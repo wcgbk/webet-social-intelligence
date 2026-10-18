@@ -21,7 +21,6 @@ const {
   mergeGradeIntoCard,
   cacheControlFor,
 } = require("./lib/circa-live-grade");
-const { buildSeason, writeStuckAlert } = require("./lib/circa-season");
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -140,42 +139,6 @@ async function writeBlob(store, key, data) {
   }
 }
 
-function blobIo(store) {
-  return {
-    read: async (key) => {
-      if (store) {
-        try {
-          const v = await store.get(key, { type: "json" });
-          if (v) return v;
-        } catch (e) {}
-      }
-      try { return await readBlobRest(key, true); } catch (e) { return null; }
-    },
-    write: (key, value) => writeBlob(store, key, value),
-  };
-}
-
-// Season rows + KPIs come ONLY from immutable frozen Saturday final cards.
-async function applySeason(store, payload, currentWeekNum, liveCard) {
-  try {
-    const io = blobIo(store);
-    const season = await buildSeason(io, {
-      currentWeekNum,
-      currentCard: liveCard,
-      baseWeeks: payload.weeks,
-      maxWeek: Math.max(currentWeekNum, Number(payload.weekNum) || 1),
-    });
-    payload.weeks = visibleWeeks(season.weeks, payload.picks);
-    payload.kpis = season.kpis;
-    payload.seasonTotal = season.seasonTotal;
-    payload.alerts = season.alerts;
-    if (season.alerts.length) await writeStuckAlert(io, season.alerts);
-  } catch (e) {
-    console.error(`[get-picks-circa] season build failed: ${e.message}`);
-  }
-  return payload;
-}
-
 // Persist graded result/score + kpis/weeks only. Never replace the live card.
 async function persistGrade(store, weekStr, existing, graded) {
   if (!existing || !Array.isArray(existing.picks) || existing.picks.length === 0) return false;
@@ -234,7 +197,6 @@ exports.handler = async (event) => {
           console.error(`[get-picks-circa] persist grade failed: ${e.message}`);
         }
       }
-      await applySeason(store, payload, current.weekNum, graded);
       return ok(payload, cacheControlFor(payload));
     }
 
@@ -244,7 +206,6 @@ exports.handler = async (event) => {
       const payload = normalizePayload(data, weekInfo);
       payload.pending = true;
       payload.preview = !!data.preview;
-      await applySeason(store, payload, current.weekNum, null);
       return ok(payload);
     }
     const pending = pendingPayload(weekInfo, {
@@ -265,4 +226,3 @@ exports.handler = async (event) => {
 
 exports.normalizePayload = normalizePayload;
 exports.hasLivePicks = hasLivePicks;
-exports.applySeason = applySeason;

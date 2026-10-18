@@ -16,8 +16,7 @@
   # PAUSED — alpha pipeline is now the primary picks pipeline
 
 [functions."trigger-picks-alpha"]
-  # schedule = "0 13,14 * * *"
-  # PAUSED 2026-10-15 — Odds API pull at 9:00 ET. Odds API credits go to the 3:00 and 10:00 ET pulls only.
+  schedule = "0 13 * * *"
   # Alpha pipeline — 9am EDT (13:00 UTC), 1hr earlier than beta for max CLV runway
   # Writes to edge-picks-alpha blob store. Model: v10.2-alpha-calibrated
 
@@ -29,55 +28,23 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-omega"]
-  schedule = "5 14,15 * * *"
-  # OMEGA vNext — 10:05am ET (14:05 UTC EDT, 15:05 UTC EST).
-  # Five minutes after the 10:00 ET capture. The build waits for that capture
-  # to finish, then publishes from the stored board. It does not pull odds.
-  # Ranks the top 10 and leaves the card a draft. 11:00am ET finalizes.
-  # Writes edge-picks-omega → /omega.
-  # CLV via trigger-clv (track-clv-omega). A short pregame board fills to
-  # 3 straights and a 3-leg parlay. Schedule is unchanged.
+  schedule = "30 13 * * *"
+  # OMEGA vNext (v12 CLV-first) — 9:30am ET (13:30 UTC in EDT). Generate early enough for QA;
+  # verify 10:30am ET; public card live by ~11:00am ET. Writes edge-picks-omega → /omega.
+  # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
 
 [functions."generate-picks-omega-background"]
   # Background function — 15min timeout for Omega pick generation (omega-vnext)
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
-[functions."rerank-picks-omega"]
-  schedule = "15 14,15 * * *"
-  # 10:15am ET (14:15 UTC EDT, 15:15 UTC EST). News re-rank on the 10:00 prices.
-  # No Odds API pull. After 10:30 ET, or if ESPN fails, the 10:00 card stays.
-
 [functions."verify-picks-omega"]
-  schedule = "30 14,15 * * *"
-  # Omega draft + Hard Rock check — 10:30am ET (14:30 UTC EDT, 15:30 UTC EST).
-  # Uses the saved 10:00 snapshot. No Odds API pull. Straights are flagged.
-  # A failed parlay is re-priced or swapped. The check does not block publish.
-
-[functions."narrate-card-omega"]
-  schedule = "45 14,15 * * *"
-  # 10:45 ET (14:45 UTC EDT, 15:45 UTC EST). Written context and summaries.
-  # No Odds API pull. Does not finalize and does not post.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."post-card-omega"]
-  schedule = "0 15,16 * * *"
-  # 11:00 ET (15:00 UTC EDT, 16:00 UTC EST). The only finalization. Posts only
-  # when OMEGA_X_AUTOPOST is the string true. Copy that contains Alpha or Omega
-  # is rejected. The flag is unset, so this job does not post. It does not pull odds.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."pregame-check-omega"]
-  schedule = "0,30 15-23,0-4 * * *"
-  # Schedule stays 11:00–23:30 ET. The handler does not rewrite the card.
-  # UTC union covers EDT and EST. etGuard keeps the listed ET slots. Avoid :40.
+  schedule = "30 14 * * *"
+  # Omega QA — 10:30am ET (14:30 UTC EDT). Target: publish unlock by 11:00am ET.
+  # Placeability advisory; must not invent sides. Empty card remains valid.
 
 [functions."self-optimize-omega"]
-  # schedule = "0 9 * * 0"
-  # PAUSED 2026-10-06 — output edge-picks-omega/self-optimize-params is unused.
-  # Confirmed unread by Edge generate/verify/select (generateOmegaVnext), Betty,
-  # Live Picks, Circa, and the X posting pipeline. Alpha self-optimize stays on:
-  # generate-picks-alpha-background still loads edge-picks/self-optimize-params.
-  # Function code kept. Was Sunday 09:00 UTC.
+  schedule = "0 9 * * 0"
+  # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
 
 [functions."fetch-tsp-live"]
   # schedule = "*/15 * * * *"
@@ -89,8 +56,7 @@
   # writes isolated "tsp-live" blob. Needs env: TSP_SESSION_COOKIE + TSP_PAGE_KEY.
 
 [functions."trigger-picks-nfl"]
-  # schedule = "5 13,14 * * *"
-  # PAUSED 2026-10-15 — Odds API pull at 9:05 ET. Odds API credits go to the 3:00 and 10:00 ET pulls only.
+  schedule = "5 13 * * *"
   # NFL pipeline — 9:05am ET (13:05 UTC). Aligned with Omega MAIN daily process (Omega 9:00,
   # NFL 9:05, CFB 9:10) so gen+QA share the live morning window; +5min avoids Odds API burst
   # with Omega. GATED: fires only on days with NFL games (ESPN scoreboard) — quiet no-op else.
@@ -110,70 +76,30 @@
 #   Health checker (check-circa-card-health): :05/:20/:35/:50 after generate slots
   #   Sat 20:00 UTC = 1:00 PM PT  — final, well before Sat 4:00 PM PT deadline
   #   Wed 17:15 UTC — holiday first card only (2026-11-25 Thanksgiving, 2026-12-23 Christmas)
-  # ET guard (lib/et-schedule.js) keeps the PT windows year-round. US ET and PT
-  # switch DST together, so the 10:15 AM PT first card stays 13:15 ET in both
-  # PDT and PST. The cron fires both UTC hours; the guard drops the other one.
-  # The old "shift 17:15 UTC to 18:15 UTC after November" TODO is resolved.
-  schedule = "0,15,30,45 17,18,19,20,21 * * 3,4,5,6"
-  # Re-enabled 2026-10-15: Circa builds from the stored 10:00 ET (fallback 3:00 ET) NFL board. No Odds API call.
+  # After DST (Nov) 17:15 UTC is 9:15 AM PST; Circa still posts ~10:00 AM PT — TODO
+  # if a PST-shifted 18:15 UTC first-card cron is needed.
+  schedule = "0,15,30,45 17,18,20 * * 3,4,5,6"
 
 [functions."generate-picks-circa-background"]
   # Background function — 15min timeout for Circa Million VIII weekly ATS card
   # Spreads only, 5 unique NFL games, rank by calibrated cover probability.
   # pdfium.wasm + tesseract.js for image-only / vector-outline Contest Point Spreads PDFs.
-  # OCR deps: pinned by lib/circa-ocr-deps (own package.json + lockfile).
-  # deploy.sh `npm ci`s that package and stages it as the repo-root
-  # node_modules for the bundle step only (no checkout has a root node_modules,
-  # which is why '@hyzyla/pdfium' was missing). Netlify drops nested
-  # node_modules dirs from the function at runtime, so they must sit at the
-  # zip root. No other function requires these packages, so no other bundle changes.
   included_files = [
-    "node_modules/@hyzyla/pdfium/package.json",
     "node_modules/@hyzyla/pdfium/dist/**",
     "node_modules/tesseract.js/**",
     "node_modules/tesseract.js-core/**",
-    "node_modules/bmp-js/**",
-    "node_modules/idb-keyval/**",
-    "node_modules/is-electron/**",
-    "node_modules/is-url/**",
-    "node_modules/node-fetch/**",
-    "node_modules/regenerator-runtime/**",
-    "node_modules/tr46/**",
-    "node_modules/wasm-feature-detect/**",
-    "node_modules/webidl-conversions/**",
-    "node_modules/whatwg-url/**",
-    "node_modules/zlibjs/**",
     "netlify/functions/lib/circa-contest-pdf-ocr.js",
     "netlify/functions/lib/circa-contest-lines.js",
     "netlify/functions/lib/circa-card-health.js",
   ]
 
-[functions."get-circa-standings"]
-  # Standings row parser (pdf-parse@1.1.1) is pinned in lib/circa-ocr-deps and
-  # staged as root node_modules by deploy.sh. PDF links never depend on it:
-  # discovery + %PDF verification + last-good fallback live in lib/circa-standings.js.
-  included_files = [
-    "node_modules/pdf-parse/**",
-    "node_modules/node-ensure/**",
-    "node_modules/debug/**",
-    "node_modules/ms/**",
-  ]
-
-[functions."regrade-circa"]
-  # Circa ops: re-polls ESPN for every non-final pick on frozen Saturday cards
-  # (weeks 1..current) and writes circa-ops/stuck-game-alert when a game is
-  # still not final 6h after kickoff. Read-only vs picks; never regenerates a card.
-  # Hourly at :40, short (<30s). Does not touch Omega.
-  schedule = "40 * * * *"
-
 [functions."check-circa-card-health"]
   # Follow-up ~5 min after each Circa generate slot (Thu/Fri/Sat + holiday Wed).
   # Persists circa-ops/card-health-* + alerts when card pending/empty/error/<5 picks.
-  schedule = "5,20,35,50 17,18,19,20,21 * * 3,4,5,6"
+  schedule = "5,20,35,50 17,18,20 * * 3,4,5,6"
 
 [functions."trigger-picks-cfb"]
-  # schedule = "10 13,14 * * *"
-  # PAUSED 2026-10-15 — Odds API pull at 9:10 ET. Odds API credits go to the 3:00 and 10:00 ET pulls only.
+  schedule = "10 13 * * *"
   # College Football pipeline — 9:10am ET (13:10 UTC). Aligned with Omega/NFL morning window
   # (Omega 9:00, NFL 9:05, CFB 9:10) to share gen timing for the live daily process; staggered
   # to avoid Odds API burst. Generator no-ops on non-CFB days. Separate env: edge-picks-cfb → /cfb.
@@ -224,7 +150,7 @@
   # Background function — 15min timeout for MLB F5 pick generation
 
 [functions."confirm-starters-mlb"]
-  schedule = "30 17,18 * * *"
+  schedule = "30 17 * * *"
   # 17:30 UTC = 1:30pm ET. Re-checks ESPN probable starters against today's Alpha + Omega
   # cards (edge-picks-alpha / edge-picks-omega). Flags SP changes; kills SP-dependent
   # MLB totals/ML/F5/RL when the gen-time starter no longer matches. See SHARP-90-REMAINING.md.
@@ -265,208 +191,53 @@
   # Background function — 15min timeout for BettorEdge-enhanced pick generation
 
 [functions."trigger-clv"]
-  schedule = "0 7,8 * * *"
-  # 3:00 ET only (07:00 UTC EDT / 08:00 UTC EST). The 13:00 and 19:00 ET closing-line
-  # pulls are PAUSED 2026-10-15: Odds API credits go to the 3:00 and 10:00 ET pulls only.
-  # The 10:00 ET board is saved for CLV by capture-omega-pinnacle-lines (clv-board/{date}/1000).
+  schedule = "0 7,17,23 * * *"
   # 07:00 UTC = 3am EDT (overnight settle — track-clv re-invokes itself for YESTERDAY so night
   # games get results written before the 8am/9am pick runs read bankroll/drawdown state).
   # 17:00 UTC = 1pm EDT (afternoon games). 23:00 UTC = 7pm EDT (evening games). Merges results.
 
 
 [functions."capture-omega-lines"]
-  # Suspended. Odds API pulls are 3:00 and 10:00 ET only. Morning line snaps
-  # are not pulled. Alpha capture-opening-lines (edge-picks) is unchanged.
-  # schedule = "0,30 10,11,12 * * *"
+  schedule = "0,30 10,11 * * *"
+  # Omega-only US morning line-path (edge-picks-omega). 6:00/7:30 ET window:
+  #   10:00 UTC = 6:00am ET, 11:30 UTC = 7:30am ET.
+  # Union also fires 10:30/11:00 — handler no-ops outside ±5min of allowed UTC slots.
+  # 9:00/9:15 ET are on the thin second function capture-omega-lines-late.
+  # 9:30 capture removed so it does not race trigger-picks-omega (13:30 UTC).
+  # Alpha capture-opening-lines (edge-picks) left unchanged.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-lines-late"]
-  # Suspended with capture-omega-lines. 9:00 and 9:15 ET are not Odds API pulls.
-  # schedule = "0,15 13,14 * * *"
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."capture-omega-pinnacle-lines"]
-  schedule = "0 7,8,14,15 * * *"
-  # Pinnacle + DraftKings + Hard Rock checks at 3:00 and 10:00 ET only.
-  # UTC union of EDT (UTC-4) and EST (UTC-5).
-  #   07:00 UTC = 3:00 EDT, 08:00 UTC = 3:00 EST
-  #   14:00 UTC = 10:00 EDT, 15:00 UTC = 10:00 EST
-  # etGuard drops 04:00 EDT and 11:00 EDT. 9:00 and 10:30 are not in this cron.
-  # A scheduler invoke fires capture-omega-pinnacle-lines-background and
-  # returns. This entry stays synchronous and keeps the only schedule.
-  # If that call cannot run, the capture still runs inline in this function.
-  # One live odds call per sport: bookmakers=pinnacle,draftkings,hardrockbet.
-  # regions=eu. Opens and historical closes stay pinnacle-only.
-  # 3:00 also pulls yesterday's pregame historical closes (30 credits per
-  # shared commence_time) and stores the opener when none is stored.
-  # Writes omega-pinnacle-line-moves and odds-master. Never the card.
-  # The 49,000 credit stop does not apply to this 3:00 or 10:00 pull.
-  # dryRun writes nothing.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."capture-omega-pinnacle-lines-background"]
-  # Background function — 15 min. No schedule. The 3:00 and 10:00 cron stays
-  # on capture-omega-pinnacle-lines, which invokes this and returns.
-  # Requires PICKS_SECRET_KEY. Historical closes cost 30 credits each.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."monitor-omega-snapshot-coverage"]
-  schedule = "20 14,15 * * *"
-  # 14:20 UTC = 10:20 ET (EDT). 15:20 UTC = 10:20 ET (EST).
-  # After the 3:00 and 10:00 checks. Reads stored line moves only.
-  # Does not pull the Odds API, does not grade, does not write the card.
-  # etGuard drops the off-season copy of the UTC union.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."monitor-omega-missed-pull"]
-  schedule = "15 7,8 * * *"
-  # 07:15 UTC = 3:15 ET (EDT). 08:15 UTC = 3:15 ET (EST).
-  # After the 3:00 check. Reads the capture-done and capture-start markers
-  # and stored line moves.
-  # Does not pull the Odds API and does not re-pull a missed slot.
-  # etGuard drops the other UTC copy.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."capture-omega-pinnacle-open"]
-  # Suspended. Openers are the first price in the 3:00 ET pull. This job
-  # does not poll /events and does not pull Pinnacle.
-  # schedule = "0 * * * *"
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."recal-report-omega"]
-  schedule = "15 13,14 * * *"
-  # 13:15 UTC = 9:15am ET (EDT). 14:15 UTC = 9:15am ET (EST).
-  # etGuard keeps 09:15 ET only, before the 9:30 generate and the 10:30 selection.
-  # Observe-only. Reads omega-candidates, clv-candidates-v2, and picks results
-  # for 28 days. Writes omega-recal-report/{date} and omega-recal-report/latest.
-  # Does not change a live price, probability, floor, stake, or selection.
-  # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the report and writes nothing.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."report-clv-omega"]
-  schedule = "15 13,14 * * *"
-  # 13:15 UTC = 9:15am ET (EDT). 14:15 UTC = 9:15am ET (EST).
-  # etGuard keeps 09:15 ET only. Display only.
-  # Merges data/clv-ledger-seed.json with clv-*, clv-candidates-*,
-  # clv-candidates-v2/*, and omega-candidates/* over the last 45 ET days.
-  # Writes omega-clv-report/{date} and omega-clv-report/latest.
-  # Does not change a live price, probability, floor, stake, or selection.
-  # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the report and writes nothing.
-  included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
-
-[functions."get-clv-report"]
-  # Public read of omega-clv-report/latest. No auth token.
-  # Falls back to the seeded total when the blob is missing. Writes nothing.
-  included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
-
-[functions."report-tracking-omega"]
-  schedule = "15 13,14 * * *"
-  # 13:15 UTC = 9:15am ET (EDT). 14:15 UTC = 9:15am ET (EST).
-  # etGuard keeps 09:15 ET only, after closes and finals, before the 10:30 selection.
-  # Display only. One row per day for Edge (all versions) and Omega:
-  # engineering percentiles, track-record KPIs, and closing-line totals.
-  # Writes omega-tracking/{date} and omega-tracking/index.
-  # Does not change a live price, probability, floor, stake, or selection.
-  # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the table and writes nothing.
-  included_files = ["data/engineering-scores.json", "data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/tracking-report.js", "netlify/functions/lib/kpi-cache.js"]
-
-[functions."sync-supabase"]
-  schedule = "25 13,14 * * *"
-  # 13:25 UTC = 9:25am ET (EDT). 14:25 UTC = 9:25am ET (EST).
-  # etGuard keeps 09:25 ET only, after report-clv-omega and report-tracking-omega.
-  # Posts yesterday's opener, 10:00 ET snapshot, and 3:00 ET close, plus the
-  # graded Omega card and that day's CLV ledger. Ignore-duplicates.
-  # Does not call the Odds API. Does not write the card or picks blobs.
-  # Manual invoke requires admin auth. Scheduler invocations are allowed.
-  # ?dryRun=1 builds rows and does not call Supabase. ?date=YYYY-MM-DD.
-  # There is no 10:30 lock capture. Odds API pulls stay 3:00 and 10:00 ET.
-  included_files = ["netlify/functions/lib/omega-vnext/**", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/omega-grading-rules.js", "js/live-score.js"]
-
-[functions."report-calibration-omega"]
-  schedule = "15 10,11 * * 0"
-  # Sunday 06:15 ET. 10:15 UTC = 6:15am EDT. 11:15 UTC = 6:15am EST.
-  # etGuard keeps Sunday 06:15 ET only, outside the card window.
-  # Weekly calibration review. Report only. FIT stays off. Shrink is not applied.
-  # self-optimize-omega stays paused. Does not change a price, a stake, or a pick.
-  # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the report and writes nothing.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."get-tracking"]
-  # Public read of omega-tracking/index. No auth token.
-  # Falls back to tracking/report.json when the blob is missing. Writes nothing.
-  included_files = ["tracking/report.json", "netlify/functions/lib/tracking-report.js"]
-
-[functions."capture-candidate-closes"]
-  # Sharp close for every gate-evaluated Omega candidate. Private blobs only:
-  # reads omega-candidates/{date}, writes clv-candidates-v2/{date}.
-  # Does not write picks-{date}, clv-{date}, or any public card.
-  #
-  # UTC cron is the union that covers 11:30 ET through 01:30 ET next day in
-  # both EDT (UTC-4) and EST (UTC-5). lib/et-schedule etGuard drops the rest.
-  #   EDT: 15:30 UTC = 11:30 ET … 05:30 UTC = 01:30 ET
-  #   EST: 16:30 UTC = 11:30 ET … 06:30 UTC = 01:30 ET
-  # Hour 15 UTC is 10:00 ET during EST (skipped). Hour 6 UTC is 02:00 ET
-  # during EDT (skipped). Fires every 15 minutes inside the window.
-  # On the November fall-back night the 1:00 ET hour occurs twice; etGuard
-  # keeps the later (EST) occurrence so that slot still runs once.
-  #
-  # One live /odds call per sport that has a commence group starting within
-  # 20 minutes or started less than 5 minutes ago. bookmakers is the five
-  # sharp books (≤10 → one region) × markets h2h,spreads,totals = 3 credits.
-  # Suspended. Closing lines come from the 3:00 ET historical capture.
-  # This job does not call the Odds API.
-  # schedule = "*/15 15-23,0-6 * * *"
+  schedule = "0,15 13 * * *"
+  # 13:00 UTC = 9:00am ET, 13:15 UTC = 9:15am ET. Dedicated late-morning snaps.
+  # 9:30 (13:30) intentionally omitted — races trigger-picks-omega.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."warm-omega-feeds"]
-  schedule = "0 13,14 * * *"
+  schedule = "0 13 * * *"
   # 13:00 UTC = 9:00am ET (EDT). Prefetch ESPN injuries/QB, MLB weather, StatsAPI SP
   # into omega-feed-warm/{date}. Soft-fail. Does not write the live card.
   # Same minute as other 9:00 jobs is fine (independent).
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."trigger-omega-shadow"]
-  schedule = "5 13,14 * * *"
+  schedule = "5 13 * * *"
   # 13:05 UTC ≈ 9:05am ET (EDT). Shadow dry-run → omega-shadow/picks-{date} only.
   # Never latest-date / picks-dates / live picks-{date}. Same minute as NFL trigger is fine.
-  # See docs/OMEGA-SHADOW-DRYRUN.md. NBA shadow is not this job.
-
-[functions."omega-nba-shadow"]
-  # Public HTTP, unscheduled. A POST without the internal secret is 403 and
-  # makes 0 Odds API calls and writes nothing. Schedules are the two wrappers
-  # below. SPORTS_ENABLED.NBA stays false. Does not write the daily card.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."trigger-omega-nba-shadow"]
-  schedule = "30 21,22 * * *"
-  # 21:30 UTC = 5:30pm ET (EDT), before NBA tips, away from the 13:30 UTC card.
-  # The cron still fires. A live invoke does not call the Odds API.
-  # Fixture tests pass nbaShadowTest and do not fetch. Grade is
-  # trigger-omega-nba-shadow-grade.
-  # EST from 2026-11-01: this slot becomes 4:30pm ET. Prepared replacement is
-  # "30 22 * * *" (5:30pm EST). Do not switch it before that date.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions."trigger-omega-nba-shadow-grade"]
-  schedule = "0 12,13 * * *"
-  # 12:00 UTC = 8:00am ET (EDT). Grades the previous ET date from ESPN finals
-  # into omega-nba-shadow-results-{date}. 0 Odds API credits.
-  # EST from 2026-11-01: this slot becomes 7:00am ET. Prepared replacement is
-  # "0 13 * * *" (8:00am EST). Do not switch it before that date.
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
+  # See docs/OMEGA-SHADOW-DRYRUN.md.
 
 
 [functions."capture-omega-pm-observer-open"]
-  schedule = "30 12,13 * * *"
+  schedule = "30 12 * * *"
   # Morning PM open snap — 8:30am ET (12:30 UTC in EDT), inside 8:00–8:45 ET.
-  # Writes omega-pm-observer/{date}-open (raw ML markets) so the 10:05 ET
-  # generate can compute pmMove. This snap is before that build — no race.
+  # Writes omega-pm-observer/{date}-open (raw ML markets) so 9:30 generate can
+  # compute pmMove. One hour before trigger-picks-omega (13:30 UTC) — no race.
   # Does not write the live card. Soft-fail if PM APIs are down.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pm-observer"]
-  schedule = "15 14,15 * * *"
-  # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after the 10:05 ET card build.
+  schedule = "15 14 * * *"
+  # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after 9:30 generate.
   # Audit log: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
   # Generate already applied hard-capped soft score in-process. This job does
   # not mutate the live card / grades / units. ?slot=open also writes the open key.
@@ -476,7 +247,7 @@
 
 
 [functions."capture-omega-walkforward"]
-  schedule = "15 15,16 * * *"
+  schedule = "15 15 * * *"
   # Omega walk-forward OBSERVER — 11:15am ET (15:15 UTC in EDT).
   # Reads picks-{date}+clv-{date}; writes omega-walkforward/* only.
   # SCAFFOLD: FIT_ENABLED=false until Mon 11am ET ≥2026-09-29. No Discord. Soft-fail.
@@ -485,7 +256,7 @@
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-walkforward-evening"]
-  schedule = "45 23,0 * * *"
+  schedule = "45 23 * * *"
   # Evening post-close walk-forward OBSERVER — 7:45pm ET (23:45 UTC in EDT),
   # after trigger-clv's 23:00 UTC pass. Writes omega-walkforward/* only.
   # Never mutates picks-{date}, latest-date, grades, or units. FIT stays off.
@@ -501,8 +272,6 @@
   #   capture-omega-lines-late         "0,15 13" → "0,15 14"
   #   warm-omega-feeds                 "0 13" → "0 14"
   #   trigger-omega-shadow             "5 13" → "5 14"
-  #   trigger-omega-nba-shadow         "30 21" → "30 22"   (5:30pm ET)
-  #   trigger-omega-nba-shadow-grade   "0 12" → "0 13"     (8:00am ET)
   #   capture-omega-pm-observer-open   "30 12" → "30 13"
   #   capture-omega-pm-observer        "15 14" → "15 15"
   #   capture-omega-walkforward        "15 15" → "15 16"
@@ -513,22 +282,20 @@
 
 
 [functions."capture-opening-lines"]
-  # schedule = "0 10,11 * * *"
-  # PAUSED 2026-10-15 — Odds API pull at 6:00/7:00 AM ET. Odds API credits go to the 3:00 and 10:00 ET pulls only.
+  schedule = "0 10 * * *"
   # 10:00 UTC = 6am EDT. Capture early morning lines before US sharp action.
   # 4-hour window before 10am picks maximizes line movement detection.
 
 [functions."verify-picks"]
-  # schedule = "30 14,15 * * *"
-  # PAUSED 2026-10-15 — Odds API pull at 10:30 ET legacy beta Hard Rock re-pull. Odds API credits go to the 3:00 and 10:00 ET pulls only.
+  schedule = "30 14 * * *"
   # 14:30 UTC = 10:30am EDT. Runs 30min after picks to verify math + narrative.
 
 [functions."self-optimize"]
-  schedule = "0 9,10 * * 0"
+  schedule = "0 9 * * 0"
   # 09:00 UTC = 5am EDT every Sunday. Weekly self-optimization cycle.
 
 [functions."trigger-trend-monitor"]
-  schedule = "0 1,2 * * *"
+  schedule = "0 1 * * *"
   # 01:00 UTC = 9pm EDT, after the 23:00 track-clv settle. Fires the trend-monitor HTTP
   # function (kept plain so /api/trend-monitor stays reliably on-demand). Negative-trend
   # tracker: grades alpha picks vs ESPN (independent of the leaky settle write-back), computes
@@ -1181,7 +948,7 @@
   status = 200
 
 [functions."monitor-tsp-public-records"]
-  schedule = "0 15,16 * * *"
+  schedule = "0 15 * * *"
   # Daily TSP public-records observer digest — 11:00am ET (15:00 UTC in EDT).
   # Writes tsp-research digests/{date} only. NEVER edge-picks-omega.
   # Member tsp.live fetch hold lifted 2026-09-22; still isolated (tsp-live → /live-ai).

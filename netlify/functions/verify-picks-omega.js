@@ -4,19 +4,13 @@
 // Runs at 10:30am ET daily. For each pick on today's beta card:
 // 1. MATH CHECKS: Recompute EV, Kelly, grade. Flag mismatches.
 // 2. NARRATIVE CHECKS: Verify reasoning mentions correct team, correct length, whatLoses present.
-// 3. SHARP REVIEW: Call Grok as an elite Vegas handicapper to review the full card.
+// 3. SHARP REVIEW: Call Claude as an elite Vegas handicapper to review the full card.
 // 4. AUTO-FIX: If a pick fails critical checks (negative EV, math broken), drop it.
-//    Auto-fix does not invent a side. A later reserve top-up can refill to 3.
+//    Do not invent a replacement straight. Empty stays empty.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
 // Verify may drop, flag, or resize inside the existing unit cap.
-// A short card refills only from the private reserve, only up to 3,
-// and never with a blocked side. Steam does not refill. No odds pull.
-// A material Hard Rock line or price is the exception: that pick is
-// repriced at Hard Rock, or replaced by the next Hard Rock candidate,
-// and the parlay is rebuilt from the corrected card. Every change is logged.
-// Late-news (MLB starter, NHL goalie, NFL/NCAAF QB) uses the same rule:
-// drop or flag a published pick, never add or swap one.
+// It does not add a straight and it does not rebuild a locked parlay.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -43,32 +37,18 @@ function enforceOmegaDailyUnitCap(picksData) {
   picksData.picks = capped.picks;
   if (Array.isArray(picksData.parlayLegs)) picksData.parlayLegs = capped.parlayLegs;
   if (picksData.summary) {
+    const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
+    const straightU = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+    const parlayU = (picksData.parlayLegs || []).reduce((s, pl) => s + parseU(pl.units), 0);
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
-    writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
+    picksData.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
   }
 }
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
-const { passesSheetMinimums } = require('./lib/omega-vnext/bet_check_gate');
-const { finishShortCard, sideBlocked } = require('./lib/omega-vnext/card_topup');
-const { buildShortfall } = require('./lib/omega-vnext/shortfall');
-const { MAX_STRAIGHTS } = require('./lib/omega-vnext/config');
-const { reviewHardRock, verifySchedule, applySilentSortCheck } = require('./lib/omega-vnext/selection_pass');
-const { parlayFromStraights, parlayEvLabel, parlayIndependent } = require('./lib/omega-vnext/parlay');
-const lateNews = require('./lib/omega-vnext/late_news');
-const { storeLateNewsOps } = require('./lib/omega-vnext/store');
-const { decimalToAmerican, formatAmerican, writeSummaryStakeDisplay } = require('./lib/omega-vnext/odds_math');
-const { xaiChat, resolveXaiKey } = require('./lib/xai-chat');
-const {
-  createAuditLog, runWithAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId, currentAudit,
-} = require('./lib/omega-vnext/audit_log');
-const { replayNoWrite } = require('./lib/omega-vnext/no_write');
-
-function auditFetch(url, init) {
-  return resolveFetch(fetch)(url, init);
-}
+const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -110,8 +90,7 @@ function cardModelVersion(picksData) {
 
 /**
  * Replacement / backfill pick. Rating, qualityGrade, confidence, and units
- * come from toPickObject: quarter-Kelly ×50 in 0.5u steps, MAX_STRAIGHT_UNITS_PER_PICK,
- * then B_GRADE_UNIT_CAP when the quality grade is B.
+ * come from toPickObject: quarter-Kelly, 0.25u steps, MAX_STRAIGHT_UNITS_PER_PICK.
  * The card-level 3.5u / 0.5u / 4.0u cap is enforceOmegaDailyUnitCap on write.
  * kellyUnits on the candidate is ignored (that field was the Alpha ladder).
  */
@@ -136,90 +115,14 @@ function steamDropBlocksStraightRefill(droppedSteam, steamHardFails) {
 }
 
 /**
- * Refill only to reach 3, only from the private reserve, never for a
- * blocked side. Steam still refuses. Placeability and late-news set
- * blockStraightRefill for the audit trail; that flag does not veto a
- * reserve row that is not itself blocked.
+ * Verify is not a second publisher. A short card stays short, including when
+ * steam did not fire. Steam and placeability still record a block so a later
+ * edit cannot quietly refill those drops.
  */
 function straightRefillAllowed(ctx = {}) {
   if (steamDropBlocksStraightRefill(ctx.droppedSteam, ctx.steamHardFails)) return false;
-  const count = ctx.straightCount != null
-    ? Number(ctx.straightCount)
-    : (Array.isArray(ctx.picks) ? ctx.picks.length : NaN);
-  if (!Number.isFinite(count) || !(count < MAX_STRAIGHTS)) return false;
-  const reserve = Array.isArray(ctx.reserve) ? ctx.reserve : [];
-  if (!reserve.length) return false;
-  return true;
-}
-
-/**
- * After placeability, late-news, and auto-fix drops. Tops up from
- * card.reserve, checks placeability on the new rows only, rebuilds the
- * parlay, and re-applies the unit cap. Does not call the Odds API.
- * A failure here leaves the card as it was.
- */
-function applyVerifyReserveTopUp(picksData, ctx = {}) {
-  const empty = { topped: false, topUps: [], exhausted: false };
-  try {
-    if (!picksData || !Array.isArray(picksData.picks)) return empty;
-    const allowed = straightRefillAllowed({
-      droppedSteam: ctx.droppedSteam,
-      steamHardFails: ctx.steamHardFails,
-      straightCount: picksData.picks.length,
-      reserve: picksData.reserve,
-      picks: picksData.picks,
-    });
-    if (!allowed) {
-      if (picksData.picks.length < MAX_STRAIGHTS) {
-        picksData.shortfall = buildShortfall({
-          picks: picksData.picks,
-          parlayLegs: picksData.parlayLegs,
-          yesPool: picksData.reserve || [],
-          rejected: ctx.blocked || [],
-        });
-      }
-      return empty;
-    }
-    const finished = finishShortCard({
-      picks: picksData.picks,
-      reserve: picksData.reserve,
-      blocked: require('./lib/omega-vnext/card_integrity').blockedRowsFor(picksData, ctx.blocked || []),
-      parlayPool: (picksData.picks || []).concat(picksData.reserve || []),
-      decide: ctx.decide,
-      checkPlaceability: true,
-      maxRounds: 3,
-      allowSameGame: ctx.allowSameGame,
-    });
-    if (!finished.added.length) {
-      picksData.shortfall = buildShortfall({
-        picks: picksData.picks,
-        parlayLegs: picksData.parlayLegs,
-        yesPool: finished.reserve || picksData.reserve || [],
-        rejected: ctx.blocked || [],
-      });
-      return { topped: false, topUps: [], exhausted: !!finished.exhausted };
-    }
-    picksData.picks = finished.picks;
-    picksData.parlayLegs = finished.parlayLegs;
-    picksData.reserve = finished.reserve;
-    if (!picksData.summary || typeof picksData.summary !== 'object') picksData.summary = {};
-    picksData.summary.topUps = finished.topUps;
-    picksData.summary.totalPicks = finished.picks.length;
-    picksData.summary.totalStraightBets = finished.picks.length;
-    writeSummaryStakeDisplay(picksData.summary, finished.picks, finished.parlayLegs);
-    const integrity = require('./lib/omega-vnext/card_integrity').applyCardIntegrity(picksData);
-    Object.assign(picksData, integrity.card);
-    picksData.shortfall = buildShortfall({
-      picks: finished.picks,
-      parlayLegs: finished.parlayLegs,
-      yesPool: finished.reserve || [],
-      rejected: ctx.blocked || [],
-    });
-    return { topped: true, topUps: finished.topUps, exhausted: !!finished.exhausted };
-  } catch (err) {
-    console.log(`[verify-final] reserve top-up soft-fail: ${err && err.message}`);
-    return empty;
-  }
+  if (ctx.blockStraightRefill) return false;
+  return false;
 }
 
 function sameTicketName(a, b) {
@@ -242,26 +145,12 @@ function repriceLockedParlay(root, legs) {
   }
   const type = String(root.type || '').replace(/^\d+(?=-leg-parlay-)/, String(legs.length));
   const next = { ...root, legs, type: type || root.type };
-  if (priced) {
-    const parlayEV = (combinedProb * combinedDecimal) - 1;
-    next.combinedOdds = formatCombinedAmerican(combinedDecimal);
-    next.combinedDecimal = +combinedDecimal.toFixed(2);
-    next.combinedProb = `${(combinedProb * 100).toFixed(1)}%`;
-    next.ev = `${(parlayEV * 100).toFixed(1)}%`;
-  }
-  // Numbers stay a plain product. The label says so when comboStats would
-  // have applied a haircut or a correlation term.
-  const view = { ...next, legs, plainProduct: priced === true };
-  const label = parlayEvLabel(view);
-  if (label) {
-    next.evLabel = label;
-    next.correlationNote = label;
-  }
-  next.independent = parlayIndependent({ ...next, legs });
-  if (Object.prototype.hasOwnProperty.call(root, 'mirrorsCard')) {
-    const origLen = Array.isArray(root.legs) ? root.legs.length : legs.length;
-    next.mirrorsCard = root.mirrorsCard === true && origLen === legs.length;
-  }
+  if (!priced) return next;
+  const parlayEV = (combinedProb * combinedDecimal) - 1;
+  next.combinedOdds = formatCombinedAmerican(combinedDecimal);
+  next.combinedDecimal = +combinedDecimal.toFixed(2);
+  next.combinedProb = `${(combinedProb * 100).toFixed(1)}%`;
+  next.ev = `${(parlayEV * 100).toFixed(1)}%`;
   return next;
 }
 
@@ -419,23 +308,19 @@ const {
 } = require('./lib/omega-vnext/edge');
 const HR_BOOK_KEYS = new Set(["hardrockbet", "hardrockbet_oh", "hardrock"]);
 const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl", NCAAF: "americanfootball_ncaaf" };
-function sportEvFloor(sport, defaultFloor = 0) {
-  const map = (GATES && GATES.minEV) || {};
-  if (sport && map[sport] != null) return map[sport];
-  if (map.default != null) return map.default;
+function sportEvFloor(sport, defaultFloor = 0.03) {
+  if (sport === "NFL") return Math.max(defaultFloor, 0.025);
+  if (sport === "NCAAF") return Math.max(defaultFloor, 0.030);
   return defaultFloor;
 }
 function sportCoverFloor(sport) {
   const map = (GATES && GATES.minCoverProb) || {};
-  if (sport && map[sport] != null) return map[sport];
+  if (map[sport] != null) return map[sport];
   if (map.default != null) return map.default;
-  return 0;
+  return 0.48;
 }
 function candidateClearsSportGates(c) {
-  // Sheet floors are the only admission rule post-generate (2026-10-18):
-  // no sub-sheet replacement/backfill pick can be added after generate.
-  if (!passesSheetMinimums(c)) return false;
-  if (!c || !(c.ev > 0) || !(c.ev + 1e-12 >= sportEvFloor(c.sport))) return false;
+  if (!c || !(c.ev > sportEvFloor(c.sport, 0.03))) return false;
   const cp = typeof c.coverProb === "number" ? c.coverProb : parseFloat(c.coverProb) || 0;
   if (cp < sportCoverFloor(c.sport)) return false;
   return true;
@@ -484,11 +369,15 @@ function hrFindOutcome(market, pick, marketKey) {
   return { outcome, pubPoint };
 }
 
-// Deprecated F5 majors fallback. The 10:30 check uses the saved 10:00 quotes
-// and does not call this helper. Backup books are Pinnacle, Hard Rock, and
-// DraftKings. FanDuel, BetMGM, Caesars, and the rest are off this list.
+// Hard Rock DOES offer F5 on-app (branded "First 5 Innings") but its F5 prices don't flow
+// through The Odds API (verified 0/15 MLB events on 2026-08-22 while 14 other books quote
+// them — a feed-coverage gap, NOT a Hard Rock product gap; Ben-corrected 2026-08-22).
+// When HR is absent from an F5 event, confirm placeability against the other major US
+// books instead: >=3 majors quoting the same bet with a ballpark median = placeable
+// (informational note to spot-check the HR app); <3 majors or off-ballpark median = flag.
 const HR_MAJOR_BOOKS = new Set([
-  "pinnacle", "hardrockbet", "hardrock", "draftkings",
+  "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us",
+  "espnbet", "betrivers", "fanatics", "hardrockbet", "hardrockbet_oh",
 ]);
 function hrMajorsFallback(pick, game) {
   const out = { available: false, hrOdds: null, hrPoint: null, warnings: [], errors: [], notes: [] };
@@ -619,117 +508,7 @@ function decisionForPick(pick, hr, { feedDown = false, gameMissing = false, live
   });
 }
 
-function snapshotAlreadyCoversQa(picksData) {
-  const sel = picksData && picksData.selection;
-  return !!(sel && sel.snapshotCoversHardRock === true && sel.snapshotCoversParlay === true);
-}
-
 async function runHardRockCheck(picksData) {
-  // Saved 10:00 quotes only. No Odds API pull. Straights are flagged.
-  // decision.drop stays false so a miss never removes a straight.
-  const sportGames = {};
-  const reviewed = reviewHardRock(picksData, sportGames);
-  let drafted = { changed: false, card: picksData, verdict: reviewed.verdict, lines: reviewed.lines, corrections: [] };
-  try {
-    const timeline = require('./lib/omega-vnext/timeline');
-    drafted = timeline.draftAndCheckHardRock(picksData, { sportGames });
-    if (drafted && drafted.card) {
-      picksData.picks = drafted.card.picks;
-      picksData.parlayLegs = drafted.card.parlayLegs;
-      picksData.hardRockCheck = drafted.card.hardRockCheck;
-      picksData.timelineStep = drafted.card.timelineStep;
-      picksData.cardStatus = drafted.card.cardStatus;
-      picksData.finalized = false;
-      picksData.selection = drafted.card.selection;
-      picksData.bugLog = drafted.card.bugLog;
-    }
-  } catch (err) {
-    console.log(`[verify-hardrock] draft check soft-fail: ${err && err.message}`);
-  }
-  const lines = (drafted && drafted.lines) || reviewed.lines || [];
-  const summary = {
-    book: "Hard Rock Bet",
-    checked: (picksData.picks || []).length,
-    available: lines.filter((row) => row && row.placeable && row.kind === "straight").length,
-    warnings: lines.filter((row) => row && row.placeable === false).length,
-    errors: 0,
-    skipped: false,
-    apiDown: false,
-    verdict: (drafted && drafted.verdict) || reviewed.verdict || "FAIL",
-    blocksPublish: false,
-    reason: "saved 10:00 quotes",
-  };
-  const pickResults = (picksData.picks || []).map((pick, i) => {
-    const line = lines.find((row) => row && row.kind === "straight" && row.index === i) || {};
-    const placeable = !!line.placeable;
-    return {
-      available: placeable,
-      hrOdds: line.hardRockAmerican != null ? line.hardRockAmerican : null,
-      hrPoint: line.line != null ? line.line : null,
-      warnings: placeable ? [] : ["Hard Rock does not post the displayed price"],
-      errors: [],
-      notes: [],
-      decision: { drop: false },
-    };
-  });
-  const parlayFindings = [];
-  const legDecisions = lines.filter((row) => row && row.kind === "parlay").map((row) => {
-    if (!row.placeable) {
-      parlayFindings.push({ level: "warning", note: `Parlay leg "${row.pick}" is not at the displayed price on Hard Rock` });
-    }
-    return { drop: false, pick: row.pick, matchup: row.matchup, placeable: !!row.placeable };
-  });
-  return {
-    summary,
-    pickResults,
-    parlayFindings,
-    legDecisions,
-    corrections: (drafted && drafted.corrections) || [],
-    changed: !!(drafted && drafted.changed),
-  };
-}
-
-async function runHardRockCheckLegacyFetch(picksData) {
-  // Deprecated. Not called. The 10:30 path is runHardRockCheck and does not
-  // pull odds. The old fetch body stays below so it is not deleted.
-  void picksData;
-  return {
-    summary: { skipped: true, apiDown: false, reason: 'deprecated' },
-    pickResults: [],
-    parlayFindings: [],
-    legDecisions: [],
-    corrections: [],
-    changed: false,
-  };
-  if (snapshotAlreadyCoversQa(picksData)) {
-    const schedule = verifySchedule(picksData, Date.now());
-    return {
-      summary: {
-        book: "Hard Rock Bet",
-        checked: (picksData.picks || []).length,
-        available: 0,
-        warnings: 0,
-        errors: 0,
-        skipped: true,
-        apiDown: false,
-        reason: "10 AM snapshot covers Hard Rock and the parlay",
-        scheduleDrops: schedule.dropped || [],
-      },
-      pickResults: (picksData.picks || []).map(() => ({
-        available: false,
-        hrOdds: null,
-        hrPoint: null,
-        warnings: [],
-        errors: [],
-        notes: [],
-        decision: { drop: false },
-      })),
-      parlayFindings: [],
-      legDecisions: [],
-      corrections: [],
-      changed: !!schedule.changed,
-    };
-  }
   const summary = { book: "Hard Rock Bet", checked: 0, available: 0, warnings: 0, errors: 0, skipped: false, apiDown: false };
   const pickResults = [];
   const parlayFindings = [];
@@ -746,7 +525,7 @@ async function runHardRockCheckLegacyFetch(picksData) {
         warnings: [decision.warning], errors: [], notes: [], decision,
       });
     }
-    return { summary, pickResults, parlayFindings, legDecisions, corrections: [], changed: false };
+    return { summary, pickResults, parlayFindings, legDecisions };
   }
 
   // Main-lines fetch: Hard Rock only when every pick already carries placeableBooks.
@@ -766,7 +545,7 @@ async function runHardRockCheckLegacyFetch(picksData) {
     if (!key) continue;
     sportsAttempted++;
     try {
-      const resp = await auditFetch(
+      const resp = await fetch(
         `https://api.the-odds-api.com/v4/sports/${key}/odds?markets=h2h,spreads,totals&oddsFormat=american&bookmakers=${bookmakers}&apiKey=${apiKey}`,
         { signal: AbortSignal.timeout(12000) }
       );
@@ -775,25 +554,6 @@ async function runHardRockCheckLegacyFetch(picksData) {
     } catch (e) { sportGames[sport] = null; }
   }
   if (sportsAttempted > 0 && !anySportOk) summary.apiDown = true;
-
-  // Hard Rock is a review-only verifier. A gap is flagged and the DraftKings
-  // price is left alone. Start times are re-checked here; a live or
-  // out-of-slate straight is dropped and the next DK candidate can fill.
-  let corrections = [];
-  let changed = false;
-  if (!summary.apiDown) {
-    const reviewed = reviewHardRock(picksData, sportGames);
-    corrections = reviewed.flags || [];
-    summary.hardRockFlags = corrections.length;
-    if (summary.hardRockFlags) {
-      console.log(`[verify-hardrock] review-only flags=${summary.hardRockFlags} (DK price unchanged)`);
-    }
-  }
-  const schedule = verifySchedule(picksData, Date.now());
-  if (schedule.changed) {
-    changed = true;
-    summary.scheduleDrops = schedule.dropped || [];
-  }
 
   const f5Cache = {};
   async function gameForPick(pick) {
@@ -806,7 +566,7 @@ async function runHardRockCheckLegacyFetch(picksData) {
         try {
           // All US books, not HR-scoped: HR's F5 prices aren't in the feed, so the
           // majors-fallback needs the full field to confirm placeability.
-          const resp = await auditFetch(
+          const resp = await fetch(
             `https://api.the-odds-api.com/v4/sports/${HR_SPORT_KEYS[pick.sport]}/events/${game.id}/odds?regions=us,us2&markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&apiKey=${apiKey}`,
             { signal: AbortSignal.timeout(12000) }
           );
@@ -894,14 +654,13 @@ async function runHardRockCheckLegacyFetch(picksData) {
   }
   summary.errors += parlayFindings.filter(f => f.level === "error").length;
   summary.warnings += parlayFindings.filter(f => f.level === "warning").length;
-  return { summary, pickResults, parlayFindings, legDecisions, corrections, changed };
+  return { summary, pickResults, parlayFindings, legDecisions };
 }
 
 // ── Open→pick steam recheck (Omega v12.1 line-move) ──
 // Load latest morning snap; hard-fail / flag critical on adverse steam past verify thresholds.
 // Empty card OK — never lean force-fill. Placeability soft-veto is separate from steam:
-// it drops a pick only when Hard Rock and US majors both fail. The later reserve
-// top-up may replace that drop. This steam recheck does not refill.
+// it drops a pick only when Hard Rock and US majors both fail, and it does not refill.
 async function runOmegaSteamRecheck(picksData, pickReports) {
   const out = { checked: 0, failed: 0, reasons: [] };
   try {
@@ -961,8 +720,29 @@ async function runOmegaSteamRecheck(picksData, pickReports) {
   return out;
 }
 
-// ── Sharp Handicapper Review (Grok) ──
-const SHARP_REVIEW_SYSTEM = `You are an elite Las Vegas handicapper with 25 years of experience. You've worked for professional betting syndicates and have a lifetime ROI of +8% on over 50,000 bets. You review betting cards for red flags that pure math can't catch.
+// ── Sharp Handicapper Review (Claude) ──
+async function sharpReview(picks, dateFormatted) {
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) return { verdict: "skip", analysis: "No API key for sharp review" };
+
+  const cardSummary = picks.map((p, i) =>
+    `${i + 1}. [${p.rating}] ${p.pick} ${p.odds} | ${p.units} | ${p.sport} | Cover: ${p.winProbability} | EV: ${p.ev}\n   Reasoning: ${(p.coreReasoning || '').slice(0, 200)}\n   What loses: ${p.whatLoses || 'N/A'}`
+  ).join('\n\n');
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → skip
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-beta": "prompt-caching-2024-07-31",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1500,
+        system: [{ type: "text", text: `You are an elite Las Vegas handicapper with 25 years of experience. You've worked for professional betting syndicates and have a lifetime ROI of +8% on over 50,000 bets. You review betting cards for red flags that pure math can't catch.
 
 Your job: Review today's 3-pick card and flag anything that concerns you. Think about:
 - Trap games (teams with nothing to play for, scheduling spots, look-ahead games)
@@ -986,203 +766,21 @@ Return ONLY valid JSON:
 "concerns" = minor situational worries but still playable.
 "red_flag" = at least one pick has a significant problem that math wouldn't catch.
 
-Be honest and direct. Don't flag things just to flag them. Only raise genuine concerns.`;
-
-function isXaiHttpError(err) {
-  return /xAI HTTP \d+/.test(String((err && err.message) || ''));
-}
-
-async function sharpReview(picks, dateFormatted) {
-  const xaiKey = resolveXaiKey();
-  if (!xaiKey) return { verdict: "skip", analysis: "No API key for sharp review" };
-
-  const cardSummary = picks.map((p, i) =>
-    `${i + 1}. [${p.rating}] ${p.pick} ${p.odds} | ${p.units} | ${p.sport} | Cover: ${p.winProbability} | EV: ${p.ev}\n   Reasoning: ${(p.coreReasoning || '').slice(0, 200)}\n   What loses: ${p.whatLoses || 'N/A'}`
-  ).join('\n\n');
-
-  try {
-    // never hang QA on a rate-limited call — try/catch → skip
-    const text = await xaiChat({
-      apiKey: xaiKey,
-      system: SHARP_REVIEW_SYSTEM,
-      user: `Today's card (${dateFormatted}):\n\n${cardSummary}`,
-      maxTokens: 1500,
-      timeoutMs: 25000,
+Be honest and direct. Don't flag things just to flag them. Only raise genuine concerns.`, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: `Today's card (${dateFormatted}):\n\n${cardSummary}` }],
+      }),
     });
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    }
   } catch (e) {
-    console.log(`[verify-sharp] Grok review failed: ${e.message}`);
+    console.log(`[verify-sharp] Claude review failed: ${e.message}`);
   }
   return { verdict: "skip", analysis: "Sharp review unavailable" };
-}
-
-const STRAIGHT_NARRATIVE_SYSTEM = `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
-- Be 2-3 sentences max
-- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
-- Frame the value as the model's projection diverging from this market price
-- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
-- Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
-- Always say "WeBetAI" not "the model"
-
-Also write:
-- "whatLoses": one sentence describing the specific scenario that beats this pick
-- "dataVerified": brief note that the edge is model-grounded (no invented injuries/stats)
-- "clvExpectation": one sentence on expected closing-line movement
-
-Return ONLY valid JSON array:
-[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`;
-
-const PARLAY_LEG_NARRATIVE_SYSTEM = `You write concise sports betting pick narratives for WeBetAI parlay legs. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
-- Be 2-4 sentences
-- Explain in GENERAL terms why WeBetAI favors the side named in the leg
-- Frame the value as the model's projection diverging from this market price
-- State NO specific player names, records, scores, venues, or injuries you were not explicitly given
-- Never use technical jargon; never restate projections/lines/numbers (shown separately)
-- Always say "WeBetAI" not "the model"
-
-Also write whatLoses, dataVerified, and clvExpectation (one sentence each).
-
-Return ONLY valid JSON array:
-[{ "legIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`;
-
-function applyNarrativeTemplate(rows, indices) {
-  let finalFixCount = 0;
-  for (const i of indices) {
-    const p = rows[i];
-    if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces')) {
-      const isTotal = /over|under/i.test(p.pick);
-      const isML = /\bML\b/i.test(p.pick);
-      p.coreReasoning = isTotal
-        ? `WeBetAI projects ${p.modelEdge || 'a statistical edge'} on this total. Recent scoring trends and pace data support this direction, with the projection diverging from the consensus line.`
-        : isML
-        ? `WeBetAI gives this team a win probability above the market's implied odds at ${p.odds}. The Elo rating differential and recent form support value at these odds.`
-        : `WeBetAI projects ${p.modelEdge || 'a spread edge'} on this matchup. Efficiency metrics and recent form diverge from the consensus line, creating positive expected value.`;
-      finalFixCount++;
-    }
-    if (!p.whatLoses || p.whatLoses.length < 15) {
-      p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
-    }
-  }
-  return finalFixCount;
-}
-
-function applyParlayLegTemplate(legs, indices) {
-  let finalFixCount = 0;
-  for (const i of indices) {
-    const leg = legs[i];
-    if (!leg.coreReasoning || leg.coreReasoning.length < 80) {
-      const isTotal = /over|under/i.test(leg.pick || '');
-      leg.coreReasoning = isTotal
-        ? `WeBetAI likes this total as a parlay leg — scoring trends and pace support the direction at the posted number.`
-        : `WeBetAI likes this side as a parlay leg — form and matchup factors diverge from the market price enough to include it on the slip.`;
-      finalFixCount++;
-    }
-    if (!leg.whatLoses || leg.whatLoses.length < 15) {
-      leg.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
-    }
-  }
-  return finalFixCount;
-}
-
-/** HTTP failures log and leave the short copy. Network/parse failures use the template. Card still publishes. */
-async function backfillStraightNarratives(picks, uniqueNeeds) {
-  let finalFixCount = 0;
-  if (!uniqueNeeds || uniqueNeeds.length === 0 || !resolveXaiKey()) return finalFixCount;
-  console.log(`[verify-final] Writing narratives for ${uniqueNeeds.length} pick(s) via Grok`);
-  const pickDescriptions = uniqueNeeds.map(i => {
-    const p = picks[i];
-    return `Pick ${i + 1}: ${p.pick} ${p.odds} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`;
-  }).join('\n');
-  try {
-    // never hang QA on a rate-limited call — try/catch → template
-    const text = await xaiChat({
-      apiKey: resolveXaiKey(),
-      system: STRAIGHT_NARRATIVE_SYSTEM,
-      user: `Write narratives for these picks:\n${pickDescriptions}`,
-      maxTokens: 1500,
-      timeoutMs: 25000,
-    });
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const narratives = JSON.parse(jsonMatch[0]);
-      for (const n of narratives) {
-        const idx = (n.pickIndex || 1) - 1;
-        if (idx >= 0 && idx < picks.length) {
-          if (n.coreReasoning && n.coreReasoning.length > 30) {
-            picks[idx].coreReasoning = n.coreReasoning;
-            finalFixCount++;
-            console.log(`[verify-final] Wrote narrative for pick ${idx + 1}: "${picks[idx].pick}"`);
-          }
-          if (n.whatLoses && n.whatLoses.length > 10) {
-            picks[idx].whatLoses = n.whatLoses;
-          }
-          if (n.dataVerified && n.dataVerified.length > 5) {
-            picks[idx].dataVerified = n.dataVerified;
-          }
-          if (n.clvExpectation && n.clvExpectation.length > 5) {
-            picks[idx].clvExpectation = n.clvExpectation;
-          }
-        }
-      }
-    }
-  } catch (e) {
-    if (isXaiHttpError(e) || /no text in xAI response/.test(e.message)) {
-      console.log(`[verify-final] ${e.message}`);
-    } else {
-      console.log(`[verify-final] Grok narrative write failed: ${e.message}`);
-      finalFixCount += applyNarrativeTemplate(picks, uniqueNeeds);
-    }
-  }
-  return finalFixCount;
-}
-
-async function backfillParlayLegNarratives(legs, uniqueLegNeeds) {
-  let finalFixCount = 0;
-  if (!uniqueLegNeeds || uniqueLegNeeds.length === 0) return finalFixCount;
-  if (!resolveXaiKey()) {
-    console.log(`[verify-final] Skipping parlay-leg Grok write — no XAI_API_KEY`);
-    return finalFixCount;
-  }
-  console.log(`[verify-final] Writing parlay-leg narratives for ${uniqueLegNeeds.length} leg(s) via Grok`);
-  const legDescriptions = uniqueLegNeeds.map(i => {
-    const leg = legs[i];
-    return `Leg ${i + 1}: ${leg.pick} ${leg.odds || ''} | ${leg.sport || ''} ${leg.betType || ''} | ${leg.matchup || ''} | Cover: ${leg.coverProb || ''} | EV: ${leg.ev || ''}`;
-  }).join('\n');
-  try {
-    const text = await xaiChat({
-      apiKey: resolveXaiKey(),
-      system: PARLAY_LEG_NARRATIVE_SYSTEM,
-      user: `Write narratives for these parlay legs:\n${legDescriptions}`,
-      maxTokens: 2000,
-      timeoutMs: 25000,
-    });
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const narratives = JSON.parse(jsonMatch[0]);
-      for (const n of narratives) {
-        const idx = (n.legIndex || 1) - 1;
-        if (idx >= 0 && idx < legs.length) {
-          if (n.coreReasoning && n.coreReasoning.length > 30) {
-            legs[idx].coreReasoning = n.coreReasoning;
-            finalFixCount++;
-            console.log(`[verify-final] Wrote parlay-leg narrative for leg ${idx + 1}: "${legs[idx].pick}"`);
-          }
-          if (n.whatLoses && n.whatLoses.length > 10) legs[idx].whatLoses = n.whatLoses;
-          if (n.dataVerified && n.dataVerified.length > 5) legs[idx].dataVerified = n.dataVerified;
-          if (n.clvExpectation && n.clvExpectation.length > 5) legs[idx].clvExpectation = n.clvExpectation;
-        }
-      }
-    }
-  } catch (e) {
-    if (isXaiHttpError(e) || /no text in xAI response/.test(e.message)) {
-      console.log(`[verify-final] parlay-leg ${e.message}`);
-    } else {
-      console.log(`[verify-final] Grok parlay-leg narrative write failed: ${e.message}`);
-      finalFixCount += applyParlayLegTemplate(legs, uniqueLegNeeds);
-    }
-  }
-  return finalFixCount;
 }
 
 // ── Auto-Fix: drop a critical pick. Do not invent a replacement straight. ──
@@ -1230,10 +828,12 @@ async function autoFixPicks(picksData, pickReports) {
 
   // Recalculate summary + enforce 4.0u daily cap (straights ≤3.5u + parlay 0.5u)
   enforceOmegaDailyUnitCap(picksData);
+  const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
+    + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
   if (picksData.summary) {
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
-    writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
+    picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
   }
 
   return { fixed: true, replacements };
@@ -1242,8 +842,6 @@ async function autoFixPicks(picksData, pickReports) {
 // ── Write updated picks back to blob ──
 async function updatePicksBlob(dateKey, picksData) {
   try { enforceOmegaDailyUnitCap(picksData); } catch (e) { console.error('[verify] unit cap', e.message); }
-  try { attachAuditSummary(picksData, currentAudit()); }
-  catch (e) { console.error(`[omega-audit] verify card summary soft-fail: ${e && e.message}`); }
   picksData.verifiedAt = new Date().toISOString();
   // verified is set by the caller (final pass) based on whether the FINAL card is genuinely clean.
   // Do NOT force true here — a red-flagged pick that couldn't be resolved must not be stamped "verified".
@@ -1254,7 +852,7 @@ async function updatePicksBlob(dateKey, picksData) {
 
   try {
     const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/picks-${dateKey}`;
-    const resp = await auditFetch(url, {
+    const resp = await fetch(url, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(picksData),
@@ -1271,9 +869,6 @@ async function updatePicksBlob(dateKey, picksData) {
 
 // ── Discord Alert ──
 async function postToDiscord(report, sharpResult) {
-  // PAUSED 2026-10-15 (Ben): all Discord posts off. QA/report still run. Flip to false to re-enable.
-  const DISCORD_POSTS_PAUSED = true;
-  if (DISCORD_POSTS_PAUSED) { console.log("[verify] Discord posts paused, skipping"); return; }
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) { console.log("[verify] No DISCORD_BOT_TOKEN, skipping alert"); return; }
 
@@ -1327,7 +922,7 @@ async function postToDiscord(report, sharpResult) {
   if (msg.length > 1950) msg = msg.slice(0, 1950) + '...';
 
   try {
-    const resp = await auditFetch(`https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages`, {
+    const resp = await fetch(`https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages`, {
       method: "POST",
       headers: { "Authorization": `Bot ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ content: msg }),
@@ -1349,14 +944,14 @@ async function fetchBetaPicks(dateKey) {
 
   if (!dateKey) {
     try {
-      const resp = await auditFetch(`${baseUrl}/latest-date`, { headers });
+      const resp = await fetch(`${baseUrl}/latest-date`, { headers });
       if (resp.ok) dateKey = (await resp.text()).trim().replace(/"/g, '');
     } catch (e) { console.error("[verify] latest-date fetch failed:", e.message); }
   }
   if (!dateKey) return null;
 
   try {
-    const resp = await auditFetch(`${baseUrl}/picks-${dateKey}`, { headers });
+    const resp = await fetch(`${baseUrl}/picks-${dateKey}`, { headers });
     if (resp.ok) return { dateKey, data: await resp.json() };
   } catch (e) { console.error("[verify] picks fetch failed:", e.message); }
   return null;
@@ -1367,7 +962,7 @@ async function storeReport(dateKey, report) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return;
   try {
-    await auditFetch(
+    await fetch(
       `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/verification-${dateKey}`,
       { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(report) }
     );
@@ -1377,54 +972,14 @@ async function storeReport(dateKey, report) {
 exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
 exports.straightRefillAllowed = straightRefillAllowed;
-exports.applyVerifyReserveTopUp = applyVerifyReserveTopUp;
 exports.resolveLockedParlay = resolveLockedParlay;
 exports.formatCombinedAmerican = formatCombinedAmerican;
-exports.sportEvFloor = sportEvFloor;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
-exports.updatePicksBlob = updatePicksBlob;
-exports.fetchBetaPicks = fetchBetaPicks;
-exports.enforceOmegaDailyUnitCap = enforceOmegaDailyUnitCap;
-exports.sharpReview = sharpReview;
-exports.backfillStraightNarratives = backfillStraightNarratives;
-exports.backfillParlayLegNarratives = backfillParlayLegNarratives;
 
 // ── Handler ──
-const { rejectUnlessEtSlot, etParts } = require("./lib/et-schedule");
-
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
-  const etSkip = rejectUnlessEtSlot("verify-picks-omega", event);
-  if (etSkip) return etSkip;
-
-  if (!event._omegaAuditBound) {
-    const params = event.queryStringParameters || {};
-    let dateKey = params.date || null;
-    if (!dateKey) {
-      dateKey = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-    }
-    const auditLog = createAuditLog({
-      runId: makeRunId(),
-      date: dateKey,
-      fn: 'verify-picks-omega',
-    });
-    const bound = Object.assign({}, event, {
-      _omegaAuditBound: true,
-      queryStringParameters: Object.assign({}, params, { date: dateKey }),
-    });
-    return runWithAudit(auditLog, async () => {
-      try {
-        return await exports.handler(bound);
-      } finally {
-        try {
-          await persistAuditLog(auditLog, { dryRun: replayNoWrite() });
-        } catch (err) {
-          console.error(`[omega-audit] verify persist soft-fail: ${err && err.message}`);
-        }
-      }
-    });
-  }
 
   try {
     const params = event.queryStringParameters || {};
@@ -1467,47 +1022,13 @@ exports.handler = async (event) => {
     // Drop a pick only when Hard Rock and majors coverage both fail. Odds API down
     // warns and leaves the card. Do not mark critical — auto-fix must not invent a
     // replacement side. Empty card OK.
-    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [], legDecisions: [], corrections: [], changed: false };
+    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [], legDecisions: [] };
     let blockStraightRefill = false;
     let blockParlayRefill = false;
     let placeabilityDropped = 0;
     let droppedSteam = 0;
-    let lateNewsReport = null;
-    const droppedThisRun = [];
-    let verifyTopUps = [];
     try {
       hrCheck = await runHardRockCheck(picksData);
-      if (hrCheck.changed) {
-        // Reports were built on the pre-correct card. Rebuild them on the
-        // Hard Rock numbers so a stale critical error cannot drop the new side.
-        totalWarnings = 0;
-        totalErrors = 0;
-        pickReports.length = 0;
-        for (const pick of picksData.picks) {
-          const math = runMathChecks(pick);
-          const narrative = runNarrativeChecks(pick);
-          const allWarnings = [...math.warnings, ...narrative.warnings];
-          const allErrors = [...math.errors, ...narrative.errors];
-          const severity = math.severity === "critical" || narrative.severity === "critical" ? "critical" : allWarnings.length > 0 ? "warning" : "clean";
-          totalWarnings += allWarnings.length;
-          totalErrors += allErrors.length;
-          pickReports.push({ pick: `${pick.pick} ${pick.odds}`, sport: pick.sport, severity, mathSeverity: math.severity, mathChecks: math.checks, narrativeChecks: narrative.checks, warnings: allWarnings, errors: allErrors });
-        }
-        for (const row of (hrCheck.corrections || [])) {
-          console.log(`[verify-hardrock] card ${row.action}: ${row.from || ''} → ${row.to || 'dropped'} (${row.reason || ''})`);
-          const idx = row.to ? picksData.picks.findIndex(p => p.pick === row.to) : -1;
-          if (idx >= 0 && pickReports[idx]) {
-            pickReports[idx].warnings.push(`Hard Rock auto-correct ${row.action}: ${row.from} → ${row.to} (${row.reason || ''})`);
-            totalWarnings++;
-            if (pickReports[idx].severity === "clean") pickReports[idx].severity = "warning";
-          }
-        }
-        try {
-          await updatePicksBlob(dateKey, picksData);
-        } catch (e) {
-          console.log(`[verify-hardrock] auto-correct blob write soft-fail: ${e.message}`);
-        }
-      }
       const decisions = (hrCheck.pickResults || []).map(r => (r && r.decision) || { drop: false });
       const legDecisions = hrCheck.legDecisions || [];
       for (let i = 0; i < pickReports.length; i++) {
@@ -1528,11 +1049,7 @@ exports.handler = async (event) => {
       totalWarnings += hrCheck.parlayFindings.filter(f => f.level === "warning").length;
       const anyDrop = decisions.some(d => d.drop) || legDecisions.some(d => d.drop);
       if (anyDrop && !hrCheck.summary.apiDown && !hrCheck.summary.skipped) {
-        const picksBeforePlace = (picksData.picks || []).slice();
         const applied = applyPlaceabilityDrops(picksData, decisions, legDecisions);
-        for (const gone of picksBeforePlace) {
-          if (!(picksData.picks || []).includes(gone)) droppedThisRun.push(gone);
-        }
         for (let i = pickReports.length - 1; i >= 0; i--) {
           if (decisions[i] && decisions[i].drop) pickReports.splice(i, 1);
         }
@@ -1549,71 +1066,64 @@ exports.handler = async (event) => {
       console.log(`[verify-hardrock] Check failed (non-fatal, card unchanged): ${e.message}`);
     }
 
-    // ── Step 1.6: Steam is a pre-10:30 selection input only ──
-    // sharpSteamSinceOpen records size and direction, and dkLagsSharp, on
-    // the generate path. Verify does not recheck steam and does not drop
-    // or reprice a pick for steam. Nothing on the card moves for steam
-    // after the 10:30 lock. runOmegaSteamRecheck is not called.
+    // ── Step 1.6: Open→pick steam recheck (hard-fail / replace; empty OK) ──
     let steamCheck = { checked: 0, failed: 0, reasons: [] };
-    if (steamDropBlocksStraightRefill(droppedSteam, steamCheck.failed)) {
-      blockStraightRefill = true;
+    try {
+      steamCheck = await runOmegaSteamRecheck(picksData, pickReports);
+      totalErrors += steamCheck.failed;
+    } catch (e) {
+      console.log(`[verify-steam] Check failed (non-fatal): ${e.message}`);
     }
 
     // ── Step 2: Auto-fix critical issues ──
     const fixResult = await autoFixPicks(picksData, pickReports);
     if (fixResult.fixed) {
       console.log(`[verify] Auto-fixed ${fixResult.replacements.length} pick(s)`);
-      for (const row of fixResult.replacements || []) {
-        if (row && row.removed) droppedThisRun.push({ pick: row.removed, side: row.removed });
-      }
       // Write updated picks back to blob so the page shows clean data
       await updatePicksBlob(dateKey, picksData);
     }
 
-    // Pre-publish news reprice. Same 90-minute window. A scratched starter,
-    // a priced goalie change, or a newly out QB reprices at the posted
-    // DraftKings number and stays when the new EV clears the floor. It
-    // drops only on ev-floor. Postponed and suspended still void. This
-    // verify slot is 10:30 ET, before the 11:00 publish. Never adds a side.
+    // Steam hard-fails still on card after autofix → drop (empty OK; no TARGET_PICKS refill)
     try {
-      const lateNow = new Date();
-      const late = await lateNews.runLateNews({
-        picksData,
-        dateISO: dateKey,
-        now: lateNow,
-        withinMin: 90,
-      });
-      lateNewsReport = late;
-      try {
-        const plan = lateNews.commitLateNewsCard(picksData, late, {
-          resolveLockedParlay,
-          enforceCap: enforceOmegaDailyUnitCap,
-        });
-        if (plan.blockStraightRefill) blockStraightRefill = true;
-        if (late && Array.isArray(late.removed)) {
-          for (const name of late.removed) {
-            if (name) droppedThisRun.push({ pick: name, side: name });
-          }
+      const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
+      const kept = [];
+      droppedSteam = 0;
+      for (const pick of picksData.picks) {
+        const r = pick.lineMove ? adverseSteamReason(pick.lineMove, { verify: true }) : null;
+        if (r) {
+          console.log(`[verify-steam] dropping ${pick.pick}: ${r}`);
+          picksData.rejections = picksData.rejections || [];
+          picksData.rejections.unshift({
+            matchup: pick.matchup, side: pick.pick,
+            reason: `QA_HARDFAIL: ${r}`, hardFail: true,
+          });
+          droppedSteam++;
+          continue;
         }
-        for (const row of picksData.voidedPregame || []) {
-          if (row) droppedThisRun.push({ ...row, void: true });
-        }
-        if (plan.write) await updatePicksBlob(dateKey, picksData);
-      } catch (e) {
-        console.log(`[verify-late-news] write soft-fail: ${e.message}`);
+        kept.push(pick);
       }
-      try {
-        await storeLateNewsOps(dateKey, lateNews.opsFromRun(late, {
-          date: dateKey,
-          functionName: 'verify-picks-omega',
-          et: etParts(lateNow).et,
-        }));
-      } catch (e) {
-        console.error(`[verify-late-news] ops soft-fail: ${e.message}`);
+      // Adverse steam must not be undone by TARGET_PICKS backfill (same flag as placeability).
+      if (steamDropBlocksStraightRefill(droppedSteam, steamCheck.failed)) {
+        blockStraightRefill = true;
+      }
+      if (droppedSteam > 0) {
+        picksData.picks = kept;
+        if (kept.length === 0) {
+          picksData.parlayLegs = [];
+          Object.assign(picksData, require('./lib/no-plays').noPlaysFields(
+            "The line moved against today's candidates after they were priced, so Omega is passing."));
+          picksData.edgeSummary = picksData.noPlaysReason;
+        }
+        if (picksData.summary) {
+          picksData.summary.totalStraightBets = kept.length;
+          picksData.summary.totalPicks = kept.length;
+        }
+        enforceOmegaDailyUnitCap(picksData);
+        await updatePicksBlob(dateKey, picksData);
+        console.log(`[verify-steam] dropped ${droppedSteam} adverse-steam pick(s); remaining=${kept.length}`);
       }
     } catch (e) {
-      console.log(`[verify-late-news] soft-fail: ${e.message}`);
-      lateNewsReport = { dropped: 0, flagged: 0, checked: 0, httpCalls: 0, softFail: true, error: e.message };
+      console.log(`[verify-steam] drop pass skipped: ${e.message}`);
     }
 
     // ── Step 3: Sharp handicapper review ──
@@ -1632,46 +1142,32 @@ exports.handler = async (event) => {
     }
 
     // Merge all replacements
-    const hrReplacements = (hrCheck.corrections || [])
-      .filter(c => c && (c.action === 'repriced' || c.action === 'replaced' || c.action === 'dropped'))
-      .map(c => ({
-        removed: c.from && c.from !== c.to ? c.from : null,
-        added: c.to || null,
-        removedReason: `hardrock-autocorrect:${c.action}`,
-      }));
-    const allReplacements = [...(fixResult.replacements || []), ...sharpReplacements, ...hrReplacements];
+    const allReplacements = [...(fixResult.replacements || []), ...sharpReplacements];
 
-    // ── Step 3c: FINAL PASS — re-verify the locked card. ──
-    // After drops, refill from the private reserve up to 3. Steam does not
-    // refill. A blocked side never returns. No odds pull. When the reserve
-    // cannot fill the card, publish what remains.
+    // ── Step 3c: FINAL PASS — re-verify the locked card. Do not rebuild the parlay. ──
+    // After drops, the published card must stay the one generate locked:
     // 1. Every remaining pick has a real narrative (not generic)
     // 2. Grades stay quality/edge — never rewritten from units
     // 3. Math checks pass
-    // 4. A top-up rebuilds the parlay from the final straights. Otherwise a
-    //    locked parlay is preserved, or a dropped leg is removed.
+    // 4. A locked parlay is preserved, or a dropped leg is removed. It is not rebuilt.
     {
       console.log(`[verify-final] Running final verification pass on ${picksData.picks.length} picks`);
       let finalFixCount = 0;
 
-      // Placeability, late-news, and auto-fix drops refill from the private reserve up to 3.
-      // Steam does not refill. A blocked side never returns.
+      // Placeability soft-veto and adverse steam drops do not refill. Empty slots stay empty.
+      // A clean short card does not refill either. Verify does not invent straights.
       const stillOnCard = new Set(picksData.picks.map(p => p.pick));
       const removedSinceLock = lockedStraightPicks.filter(p => !stillOnCard.has(p));
-      for (const name of removedSinceLock) {
-        if (name && !droppedThisRun.some((row) => (row.pick || row.side) === name)) {
-          droppedThisRun.push({ pick: name, side: name });
-        }
-      }
-      const topUpResult = applyVerifyReserveTopUp(picksData, {
+      if (straightRefillAllowed({
         droppedSteam,
         steamHardFails: steamCheck.failed,
-        blocked: require('./lib/omega-vnext/card_integrity').blockedRowsFor(picksData, droppedThisRun),
-      });
-      verifyTopUps = topUpResult.topUps || [];
-      if (topUpResult.topped) {
-        console.log(`[verify-final] reserve top-up ${verifyTopUps.length}: ${verifyTopUps.map((row) => `${row.pick} (${row.reason})`).join(', ')}`);
-      } else if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
+        blockStraightRefill,
+        cardLocked: true,
+        removedSinceLock,
+      })) {
+        throw new Error('[verify] refused: straight refill is not a verify action');
+      }
+      if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
         console.log(`[verify-final] Straight refill blocked — publishing ${picksData.picks.length} pick(s) from the locked card`);
       }
 
@@ -1695,10 +1191,99 @@ exports.handler = async (event) => {
       }
       const uniqueNeeds = [...new Set(needsNarrative)];
 
-      // Grok writes narratives for picks that need them. Failure keeps the card.
-      finalFixCount += await backfillStraightNarratives(picksData.picks, uniqueNeeds);
+      // Call Claude to write proper narratives for picks that need them
+      if (uniqueNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
+        console.log(`[verify-final] Writing narratives for ${uniqueNeeds.length} pick(s) via Claude`);
+        const pickDescriptions = uniqueNeeds.map(i => {
+          const p = picksData.picks[i];
+          return `Pick ${i + 1}: ${p.pick} ${p.odds} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`;
+        }).join('\n');
 
-      // Ensure UI fields always present after narrative pass (Grok may omit optional keys)
+        try {
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → template
+            headers: {
+              "x-api-key": process.env.ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+              "anthropic-beta": "prompt-caching-2024-07-31",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 1500,
+              system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+- Be 2-3 sentences max
+- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
+- Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
+- Always say "WeBetAI" not "the model"
+
+Also write:
+- "whatLoses": one sentence describing the specific scenario that beats this pick
+- "dataVerified": brief note that the edge is model-grounded (no invented injuries/stats)
+- "clvExpectation": one sentence on expected closing-line movement
+
+Return ONLY valid JSON array:
+[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
+              messages: [{ role: "user", content: `Write narratives for these picks:\n${pickDescriptions}` }],
+            }),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const text = data.content?.[0]?.text || "";
+            const jsonMatch = text.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              const narratives = JSON.parse(jsonMatch[0]);
+              for (const n of narratives) {
+                const idx = (n.pickIndex || 1) - 1;
+                if (idx >= 0 && idx < picksData.picks.length) {
+                  if (n.coreReasoning && n.coreReasoning.length > 30) {
+                    picksData.picks[idx].coreReasoning = n.coreReasoning;
+                    finalFixCount++;
+                    console.log(`[verify-final] Wrote narrative for pick ${idx + 1}: "${picksData.picks[idx].pick}"`);
+                  }
+                  if (n.whatLoses && n.whatLoses.length > 10) {
+                    picksData.picks[idx].whatLoses = n.whatLoses;
+                  }
+                  if (n.dataVerified && n.dataVerified.length > 5) {
+                    picksData.picks[idx].dataVerified = n.dataVerified;
+                  }
+                  if (n.clvExpectation && n.clvExpectation.length > 5) {
+                    picksData.picks[idx].clvExpectation = n.clvExpectation;
+                  }
+                }
+              }
+            }
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            console.log(`[verify-final] Anthropic HTTP ${resp.status}${errBody ? ': ' + errBody.slice(0, 180) : ''}`);
+          }
+        } catch (e) {
+          console.log(`[verify-final] Claude narrative write failed: ${e.message}`);
+          // Fallback: use template narratives
+          for (const i of uniqueNeeds) {
+            const p = picksData.picks[i];
+            if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces')) {
+              const isTotal = /over|under/i.test(p.pick);
+              const isML = /\bML\b/i.test(p.pick);
+              p.coreReasoning = isTotal
+                ? `WeBetAI projects ${p.modelEdge || 'a statistical edge'} on this total. Recent scoring trends and pace data support this direction, with the projection diverging from the consensus line.`
+                : isML
+                ? `WeBetAI gives this team a win probability above the market's implied odds at ${p.odds}. The Elo rating differential and recent form support value at these odds.`
+                : `WeBetAI projects ${p.modelEdge || 'a spread edge'} on this matchup. Efficiency metrics and recent form diverge from the consensus line, creating positive expected value.`;
+              finalFixCount++;
+            }
+            if (!p.whatLoses || p.whatLoses.length < 15) {
+              p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+            }
+          }
+        }
+      }
+
+      // Ensure UI fields always present after narrative pass (Claude may omit optional keys)
       for (const p of picksData.picks) {
         if (!p.whatLoses || p.whatLoses.trim().length < 15) {
           p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
@@ -1721,50 +1306,36 @@ exports.handler = async (event) => {
         }
       }
 
-      // ── Parlay: a reserve top-up already rebuilt from the final straights.
-      // Otherwise preserve the generate-locked slip. Drop a leg steam or safety
+      // ── Parlay: preserve the generate-locked slip. Drop a leg steam or safety
       // already removed. Do not compose a new parlay from the straight card.
       const removedPicks = [
         ...removedSinceLock,
         ...allReplacements.map(r => r.removed).filter(Boolean),
       ];
-      if (topUpResult.topped) {
-        console.log(`[verify-final] Parlay rebuilt from ${picksData.picks.length} straights after reserve top-up`);
-      } else {
-        if (blockParlayRefill) {
-          console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
-        }
-        const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
-          removedPicks,
-          straightCard: picksData.picks,
-        });
-        if (resolvedParlay.rebuilt) {
-          console.error('[verify] parlay rebuild requested — ignored; QA does not block publish');
-        } else {
-          picksData.parlayLegs = resolvedParlay.parlayLegs;
-        }
-        if (resolvedParlay.action === 'preserved') {
-          const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
-          console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
-        } else if (resolvedParlay.action === 'resized') {
-          finalFixCount++;
-          console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
-        } else if (resolvedParlay.action === 'cleared') {
-          console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
-        }
-        if ((picksData.picks || []).length < MAX_STRAIGHTS) {
-          picksData.shortfall = buildShortfall({
-            picks: picksData.picks,
-            parlayLegs: picksData.parlayLegs,
-            yesPool: picksData.reserve || [],
-            rejected: droppedThisRun,
-          });
-        }
+      if (blockParlayRefill) {
+        console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
+      }
+      const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
+        removedPicks,
+        straightCard: picksData.picks,
+      });
+      if (resolvedParlay.rebuilt) {
+        throw new Error('[verify] refused: parlay rebuild is not a verify action');
+      }
+      picksData.parlayLegs = resolvedParlay.parlayLegs;
+      if (resolvedParlay.action === 'preserved') {
+        const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
+        console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
+      } else if (resolvedParlay.action === 'resized') {
+        finalFixCount++;
+        console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
+      } else if (resolvedParlay.action === 'cleared') {
+        console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
       }
 
       // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──
       // Straights get writeups above; parlay legs often differ from the straight card and were
-      // previously left with empty/fallback blurbs. Mirror the straight Grok pass per-leg.
+      // previously left with empty/fallback blurbs. Mirror the straight Claude pass per-leg.
       {
         const plRoot = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
         const legs = (plRoot && Array.isArray(plRoot.legs)) ? plRoot.legs : [];
@@ -1787,7 +1358,83 @@ exports.handler = async (event) => {
           }
         }
         const uniqueLegNeeds = [...new Set(needsLeg)];
-        finalFixCount += await backfillParlayLegNarratives(legs, uniqueLegNeeds);
+        if (uniqueLegNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
+          console.log(`[verify-final] Writing parlay-leg narratives for ${uniqueLegNeeds.length} leg(s) via Claude`);
+          const legDescriptions = uniqueLegNeeds.map(i => {
+            const leg = legs[i];
+            return `Leg ${i + 1}: ${leg.pick} ${leg.odds || ''} | ${leg.sport || ''} ${leg.betType || ''} | ${leg.matchup || ''} | Cover: ${leg.coverProb || ''} | EV: ${leg.ev || ''}`;
+          }).join('\n');
+          try {
+            const resp = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              signal: AbortSignal.timeout(25000),
+              headers: {
+                "x-api-key": process.env.ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+                "anthropic-beta": "prompt-caching-2024-07-31",
+              },
+              body: JSON.stringify({
+                model: "claude-sonnet-4-6",
+                max_tokens: 2000,
+                system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI parlay legs. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+- Be 2-4 sentences
+- Explain in GENERAL terms why WeBetAI favors the side named in the leg
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given
+- Never use technical jargon; never restate projections/lines/numbers (shown separately)
+- Always say "WeBetAI" not "the model"
+
+Also write whatLoses, dataVerified, and clvExpectation (one sentence each).
+
+Return ONLY valid JSON array:
+[{ "legIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
+                messages: [{ role: "user", content: `Write narratives for these parlay legs:\n${legDescriptions}` }],
+              }),
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              const textOut = data.content?.[0]?.text || "";
+              const jsonMatch = textOut.match(/\[[\s\S]*\]/);
+              if (jsonMatch) {
+                const narratives = JSON.parse(jsonMatch[0]);
+                for (const n of narratives) {
+                  const idx = (n.legIndex || 1) - 1;
+                  if (idx >= 0 && idx < legs.length) {
+                    if (n.coreReasoning && n.coreReasoning.length > 30) {
+                      legs[idx].coreReasoning = n.coreReasoning;
+                      finalFixCount++;
+                      console.log(`[verify-final] Wrote parlay-leg narrative for leg ${idx + 1}: "${legs[idx].pick}"`);
+                    }
+                    if (n.whatLoses && n.whatLoses.length > 10) legs[idx].whatLoses = n.whatLoses;
+                    if (n.dataVerified && n.dataVerified.length > 5) legs[idx].dataVerified = n.dataVerified;
+                    if (n.clvExpectation && n.clvExpectation.length > 5) legs[idx].clvExpectation = n.clvExpectation;
+                  }
+                }
+              }
+            } else {
+              const errBody = await resp.text().catch(() => '');
+              console.log(`[verify-final] Anthropic parlay-leg HTTP ${resp.status}${errBody ? ': ' + errBody.slice(0, 180) : ''}`);
+            }
+          } catch (e) {
+            console.log(`[verify-final] Claude parlay-leg narrative write failed: ${e.message}`);
+            for (const i of uniqueLegNeeds) {
+              const leg = legs[i];
+              if (!leg.coreReasoning || leg.coreReasoning.length < 80) {
+                const isTotal = /over|under/i.test(leg.pick || '');
+                leg.coreReasoning = isTotal
+                  ? `WeBetAI likes this total as a parlay leg — scoring trends and pace support the direction at the posted number.`
+                  : `WeBetAI likes this side as a parlay leg — form and matchup factors diverge from the market price enough to include it on the slip.`;
+                finalFixCount++;
+              }
+              if (!leg.whatLoses || leg.whatLoses.length < 15) {
+                leg.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+              }
+            }
+          }
+        } else if (uniqueLegNeeds.length > 0) {
+          console.log(`[verify-final] Skipping parlay-leg Claude write — no ANTHROPIC_API_KEY`);
+        }
       }
 
       // Ensure parlay legs carry whatLoses for Optimized Parlay cards
@@ -1808,37 +1455,9 @@ exports.handler = async (event) => {
       }
 
       // QA_HARDFAIL soft: generator already dropped SP/QB/stale; verify does not force-fill leans.
-      // Grok remains narrator/verifier only — structural hard-fails live in omega-vnext/qa_hardfail.js.
+      // Claude remains narrator/verifier only — structural hard-fails live in omega-vnext/qa_hardfail.js.
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
       picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
-
-      // Sort check: card top 3 vs the re-ranked list. Silent on the page.
-      // A mismatch rebuilds the top 3 and the parlay and writes bugLog only.
-      {
-        const sortCheck = applySilentSortCheck(picksData);
-        if (sortCheck.entry) {
-          if (!Array.isArray(picksData.bugLog)) picksData.bugLog = [];
-          picksData.bugLog.push(sortCheck.entry);
-        }
-        if (sortCheck.changed) {
-          const restoresBlocked = (sortCheck.picks || []).some((row) => sideBlocked(row, droppedThisRun));
-          // The 10:00 rank list still names a side this run already dropped.
-          // Putting it back would undo the reserve fill. Keep the topped-up card.
-          if (topUpResult.topped || restoresBlocked) {
-            console.log('[verify-final] sort-check rebuild skipped — blocked side or reserve top-up');
-          } else {
-            picksData.picks = sortCheck.picks;
-            const prevTicket = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || {};
-            const rebuilt = parlayFromStraights(picksData.picks, {
-              hrPlaceabilityNote: prevTicket.hrPlaceabilityNote,
-              pool: picksData.candidateTable,
-            });
-            if (rebuilt.length) picksData.parlayLegs = rebuilt;
-            enforceOmegaDailyUnitCap(picksData);
-            console.log(`[verify-sort] silent auto-correct differed=${sortCheck.entry.differed.length}`);
-          }
-        }
-      }
 
       // Write the final clean card
       await updatePicksBlob(dateKey, picksData);
@@ -1856,17 +1475,9 @@ exports.handler = async (event) => {
       totalErrors,
       sharpRedFlags: sharpReplacements.length,
       picks: pickReports,
-      hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings, corrections: hrCheck.corrections || [] },
+      hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
       placeability: { dropped: placeabilityDropped, parlayCleared: blockParlayRefill },
-      topUps: verifyTopUps,
       steamRecheck: steamCheck,
-      lateNews: lateNewsReport ? {
-        checked: lateNewsReport.checked || 0,
-        dropped: lateNewsReport.dropped || 0,
-        flagged: lateNewsReport.flagged || 0,
-        httpCalls: lateNewsReport.httpCalls || 0,
-        softFail: !!lateNewsReport.softFail,
-      } : { checked: 0, dropped: 0, flagged: 0, httpCalls: 0, softFail: false },
       sharpReview: sharpResult,
       summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? "skipped" : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
       verifiedAt: new Date().toISOString(),
@@ -1879,14 +1490,6 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: CORS, body: JSON.stringify(report, null, 2) };
   } catch (err) {
     console.error("[verify] Error:", err.message);
-    return {
-      statusCode: 200,
-      headers: CORS,
-      body: JSON.stringify({
-        published: true,
-        qaError: err.message,
-        message: 'QA did not block publish. The stored card stays up.',
-      }),
-    };
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: err.message }) };
   }
 };

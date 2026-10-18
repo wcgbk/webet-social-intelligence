@@ -11,7 +11,6 @@
 
 const store = require('./lib/omega-vnext/store');
 const wf = require('./lib/omega-vnext/walk_forward');
-const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
 function json(statusCode, body) {
   return {
@@ -93,11 +92,7 @@ async function runCapture(explicitDate) {
   };
 }
 
-exports.handler = async (event, context) => {
-  if (!(context && context.skipEtGuard)) {
-    const etSkip = rejectUnlessEtSlot('capture-omega-walkforward', event);
-    if (etSkip) return etSkip;
-  }
+exports.handler = async (event) => {
   const qs = (event && event.queryStringParameters) || {};
   const explicit = qs.date || null;
   console.log(`[omega-walkforward] start observer date=${explicit || 'yesterday+today'}`);

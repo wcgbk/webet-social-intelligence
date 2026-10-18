@@ -19,13 +19,13 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
-assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 4.5);
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
-assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.5);
+assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
-assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
-assert.strictEqual(config.LEAN_PAD, true);
+assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
+assert.strictEqual(config.LEAN_PAD, false);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);
 assert.ok(Math.abs(math.evAtOdds(0.55, -110) - (0.55 * (100/110 + 1) - 1)) < 1e-9);
 
@@ -52,16 +52,13 @@ const sorted = math.sortByGradeThenUnits([
 ]);
 assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low']);
 
-// Shrunk EV is the rank. Edge breaks an equal-EV tie.
+// Published candidate rank uses the grade score, not raw EV. A +180 dog stays behind.
 {
   const fav = { edgePct: 0.048, ev: 0.04, odds: -140, sport: 'MLB', side: 'Fav', predictedClv: 0, uncertainty: 0.12 };
   const dog = { edgePct: 0.021, ev: 0.18, odds: 180, sport: 'MLB', side: 'Dog', predictedClv: 0, uncertainty: 0.12 };
   const rankedPool = select.orderedByScore([dog, fav]);
-  assert.strictEqual(rankedPool[0].side, 'Dog');
-  assert.strictEqual(rankedPool[1].side, 'Fav');
-  const hiEdge = { edgePct: 0.05, ev: 0.04, odds: -110, sport: 'MLB', side: 'Hi', predictedClv: 0, uncertainty: 0.12 };
-  const loEdge = { edgePct: 0.02, ev: 0.04, odds: -110, sport: 'MLB', side: 'Lo', predictedClv: 0, uncertainty: 0.12 };
-  assert.strictEqual(select.orderedByScore([loEdge, hiEdge])[0].side, 'Hi');
+  assert.strictEqual(rankedPool[0].side, 'Fav');
+  assert.strictEqual(rankedPool[1].side, 'Dog');
   assert.strictEqual(math.americanCentsDiff(105, -105), 10);
   assert.strictEqual(math.americanCentsDiff(-110, -130), 20);
   assert.notStrictEqual(math.americanCentsDiff(105, -105), 210);
@@ -78,18 +75,12 @@ assert.ok(mlbMl > nflMl);
 const mlbNoise = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.53, fair_sharp_p: 0.52, odds: -110,
 }));
-assert.strictEqual(mlbNoise.calMode, 'A');
-assert.strictEqual(mlbNoise.calibK, config.MLB_CALIBRATION.shrinkK.Moneyline);
-assert.strictEqual(mlbNoise.calMap, null);
-assert.ok(mlbNoise.ev < 0.03, 'noise near the market stays under a 3% EV scale');
-assert.ok(mlbNoise.ev > 0, 'hand-set shrink still leaves a tiny positive EV');
+assert.ok(mlbNoise.ev < config.GATES.minEV.MLB, 'noise near the market stays under the EV gate');
 const mlbReal = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.60, fair_sharp_p: 0.52, odds: -120,
 }));
-assert.strictEqual(mlbReal.calMode, 'A');
-assert.strictEqual(mlbReal.calLevel, 'handset');
-assert.ok(mlbReal.ev >= 0.03, 'a real MLB moneyline disagreement clears a 3% EV scale');
-assert.ok(mlbReal.edgePct < 0.12, 'MLB moneyline shrink keeps a real disagreement under a double-digit edge');
+assert.ok(mlbReal.ev >= config.GATES.minEV.MLB, 'a real MLB moneyline disagreement clears minEV');
+assert.ok(mlbReal.edgePct < 0.12, 'global isotonic still blocks a fake double-digit edge');
 // isotonic must compress toward band — not inflate just-above-hi values
 assert.ok(calibrate.isotonicClip(0.60) <= 0.60, 'isotonic must not inflate at hi');
 assert.ok(calibrate.isotonicClip(0.72) < 0.65, 'isotonic must pull 0.72 down');
@@ -125,7 +116,7 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// The letter score is still the edge. Published order is anchored stake EV.
+// Rank is calibrated edge, not dog EV. A +180 with a fatter EV stays behind a -110.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
@@ -137,7 +128,7 @@ assert.ok(picked.length >= 1);
   };
   assert.ok(select.scoreCandidate(chalk) > select.scoreCandidate(dog));
   const ranked = select.selectStraights([dog, chalk], 1);
-  assert.strictEqual(ranked[0].matchup, 'C @ D');
+  assert.strictEqual(ranked[0].matchup, 'A @ B');
 }
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));
@@ -164,8 +155,7 @@ if (parlays.length) {
   assert.ok(parlays[0].type.includes('parlay'));
 }
 
-// A moneyline parlay of the straight card still mirrors the card after the " ML" suffix.
-// The same-model-bias haircut makes the joint dependent on every multi-leg ticket.
+// A moneyline parlay of the straight card is not "independent" just because the label gained " ML".
 {
   const mirrorPool = [
     {
@@ -176,7 +166,7 @@ if (parlays.length) {
     {
       side: 'Los Angeles Dodgers', market: 'Moneyline', odds: -115, coverProb: 0.55, ev: 0.035,
       matchup: 'San Diego Padres @ Los Angeles Dodgers', sport: 'MLB', commenceTime: '2026-09-23T23:10:00Z',
-      homeTeam: 'Los Angeles Dodgers', awayTeam: 'San Diego Padres', edgePct: 0.03,
+      homeTeam: 'Los Angeles Dodgers', awayTeam: 'San Diego Padres', edgePct: 0.028,
     },
   ];
   const mirrorStraights = mirrorPool.map(c => ({
@@ -186,18 +176,14 @@ if (parlays.length) {
   }));
   const mirrored = parlay.optimizeParlay(mirrorPool, mirrorStraights, { cardDate: '2026-09-23' });
   assert.strictEqual(mirrored.length, 1);
-  assert.strictEqual(mirrored[0].mirrorsCard, true);
   assert.strictEqual(mirrored[0].independent, false);
-  assert.strictEqual(mirrored[0].evLabel, 'same-model-bias haircut x0.95 applied');
-  assert.strictEqual(mirrored[0].correlationNote, mirrored[0].evLabel);
   assert.ok(/straight/.test(mirrored[0].type));
   const alone = parlay.optimizeParlay(mirrorPool, [], { cardDate: '2026-09-23' });
-  assert.strictEqual(alone[0].mirrorsCard, false);
-  assert.strictEqual(alone[0].independent, false);
+  assert.strictEqual(alone[0].independent, true);
   assert.ok(/optimized/.test(alone[0].type));
 }
 
-// Daily unit structure: three A+ at 1.5u + full-card 0.5u parlay ≤ 5.0u MAX
+// Daily unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX
 {
   const fat = [
     { pick: 'A', rating: 'aplus', units: '1.5u', confidence: 90 },
@@ -209,11 +195,9 @@ if (parlays.length) {
   const straightU = capped.picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const parlayU = capped.parlayLegs.reduce((s, pl) => s + parseFloat(pl.units), 0);
   const total = straightU + parlayU;
-  assert.ok(straightU <= 4.5 + 1e-9, `straight budget=${straightU}`);
-  assert.strictEqual(straightU, 4.5);
-  assert.strictEqual(parlayU, 0.5, 'full card parlay is 0.5u');
-  assert.ok(total <= 5.0 + 1e-9, `cap total=${total}`);
-  assert.strictEqual(total, 5);
+  assert.ok(straightU <= 3.5 + 1e-9, `straight budget=${straightU}`);
+  assert.strictEqual(parlayU, 0.5, 'parlay must be fixed 0.5u');
+  assert.ok(total <= 4.0 + 1e-9, `cap total=${total}`);
   assert.strictEqual(capped.picks[0].rating, 'aplus');
 }
 
@@ -235,8 +219,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   // Kickoff must still be pregame. A fixed Sep 22 night tip is already
   // behind Date.now() once that evening passes, so use a few hours ahead
   // and the ET date of that tip. Off-days stay later in the week.
-  const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
-  const tueKick = sampleInSlateKick();
+  const tueKick = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
   const tue = math.etCalendarDate(tueKick);
   const offSat = new Date(Date.now() + 4 * 864e5).toISOString();
   const offSun = new Date(Date.now() + 5 * 864e5).toISOString();
@@ -248,7 +231,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   const gated = gates.applyGates(mixed, { cardDate: tue });
   assert.strictEqual(gated.yesPool.length, 1, 'only Tue MLB should pass');
   assert.strictEqual(gated.yesPool[0].sport, 'MLB');
-  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day' || r.rejectReason === 'future-date'));
+  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day'));
 
   // ingest filter helper — same dynamic card date as the gate case above.
   // A fixed Sep 22 kickoff is the wrong ET day once now+3h crosses midnight.
@@ -299,55 +282,39 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.strictEqual(card.length, 1);
   assert.strictEqual(card[0].legs.length, 3, '3 clean legs publish a 3-leg');
 
-  // Cover under 45% is not a parlay leg, even at a higher edge.
+  // Hit probability outranks a longshot with a much higher parlay EV.
   const ranked = parlay.optimizeParlay([
-    { ...row('A @ B', 0.58, 0.05), edgePct: 0.03, side: 'ChalkA' },
-    { ...row('C @ D', 0.57, 0.05), edgePct: 0.03, side: 'ChalkC' },
-    { ...row('E @ F', 0.56, 0.05), edgePct: 0.03, side: 'ChalkE' },
-    { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800, edgePct: 0.09 },
+    row('A @ B', 0.58, 0.05),
+    row('C @ D', 0.57, 0.05),
+    row('E @ F', 0.56, 0.05),
+    { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800 },
   ], []);
   assert.strictEqual(ranked[0].legs.length, 3);
   assert.ok(!ranked[0].legs.some(l => /Longshot/.test(l.pick)));
 
-  // Among legs at or above 45% cover, a higher edge beats a higher cover.
-  const dog = parlay.optimizeParlay([
-    { ...row('A @ B', 0.58, 0.05), edgePct: 0.03, side: 'ChalkA' },
-    { ...row('C @ D', 0.57, 0.05), edgePct: 0.03, side: 'ChalkC' },
-    { ...row('E @ F', 0.56, 0.05), edgePct: 0.03, side: 'ChalkE' },
-    { ...row('G @ H', 0.46, 0.08), side: 'Dog', odds: 150, edgePct: 0.05 },
-  ], []);
-  assert.strictEqual(dog[0].legs.length, 3);
-  assert.ok(dog[0].legs.some(l => /Dog/.test(l.pick)));
-
-  // Equal edge: the higher combined parlay EV wins the tie.
+  // Same hit probability: the higher-EV leg wins the tie.
   const tied = parlay.optimizeParlay([
     { ...row('A @ B', 0.56, 0.05), odds: -110, side: 'PriceA' },
     { ...row('C @ D', 0.56, 0.05), odds: -110, side: 'PriceC' },
     { ...row('E @ F', 0.56, 0.05), odds: -110, side: 'PriceE' },
-    // +180 is the 1.5× main EV band. 0.045 clears 4.5% so the plus price stays in the ticket search.
-    { ...row('G @ H', 0.56, 0.045), odds: 180, side: 'PlusPrice' },
+    { ...row('G @ H', 0.56, 0.04), odds: 180, side: 'PlusPrice' },
   ], []);
-  assert.ok(tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'plus price raises combined EV when edges tie');
+  assert.ok(tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'EV tie-break keeps the plus price');
 
   // Favorite combined price (decimal < 2) is a minus number, never a plus.
   const chalk = parlay.optimizeParlay([
-    { ...row('A @ B', 0.90, 0.08), odds: -400, side: 'ChalkA' },
-    { ...row('C @ D', 0.90, 0.08), odds: -400, side: 'ChalkC' },
-    { ...row('E @ F', 0.90, 0.08), odds: -400, side: 'ChalkE' },
+    { ...row('A @ B', 0.90, 0.12), odds: -400, side: 'ChalkA' },
+    { ...row('C @ D', 0.90, 0.12), odds: -400, side: 'ChalkC' },
+    { ...row('E @ F', 0.90, 0.12), odds: -400, side: 'ChalkE' },
   ], []);
   assert.ok(chalk[0].combinedDecimal < 2);
   assert.ok(chalk[0].combinedOdds.startsWith('-'), chalk[0].combinedOdds);
 }
 
-// Wednesday MLB. Legacy (hand-set shrink + bandRetainClip) and mode A
-// (hand-set shrink, no band) still fill 3 straights and a 3-leg. Rank is
-// stake EV, so a noise side with a higher EV can be a straight. Real
-// starter, total, and park games still clear into the yes pool. Mode B
-// stays selectable. Its ship fit sets MLB spread K to the product floor
-// 0.3 (hand-set 0.62; kMle 0). K_MIN is a fit box, not a publish gate.
+// Wednesday MLB: real starter / total / park edges fill 3 straights + a 3-leg.
+// A pick'em, a 0.25-run moneyline, and a starter already priced to -190 stay out.
 {
-  const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
-  const kick = sampleInSlateKick(Date.now() + 24 * 3600 * 1000);
+  const kick = new Date(Date.now() + 30 * 3600 * 1000).toISOString();
   const cardDate = math.etCalendarDate(kick);
   function sharpish(base) {
     return {
@@ -358,13 +325,20 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
         spA: base.spA < 0 ? base.spA + 4 : base.spA - 4,
         ov: -108, un: -108,
       },
+      circa: {
+        mlH: base.mlH, mlA: base.mlA,
+        spH: base.spH < 0 ? base.spH + 2 : base.spH - 2,
+        spA: base.spA < 0 ? base.spA + 2 : base.spA - 2,
+        ov: -112, un: -104,
+      },
     };
   }
   function mlbEvent(home, away, lines) {
     const soft = lines;
     const pin = lines.pin || soft;
+    const circa = lines.circa || pin;
     const marketsFor = (book) => {
-      const L = book === 'pinnacle' ? pin : soft;
+      const L = book === 'pinnacle' ? pin : book === 'circa' ? circa : soft;
       return [
         { key: 'h2h', outcomes: [{ name: home, price: L.mlH }, { name: away, price: L.mlA }] },
         { key: 'spreads', outcomes: [
@@ -381,7 +355,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
       home_team: home,
       away_team: away,
       commence_time: kick,
-      bookmakers: ['draftkings', 'fanduel', 'betmgm', 'pinnacle'].map(key => ({ key, markets: marketsFor(key) })),
+      bookmakers: ['draftkings', 'fanduel', 'betmgm', 'pinnacle', 'circa'].map(key => ({ key, markets: marketsFor(key) })),
     };
   }
   const slate = [
@@ -416,90 +390,20 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     mlbPitcherStats: { byId, byName: {}, byTeam: {} },
     parkFactors,
   });
+  const calibrated = calibrate.calibrateAll(raw).map(edge.attachEv);
+  const { yesPool } = gates.applyGates(calibrated, { cardDate, asOfMs: Date.now() });
   const realMatchups = new Set(slate.filter(g => g.tag === 'real').map(g => `${g.ev.away_team} @ ${g.ev.home_team}`));
-  function scoreWednesday(mode) {
-    const prev = process.env.OMEGA_CAL_MODE;
-    if (mode == null) delete process.env.OMEGA_CAL_MODE;
-    else process.env.OMEGA_CAL_MODE = mode;
-    calibrate.clearCalParamsCache();
-    try {
-      const calibrated = calibrate.calibrateAll(raw, { cardDate: '2026-10-10' }).map(edge.attachEv);
-      const gated = gates.applyGates(calibrated, { cardDate, asOfMs: Date.now() });
-      const yesPool = gated.yesPool;
-      const yesGames = new Set(yesPool.map(c => c.matchup));
-      const realYes = [...yesGames].filter(m => realMatchups.has(m));
-      const straights = select.selectStraights(yesPool, config.MAX_STRAIGHTS, gated.leanPool);
-      const wedParlay = parlay.optimizeParlay(yesPool, [], { cardDate });
-      return { yesPool, rejected: gated.rejected, yesGames, realYes, straights, wedParlay };
-    } finally {
-      if (prev == null) delete process.env.OMEGA_CAL_MODE;
-      else process.env.OMEGA_CAL_MODE = prev;
-      calibrate.clearCalParamsCache();
-    }
-  }
-  function assertFilled(scored, label) {
-    assert.ok(scored.realYes.length >= 3, `${label} real games ${scored.realYes.join(' | ')}`);
-    assert.strictEqual(scored.straights.length, 3, label);
-    assert.strictEqual(scored.wedParlay.length, 1, label);
-    assert.strictEqual(scored.wedParlay[0].legs.length, 3, label);
-    assert.strictEqual(parseFloat(scored.wedParlay[0].units), config.PARLAY_FIXED_UNITS, label);
-  }
-  function assertEdgeRank(scored, label) {
-    const used = new Set(scored.straights.map((s) => s.matchup));
-    assert.strictEqual(used.size, scored.straights.length, `${label} two straights on one game`);
-    const floors = scored.straights.filter((s) => s.tier !== 'lean');
-    const bestOpen = {};
-    for (const c of scored.yesPool) {
-      if (used.has(c.matchup) || !select.passesPublishFloor(c)) continue;
-      const cur = bestOpen[c.matchup];
-      if (!cur || select.compareByEv(c, cur) < 0) bestOpen[c.matchup] = c;
-    }
-    if (!floors.length) return;
-    let worst = floors[0];
-    for (const s of floors) {
-      if (select.compareByEv(s, worst) > 0) worst = s;
-    }
-    for (const [game, c] of Object.entries(bestOpen)) {
-      assert.ok(
-        select.compareByEv(worst, c) <= 0,
-        `${label} left ${game} edge ${c.edgePct} ahead of ${worst.matchup} edge ${worst.edgePct}`,
-      );
-    }
-  }
-  const legacyCard = scoreWednesday('legacy');
-  assert.ok(legacyCard.yesPool.every(c => c.calMode === 'legacy'));
-  assertFilled(legacyCard, 'legacy');
-  assertEdgeRank(legacyCard, 'legacy');
-
-  const defaultCard = scoreWednesday(null);
-  assert.ok(defaultCard.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
-  assertFilled(defaultCard, 'mode A');
-  assertEdgeRank(defaultCard, 'mode A');
-  const aSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
-  assert.ok(aSpread, 'mode A publishes an MLB spread');
-  assert.strictEqual(aSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
-
-  const modeB = scoreWednesday('B');
-  assert.ok(modeB.yesPool.every(c => c.calMode === 'B' && c.calParamsSource === 'ship'));
-  assertFilled(modeB, 'mode B');
-  function noiseSpread(card, matchup) {
-    const rows = card.yesPool.concat(card.rejected || []);
-    return rows.find(c => c.matchup === matchup && c.market === 'Spread' && /\+1\.5/.test(c.side));
-  }
-  const pirates = noiseSpread(modeB, 'Pittsburgh Pirates @ Cincinnati Reds');
-  const marlins = noiseSpread(modeB, 'Miami Marlins @ Philadelphia Phillies');
-  assert.ok(pirates, 'Pirates +1.5 is priced at the MLB spread K floor');
-  assert.strictEqual(pirates.calibK, 0.3);
-  assert.strictEqual(pirates.calLevel, 'cell');
-  assert.ok(pirates.ev > 0.12, 'mode B K=0.3 pushes that spread over the 12% stale cap');
-  assert.strictEqual(pirates.rejectReason, 'ev-stale');
-  assert.ok(!modeB.straights.some(s => /Pirates/.test(s.matchup)));
-  assert.ok(marlins, 'Marlins +1.5 is priced at the MLB spread K floor');
-  assert.strictEqual(marlins.calibK, 0.3);
-  assert.strictEqual(marlins.calLevel, 'cell');
-  assert.strictEqual(marlins.rejectReason, 'ev-stale');
-  const astros = [...modeB.yesPool].filter(c => c.matchup === 'Texas Rangers @ Houston Astros');
-  assert.ok(astros.every(c => c.edgePct > 0 && c.ev > 0), 'a -190 starter publishes only with a positive edge');
+  const noiseMatchups = new Set(slate.filter(g => g.tag === 'noise').map(g => `${g.ev.away_team} @ ${g.ev.home_team}`));
+  const yesGames = new Set(yesPool.map(c => c.matchup));
+  const realYes = [...yesGames].filter(m => realMatchups.has(m));
+  assert.ok(realYes.length >= 3, `Wednesday real games ${realYes.join(' | ')}`);
+  for (const m of yesGames) assert.ok(!noiseMatchups.has(m), `noise game published: ${m}`);
+  const straights = select.selectStraights(yesPool, config.MAX_STRAIGHTS);
+  assert.strictEqual(straights.length, 3);
+  const wedParlay = parlay.optimizeParlay(yesPool, [], { cardDate });
+  assert.strictEqual(wedParlay.length, 1);
+  assert.strictEqual(wedParlay[0].legs.length, 3);
+  assert.strictEqual(parseFloat(wedParlay[0].units), config.PARLAY_FIXED_UNITS);
 }
 
 assert.deepStrictEqual(nba.project({}), []);
@@ -549,22 +453,18 @@ assert.strictEqual(typeof cfb.project, 'function');
 
 const narrate = require(path.join(root, 'narrate'));
 const narrateSrc = require('fs').readFileSync(path.join(root, 'narrate.js'), 'utf8');
-const xaiChatSrc = require('fs').readFileSync(path.join(root, '../xai-chat.js'), 'utf8');
-assert.ok(narrateSrc.includes("require('../xai-chat')"), 'narrate must call Grok');
-assert.ok(/GROK_MODEL = 'grok-4\.3'/.test(xaiChatSrc), 'default narrate model is grok-4.3');
-assert.ok(narrateSrc.includes('api.x.ai/v1/chat/completions') || narrateSrc.includes("require('../xai-chat')"), 'narrate must use the xAI chat helper');
-assert.ok(!/anthropic|api\.anthropic\.com|claude-sonnet|claude-haiku/i.test(narrateSrc), 'narrate must not call Anthropic');
-assert.ok(!/claude/i.test(narrateSrc.replace(/claudeVerified/g, '')), 'published claudeVerified flag is the only claude token');
+assert.ok(narrateSrc.includes("claude-sonnet-4-6"), 'narrate must use claude-sonnet-4-6');
+assert.ok(!narrateSrc.includes("claude-sonnet-4-20250514"), 'old sonnet date-id must be gone');
 assert.ok(/4–6 sentence journalistic blurbs/.test(narrateSrc), 'header states 4-6 sentence blurbs');
 assert.ok(/4-6 sentence/.test(narrateSrc), 'prompt asks for 4-6 sentence straights');
 assert.ok(/3-5 sentence/.test(narrateSrc), 'prompt asks for 3-5 sentence legs and sections');
 assert.ok(!/2-4 sentence/.test(narrateSrc), 'stubby 2-4 sentence parlay rule must be gone');
 assert.ok(!/1-2 sentence/.test(narrateSrc), 'thin 1-2 sentence edge/insights rule must be gone');
 assert.ok(/NARRATIVE_MAX_TOKENS = 5800/.test(narrateSrc), 'max_tokens raised into 5500-6000');
-assert.ok(/maxTokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
-assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Grok');
+assert.ok(/max_tokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
+assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Claude');
 assert.ok(narrateSrc.includes('JSON.stringify(lockedLegs || [], null, 2)'));
-assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callGrokOnce must not strip context');
+assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callClaudeOnce must not strip context');
 assert.ok(/ESPN/.test(narrateSrc) && /handicap/i.test(narrateSrc));
 assert.ok(/No em dashes/.test(narrateSrc));
 
@@ -584,85 +484,19 @@ function assertDeskCopy(text, label, minSentences, maxSentences) {
 const fb = narrate.buildFallbackNarrative({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105', units: '1u', rating: 'a', edgePct: '4.2%' });
 assertDeskCopy(fb, 'total fallback', 4, 6);
 assert.ok(/Under 45\.5/.test(fb) && /DAL @ NYG/.test(fb));
-assert.ok(/4\.2%/.test(fb), 'total fallback states the edge');
-assert.ok(/-105/.test(fb));
-assert.ok(!/little high|half[- ]point/i.test(fb), 'total fallback does not invent a point gap');
+assert.ok(/little high/i.test(fb), 'total fallback translates the number into English');
+assert.ok(/under/i.test(fb));
 
 const fbDog = narrate.buildFallbackNarrative({ pick: 'Giants +6.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Spread', odds: '-110', units: '0.75u', steamAgainst: true, edgePct: 0.028 });
 assertDeskCopy(fbDog, 'dog fallback', 4, 6);
 assert.ok(/Giants \+6\.5/.test(fbDog));
-assert.ok(/2\.8%/.test(fbDog));
-assert.ok(/moved against/i.test(fbDog), 'steam against is the line move, not a made-up cause');
-
-const fbHomeSpread = narrate.buildFallbackNarrative({
-  pick: 'Texas State Bobcats -13.5',
-  side: 'Texas State Bobcats -13.5',
-  matchup: 'Colorado State Rams @ Texas State Bobcats',
-  homeTeam: 'Texas State Bobcats',
-  awayTeam: 'Colorado State Rams',
-  sport: 'NCAAF',
-  betType: 'Spread',
-  odds: '-120',
-  units: '0.5u',
-  rating: 'b',
-  edgePct: -0.109,
-  ev: -0.199,
-  coverProb: 0.437,
-  modelProjection: 12.7,
-  line: -13.5,
-});
-assert.ok(/win by 12\.7/.test(fbHomeSpread), fbHomeSpread);
-assert.ok(/0\.8 points past that win/.test(fbHomeSpread), fbHomeSpread);
-assert.ok(!/26\.2/.test(fbHomeSpread), fbHomeSpread);
-
-const fbAwaySpread = narrate.buildFallbackNarrative({
-  pick: 'Georgia Southern Eagles -3.5',
-  side: 'Georgia Southern Eagles -3.5',
-  matchup: 'Georgia Southern Eagles @ Old Dominion Monarchs',
-  homeTeam: 'Old Dominion Monarchs',
-  awayTeam: 'Georgia Southern Eagles',
-  sport: 'NCAAF',
-  betType: 'Spread',
-  odds: '-110',
-  units: '1.5u',
-  rating: 'aplus',
-  edgePct: 0.101,
-  ev: 0.193,
-  coverProb: 0.625,
-  modelProjection: -8.59,
-  line: -3.5,
-});
-assert.ok(/win by 8\.6/.test(fbAwaySpread), fbAwaySpread);
-assert.ok(/5\.1 points inside that win/.test(fbAwaySpread), fbAwaySpread);
-assert.ok(!/projection is 8\.6/.test(fbAwaySpread), fbAwaySpread);
-assert.ok(!/short of/.test(fbAwaySpread), fbAwaySpread);
-
-const fbDogSpread = narrate.buildFallbackNarrative({
-  pick: 'Colorado State Rams +13.5',
-  side: 'Colorado State Rams +13.5',
-  matchup: 'Colorado State Rams @ Texas State Bobcats',
-  homeTeam: 'Texas State Bobcats',
-  awayTeam: 'Colorado State Rams',
-  sport: 'NCAAF',
-  betType: 'Spread',
-  odds: '+100',
-  units: '0.75u',
-  rating: 'aminus',
-  edgePct: 0.02,
-  ev: 0.039,
-  coverProb: 0.52,
-  modelProjection: 12.71,
-  line: 13.5,
-});
-assert.ok(/lose by 12\.7/.test(fbDogSpread), fbDogSpread);
-assert.ok(/\+13\.5/.test(fbDogSpread), fbDogSpread);
-assert.ok(/0\.8 points past/.test(fbDogSpread), fbDogSpread);
-assert.ok(!/projection is -12\.7/.test(fbDogSpread), fbDogSpread);
+assert.ok(/points/i.test(fbDog));
+assert.ok(/leaning the other way/i.test(fbDog), 'steam against is translated, not dumped as cents');
 
 const fbMl = narrate.buildFallbackNarrative({ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '+120', edgePct: '5.4%', steamToward: true });
 assertDeskCopy(fbMl, 'ml fallback', 4, 6);
 assert.ok(/\+120/.test(fbMl) && /Yankees ML/.test(fbMl));
-assert.ok(/5\.4%/.test(fbMl) && /moved toward/i.test(fbMl));
+assert.ok(/strong/i.test(fbMl) && /leaning this way/i.test(fbMl));
 
 const replaced = narrate.ensureNarrative({
   pick: 'Lakers ML', matchup: 'A @ B', sport: 'NBA', odds: '+120',
@@ -692,7 +526,7 @@ assert.strictEqual(row.edgeBand, 'solid');
 assert.strictEqual(row.rating, 'A');
 assert.strictEqual(row.grade, 'A');
 assert.ok(/toward/i.test(row.steamHint));
-assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Grok');
+assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Claude');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: '5.0%' }), 'strong');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: 0.05 }), 'strong');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: '3.5%' }), 'solid');
@@ -737,10 +571,7 @@ assert.ok(!/graded with the slip/i.test(html));
 assert.ok(!/Sharp Depth \(premium gate/.test(html));
 assert.ok(/Daily Lock Parlay/.test(html));
 assert.ok(/Daily Lock - Top 3 Straight Picks/.test(html));
-assert.ok(/class="parlay-section"/.test(html));
-assert.ok(/Recommended \$\{legCount\}-Team Parlay/.test(html));
-assert.ok(!/Daily Lock - Top 3 Leg Parlay/.test(html));
-assert.ok(!/parlayOnly:\s*true/.test(html));
+assert.ok(/Daily Lock - Top 3 Leg Parlay/.test(html));
 assert.ok(/resolveRatingKey/.test(html));
 assert.ok(!/apiParlay\.correlationNote/.test(html));
 assert.ok(/Bet Slip — Summary/.test(html));
@@ -769,12 +600,8 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   }, { modelVersion: MODEL_VERSION });
   assert.strictEqual(highEdgeLowUnits.rating, 'aplus');
   assert.strictEqual(highEdgeLowUnits.qualityGrade, 'aplus');
-  // 2026-10-18: quarter Kelly at p=0.53 is 0.25u, so the row is a labelled lean at 0.5u. The letter stays the edge.
-  assert.strictEqual(select.quarterKellyUnits(0.53, -110), 0.25);
-  assert.strictEqual(highEdgeLowUnits.tier, 'lean');
-  assert.strictEqual(highEdgeLowUnits.label, 'lean');
-  assert.strictEqual(highEdgeLowUnits.units, '0.5u');
-  assert.notStrictEqual(highEdgeLowUnits.units, '1.5u');
+  const hiKelly = math.kellyToUnits(math.kellyFraction(0.53, -110, config.KELLY_FRACTION), config.MAX_STRAIGHT_UNITS_PER_PICK);
+  assert.strictEqual(highEdgeLowUnits.units, `${hiKelly}u`);
   assert.notStrictEqual(highEdgeLowUnits.units, '5u');
   assert.strictEqual(typeof highEdgeLowUnits.confidence, 'number');
   assert.strictEqual(highEdgeLowUnits.confidence, math.ratingToConfidence('aplus'));
@@ -782,16 +609,16 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.ok(typeof highEdgeLowUnits.qualityScore === 'number' && highEdgeLowUnits.qualityScore >= 0.05);
   assert.strictEqual(highEdgeLowUnits.modelVersion, MODEL_VERSION);
 
-  // High cover, thin edge → letter B. Stake is quarter Kelly, not the B cap.
+  // High stake, thin edge → B, not the units letter (1.5u would be A+ on the old map).
   const lowEdgeHighUnits = verify.buildQualityReplacement({
     sport: 'NFL', matchup: 'C @ D', side: 'Over 45.5', market: 'Total',
-    odds: -110, coverProb: 0.58, ev: 0.03, edgePct: 0.012, kellyUnits: 9,
+    odds: -110, coverProb: 0.54, ev: 0.03, edgePct: 0.012, kellyUnits: 9,
     predictedClv: 0, uncertainty: 0.12, homeTeam: 'D', awayTeam: 'C',
   }, { modelVersion: MODEL_VERSION });
   assert.strictEqual(lowEdgeHighUnits.rating, 'b');
   assert.strictEqual(lowEdgeHighUnits.qualityGrade, 'b');
-  assert.strictEqual(lowEdgeHighUnits.units, `${select.quarterKellyUnits(0.58, -110)}u`);
-  assert.notStrictEqual(lowEdgeHighUnits.units, `${config.B_GRADE_UNIT_CAP}u`);
+  const loKelly = math.kellyToUnits(math.kellyFraction(0.54, -110, config.KELLY_FRACTION), config.MAX_STRAIGHT_UNITS_PER_PICK);
+  assert.strictEqual(lowEdgeHighUnits.units, `${loKelly}u`);
   assert.notStrictEqual(lowEdgeHighUnits.units, '9u');
   assert.strictEqual(typeof lowEdgeHighUnits.confidence, 'number');
   assert.notStrictEqual(lowEdgeHighUnits.rating, math.unitsToRating(1.5));
@@ -801,15 +628,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.ok(verify.formatCombinedAmerican(2.50).startsWith('+'));
   assert.ok(String(verify.formatCombinedAmerican(1.91)).startsWith('-'));
   assert.strictEqual(verify.sportCoverFloor('NFL'), config.GATES.minCoverProb.NFL);
-  assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
-  assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-  assert.strictEqual(verify.sportEvFloor('NFL'), 0.02);
-  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0.02);
+  assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0.48);
+  assert.strictEqual(verify.sportCoverFloor('MLB'), 0.48);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NFL', ev: 0.04, coverProb: 0.49 }), true);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), true);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), false);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0, coverProb: 0.55 }), false);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), false);
   assert.ok(!verifySrc.includes('alpha-config'));
   assert.ok(!verifySrc.includes('mlUnitCap'));
 
@@ -836,10 +658,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
 }
 
 (async () => {
-  const prevA = process.env.XAI_API_KEY;
-  const prevB = process.env.ANTHROPIC_API_KEY;
-  delete process.env.XAI_API_KEY;
+  const prevA = process.env.ANTHROPIC_API_KEY;
+  const prevB = process.env.ANTHROPIC_KEY;
   delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_KEY;
   try {
     const empty = await narrate.narrateAndVerify({
       picks: [], parlayLegs: [], dateFormatted: 'Tuesday, September 22',
@@ -876,10 +698,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
     assert.ok(/Yankees ML/.test(leg.whatLoses));
     assert.ok(/starter|quarterback|weather/i.test(out.insights));
   } finally {
-    if (prevA == null) delete process.env.XAI_API_KEY;
-    else process.env.XAI_API_KEY = prevA;
-    if (prevB == null) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = prevB;
+    if (prevA == null) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevA;
+    if (prevB == null) delete process.env.ANTHROPIC_KEY;
+    else process.env.ANTHROPIC_KEY = prevB;
   }
 
   console.log('PASS test-omega-vnext', {

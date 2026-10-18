@@ -5,75 +5,16 @@
  * defEpa is defensive strength per play (higher = better, sign-flipped EPA allowed).
  * Both teams must match a clean prior; otherwise the caller keeps standings power.
  * Sierra blend only when standings pf/pa and a game count are clean.
- * In-season weight on current points/game ramps with each team's games played.
- * Seeds are zero-sum centered once at load (centerSeed). The JSON file stays raw.
  * v12.3.8: capped success→margin (NFL) and talent/spPlus blend (NCAAF).
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
-const {
-  HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled, envNumber, ncaafRetProdMultiplier,
-  ncaafPriorK, ncaafPaceFollowsPrior,
-} = require('../config');
+const { HFA, ENGINE_SOFT } = require('../config');
 const { clamp } = require('../odds_math');
-const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
-const { resolveTeamId, modelRow, logUnknownTeam, isFbsTeamId, teamRecord, rowByIdentity } = require('./team_identity');
-const returningProductionFile = require('./data/cfb-returning-production-2026.json');
+const { fuzzyTeam, powerFromStandings, gamesPlayed } = require('./_common');
 
-/**
- * ESPN-id rows from the 2026 returning-production table. A key that does
- * not resolve, or a rate outside 0-1, is logged and dropped. Lookup then
- * fail-softs to multiplier 1.
- */
-function loadReturningProduction(file) {
-  const out = {};
-  const src = file && typeof file === 'object' ? file : {};
-  for (const [key, row] of Object.entries(src)) {
-    if (!key || String(key).startsWith('_')) continue;
-    const id = String(key);
-    const rec = teamRecord('NCAAF', id);
-    const resolved = rec && rec.displayName ? resolveTeamId('NCAAF', rec.displayName) : null;
-    if (!rec || resolved !== id) {
-      console.warn(`[omega-ncaaf] returning production id ${id} did not resolve`);
-      continue;
-    }
-    const offRet = Number(row && row.offRet);
-    const defRet = Number(row && row.defRet);
-    const overallRet = Number(row && row.overallRet);
-    if (![offRet, defRet, overallRet].every((n) => n >= 0 && n <= 1)) {
-      console.warn(`[omega-ncaaf] returning production id ${id} has a rate outside 0-1`);
-      continue;
-    }
-    out[id] = { offRet, defRet, overallRet };
-  }
-  return out;
-}
-
-const NCAAF_RETURNING_PROD = loadReturningProduction(returningProductionFile);
-
-/** Seed-prior multiplier for one ESPN id. Missing team, bad rate, or the disable switch is 1. */
-function ncaafRetProdPriorMultiplier(teamId) {
-  if (teamId == null || teamId === '') return 1;
-  const row = NCAAF_RETURNING_PROD[String(teamId)];
-  if (!row) return 1;
-  return ncaafRetProdMultiplier(row.overallRet);
-}
-
-/**
- * Sierra weight on current points/game. Prior seed weight is 1 − w.
- * w is 0 below 2 games (sierraAdjust keeps the seed).
- * w is 0.20 at 2 games, then rises linearly to 0.50 at midseason
- * games played, and stays at 0.50 after that.
- * Midseason is SPORT_CFG[sport].sierraMidseasonGp: NFL 9, NCAAF 6.
- * Each team uses its own gamesPlayed() count.
- * A cfg with no midseason gp, or midseason <= 2, keeps 0.20 for every gp >= 2.
- */
-const SIERRA_W_GP2 = 0.2;
-const SIERRA_W_CAP = 0.5;
+const SIERRA_W = 0.2;
 const LEAGUE_SUCCESS = 0.43;
-/** Sanity band for a per-game rate after season sums are divided. Not a divide trigger. */
-const FOOTBALL_PPG_MIN = 6;
-const FOOTBALL_PPG_MAX = 55;
 
 const SPORT_CFG = {
   NFL: {
@@ -92,13 +33,10 @@ const SPORT_CFG = {
     marginCap: 24,
     totalMin: 32,
     totalMax: 66,
-    // Week 9. Linear Sierra ramp reaches 0.50 here, then stays capped.
-    sierraMidseasonGp: 9,
   },
   NCAAF: {
     plays: 68,
-    // 2 * leaguePpg === baseTotal. A close-game FBS mean replaces both.
-    leaguePpg: 26,
+    leaguePpg: 27.5,
     baseTotal: 52,
     totalSlope: 0.04,
     epaUncertainty: 0.17,
@@ -112,148 +50,8 @@ const SPORT_CFG = {
     marginCap: 31,
     totalMin: 35,
     totalMax: 82,
-    // Game 6 of a 12-game schedule. Linear Sierra ramp reaches 0.50 here.
-    sierraMidseasonGp: 6,
   },
 };
-
-/**
- * Opponent-adjusted NCAAF ratings from completed games.
- *
- * Strength and pace are different quantities, so they do not share a
- * prior. Margin noise is about 14 points and between-team FBS strength
- * (off + def) is about 10: K_strength = 14^2 / 10^2 = 1.96, taken as 2.
- * Pace (off − def) is much tighter. Its prior variance is the seed
- * table's own pace dispersion, and one game's total is noisier than
- * that dispersion (SPORT_TOTAL_STD.NCAAF). K_pace = totalStd^2 / paceVar,
- * rounded, computed from the seed at solve time rather than stored as a
- * second magic number. Same shape as the NHL GF/GA prior. Neither K is
- * fit on a slate.
- *
- * The prior mean is the centered EPA seed in points (offEpa * plays,
- * defEpa * plays) when that school has a seed, otherwise 0 (average FBS).
- * Returning production multiplies that seed only (NCAAF_RET_PROD). A team
- * with no row keeps multiplier 1. Current-season weight is still g / (g + K)
- * on strength and on pace separately, then off = (S + P) / 2 and
- * def = (S − P) / 2. Results replace the seed; they do not get blended
- * again on the way out.
- *
- * Totals use a symmetric model, so the center is the mean points of
- * FBS-vs-FBS games decided by at most NCAAF_OA_BLOWOUT_MARGIN (28, four
- * scores). The raw mean sits higher because blowouts add garbage-time
- * points. Pace (off − def) still moves each game off that center.
- * A non-FBS side is one shared opponent, not a missing team. Its off and
- * def are fit from FBS-vs-non-FBS games, and those games also update the
- * FBS side. Dropping them left a 4-game team that scheduled a cupcake on
- * only 3 observations and shrunk it toward the prior.
- * Below NCAAF_OA_MIN_GAMES the pack is withheld. A side with a clean EPA
- * seed keeps it. The other side, when both ESPN ids resolve, is a
- * games-played regression toward 0 strength and league pace. One missing
- * seed does not drop both teams onto raw point differential. The total
- * center is this same close-game mean when the board has one.
- */
-const NCAAF_OA_PRIOR_GAMES = 2;
-
-/**
- * Games of pace shrinkage implied by the seed table. Null when the table
- * has too few clean rows to estimate a prior variance — the solver then
- * uses the strength prior, which is the old shared-K behavior.
- * Pace variance is the population variance of (off − def) in points.
- */
-function ncaafPacePriorGames(efficiency) {
-  const plays = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.plays) || 68;
-  const noise = Number(SPORT_TOTAL_STD && SPORT_TOTAL_STD.NCAAF);
-  const paces = [];
-  for (const row of teamRows(efficiency)) {
-    if (!isCleanEpa(row)) continue;
-    paces.push((Number(row.offEpa) - Number(row.defEpa)) * plays);
-  }
-  if (paces.length < 8 || !Number.isFinite(noise) || noise <= 0) return null;
-  const mean = paces.reduce((s, x) => s + x, 0) / paces.length;
-  const variance = paces.reduce((s, x) => s + (x - mean) ** 2, 0) / paces.length;
-  if (!(variance > 0)) return null;
-  const k = Math.round((noise * noise) / variance);
-  return Number.isFinite(k) && k >= 1 ? k : null;
-}
-
-function ncaafPaceK(efficiency) {
-  const estimated = ncaafPacePriorGames(efficiency);
-  return estimated != null ? estimated : NCAAF_OA_PRIOR_GAMES;
-}
-
-/**
- * Strength and pace prior games for the EPA seed.
- * opts are not applied here. solveNcaafOpponentRatings still honors
- * priorGames and pacePriorGames.
- * Unset env keeps strength at NCAAF_PRIOR_K and pace at the variance
- * estimate. OMEGA_NCAAF_PRIOR_K, or NCAAF_PACE_FOLLOWS_PRIOR, uses one K
- * for both: priorW(gp) = K/(K+gp) on the seed.
- */
-function ncaafShrinkKs(efficiency) {
-  const strength = ncaafPriorK();
-  if (ncaafPaceFollowsPrior()) return { strength, pace: strength };
-  const estimated = ncaafPacePriorGames(efficiency);
-  return { strength, pace: estimated != null ? estimated : strength };
-}
-const NCAAF_OA_BLOWOUT_MARGIN = 28;
-const NCAAF_OA_MIN_GAMES = 40;
-const NCAAF_OA_ITERS = 16;
-/**
- * FBS-vs-FCS margins are regularly past the old 31-point EPA cap: the
- * non-FBS prior is about -36, so a good FBS side at home is a 40 to 55
- * point favorite and the market posts that number. Clipping those to 31
- * sits the model under the line and pulls the slate mean. 70 still stops
- * a broken rating from printing an impossible spread.
- */
-const NCAAF_OA_MARGIN_CAP = 70;
-
-/**
- * In-season weight on current points/game for one team's games played.
- * cfgOrSport is SPORT_CFG[sport] or 'NFL' / 'NCAAF'.
- */
-function sierraWeight(gp, cfgOrSport) {
-  const g = Number(gp);
-  if (!Number.isFinite(g) || g < 2) return 0;
-  const cfg = typeof cfgOrSport === 'string' ? SPORT_CFG[cfgOrSport] : cfgOrSport;
-  const mid = cfg && Number(cfg.sierraMidseasonGp);
-  if (!Number.isFinite(mid) || mid <= 2) return SIERRA_W_GP2;
-  if (g >= mid) return SIERRA_W_CAP;
-  return SIERRA_W_GP2 + (SIERRA_W_CAP - SIERRA_W_GP2) * ((g - 2) / (mid - 2));
-}
-
-/**
- * Season year of a card date (YYYY-MM-DD). It is the calendar year.
- * A 2027 card date is season year 2027, including January and February.
- * Null when the date does not parse. The label does not change projections.
- */
-function cardSeasonYear(dateISO) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateISO || '').trim());
-  if (!m) return null;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return year;
-}
-
-/**
- * Seed season label vs the card date. seedSeasonStale is true only when
- * appliesToSeason and the card season year are both finite and they differ.
- */
-function seedSeasonStatus(meta, dateISO) {
-  const src = meta && typeof meta === 'object' ? meta : {};
-  const season = Number(src.season);
-  const applies = Number(src.appliesToSeason);
-  const year = cardSeasonYear(dateISO);
-  const haveApplies = Number.isFinite(applies);
-  const haveYear = year != null;
-  return {
-    season: Number.isFinite(season) ? season : null,
-    appliesToSeason: haveApplies ? applies : null,
-    cardSeasonYear: year,
-    seedSeasonStale: haveApplies && haveYear && applies !== year,
-  };
-}
 
 function isCleanEpa(row) {
   if (!row || typeof row !== 'object') return false;
@@ -265,135 +63,8 @@ function isCleanEpa(row) {
   return true;
 }
 
-function teamRows(table) {
-  const rows = [];
-  if (!table || typeof table !== 'object') return rows;
-  for (const [key, row] of Object.entries(table)) {
-    if (!key || key.startsWith('_')) continue;
-    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-    rows.push(row);
-  }
-  return rows;
-}
-
-/** Mean over rows that have both fields. d = mean(off) − mean(def). */
-function pairMean(rows, offKey, defKey) {
-  let n = 0;
-  let sumOff = 0;
-  let sumDef = 0;
-  for (const row of rows) {
-    const off = Number(row[offKey]);
-    const def = Number(row[defKey]);
-    if (!Number.isFinite(off) || !Number.isFinite(def)) continue;
-    n += 1;
-    sumOff += off;
-    sumDef += def;
-  }
-  if (!n) return null;
-  const meanOff = sumOff / n;
-  const meanDef = sumDef / n;
-  const d = meanOff - meanDef;
-  return { n, meanOff, meanDef, d, half: d / 2 };
-}
-
-/**
- * successTotalAdj environment is (offEnv − defEnv) × 12.
- * offEnv − defEnv = ((homeOff + awayOff) − (homeDef + awayDef)) / 2.
- * LEAGUE_SUCCESS cancels, so an average pair is (mean offSuccess − mean defSuccess) × 12.
- * defSuccess is higher-is-better (more stops), the same orientation as defEpa,
- * so the symmetric shift zeros that term. It would not zero a same-sign sum.
- * Skip the shift when any rate would leave (0, 1): successTotalAdj and
- * successMarginAdj then return 0 for that pair, and margins would move.
- */
-function successShiftFor(rows) {
-  const stats = pairMean(rows, 'offSuccess', 'defSuccess');
-  if (!stats) {
-    return { applied: false, d: 0, half: 0, n: 0, reason: 'no paired success rates' };
-  }
-  for (const row of rows) {
-    const off = Number(row.offSuccess);
-    const def = Number(row.defSuccess);
-    if (!Number.isFinite(off) || !Number.isFinite(def)) continue;
-    const off2 = off - stats.half;
-    const def2 = def + stats.half;
-    if (!(off2 > 0 && off2 < 1 && def2 > 0 && def2 < 1)) {
-      return {
-        applied: false,
-        d: stats.d,
-        half: stats.half,
-        n: stats.n,
-        meanOff: stats.meanOff,
-        meanDef: stats.meanDef,
-        reason: 'shift would leave (0, 1); success environment left uncentered',
-      };
-    }
-  }
-  return {
-    applied: true,
-    d: stats.d,
-    half: stats.half,
-    n: stats.n,
-    meanOff: stats.meanOff,
-    meanDef: stats.meanDef,
-    reason: 'defSuccess is higher-is-better; symmetric shift zeros (mean offSuccess - mean defSuccess) * 12',
-  };
-}
-
-/**
- * Shift that centerSeed would apply. Does not copy or mutate the table.
- * epa.d is mean(offEpa) − mean(defEpa) on the input (0 after a center).
- */
-function seedCenterStats(table) {
-  const rows = teamRows(table);
-  const epa = pairMean(rows, 'offEpa', 'defEpa') || {
-    n: 0, meanOff: null, meanDef: null, d: 0, half: 0,
-  };
-  return { epa, success: successShiftFor(rows) };
-}
-
-/**
- * Symmetric zero-sum re-center. d = mean(off) − mean(def);
- * off' = off − d/2; def' = def + d/2. Mean(off') === mean(def').
- * A both-seeded total uses (homeOff − awayDef) + (awayOff − homeDef), which is
- * 0 for an average pair once the means match. Every (off − def) drops by d,
- * so margins, the differences of those edges, stay put.
- * The same shift is applied to offSuccess/defSuccess when successShiftFor
- * says it zeros the success environment term without leaving (0, 1).
- * Idempotent. Does not mutate the input. Raw JSON stays the source of truth.
- * Call once at load. Do not call from footballProjection.
- */
-function centerSeed(table) {
-  const src = table && typeof table === 'object' ? table : {};
-  const stats = seedCenterStats(src);
-  const out = {};
-  for (const [key, row] of Object.entries(src)) {
-    if (!key || key.startsWith('_') || !row || typeof row !== 'object' || Array.isArray(row)) {
-      out[key] = row;
-      continue;
-    }
-    const next = { ...row };
-    const off = Number(row.offEpa);
-    const def = Number(row.defEpa);
-    if (Number.isFinite(off) && Number.isFinite(def)) {
-      next.offEpa = off - stats.epa.half;
-      next.defEpa = def + stats.epa.half;
-    }
-    if (stats.success.applied) {
-      const offS = Number(row.offSuccess);
-      const defS = Number(row.defSuccess);
-      if (Number.isFinite(offS) && Number.isFinite(defS)) {
-        next.offSuccess = offS - stats.success.half;
-        next.defSuccess = defS + stats.success.half;
-      }
-    }
-    out[key] = next;
-  }
-  return out;
-}
-
-function lookupEpa(teamName, table, sport) {
-  if (sport !== 'NFL' && sport !== 'NCAAF') return null;
-  const row = modelRow(sport, table || {}, teamName);
+function lookupEpa(teamName, table) {
+  const row = fuzzyTeam(teamName, table || {});
   if (!isCleanEpa(row)) return null;
   return {
     offEpa: Number(row.offEpa),
@@ -407,14 +78,7 @@ function lookupEpa(teamName, table, sport) {
 
 /**
  * Blend seed EPA toward current points/game when standings are clean.
- * ESPN pointsFor/pointsAgainst are season sums. gp >= 2 always divides both.
- * gp < 2 returns the seed. Divided rates must land in [6, 55] or the seed is kept.
- * An explicit avgPointsFor-style pair is the rate and is not divided.
- * gamesPlayed() prefers an explicit count, then wins+losses when losses
- * was sent, else a W-L record. Wins alone are not a count.
- * Current-season weight is sierraWeight(that gp): 0.20 at gp 2, linear to
- * 0.50 at the sport midseason gp, capped at 0.50. Prior seed weight is 1 − w.
- * Home and away each use their own gp.
+ * Unclean (missing games, absurd ppg) returns the seed unchanged.
  */
 function sierraAdjust(epa, standingsRow, cfg) {
   const base = {
@@ -427,25 +91,18 @@ function sierraAdjust(epa, standingsRow, cfg) {
     adjusted: false,
   };
   if (!standingsRow) return base;
+  const pf = Number(standingsRow.pf);
+  const pa = Number(standingsRow.pa);
   const g = gamesPlayed(standingsRow);
-  if (g < 2) return base;
-  const explicit = explicitPointsPerGame(standingsRow);
-  let pfPg;
-  let paPg;
-  if (explicit) {
-    pfPg = explicit.pfPg;
-    paPg = explicit.paPg;
-  } else {
-    const pf = Number(standingsRow.pf);
-    const pa = Number(standingsRow.pa);
-    if (!Number.isFinite(pf) || !Number.isFinite(pa)) return base;
-    pfPg = pf / g;
-    paPg = pa / g;
-  }
-  if (![pfPg, paPg].every(n => Number.isFinite(n) && n >= FOOTBALL_PPG_MIN && n <= FOOTBALL_PPG_MAX)) return base;
+  if (!Number.isFinite(pf) || !Number.isFinite(pa) || g < 2) return base;
+  // ESPN sometimes sends season totals, sometimes per-game. Totals exceed ~1.8x league ppg.
+  const threshold = cfg.leaguePpg * 1.8;
+  const pfPg = pf > threshold ? pf / g : pf;
+  const paPg = pa > threshold ? pa / g : pa;
+  if (![pfPg, paPg].every(n => Number.isFinite(n) && n >= 6 && n <= 55)) return base;
   const offFromSt = (pfPg - cfg.leaguePpg) / cfg.plays;
   const defFromSt = (cfg.leaguePpg - paPg) / cfg.plays;
-  const w = sierraWeight(g, cfg);
+  const w = SIERRA_W;
   return {
     ...base,
     offEpa: (1 - w) * base.offEpa + w * offFromSt,
@@ -601,12 +258,6 @@ function pieceAdj(row, field) {
 /**
  * Apply the sport's stacked engine cap. Contributions already sit inside modelMargin.
  * NFL: success + QB continuity. NCAAF: talent + QB continuity.
- *
- * Football rest (short week, mini-bye, bye, MNF→Sun) is recorded on
- * gameDay by applyGameDayAdjustments and added here, after the stack.
- * It is not a `parts` entry, so ENGINE_SOFT.maxAbsMarginAdj cannot scale
- * it. Its own cap is REST_ADJ (±1.0). The total is not an input here
- * and is not moved.
  */
 function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
   const caps = (ENGINE_SOFT && ENGINE_SOFT[sport]) || {};
@@ -620,7 +271,6 @@ function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
     parts.push({ key: 'talent', adj: pieceAdj(soft.talent, 'appliedMarginAdj') });
     parts.push({ key: 'continuity', adj: pieceAdj(gd && gd.qbContinuity, 'marginAdj') });
   }
-  // Rest stays out of `parts` on purpose. See the comment above.
   const stacked = applyStackedMarginCap(modelMargin, parts, caps.maxAbsMarginAdj);
   const nextSoft = { ...soft, stacked };
   if (nextSoft.success && stacked.byKey.success != null) {
@@ -645,18 +295,12 @@ function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
       stackCapped: stacked.capped,
     };
   }
-  // Rest is outside the stack. 0 when the schedule path is off, so the
-  // played-yesterday proxy (already inside modelMargin) is unchanged.
-  const restAdj = (gd && gd.restPending === true && Number.isFinite(Number(gd.restAdj)))
-    ? Number(gd.restAdj)
-    : 0;
   return {
-    modelMargin: stacked.modelMargin + restAdj,
+    modelMargin: stacked.modelMargin,
     engineSoft: nextSoft,
     gameDay: gd,
     enginesOn: Math.abs(stacked.rawSum) > 1e-9 || !!soft.used,
     stacked,
-    restAdj,
   };
 }
 
@@ -682,430 +326,41 @@ function tagEngines(methods, enginesOn) {
   return out;
 }
 
-/** Midnight America/New_York on dateISO, as epoch ms. Games at or after this are the card, not the fit. */
-function etMidnightMs(dateISO) {
-  const [y, m, d] = String(dateISO || '').split('-').map(Number);
-  if (![y, m, d].every(Number.isInteger)) return null;
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  });
-  let t = Date.UTC(y, m - 1, d, 4, 0, 0);
-  for (let i = 0; i < 4; i += 1) {
-    const parts = Object.fromEntries(fmt.formatToParts(new Date(t)).map((p) => [p.type, p.value]));
-    const py = Number(parts.year);
-    const pm = Number(parts.month);
-    const pd = Number(parts.day);
-    const ph = Number(parts.hour);
-    const pmin = Number(parts.minute);
-    if (py === y && pm === m && pd === d && ph === 0 && pmin === 0) return t;
-    const cur = Date.UTC(py, pm - 1, pd, ph, pmin);
-    const want = Date.UTC(y, m - 1, d, 0, 0);
-    t += (want - cur);
-  }
-  return null;
-}
-
-function boardIsFinal(ev, comp) {
-  const compState = comp && comp.status && comp.status.type && comp.status.type.state;
-  const evState = ev && ev.status && ev.status.type && ev.status.type.state;
-  return compState === 'post' || evState === 'post';
-}
-
 /**
- * Completed games from ESPN weekly scoreboards. One row per game.
- * FBS flags are the id table, not the board group.
+ * Home margin and total. engine family is null on the standings path.
  */
-function ncaafCompletedGames(boards) {
-  const games = [];
-  const seen = new Set();
-  const list = Array.isArray(boards) ? boards : [];
-  for (const board of list) {
-    for (const ev of (board && board.events) || []) {
-      const comp = (ev.competitions && ev.competitions[0]) || {};
-      if (!boardIsFinal(ev, comp)) continue;
-      const comps = comp.competitors || [];
-      const home = comps.find((c) => c && c.homeAway === 'home') || comps[0];
-      const away = comps.find((c) => c && c.homeAway === 'away') || comps[1];
-      if (!home || !away || !home.team || !away.team) continue;
-      const hs = Number(home.score);
-      const as = Number(away.score);
-      if (!Number.isFinite(hs) || !Number.isFinite(as)) continue;
-      const commence = ev.date || comp.date || null;
-      if (!commence || !Number.isFinite(Date.parse(commence))) continue;
-      const hid = String(home.team.id);
-      const aid = String(away.team.id);
-      const key = `${hid}|${aid}|${commence}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      games.push({
-        hid,
-        aid,
-        hs,
-        as,
-        margin: hs - as,
-        total: hs + as,
-        neutral: comp.neutralSite === true,
-        commence,
-        hFbs: isFbsTeamId(hid),
-        aFbs: isFbsTeamId(aid),
-      });
-    }
-  }
-  return games;
-}
+function footballProjection({ sport, home, away, standings, efficiency }) {
+  const cfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
+  const table = efficiency && typeof efficiency === 'object' ? efficiency : {};
+  const ratings = standings && typeof standings === 'object' ? standings : {};
+  const homeSt = fuzzyTeam(home, ratings);
+  const awaySt = fuzzyTeam(away, ratings);
+  const hPow = powerFromStandings(homeSt, sport);
+  const aPow = powerFromStandings(awaySt, sport);
+  const hfa = HFA[sport] != null ? HFA[sport] : 0;
+  const fallbackMargin = (hPow - aPow) + hfa;
+  const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
+  const homeEpa = lookupEpa(home, table);
+  const awayEpa = lookupEpa(away, table);
 
-function seedPointsForId(efficiency, id, plays) {
-  const rec = teamRecord('NCAAF', id);
-  if (!rec || !rec.displayName) return null;
-  const row = rowByIdentity('NCAAF', efficiency, rec.displayName);
-  if (!isCleanEpa(row)) return null;
-  return { o: Number(row.offEpa) * plays, d: Number(row.defEpa) * plays };
-}
-
-/**
- * Fit FBS off/def. boards are ESPN week payloads. Returns null when the
- * sample is too small or the date does not parse — caller keeps EPA /
- * standings. opts.minGames overrides the production floor for tests.
- */
-function ncaafGameSample(boards, opts = {}) {
-  const asOf = etMidnightMs(opts.asOf);
-  if (asOf == null) return null;
-  const blowout = Number.isFinite(Number(opts.blowoutMargin)) ? Number(opts.blowoutMargin) : NCAAF_OA_BLOWOUT_MARGIN;
-  const games = ncaafCompletedGames(boards).filter((g) => Date.parse(g.commence) < asOf);
-  const fbsGames = games.filter((g) => g.hFbs && g.aFbs);
-  if (!fbsGames.length) return { games, fbsGames, close: [], leagueTotal: null, blowout };
-  const close = fbsGames.filter((g) => Math.abs(g.margin) <= blowout);
-  const baseRows = close.length ? close : fbsGames;
-  const leagueTotal = baseRows.reduce((s, g) => s + g.total, 0) / baseRows.length;
-  return { games, fbsGames, close, leagueTotal, blowout };
-}
-
-/**
- * Close-game FBS-vs-FBS mean. Same games the opponent-adjusted pack
- * centers on. Null when the date does not parse or the sample has no
- * FBS game. A short schedule still returns the mean; the pack stays withheld.
- */
-function ncaafFbsLeagueTotal(boards, opts = {}) {
-  const sample = ncaafGameSample(boards, opts);
-  if (!sample || !Number.isFinite(sample.leagueTotal)) return null;
-  return {
-    leagueTotal: sample.leagueTotal,
-    games: sample.fbsGames.length,
-    closeGames: sample.close.length,
-  };
-}
-
-function solveNcaafOpponentRatings(boards, opts = {}) {
-  const sample = ncaafGameSample(boards, opts);
-  if (!sample) return null;
-  const hfaBase = Number.isFinite(Number(opts.hfa)) ? Number(opts.hfa) : (HFA.NCAAF || 0);
-  const efficiency = opts.efficiency && typeof opts.efficiency === 'object' ? opts.efficiency : {};
-  const ks = ncaafShrinkKs(efficiency);
-  const shrinkK = Number.isFinite(Number(opts.priorGames)) ? Number(opts.priorGames) : ks.strength;
-  const iters = Number.isFinite(Number(opts.iters)) ? Number(opts.iters) : NCAAF_OA_ITERS;
-  const minGames = Number.isFinite(Number(opts.minGames)) ? Number(opts.minGames) : NCAAF_OA_MIN_GAMES;
-  const plays = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.plays) || 68;
-  const paceEstimated = ncaafPacePriorGames(efficiency);
-  let paceK;
-  if (Number.isFinite(Number(opts.pacePriorGames))) paceK = Number(opts.pacePriorGames);
-  else if (ncaafPaceFollowsPrior()) paceK = shrinkK;
-  else paceK = paceEstimated != null ? paceEstimated : shrinkK;
-  const { games, fbsGames, close, leagueTotal, blowout } = sample;
-  if (fbsGames.length < minGames || !Number.isFinite(leagueTotal)) return null;
-  const league = leagueTotal / 2;
-  const ids = new Set();
-  for (const g of fbsGames) { ids.add(g.hid); ids.add(g.aid); }
-  // Cupcake games still belong to the FBS side. The non-FBS opponent is
-  // the shared pool below, not a reason to drop the observation.
-  for (const g of games) {
-    if (g.hFbs && !g.aFbs) ids.add(g.hid);
-    else if (!g.hFbs && g.aFbs) ids.add(g.aid);
-  }
-  const prior = new Map();
-  for (const id of ids) {
-    const pts = seedPointsForId(efficiency, id, plays);
-    if (pts) prior.set(id, pts);
-  }
-  const off = new Map();
-  const def = new Map();
-  for (const id of ids) { off.set(id, 0); def.set(id, 0); }
-  let fcsOff = 0;
-  let fcsDef = 0;
-  for (let it = 0; it < iters; it += 1) {
-    const offSum = new Map();
-    const defSum = new Map();
-    const n = new Map();
-    for (const id of ids) { offSum.set(id, 0); defSum.set(id, 0); n.set(id, 0); }
-    for (const g of fbsGames) {
-      const hfaPts = g.neutral ? 0 : hfaBase;
-      // home score = league + homeOff - awayDef + hfa/2
-      // away score = league + awayOff - homeDef - hfa/2
-      const hOffObs = g.hs - league - hfaPts / 2 + def.get(g.aid);
-      const aOffObs = g.as - league + hfaPts / 2 + def.get(g.hid);
-      const aDefObs = league + off.get(g.hid) - (g.hs - hfaPts / 2);
-      const hDefObs = league + off.get(g.aid) - (g.as + hfaPts / 2);
-      offSum.set(g.hid, offSum.get(g.hid) + hOffObs);
-      offSum.set(g.aid, offSum.get(g.aid) + aOffObs);
-      defSum.set(g.hid, defSum.get(g.hid) + hDefObs);
-      defSum.set(g.aid, defSum.get(g.aid) + aDefObs);
-      n.set(g.hid, n.get(g.hid) + 1);
-      n.set(g.aid, n.get(g.aid) + 1);
-    }
-    let fcsOffSum = 0;
-    let fcsDefSum = 0;
-    let fcsN = 0;
-    for (const g of games) {
-      if (g.hFbs === g.aFbs) continue;
-      const hfaPts = g.neutral ? 0 : hfaBase;
-      if (g.hFbs && !g.aFbs) {
-        offSum.set(g.hid, offSum.get(g.hid) + (g.hs - league - hfaPts / 2 + fcsDef));
-        defSum.set(g.hid, defSum.get(g.hid) + (league + fcsOff - (g.as + hfaPts / 2)));
-        n.set(g.hid, n.get(g.hid) + 1);
-        fcsOffSum += g.as - league + hfaPts / 2 + def.get(g.hid);
-        fcsDefSum += league + off.get(g.hid) - (g.hs - hfaPts / 2);
-        fcsN += 1;
-      } else if (!g.hFbs && g.aFbs) {
-        offSum.set(g.aid, offSum.get(g.aid) + (g.as - league + hfaPts / 2 + fcsDef));
-        defSum.set(g.aid, defSum.get(g.aid) + (league + fcsOff - (g.hs - hfaPts / 2)));
-        n.set(g.aid, n.get(g.aid) + 1);
-        fcsOffSum += g.hs - league - hfaPts / 2 + def.get(g.aid);
-        fcsDefSum += league + off.get(g.aid) - (g.as + hfaPts / 2);
-        fcsN += 1;
-      }
-    }
-    let so = 0;
-    let sd = 0;
-    let count = 0;
-    for (const id of ids) {
-      const g = n.get(id) || 0;
-      const pr = prior.get(id);
-      // Seed/prior only. g/(g+K) below is the existing games-played shrink.
-      const m = pr ? ncaafRetProdPriorMultiplier(id) : 1;
-      const po = pr ? pr.o * m : 0;
-      const pd = pr ? pr.d * m : 0;
-      // Strength and pace shrink on their own priors. Equal K reproduces
-      // the old per-component shrink: off and def then move together.
-      const ws = shrinkK > 0 ? g / (g + shrinkK) : 1;
-      const wp = paceK > 0 ? g / (g + paceK) : 1;
-      const sHat = g ? (offSum.get(id) + defSum.get(id)) / g : (po + pd);
-      const pHat = g ? (offSum.get(id) - defSum.get(id)) / g : (po - pd);
-      const S = g ? ws * sHat + (1 - ws) * (po + pd) : (po + pd);
-      const P = g ? wp * pHat + (1 - wp) * (po - pd) : (po - pd);
-      const o = (S + P) / 2;
-      const d = (S - P) / 2;
-      off.set(id, o);
-      def.set(id, d);
-      so += o;
-      sd += d;
-      count += 1;
-    }
-    const mo = count ? so / count : 0;
-    const md = count ? sd / count : 0;
-    for (const id of ids) {
-      off.set(id, off.get(id) - mo);
-      def.set(id, def.get(id) - md);
-    }
-    if (fcsN > 0) {
-      fcsOff = fcsOffSum / fcsN;
-      fcsDef = fcsDefSum / fcsN;
-    }
-  }
-  // Publish the non-FBS pool from the final FBS ratings, not the lagged iterate.
-  {
-    let fcsOffSum = 0;
-    let fcsDefSum = 0;
-    let fcsN = 0;
-    for (const g of games) {
-      if (g.hFbs === g.aFbs) continue;
-      const hfaPts = g.neutral ? 0 : hfaBase;
-      if (g.hFbs && !g.aFbs && off.has(g.hid)) {
-        fcsOffSum += g.as - league + hfaPts / 2 + def.get(g.hid);
-        fcsDefSum += league + off.get(g.hid) - (g.hs - hfaPts / 2);
-        fcsN += 1;
-      } else if (!g.hFbs && g.aFbs && off.has(g.aid)) {
-        fcsOffSum += g.hs - league - hfaPts / 2 + def.get(g.aid);
-        fcsDefSum += league + off.get(g.aid) - (g.as + hfaPts / 2);
-        fcsN += 1;
-      }
-    }
-    if (fcsN > 0) {
-      fcsOff = fcsOffSum / fcsN;
-      fcsDef = fcsDefSum / fcsN;
-    }
-  }
-  const fcsStrength = fcsOff + fcsDef;
-  const byId = {};
-  for (const id of ids) {
-    byId[id] = { off: off.get(id), def: def.get(id) };
-  }
-  const seedById = {};
-  for (const [id, pts] of prior) seedById[id] = { off: pts.o, def: pts.d };
-  return {
-    byId,
-    seedById,
-    leagueTotal,
-    fcsOff,
-    fcsDef,
-    fcsStrength,
-    games: fbsGames.length,
-    closeGames: close.length,
-    priorGames: shrinkK,
-    pacePriorGames: paceK,
-    blowoutMargin: blowout,
-    hfa: hfaBase,
-  };
-}
-
-function ncaafOaSide(pack, id) {
-  if (!id) return null;
-  const fit = pack.byId && pack.byId[String(id)];
-  if (fit && Number.isFinite(Number(fit.off)) && Number.isFinite(Number(fit.def))) {
-    return { off: Number(fit.off), def: Number(fit.def) };
-  }
-  if (!isFbsTeamId(id)) {
+  if (!homeEpa || !awayEpa) {
     return {
-      off: Number.isFinite(Number(pack.fcsOff)) ? Number(pack.fcsOff) : 0,
-      def: Number.isFinite(Number(pack.fcsDef)) ? Number(pack.fcsDef) : 0,
+      modelMargin: fallbackMargin,
+      modelTotal: fallbackTotal,
+      uncertainty: fallbackUncertainty(sport, homeSt, awaySt),
+      totalUncBump: cfg.totalUncBump,
+      methods: { ...cfg.fallback, family: null },
+      usedEpa: false,
+      engineSoft: { used: false },
     };
   }
-  const seed = pack.seedById && pack.seedById[String(id)];
-  if (seed && Number.isFinite(Number(seed.off)) && Number.isFinite(Number(seed.def))) {
-    return { off: Number(seed.off), def: Number(seed.def) };
-  }
-  return { off: 0, def: 0 };
-}
 
-/**
- * Home margin and total from the opponent-adjusted pack on efficiency._oa.
- * Null when the pack is absent — footballProjection keeps its other path.
- */
-function projectNcaafOpponentAdjusted({ homeId, awayId, efficiency, hfaPts, cfg }) {
-  const pack = efficiency && efficiency._oa;
-  if (!pack || !pack.byId || !Number.isFinite(Number(pack.leagueTotal))) return null;
-  if (!Number.isFinite(Number(pack.games)) || Number(pack.games) < 1) return null;
-  if (!homeId || !awayId) return null;
-  const H = ncaafOaSide(pack, homeId);
-  const A = ncaafOaSide(pack, awayId);
-  if (!H || !A) return null;
-  const margin = (H.off + H.def) - (A.off + A.def) + hfaPts;
-  const total = Number(pack.leagueTotal) + (H.off - H.def) + (A.off - A.def);
-  const modelMargin = clamp(margin, -NCAAF_OA_MARGIN_CAP, NCAAF_OA_MARGIN_CAP);
-  const modelTotal = clamp(total, cfg.totalMin, cfg.totalMax);
-  return {
-    modelMargin,
-    modelTotal,
-    uncertainty: cfg.epaUncertainty,
-    totalUncBump: cfg.totalUncBump,
-    methods: {
-      ml: 'cfb-oa-v1-ml',
-      spread: 'cfb-oa-v1-spread',
-      total: 'cfb-oa-v1-total',
-      family: 'cfb-oa-v1',
-    },
-    usedEpa: false,
-    engineSoft: { used: false },
-    unknownTeam: false,
-    unknownNames: [],
-  };
-}
-
-/**
- * Per-game points. Null rates when games are missing or a rate is outside
- * the football band. The caller then keeps the zero prior.
- */
-function footballRates(st) {
-  const g = gamesPlayed(st);
-  if (!st || g < 1) return { g: g || 0, pfPg: null, paPg: null };
-  const explicit = explicitPointsPerGame(st);
-  let pfPg;
-  let paPg;
-  if (explicit) {
-    pfPg = explicit.pfPg;
-    paPg = explicit.paPg;
-  } else {
-    const pf = Number(st.pf);
-    const pa = Number(st.pa);
-    if (!Number.isFinite(pf) || !Number.isFinite(pa)) return { g, pfPg: null, paPg: null };
-    pfPg = pf / g;
-    paPg = pa / g;
-  }
-  if (![pfPg, paPg].every((n) => Number.isFinite(n) && n >= FOOTBALL_PPG_MIN && n <= FOOTBALL_PPG_MAX)) {
-    return { g, pfPg: null, paPg: null };
-  }
-  return { g, pfPg, paPg };
-}
-
-/**
- * Missing NCAAF EPA side. Strength prior is 0 and pace prior is league.
- * Current-season weight is g/(g+K), strength K and pace K separate.
- * Success and talent stay empty so they cannot invent a seed.
- */
-function priorSideFromStandings(st, cfg, table) {
-  const rates = footballRates(st);
-  const ks = ncaafShrinkKs(table);
-  const kS = ks.strength;
-  const kP = ks.pace;
-  const g = rates.g;
-  let S = 0;
-  let P = 0;
-  if (rates.pfPg != null) {
-    const wS = kS > 0 ? g / (g + kS) : 1;
-    const wP = kP > 0 ? g / (g + kP) : 1;
-    S = wS * (rates.pfPg - rates.paPg);
-    P = wP * (rates.pfPg + rates.paPg - 2 * cfg.leaguePpg);
-  }
-  const offPts = (S + P) / 2;
-  const defPts = (S - P) / 2;
-  return {
-    offEpa: offPts / cfg.plays,
-    defEpa: defPts / cfg.plays,
-    offSuccess: null,
-    defSuccess: null,
-    talent: null,
-    spPlus: null,
-    adjusted: false,
-  };
-}
-
-/**
- * Both-missing NCAAF total. League center plus each side's games-played
- * pace. A side with no usable rate contributes 0. Bad teams do not raise
- * the total just by being bad.
- */
-function ncaafRegressedTotal(homeSt, awaySt, cfg, table) {
-  const league = cfg.baseTotal;
-  const kP = ncaafShrinkKs(table).pace;
-  const term = (st) => {
-    const rates = footballRates(st);
-    if (rates.pfPg == null) return 0;
-    const w = kP > 0 ? rates.g / (rates.g + kP) : 1;
-    return w * (rates.pfPg + rates.paPg - league);
-  };
-  return clamp(league + term(homeSt) + term(awaySt), cfg.totalMin, cfg.totalMax);
-}
-
-/**
- * Copy of the NCAAF cfg centered on the close-game mean. The shared
- * SPORT_CFG object is not mutated. No mean: the offline 52 / 26 pair.
- */
-function ncaafCfgCentered(cfg, table) {
-  const packMean = table && table._oa && Number(table._oa.leagueTotal);
-  const stored = table && Number(table._leagueTotal);
-  const mean = Number.isFinite(packMean) ? packMean : (Number.isFinite(stored) ? stored : null);
-  if (mean == null) return cfg;
-  return Object.assign({}, cfg, { baseTotal: mean, leaguePpg: mean / 2 });
-}
-
-function projectFromEpaSides({ sport, cfg, hAdj, aAdj, hfaPts, unknownTeam, unknownNames }) {
+  const hAdj = sierraAdjust(homeEpa, homeSt, cfg);
+  const aAdj = sierraAdjust(awayEpa, awaySt, cfg);
+  // (homeOff - awayDef) - (awayOff - homeDef), in points, plus HFA.
   const homeEdge = hAdj.offEpa - aAdj.defEpa;
   const awayEdge = aAdj.offEpa - hAdj.defEpa;
-  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfaPts;
+  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfa;
   let modelTotal = cfg.baseTotal + (homeEdge + awayEdge) * cfg.plays + successTotalAdj(hAdj, aAdj);
 
   const engineMeta = { used: false, success: null, talent: null };
@@ -1123,6 +378,8 @@ function projectFromEpaSides({ sport, cfg, hAdj, aAdj, hfaPts, unknownTeam, unkn
     if (tm.used) engineMeta.used = true;
   }
 
+  // Sport margin cap can eat the engine add when the base is already on the rail.
+  // appliedMarginAdj is the piece that actually remains inside modelMargin.
   const cappedBase = clamp(baseMargin, -cfg.marginCap, cfg.marginCap);
   let modelMargin = clamp(baseMargin + engineAdd, -cfg.marginCap, cfg.marginCap);
   const appliedEngine = modelMargin - cappedBase;
@@ -1157,504 +414,13 @@ function projectFromEpaSides({ sport, cfg, hAdj, aAdj, hfaPts, unknownTeam, unkn
     methods,
     usedEpa: true,
     engineSoft: engineMeta,
-    unknownTeam,
-    unknownNames,
-  };
-}
-
-/**
- * Home margin and total. engine family is null on the standings path.
- */
-function footballProjection({ sport, home, away, standings, efficiency, hfa } = {}) {
-  const baseCfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
-  const table = efficiency && typeof efficiency === 'object' ? efficiency : {};
-  const cfg = sport === 'NCAAF' ? ncaafCfgCentered(baseCfg, table) : baseCfg;
-  const ratings = standings && typeof standings === 'object' ? standings : {};
-  // Numeric hfa (including 0) overrides the sport constant. Neutral-site
-  // callers pass 0. Omitted hfa keeps HFA[sport].
-  const hfaPts = (hfa != null && Number.isFinite(Number(hfa)))
-    ? Number(hfa)
-    : (HFA[sport] != null ? HFA[sport] : 0);
-  const homeId = resolveTeamId(sport, home);
-  const awayId = resolveTeamId(sport, away);
-  const unknownNames = [];
-  if (!homeId) unknownNames.push(home);
-  if (!awayId) unknownNames.push(away);
-  if (unknownNames.length) {
-    for (const name of unknownNames) logUnknownTeam(sport, name);
-  }
-  const unknownTeam = unknownNames.length > 0;
-  // A missing side is the centered prior (0), not a made-up rating.
-  // Margin is HFA only when both sides are unknown. OMEGA_CENTER_DEFAULT=0
-  // restores the old rule: any unresolved name zeros the game to HFA.
-  const bothUnknown = unknownNames.length >= 2;
-  if (unknownTeam && (!centerDefaultEnabled() || bothUnknown)) {
-    const fallbackTotal = cfg.baseTotal;
-    return {
-      modelMargin: hfaPts,
-      modelTotal: fallbackTotal,
-      uncertainty: fallbackUncertainty(sport, null, null),
-      totalUncBump: cfg.totalUncBump,
-      methods: { ...cfg.fallback, family: null },
-      usedEpa: false,
-      engineSoft: { used: false },
-      unknownTeam: true,
-      unknownNames,
-    };
-  }
-  if (sport === 'NCAAF' && homeId && awayId) {
-    const oa = projectNcaafOpponentAdjusted({ homeId, awayId, efficiency: table, hfaPts, cfg });
-    if (oa) return oa;
-  }
-  const homeSt = homeId ? modelRow(sport, ratings, home) : null;
-  const awaySt = awayId ? modelRow(sport, ratings, away) : null;
-  const hPow = powerFromStandings(homeSt, sport);
-  const aPow = powerFromStandings(awaySt, sport);
-  const fallbackMargin = (hPow - aPow) + hfaPts;
-  const homeEpa = homeId ? lookupEpa(home, table, sport) : null;
-  const awayEpa = awayId ? lookupEpa(away, table, sport) : null;
-
-  // NCAAF only, and only when both clubs have an ESPN id. One clean seed
-  // plus a regressed prior. A missing id stays on the standings path.
-  if (sport === 'NCAAF' && homeId && awayId && (!!homeEpa !== !!awayEpa)) {
-    const hAdj = homeEpa
-      ? sierraAdjust(homeEpa, homeSt, cfg)
-      : priorSideFromStandings(homeSt, cfg, table);
-    const aAdj = awayEpa
-      ? sierraAdjust(awayEpa, awaySt, cfg)
-      : priorSideFromStandings(awaySt, cfg, table);
-    return projectFromEpaSides({
-      sport, cfg, hAdj, aAdj, hfaPts, unknownTeam, unknownNames,
-    });
-  }
-
-  if (!homeEpa || !awayEpa) {
-    const modelTotal = sport === 'NCAAF'
-      ? ncaafRegressedTotal(homeSt, awaySt, cfg, table)
-      : cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
-    return {
-      modelMargin: fallbackMargin,
-      modelTotal,
-      uncertainty: fallbackUncertainty(sport, homeSt, awaySt),
-      totalUncBump: cfg.totalUncBump,
-      methods: { ...cfg.fallback, family: null },
-      usedEpa: false,
-      engineSoft: { used: false },
-      unknownTeam,
-      unknownNames,
-    };
-  }
-
-  return projectFromEpaSides({
-    sport,
-    cfg,
-    hAdj: sierraAdjust(homeEpa, homeSt, cfg),
-    aAdj: sierraAdjust(awayEpa, awaySt, cfg),
-    hfaPts,
-    unknownTeam,
-    unknownNames,
-  });
-}
-
-/**
- * NCAAF tempo total. Market stays the line the CDF already shrinks toward
- * (POINT_SHRINK is not touched). This layer only replaces part of the
- * model total, and only when a weight and a pregame table are both present.
- *
- * Pace and efficiency are separate. Bill Connelly's SP+ prices efficiency
- * and then scales scoring for pace. For 2023 he cut scoring projections
- * about 5% for the new clock before the games started
- * (https://x.com/ESPN_BillC/status/1691897412770541605).
- * NCAA national coordinator Steve Shaw estimated the 2023 first-down clock
- * (runs on the ready-for-play, except the last two minutes of each half)
- * would remove 7 or 8 plays from a game that had been averaging about 180
- * snaps (The Athletic, 25 Aug 2023,
- * https://www.nytimes.com/athletic/4805119/2023/08/25/college-football-clock-rule-changes/;
- * ESPN, 28 Feb 2023,
- * https://www.espn.com/college-football/story/_/id/35754068/).
- * Early 2023 measurement was smaller: about six fewer combined snaps through
- * week 3 (The Athletic, 21 Sep 2023,
- * https://www.nytimes.com/athletic/4884655/2023/09/21/college-football-clock-rules-game-time-data/)
- * and 67.3 offensive plays per team versus 68.7 in 2022 (Chris Hummer,
- * 14 Sep 2023, https://x.com/chris_hummer/status/1702334664005042607).
- * The prior mean is 67 offensive plays per team, the post-2023 rate, not
- * the pre-2023 rate. SPORT_CFG.NCAAF.plays (68) is the same neighborhood.
- * When the table itself has a broad plays sample, that sample mean is the
- * shrink target, because it is the clock actually in force this season.
- *
- * Observed plays per game already include the team's run/pass mix under
- * that clock. Incompletions still stop the clock; the new rule stops it
- * less often after a first down. A second run/pass multiplier on top of
- * observed plays would count the mix twice, so there is none.
- *
- * Points per play is team points divided by offensive plays. The matchup
- * rate is the average of the offense's PPP and the points the opposing
- * defense allows per play. Connelly separates success rate from explosiveness;
- * both show up here only through the points-per-play result. CollegeFootballData
- * publishes offense.ppa, plays, and drives
- * (https://api.collegefootballdata.com/ docs, stats/season/advanced). That
- * feed is not on the lock path. The lock path is the ESPN team statistics
- * endpoint, which carries totalOffensivePlays and totalPoints for the team
- * and for the opponent:
- * https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/{id}/statistics
- *
- * Season-to-date rates shrink to the FBS mean with weight g/(g+K). K is 4
- * for an FBS side (half weight at four games — this replay window is mostly
- * three to six games). K is not fit on a slate. An FCS side, or a side with
- * no games, uses K=24, a full season, so the FBS mean is the prior and a
- * short FCS sample cannot set the total. That wide prior is the uncertainty
- * treatment. It does not change the edge floor, the Kelly fraction, or
- * POINT_SHRINK.
- *
- * Expected plays for an offense are the average of its own plays per game
- * and the plays the opposing defense faces. Home points are those plays
- * times the matchup PPP. The total is the sum of the two offenses. A table
- * with points per game and no play counts is the points-per-game proxy:
- * every team is given the mean plays, the plays cancel, and the total is
- * the shrunk points matchup (off + opponent points allowed) / 2 for each side.
- *
- * Replay sweep, 2026-09-26..10-10. No positive weight beat w=0
- * (all-candidate log-loss 0.5995 at 0, 0.6005 at 0.25). The Oct 13 rule
- * turns the default on at 0.25 anyway. OMEGA_NCAAF_TEMPO_WEIGHT=0 is the off
- * switch. A frozen snap does not fetch. KL(model||close) was flat.
- *
- *   w      NCAAF all-candidate log-loss    NCAAF totals log-loss
- *   0      0.5995                           0.6898
- *   0.25   0.6005                           0.6938
- *   0.5    0.6010                           0.6961
- */
-const NCAAF_TEMPO_WEIGHT = 0.25;
-const NCAAF_TEMPO_K_FBS = 4;
-const NCAAF_TEMPO_K_FCS = 24;
-const NCAAF_TEMPO_MEAN_PLAYS = 67;
-const NCAAF_TEMPO_PPG_MIN = 6;
-const NCAAF_TEMPO_PPG_MAX = 55;
-const NCAAF_TEMPO_PLAYS_MIN = 45;
-const NCAAF_TEMPO_PLAYS_MAX = 95;
-const NCAAF_TEMPO_PPP_MIN = 0.08;
-const NCAAF_TEMPO_PPP_MAX = 1.05;
-const NCAAF_TEMPO_MEAN_MIN_PPG = 8;
-const NCAAF_TEMPO_MEAN_MIN_PLAYS = 20;
-const NCAAF_TEMPO_PROXY_NOTE = 'Points per game stand in for pace. Offensive plays were not on the cached scoreboard, so every team uses the FBS mean plays and points per play is points per game over that mean. The mean plays cancel.';
-
-function ncaafTempoWeight() {
-  const w = envNumber('OMEGA_NCAAF_TEMPO_WEIGHT', NCAAF_TEMPO_WEIGHT);
-  if (!Number.isFinite(w) || w <= 0) return 0;
-  if (w > 1) return 1;
-  return w;
-}
-
-/** Live ESPN team statistics. Weight 0 and a frozen snap do not fetch. */
-function ncaafTempoMayFetch() {
-  return ncaafTempoWeight() > 0 && !process.env.OMEGA_FROZEN_SNAP;
-}
-
-function finiteIn(n, lo, hi) {
-  const x = Number(n);
-  if (!Number.isFinite(x) || x < lo || x > hi) return null;
-  return x;
-}
-
-function shrinkToward(obs, mean, games, k) {
-  if (!Number.isFinite(mean)) return null;
-  if (!Number.isFinite(obs)) return mean;
-  const g = Number.isFinite(games) && games > 0 ? games : 0;
-  const kk = Number.isFinite(k) && k > 0 ? k : 0;
-  if (g <= 0) return mean;
-  const w = kk > 0 ? g / (g + kk) : 1;
-  return w * obs + (1 - w) * mean;
-}
-
-function meanOf(vals) {
-  if (!vals.length) return null;
-  return vals.reduce((s, x) => s + x, 0) / vals.length;
-}
-
-function confirmedFcs(key, row) {
-  const stamped = row && row.espnId != null && String(row.espnId) !== '' ? String(row.espnId) : null;
-  const id = stamped || resolveTeamId('NCAAF', key);
-  return !!(id && !isFbsTeamId(id));
-}
-
-/**
- * ESPN site team statistics body → one offense/defense rate row.
- * Offense categories live on results.stats.categories. Opponent categories
- * are results.opponent itself (a list, not a categories wrapper).
- * totalOffensivePlays and totalPoints are copied onto several categories;
- * the first finite value wins. Null when plays or points are missing.
- */
-function parseEspnNcaafTeamStatistics(body, espnId) {
-  const results = body && body.results;
-  if (!results || typeof results !== 'object') return null;
-  const offCats = results.stats && results.stats.categories;
-  const opp = results.opponent;
-  const defCats = Array.isArray(opp) ? opp : (opp && opp.categories);
-  const off = statIndex(offCats);
-  const def = statIndex(defCats);
-  const games = finiteIn(off.teamGamesPlayed, 1, 25)
-    || finiteIn(off.gamesPlayed, 1, 25)
-    || finiteIn(def.teamGamesPlayed, 1, 25);
-  const playsTot = finiteIn(off.totalOffensivePlays, 1, 2500);
-  const points = finiteIn(off.totalPoints, 0, 1500);
-  const facedTot = finiteIn(def.totalOffensivePlays, 1, 2500);
-  const allowed = finiteIn(def.totalPoints, 0, 1500);
-  if (games == null || playsTot == null || points == null) return null;
-  const plays = playsTot / games;
-  const offPpp = points / playsTot;
-  if (finiteIn(plays, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) == null) return null;
-  if (finiteIn(offPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX) == null) return null;
-  const team = body.team || {};
-  const id = espnId != null && String(espnId) !== ''
-    ? String(espnId)
-    : (team.id != null ? String(team.id) : null);
-  let playsFaced = null;
-  let defPpp = null;
-  if (facedTot != null) {
-    const facedRate = facedTot / games;
-    if (finiteIn(facedRate, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) != null) {
-      playsFaced = facedRate;
-      if (allowed != null) {
-        const rate = allowed / facedTot;
-        if (finiteIn(rate, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX) != null) defPpp = rate;
-      }
-    }
-  }
-  return {
-    espnId: id,
-    name: team.displayName || team.name || null,
-    games,
-    plays,
-    playsFaced,
-    offPpp,
-    defPpp,
-    offPpg: points / games,
-    defPpg: allowed != null ? allowed / games : null,
-    passAttempts: Number.isFinite(Number(off.passingAttempts)) ? Number(off.passingAttempts) : null,
-    rushAttempts: Number.isFinite(Number(off.rushingAttempts)) ? Number(off.rushingAttempts) : null,
-  };
-}
-
-function statIndex(categories) {
-  const out = {};
-  for (const cat of categories || []) {
-    for (const s of (cat && cat.stats) || []) {
-      if (!s || !s.name || Object.prototype.hasOwnProperty.call(out, s.name)) continue;
-      const v = Number(s.value);
-      if (Number.isFinite(v)) out[s.name] = v;
-    }
-  }
-  return out;
-}
-
-/**
- * Season-to-date points per game. pf/pa are season sums unless the row
- * already carries an explicit per-game pair. No play counts: plays stay null.
- */
-function tempoTableFromStandings(ratings) {
-  const byName = {};
-  let skipped = 0;
-  const src = ratings && typeof ratings === 'object' ? ratings : {};
-  for (const [name, row] of Object.entries(src)) {
-    if (!name || String(name).startsWith('_')) continue;
-    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-    const g = gamesPlayed(row);
-    const explicit = explicitPointsPerGame(row);
-    let offPpg = null;
-    let defPpg = null;
-    if (explicit) {
-      offPpg = explicit.pfPg;
-      defPpg = explicit.paPg;
-    } else if (g >= 1) {
-      const pf = Number(row.pf);
-      const pa = Number(row.pa);
-      if (Number.isFinite(pf) && Number.isFinite(pa)) {
-        offPpg = pf / g;
-        defPpg = pa / g;
-      }
-    }
-    if (!(g >= 1)
-      || finiteIn(offPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX) == null
-      || finiteIn(defPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX) == null) {
-      skipped += 1;
-      continue;
-    }
-    byName[name] = {
-      games: g,
-      offPpg,
-      defPpg,
-      plays: null,
-      playsFaced: null,
-      offPpp: null,
-      defPpp: null,
-    };
-  }
-  return {
-    source: 'ppg-proxy',
-    proxy: 'ppg',
-    note: NCAAF_TEMPO_PROXY_NOTE,
-    teams: Object.keys(byName).length,
-    skipped,
-    byName,
-  };
-}
-
-function tempoMeans(table) {
-  const stated = table && table.means;
-  if (stated && Number.isFinite(Number(stated.plays)) && Number(stated.plays) > 0
-    && Number.isFinite(Number(stated.offPpp)) && Number.isFinite(Number(stated.defPpp))) {
-    const plays = Number(stated.plays);
-    return {
-      plays,
-      offPpp: Number(stated.offPpp),
-      defPpp: Number(stated.defPpp),
-      offPpg: Number.isFinite(Number(stated.offPpg)) ? Number(stated.offPpg) : Number(stated.offPpp) * plays,
-      defPpg: Number.isFinite(Number(stated.defPpg)) ? Number(stated.defPpg) : Number(stated.defPpp) * plays,
-    };
-  }
-  const byName = table && table.byName;
-  const offPpgs = [];
-  const defPpgs = [];
-  const plays = [];
-  const offPpps = [];
-  const defPpps = [];
-  if (byName && typeof byName === 'object') {
-    for (const [key, row] of Object.entries(byName)) {
-      if (!row || typeof row !== 'object' || confirmedFcs(key, row)) continue;
-      const og = finiteIn(row.offPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX);
-      const dg = finiteIn(row.defPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX);
-      if (og != null) offPpgs.push(og);
-      if (dg != null) defPpgs.push(dg);
-      const p = finiteIn(row.plays, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX);
-      if (p != null) plays.push(p);
-      const op = finiteIn(row.offPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
-      const dp = finiteIn(row.defPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
-      if (op != null) offPpps.push(op);
-      if (dp != null) defPpps.push(dp);
-    }
-  }
-  const meanPlays = plays.length >= NCAAF_TEMPO_MEAN_MIN_PLAYS ? meanOf(plays) : NCAAF_TEMPO_MEAN_PLAYS;
-  const fallbackPpg = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.leaguePpg) || 26;
-  const meanOffPpg = offPpgs.length >= NCAAF_TEMPO_MEAN_MIN_PPG ? meanOf(offPpgs) : fallbackPpg;
-  const meanDefPpg = defPpgs.length >= NCAAF_TEMPO_MEAN_MIN_PPG ? meanOf(defPpgs) : fallbackPpg;
-  const meanOffPpp = offPpps.length >= NCAAF_TEMPO_MEAN_MIN_PPG
-    ? meanOf(offPpps)
-    : meanOffPpg / meanPlays;
-  const meanDefPpp = defPpps.length >= NCAAF_TEMPO_MEAN_MIN_PPG
-    ? meanOf(defPpps)
-    : meanDefPpg / meanPlays;
-  return {
-    plays: meanPlays,
-    offPpp: meanOffPpp,
-    defPpp: meanDefPpp,
-    offPpg: meanOffPpg,
-    defPpg: meanDefPpg,
-  };
-}
-
-function observedPpp(row, meanPlays, which) {
-  const direct = finiteIn(which === 'off' ? row.offPpp : row.defPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
-  if (direct != null) return direct;
-  const ppg = finiteIn(which === 'off' ? row.offPpg : row.defPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX);
-  if (ppg == null || !(meanPlays > 0)) return null;
-  return finiteIn(ppg / meanPlays, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
-}
-
-function tempoSide(name, table, means) {
-  const byName = table && table.byName;
-  const row = byName ? rowByIdentity('NCAAF', byName, name) : null;
-  const id = resolveTeamId('NCAAF', name);
-  const fcs = !!(id && !isFbsTeamId(id));
-  const k = fcs ? NCAAF_TEMPO_K_FCS : NCAAF_TEMPO_K_FBS;
-  const g = row ? Number(row.games) : 0;
-  const games = Number.isFinite(g) && g > 0 ? g : 0;
-  const offObs = row ? observedPpp(row, means.plays, 'off') : null;
-  const defObs = row ? observedPpp(row, means.plays, 'def') : null;
-  const playsObs = row ? finiteIn(row.plays, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) : null;
-  const facedObs = row ? finiteIn(row.playsFaced, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) : null;
-  return {
-    fcs,
-    games,
-    offPpp: shrinkToward(offObs, means.offPpp, games, k),
-    defPpp: shrinkToward(defObs, means.defPpp, games, k),
-    plays: shrinkToward(playsObs, means.plays, games, k),
-    playsFaced: shrinkToward(facedObs, means.plays, games, k),
-  };
-}
-
-/**
- * Plays x points per play for each offense against the opposing defense.
- * Null when the table has no rows. FCS and missing sides sit on the FBS mean.
- */
-function ncaafTempoTotal({ home, away, table } = {}) {
-  const byName = table && table.byName;
-  if (!byName || typeof byName !== 'object' || !Object.keys(byName).length) return null;
-  const means = tempoMeans(table);
-  if (!means || ![means.plays, means.offPpp, means.defPpp].every((n) => Number.isFinite(n) && n > 0)) {
-    return null;
-  }
-  const H = tempoSide(home, table, means);
-  const A = tempoSide(away, table, means);
-  const expHome = (H.plays + A.playsFaced) / 2;
-  const expAway = (A.plays + H.playsFaced) / 2;
-  const pppHome = (H.offPpp + A.defPpp) / 2;
-  const pppAway = (A.offPpp + H.defPpp) / 2;
-  if (![expHome, expAway, pppHome, pppAway].every((n) => Number.isFinite(n) && n > 0)) return null;
-  const raw = expHome * pppHome + expAway * pppAway;
-  const cfg = SPORT_CFG.NCAAF;
-  return {
-    total: clamp(raw, cfg.totalMin, cfg.totalMax),
-    raw,
-    expPlaysHome: expHome,
-    expPlaysAway: expAway,
-    combinedPlays: expHome + expAway,
-    pppHome,
-    pppAway,
-    fcs: H.fcs || A.fcs,
-    proxy: table.proxy || null,
-    source: table.source || null,
-  };
-}
-
-/**
- * Blend the tempo total into the existing total. Weight 0, a missing
- * table, or a non-finite tempo total returns the existing number unchanged.
- * OMEGA_FROZEN_SNAP does not fetch here. The caller passes the snap table
- * or passes nothing, which is the weight-0 total.
- */
-function blendNcaafTempo({ modelTotal, home, away, gameDay } = {}) {
-  const kept = Number(modelTotal);
-  const base = Number.isFinite(kept) ? kept : modelTotal;
-  const weight = ncaafTempoWeight();
-  if (!(weight > 0) || !Number.isFinite(kept)) {
-    return { modelTotal: base, applied: false, weight: 0 };
-  }
-  const tempo = ncaafTempoTotal({ home, away, table: gameDay && gameDay.ncaafTempo });
-  if (!tempo || !Number.isFinite(tempo.total)) {
-    return { modelTotal: base, applied: false, weight: 0 };
-  }
-  return {
-    modelTotal: (1 - weight) * kept + weight * tempo.total,
-    applied: true,
-    weight,
-    tempoTotal: tempo.total,
-    proxy: tempo.proxy,
-    source: tempo.source,
-    fcs: tempo.fcs === true,
-    combinedPlays: tempo.combinedPlays,
-    detail: tempo,
   };
 }
 
 module.exports = {
-  SIERRA_W_GP2,
-  SIERRA_W_CAP,
-  sierraWeight,
-  cardSeasonYear,
-  seedSeasonStatus,
+  SIERRA_W,
   SPORT_CFG,
   isCleanEpa,
-  seedCenterStats,
-  centerSeed,
   lookupEpa,
   sierraAdjust,
   successTotalAdj,
@@ -1666,28 +432,4 @@ module.exports = {
   applyEngineStack,
   footballProjection,
   fallbackUncertainty,
-  NCAAF_OA_PRIOR_GAMES,
-  ncaafPacePriorGames,
-  ncaafShrinkKs,
-  ncaafFbsLeagueTotal,
-  ncaafCfgCentered,
-  NCAAF_OA_BLOWOUT_MARGIN,
-  NCAAF_OA_MIN_GAMES,
-  NCAAF_OA_MARGIN_CAP,
-  etMidnightMs,
-  ncaafCompletedGames,
-  solveNcaafOpponentRatings,
-  ncaafRetProdPriorMultiplier,
-  projectNcaafOpponentAdjusted,
-  NCAAF_TEMPO_WEIGHT,
-  NCAAF_TEMPO_K_FBS,
-  NCAAF_TEMPO_K_FCS,
-  NCAAF_TEMPO_MEAN_PLAYS,
-  NCAAF_TEMPO_PROXY_NOTE,
-  ncaafTempoWeight,
-  ncaafTempoMayFetch,
-  parseEspnNcaafTeamStatistics,
-  tempoTableFromStandings,
-  ncaafTempoTotal,
-  blendNcaafTempo,
 };

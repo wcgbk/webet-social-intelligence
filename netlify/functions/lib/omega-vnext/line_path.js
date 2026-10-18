@@ -10,9 +10,6 @@ const {
 } = require('./config');
 const { americanToImplied } = require('./odds_math');
 const { americanCentsWorse } = require('./edge');
-const { replayNoWrite, logBlocked } = require('./no_write');
-const { resolveFetch, auditBlobCall } = require('./audit_log');
-const { canonicalBlobKey } = require('./blob_key');
 
 function gameKey(away, home) {
   return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
@@ -53,20 +50,20 @@ function pathBlobKey(dateISO) {
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
-  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${canonicalBlobKey(path)}`;
+  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${path}`;
   const opts = {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   };
   if (body != null) opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-  return resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, opts);
+  return fetch(url, opts);
 }
 
 async function readJsonBlob(path) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await auditBlobCall('GET', path, () => store.get(path, { type: 'json' }));
+    return await store.get(path, { type: 'json' });
   } catch (_) {
     try {
       const resp = await blobFetch(path);
@@ -79,14 +76,10 @@ async function readJsonBlob(path) {
 }
 
 async function writeJsonBlob(path, data) {
-  if (replayNoWrite()) {
-    logBlocked(`writeJsonBlob ${path}`);
-    return false;
-  }
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await auditBlobCall('PUT', path, () => store.setJSON(path, data));
+    await store.setJSON(path, data);
     return true;
   } catch (sdkErr) {
     const resp = await blobFetch(path, { method: 'PUT', body: data });
@@ -201,15 +194,20 @@ function extractGameBooks(event, { usBooks = US_BOOKS, sharpBooks = SHARP_BOOKS 
 }
 
 /**
- * First book in `ordered` that posts this side.
- * Spread/total/ML matching is the same for a US print and a sharp print.
+ * Best US book print for a candidate side (priority order).
  */
-function sidePrint(gameSnap, candidate, ordered) {
+function bestUsPrint(gameSnap, candidate) {
   if (!gameSnap || !gameSnap.books) return null;
   const market = String(candidate.market || candidate.betType || '');
   const side = String(candidate.side || candidate.pick || '');
   const home = gameSnap.homeTeam;
   const away = gameSnap.awayTeam;
+  const priority = (US_BOOK_PRIORITY || US_BOOKS).map(bookKey);
+
+  const ordered = [
+    ...priority.filter(k => gameSnap.books[k]),
+    ...Object.keys(gameSnap.books).filter(k => !priority.includes(k) && US_BOOKS.map(bookKey).includes(k)),
+  ];
 
   for (const bk of ordered) {
     const row = gameSnap.books[bk];
@@ -253,30 +251,6 @@ function sidePrint(gameSnap, candidate, ordered) {
   return null;
 }
 
-/**
- * Best US book print for a candidate side (priority order).
- * openPrint for CLV stays on this print. Toward/against does not.
- */
-function bestUsPrint(gameSnap, candidate) {
-  if (!gameSnap || !gameSnap.books) return null;
-  const priority = (US_BOOK_PRIORITY || US_BOOKS).map(bookKey);
-  const ordered = [
-    ...priority.filter(k => gameSnap.books[k]),
-    ...Object.keys(gameSnap.books).filter(k => !priority.includes(k) && US_BOOKS.map(bookKey).includes(k)),
-  ];
-  return sidePrint(gameSnap, candidate, ordered);
-}
-
-/**
- * Pinnacle only. A US-only move does not set steam toward/against.
- * A stored Circa print is not the sharp anchor.
- */
-function sharpPrint(gameSnap, candidate) {
-  if (!gameSnap || !gameSnap.books) return null;
-  const ordered = ['pinnacle'].filter((key) => gameSnap.books[key]);
-  return sidePrint(gameSnap, candidate, ordered);
-}
-
 function normToken(name) {
   const parts = String(name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/);
   return parts[parts.length - 1] || '';
@@ -312,26 +286,23 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
 
   const openPrint = bestUsPrint(openGame, candidate);
   const nowPrint = nowGame ? bestUsPrint(nowGame, candidate) : null;
-  // US print is the CLV open only. Toward/against and the 18c/1pt gate
-  // read Pinnacle (else Circa). A DraftKings-only move does not count.
-  const sharpOpen = sharpPrint(openGame, candidate);
-  const sharpNow = nowGame ? sharpPrint(nowGame, candidate) : null;
-
-  let usOddsMoveCents = null;
-  if (openPrint && openPrint.odds != null && nowPrint && nowPrint.odds != null) {
-    const usWorse = americanCentsWorse(openPrint.odds, nowPrint.odds);
-    usOddsMoveCents = usWorse == null ? null : +(-usWorse).toFixed(2);
-  }
+  // Fallback now from candidate posted odds/line
+  const nowOdds = nowPrint && nowPrint.odds != null
+    ? nowPrint.odds
+    : (typeof candidate.odds === 'number' ? candidate.odds : null);
+  const nowLine = nowPrint && nowPrint.line != null
+    ? nowPrint.line
+    : (candidate.line != null ? Number(candidate.line) : null);
 
   let oddsMoveCents = null;
-  if (sharpOpen && sharpOpen.odds != null && sharpNow && sharpNow.odds != null) {
-    const worseForBettor = americanCentsWorse(sharpOpen.odds, sharpNow.odds);
+  if (openPrint && openPrint.odds != null && nowOdds != null) {
+    const worseForBettor = americanCentsWorse(openPrint.odds, nowOdds);
     oddsMoveCents = worseForBettor == null ? null : +(-worseForBettor).toFixed(2);
   }
 
   let lineMovePts = null;
-  if (sharpOpen && sharpOpen.line != null && sharpNow && sharpNow.line != null) {
-    lineMovePts = +(sharpNow.line - sharpOpen.line).toFixed(3);
+  if (openPrint && openPrint.line != null && nowLine != null) {
+    lineMovePts = +(nowLine - openPrint.line).toFixed(3);
   }
 
   // Direction: for the bettor, longer odds = toward; for points, more favorable line = toward
@@ -366,8 +337,7 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
   else if (steamAgainst) residualClvProxy = +(pred - Math.min(12, Math.abs(towardScore) * 5)).toFixed(2);
   else residualClvProxy = +pred.toFixed(2);
 
-  // Sharp move since the stored open. Size and direction are a
-  // selection input at the 10:30 lock. They are not added to fair_sharp_p.
+  // vs sharp open→now (optional context)
   let sharpLineMove = null;
   if (openGame.sharpConsensus && nowGame && nowGame.sharpConsensus) {
     if (/total/i.test(market)
@@ -380,18 +350,15 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
       sharpLineMove = +(nowGame.sharpConsensus.spreadHome - openGame.sharpConsensus.spreadHome).toFixed(3);
     }
   }
-  const sharpSteam = sharpSteamSinceOpen(openGame, nowGame, market);
 
   return {
     oddsMoveCents,
     lineMovePts,
-    usOddsMoveCents,
     steamToward,
     steamAgainst,
     towardScore: +towardScore.toFixed(4),
     residualClvProxy,
     _market: market,
-    missingSharp: !sharpOpen || !sharpNow,
     openPrint: openPrint ? {
       book: openPrint.book,
       line: openPrint.line,
@@ -402,85 +369,9 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
       book: nowPrint.book,
       line: nowPrint.line,
       odds: nowPrint.odds,
-    } : null,
-    sharpOpen: sharpOpen ? { book: sharpOpen.book, line: sharpOpen.line, odds: sharpOpen.odds } : null,
-    sharpNow: sharpNow ? { book: sharpNow.book, line: sharpNow.line, odds: sharpNow.odds } : null,
+    } : { line: nowLine, odds: nowOdds },
     sharpLineMove,
-    sharpMovePts: sharpSteam.sharpMovePts,
-    sharpMoveSize: sharpSteam.sharpMoveSize,
-    sharpMoveDir: sharpSteam.sharpMoveDir,
-    dkMovePts: sharpSteam.dkMovePts,
-    dkLagsSharp: sharpSteam.dkLagsSharp,
     missingOpen: false,
-  };
-}
-
-function consensusLine(game, market) {
-  if (!game || !game.sharpConsensus) return null;
-  if (/total/i.test(market)) return numberOrNull(game.sharpConsensus.total);
-  if (/spread|run line/i.test(market)) return numberOrNull(game.sharpConsensus.spreadHome);
-  return null;
-}
-
-function numberOrNull(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function dkBookRow(game) {
-  const books = game && game.books;
-  if (!books) return null;
-  return books.draftkings || books.draftkings_us || null;
-}
-
-function dkLine(game, market) {
-  const row = dkBookRow(game);
-  if (!row) return null;
-  if (/total/i.test(market)) return numberOrNull(row.total);
-  if (/spread|run line/i.test(market)) return numberOrNull(row.spreadHome);
-  return null;
-}
-
-/**
- * Sharp line from the stored open to the 10:30 snapshot.
- * dkLagsSharp is true when the sharp moved at least half a point and
- * DraftKings has not moved as far in that same direction.
- * Selection input only. Do not add this onto the fair price.
- *
- * The written spec sentence says steam is not monitored and is not an
- * input. The user STEAM note overrides that sentence: open-to-10:30
- * sharp-move size, direction, and the DraftKings-lag flag are a
- * selection input only (inside the score cap, before lock). They are
- * never added to the fair price.
- */
-function sharpSteamSinceOpen(openGame, nowGame, market) {
-  const openSharp = consensusLine(openGame, market);
-  const nowSharp = consensusLine(nowGame, market);
-  const sharpMovePts = (openSharp != null && nowSharp != null)
-    ? +(nowSharp - openSharp).toFixed(3)
-    : null;
-  const openDk = dkLine(openGame, market);
-  const nowDk = dkLine(nowGame, market);
-  const dkMovePts = (openDk != null && nowDk != null)
-    ? +(nowDk - openDk).toFixed(3)
-    : null;
-  let dkLagsSharp = false;
-  if (sharpMovePts != null && Math.abs(sharpMovePts) + 1e-9 >= 0.5) {
-    const dk = dkMovePts == null ? 0 : dkMovePts;
-    const sameOrFlat = dk === 0 || Math.sign(dk) === Math.sign(sharpMovePts);
-    const behind = Math.abs(sharpMovePts) - Math.abs(dk);
-    dkLagsSharp = sameOrFlat && behind + 1e-9 >= 0.5;
-  }
-  let sharpMoveDir = 'flat';
-  if (sharpMovePts != null && Math.abs(sharpMovePts) >= 0.05) {
-    sharpMoveDir = sharpMovePts > 0 ? 'up' : 'down';
-  }
-  return {
-    sharpMovePts,
-    sharpMoveSize: sharpMovePts == null ? null : +Math.abs(sharpMovePts).toFixed(3),
-    sharpMoveDir,
-    dkMovePts,
-    dkLagsSharp,
   };
 }
 
@@ -489,14 +380,15 @@ function sharpSteamSinceOpen(openGame, nowGame, market) {
  */
 function adverseSteamReason(move, { verify = false, market = null } = {}) {
   const cfg = LINE_MOVE || {};
-  // No 10:30 pull. verifyAdverseCents / verifyAdversePts stay in config
-  // and are not applied. Generate still uses 18 cents and 1.0 point.
-  if (verify) return null;
   if (!move || move.missingOpen) return null;
   if (!move.steamAgainst) return null;
 
-  const centsThresh = cfg.rejectSteamAgainstCents != null ? cfg.rejectSteamAgainstCents : 18;
-  const ptsMap = cfg.rejectSteamAgainstPts || { Spread: 1.0, Total: 1.0 };
+  const centsThresh = verify
+    ? (cfg.verifyAdverseCents != null ? cfg.verifyAdverseCents : 20)
+    : (cfg.rejectSteamAgainstCents != null ? cfg.rejectSteamAgainstCents : 18);
+  const ptsMap = verify
+    ? (cfg.verifyAdversePts || { Spread: 1.5, Total: 1.5 })
+    : (cfg.rejectSteamAgainstPts || { Spread: 1.0, Total: 1.0 });
 
   // Odds shortened against pick (negative move = worse American for bettor)
   if (move.oddsMoveCents != null && move.oddsMoveCents <= -centsThresh) {
@@ -521,11 +413,6 @@ function adverseSteamReason(move, { verify = false, market = null } = {}) {
  * Annotate candidates with open→now line-move features.
  * openPath: { polls: [...] } or a single snap { games }
  * nowSnap optional — else uses candidate odds as now.
- *
- * Toward and against come from the Pinnacle print (else Circa), not the
- * best US price. The probability adjustment in line_move_prob is what
- * changes cover, edge, and EV. These flags are not a score bump and they
- * are never added to the fair price. There is no 10:30 recheck.
  */
 function annotateLineMoves(candidates, openSnap, nowSnap) {
   const openGames = (openSnap && openSnap.games) || {};
@@ -550,53 +437,8 @@ function annotateLineMoves(candidates, openSnap, nowSnap) {
       predictedResidualClv: move.residualClvProxy,
       openPrint: move.openPrint,
       _steamScoreAdj: steamBoost - steamPenalty,
-      // Recorded for selection before 10:30. Not added to fair_sharp_p.
-      sharpMovePts: move.sharpMovePts != null ? move.sharpMovePts : null,
-      sharpMoveSize: move.sharpMoveSize != null ? move.sharpMoveSize : null,
-      sharpMoveDir: move.sharpMoveDir || 'flat',
-      dkMovePts: move.dkMovePts != null ? move.dkMovePts : null,
-      dkLagsSharp: move.dkLagsSharp === true,
     };
   });
-}
-
-const OFFICIAL_MOVE_SLOTS = new Set(['0300', '1000', 'open']);
-
-function moveSlotLabel(poll) {
-  if (!poll) return '';
-  const raw = poll.hhmm != null && poll.hhmm !== '' ? poll.hhmm : poll.slot;
-  if (raw == null || raw === '') return '';
-  const text = String(raw);
-  if (text === 'open') return 'open';
-  return text.padStart(4, '0');
-}
-
-/**
- * Line-move polls are 0300, 1000, and a stored open. Retired morning
- * slots are dropped. latest is the 1000 poll only. earliest is 0300,
- * else the stored open. Open does not stand in for a missing 0300 or
- * 1000 as a move endpoint (missingSlots says so).
- */
-function shapeOfficialLinePath(polls, dateISO) {
-  const by = {};
-  for (const poll of polls || []) {
-    const slot = moveSlotLabel(poll);
-    if (!OFFICIAL_MOVE_SLOTS.has(slot) || !poll) continue;
-    if (!by[slot]) by[slot] = poll;
-  }
-  const ordered = ['open', '0300', '1000'].map((slot) => by[slot]).filter(Boolean);
-  const earliest = by['0300'] || by.open || null;
-  const latest = by['1000'] || null;
-  const missingSlots = [];
-  if (!by['0300']) missingSlots.push('0300');
-  if (!by['1000']) missingSlots.push('1000');
-  return {
-    path: ordered.length ? { date: dateISO || null, polls: ordered } : null,
-    earliest,
-    latest,
-    missingSlots,
-    source: latest ? 'pull-0300-1000' : 'missing-0300-1000',
-  };
 }
 
 function earliestAndLatestPolls(pathDoc) {
@@ -694,13 +536,10 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
   let warning = null;
   let reason = null;
   if (hardFail) {
-    reason = opts.pullSlots
-      ? `CAPTURE_HEALTH: zero usable 3:00/10:00 pulls for ${dateISO} after retry`
-      : `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`;
+    reason = `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`;
     warning = reason;
   } else if (missing.length) {
-    const noun = opts.pullSlots ? '3:00/10:00 pulls' : 'morning snaps';
-    warning = `CAPTURE_HEALTH: missing required ${noun} ${missing.join(',')} for ${dateISO} (present ${present.join(',') || 'none'}; usable=${usableSnapCount})`;
+    warning = `CAPTURE_HEALTH: missing required morning snaps ${missing.join(',')} for ${dateISO} (present ${present.join(',') || 'none'}; usable=${usableSnapCount})`;
   }
   return {
     ok: !hardFail && missing.length === 0,
@@ -716,170 +555,31 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
   };
 }
 
-/** Odds API pulls capture-omega-pinnacle-lines actually schedules. */
-const PULL_SLOTS_ET = ['0300', '1000'];
-
-/** Retired morning line snaps. Absence does not warn and does not count. */
-const RETIRED_MORNING_SLOTS_ET = ['0600', '0730', '0900', '0915'];
-
-function bookHasQuote(books) {
-  if (!books || typeof books !== 'object') return false;
-  for (const quotes of Object.values(books)) {
-    if (quotes && typeof quotes === 'object' && Object.keys(quotes).length > 0) return true;
-  }
-  return false;
-}
-
-function slotFromOddsRole(role) {
-  const text = String(role || '');
-  if (text === 'baseline-0300' || text === 'check-0300') return '0300';
-  if (text === 'check-1000') return '1000';
-  return null;
-}
-
-function notePinnaclePulls(doc, present) {
-  if (!doc) return;
-  const events = Array.isArray(doc) ? doc : (Array.isArray(doc.events) ? doc.events : [doc]);
-  for (const eventDoc of events) {
-    const checks = eventDoc && eventDoc.checks;
-    if (!Array.isArray(checks)) continue;
-    for (const check of checks) {
-      const slot = check && String(check.slot || '');
-      if ((slot === '0300' || slot === '1000') && bookHasQuote(check.books)) present.add(slot);
-    }
-  }
-}
-
-function noteOddsMasterPulls(index, present) {
-  if (!index || typeof index !== 'object' || Array.isArray(index)) return;
-  if (index.baseline0300) present.add('0300');
-  const checks = index.checks;
-  if (checks && typeof checks === 'object' && !Array.isArray(checks)) {
-    if (checks['0300']) present.add('0300');
-    if (checks['1000']) present.add('1000');
-  }
-  const prices = index.prices;
-  if (!prices || typeof prices !== 'object') return;
-  for (const row of Object.values(prices)) {
-    if (!row || typeof row !== 'object') continue;
-    const roles = [];
-    if (row.role) roles.push(row.role);
-    if (Array.isArray(row.roles)) roles.push(...row.roles);
-    for (const role of roles) {
-      const slot = slotFromOddsRole(role);
-      if (slot) present.add(slot);
-    }
-  }
-}
-
-function noteLinePathPulls(linePath, present) {
-  const polls = linePath && linePath.path && Array.isArray(linePath.path.polls)
-    ? linePath.path.polls
-    : (linePath && Array.isArray(linePath.polls) ? linePath.polls : null);
-  if (!polls) return;
-  for (const poll of polls) {
-    if (!isUsablePoll(poll)) continue;
-    for (const label of [poll.hhmm, poll.slot]) {
-      const slot = String(label || '');
-      if (slot === '0300' || slot === '1000') present.add(slot);
-    }
-  }
-}
-
-/**
- * Slots present in the 3:00 / 10:00 capture.
- * A pinnacle line-move check (slot 0300 or 1000 with quotes), the same
- * slots on a line-path poll, or the odds-master equivalents
- * (baseline-0300, check-0300, check-1000, or checks['0300'/'1000']).
- * Retired 0600/0730/0900/0915 polls are ignored.
- */
-function presentPullSlots(sources) {
-  const present = new Set();
-  const src = sources && typeof sources === 'object' ? sources : {};
-  notePinnaclePulls(src.pinnacleDoc || src.lineMoveDoc, present);
-  noteLinePathPulls(src.linePath || src.linePathMeta, present);
-  if (src.path || Array.isArray(src.polls)) noteLinePathPulls(src, present);
-  const master = src.oddsMaster != null ? src.oddsMaster : src.oddsMasterIndexes;
-  const rows = Array.isArray(master) ? master : (master ? [master] : []);
-  for (const row of rows) {
-    if (row && Array.isArray(row.events) && !row.prices && !row.baseline0300 && !row.checks) {
-      for (const eventIndex of row.events) noteOddsMasterPulls(eventIndex, present);
-    } else {
-      noteOddsMasterPulls(row, present);
-    }
-  }
-  return present;
-}
-
-/**
- * Capture health for the live Odds API pulls. Required slots are 0300 and
- * 1000. Missing retired morning slots do not warn.
- */
-function assessPullCaptureHealth(dateISO, sources, opts = {}) {
-  const present = presentPullSlots(sources);
-  const polls = PULL_SLOTS_ET.filter((slot) => present.has(slot)).map((slot) => ({
-    hhmm: slot,
-    slot,
-    gameCount: 1,
-    games: { pull: true },
-  }));
-  return assessCaptureHealth(dateISO, { path: { polls } }, {
-    retriedCapture: opts.retriedCapture,
-    retryOk: opts.retryOk,
-    requiredSlotsET: PULL_SLOTS_ET.slice(),
-    pullSlots: true,
-  });
-}
-
-/**
- * Missing morning slots, including zero usable snaps, do not block the card.
- * assessCaptureHealth still reports hardFail when nothing usable was stored.
- * Generate turns that into a warning and publishes.
- */
-function warnCaptureHealth(health, dateISO) {
-  if (!health || health.hardFail !== true) return health;
-  const warning = health.warning
-    || health.reason
-    || `CAPTURE_HEALTH: missing morning snaps for ${dateISO}; card still publishes`;
-  return {
-    ...health,
-    hardFail: false,
-    reason: null,
-    ok: false,
-    warning,
-  };
-}
-
 /**
  * Load line path for date; return { path, earliest, latest }.
  */
 async function loadLinePath(dateISO) {
   const path = await readJsonBlob(pathBlobKey(dateISO));
-  const fromPath = path && Array.isArray(path.polls) ? path.polls : [];
-  const retired = fromPath.filter((poll) => {
-    const slot = moveSlotLabel(poll);
-    return slot && !OFFICIAL_MOVE_SLOTS.has(slot);
-  });
-  let shaped = shapeOfficialLinePath(fromPath, dateISO);
-  if (!shaped.latest && !shaped.earliest) {
-    const found = [];
-    for (const hhmm of ['open', '0300', '1000']) {
-      const snap = await readJsonBlob(snapBlobKey(dateISO, hhmm));
-      if (snap && snap.games) found.push({ hhmm, slot: snap.slot || hhmm, ...snap, games: snap.games });
-    }
-    if (found.length) shaped = shapeOfficialLinePath(found, dateISO);
+  if (path && Array.isArray(path.polls) && path.polls.length) {
+    const { earliest, latest } = earliestAndLatestPolls(path);
+    return { path, earliest, latest };
   }
-  if (shaped.missingSlots.length || retired.length) {
-    console.warn(JSON.stringify({
-      event: 'line-move-snapshot-missing',
-      date: dateISO,
-      missing: shaped.missingSlots,
-      ignoredRetiredSlots: retired.map(moveSlotLabel),
-      source: shaped.source,
-      note: 'line-move reads 0300 and 1000 only; retired morning snaps are not a fallback',
-    }));
+  // Fallback: try common morning snap keys (6:00 / 7:30 / 9:00 / 9:15 ET).
+  const slots = (LINE_MOVE.captureSlotsET && LINE_MOVE.captureSlotsET.length)
+    ? LINE_MOVE.captureSlotsET.slice()
+    : ['0600', '0730', '0900', '0915'];
+  const found = [];
+  for (const hhmm of slots) {
+    const snap = await readJsonBlob(snapBlobKey(dateISO, hhmm));
+    if (snap && snap.games) found.push({ hhmm, ...snap, games: snap.games });
   }
-  return shaped;
+  if (!found.length) return { path: null, earliest: null, latest: null };
+  found.sort((a, b) => String(a.hhmm).localeCompare(String(b.hhmm)));
+  return {
+    path: { date: dateISO, polls: found },
+    earliest: found[0],
+    latest: found[found.length - 1],
+  };
 }
 
 /**
@@ -928,25 +628,15 @@ module.exports = {
   pathBlobKey,
   extractGameBooks,
   bestUsPrint,
-  sharpPrint,
-  sidePrint,
   computeOpenToNowMove,
-  sharpSteamSinceOpen,
   adverseSteamReason,
   annotateLineMoves,
   earliestAndLatestPolls,
-  shapeOfficialLinePath,
-  moveSlotLabel,
   pollGameCount,
   isUsablePoll,
   missingDueSlots,
   canonicalRetrySlot,
   assessCaptureHealth,
-  assessPullCaptureHealth,
-  presentPullSlots,
-  PULL_SLOTS_ET,
-  RETIRED_MORNING_SLOTS_ET,
-  warnCaptureHealth,
   loadLinePath,
   storeLinePoll,
   readJsonBlob,

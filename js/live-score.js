@@ -127,10 +127,7 @@
     return true;
   }
 
-  function wholeUp(n) {
-    var up = Math.ceil((n || 0) - 1e-9);
-    return Object.is(up, -0) ? 0 : up;
-  }
+  function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
 
   function parlayWinAmount(risk, oddsList) {
     var decimalProduct = 1;
@@ -180,7 +177,7 @@
     }
     return {
       wins: wins, losses: losses, pushes: pushes, pending: pending,
-      profit: wholeUp(profit), wagered: wholeUp(wagered),
+      profit: Math.round(profit), wagered: Math.round(wagered),
       parlayResult: parlayResult, parlayProfit: parlayProfit,
     };
   }
@@ -199,8 +196,8 @@
     }
     var wins = (straight.wins || 0) - (day ? (day.wins || 0) : 0) + (today.wins || 0);
     var losses = (straight.losses || 0) - (day ? (day.losses || 0) : 0) + (today.losses || 0);
-    var profit = wholeUp((cum.totalProfit || 0) - (day ? (day.profit || 0) : 0) + (today.profit || 0));
-    var wagered = wholeUp((cum.totalWagered || 0) - (day ? (day.wagered || 0) : 0) + (today.wagered || 0));
+    var profit = Math.round((cum.totalProfit || 0) - (day ? (day.profit || 0) : 0) + (today.profit || 0));
+    var wagered = Math.round((cum.totalWagered || 0) - (day ? (day.wagered || 0) : 0) + (today.wagered || 0));
     var decided = wins + losses;
     var accuracy = decided > 0 ? ((wins / decided) * 100).toFixed(1) + '%' : '0%';
     var roiNum = wagered > 0 ? (profit / wagered) * 100 : 0;
@@ -213,166 +210,6 @@
       todayProfit: today.profit || 0,
       todayAcc: tDecided > 0 ? Math.round((today.wins / tDecided) * 100) : 0,
     };
-  }
-
-  // Keep this date identical to NHL_SHOOTOUT_RULE_FROM in omega-grading-rules.js.
-  var NHL_SHOOTOUT_RULE_FROM = '2026-10-15';
-
-  function nhlShootoutExcluded(dateISO) {
-    return typeof dateISO === 'string' && dateISO >= NHL_SHOOTOUT_RULE_FROM;
-  }
-
-  function shootoutBlob(status) {
-    var type = (status && status.type) || {};
-    return [type.detail, type.shortDetail, type.description, type.name].filter(Boolean).join(' ');
-  }
-
-  function textIsShootout(blob) {
-    var text = String(blob || '');
-    if (!text) return false;
-    if (/shootout/i.test(text)) return true;
-    if (/final\s*\/\s*so\b/i.test(text)) return true;
-    if (/(^|[\s/])SO([\s/]|$)/i.test(text) && !/\b\d*\s*OT\b/i.test(text)) return true;
-    return false;
-  }
-
-  function textIsOvertime(blob) {
-    var text = String(blob || '');
-    if (!text || textIsShootout(text)) return false;
-    return /\b\d*\s*OT\b/i.test(text);
-  }
-
-  function lineEntryIsShootout(entry) {
-    if (!entry || typeof entry !== 'object') return false;
-    if (entry.shootout === true) return true;
-    var bits = [entry.periodType, entry.displayName, entry.abbreviation, entry.name, entry.label];
-    var type = entry.type;
-    if (type && typeof type === 'object') bits.push(type.text, type.abbreviation, type.description, type.name);
-    else if (type) bits.push(type);
-    var label = bits.filter(Boolean).join(' ');
-    if (!label) return false;
-    if (/shootout/i.test(label)) return true;
-    if (/(^|[\s/])SO([\s/]|$)/i.test(label)) return true;
-    return false;
-  }
-
-  function linescoreHasShootout(away, home) {
-    var lists = [];
-    if (away && Array.isArray(away.linescores)) lists.push(away.linescores);
-    if (home && Array.isArray(home.linescores)) lists.push(home.linescores);
-    for (var i = 0; i < lists.length; i++) {
-      var list = lists[i];
-      for (var j = 0; j < list.length; j++) {
-        if (lineEntryIsShootout(list[j])) return true;
-      }
-    }
-    return false;
-  }
-
-  function winnerFromScores(awayScore, homeScore) {
-    var away = Number(awayScore);
-    var home = Number(homeScore);
-    if (!isFinite(away) || !isFinite(home)) return null;
-    if (away > home) return 'away';
-    if (home > away) return 'home';
-    return null;
-  }
-
-  function sportIsNhl(sport) {
-    var s = String(sport || '').toUpperCase();
-    return s === 'NHL' || s === 'HOCKEY';
-  }
-
-  // Raw ESPN status + competitors. Scores are not rewritten.
-  function detectNhlShootout(status, away, home, sport) {
-    var blob = shootoutBlob(status);
-    var period = Number(status && status.period) || 0;
-    var flagged = !!(status && (status.shootout === true || (status.type && status.type.shootout === true)));
-    var shootout = flagged || textIsShootout(blob) || linescoreHasShootout(away, home);
-    if (!shootout && sportIsNhl(sport) && period > 4 && !textIsOvertime(blob) && !/final\s*\/\s*\d+\b/i.test(blob)) {
-      shootout = true;
-    }
-    var awayScore = away ? (parseInt(away.score, 10) || 0) : 0;
-    var homeScore = home ? (parseInt(home.score, 10) || 0) : 0;
-    return {
-      shootout: shootout,
-      shootoutWinner: shootout ? winnerFromScores(awayScore, homeScore) : null,
-    };
-  }
-
-  function shootoutFromGame(game, sport) {
-    if (!game) return { shootout: false, shootoutWinner: null };
-    if (game.shootout === true) {
-      return { shootout: true, shootoutWinner: winnerFromScores(game.awayScore, game.homeScore) };
-    }
-    var awayLines = game.awayLineMeta || game.awayLinescores || game.awayLine;
-    var homeLines = game.homeLineMeta || game.homeLinescores || game.homeLine;
-    return detectNhlShootout({
-      period: game.period,
-      shootout: game.shootout,
-      type: {
-        detail: [game.statusDetail, game.detail].filter(Boolean).join(' '),
-        shortDetail: game.shortDetail || '',
-        description: game.statusDescription || game.description || '',
-        name: game.statusName || '',
-      },
-    }, {
-      score: game.awayScore,
-      linescores: Array.isArray(awayLines) ? awayLines : [],
-    }, {
-      score: game.homeScore,
-      linescores: Array.isArray(homeLines) ? homeLines : [],
-    }, sport || game.sport || game._sport);
-  }
-
-  function nhlPickIsF5(pick) {
-    if (!pick) return false;
-    var pickStr = String(pick.pick || '');
-    var betType = String(pick.betType || pick.market || '').toLowerCase();
-    var src = String(pick.source || '').toLowerCase();
-    return src === 'f5' || betType.indexOf('f5') !== -1 || /\bf5\b|first 5|1st 5|first-5/i.test(pickStr);
-  }
-
-  function nhlGradeMarket(pick, market) {
-    if (market === 'total' || market === 'spread' || market === 'moneyline') return market;
-    if (market === 'ml') return 'moneyline';
-    var betType = String((pick && (pick.betType || pick.market)) || '').toLowerCase();
-    var pickStr = String((pick && pick.pick) || '');
-    if (betType === 'total' || betType === 'f5 total' || betType.indexOf('total') !== -1 || /\b(over|under)\b/i.test(pickStr)) {
-      if (/\b(over|under)\b/i.test(pickStr) || betType.indexOf('total') !== -1) return 'total';
-    }
-    if (betType === 'spread' || betType === 'puck line' || /spread|puck|run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
-      if (!/\b(over|under)\b/i.test(pickStr)) return 'spread';
-    }
-    return 'moneyline';
-  }
-
-  // Totals and puck line on a shootout: drop the winner's extra goal.
-  // Moneyline keeps the ESPN final. Dates before NHL_SHOOTOUT_RULE_FROM do too.
-  function nhlRegulationScores(input) {
-    var pick = input && input.pick;
-    var game = input && input.game;
-    var awayScore = Number(input && input.awayScore);
-    var homeScore = Number(input && input.homeScore);
-    if (!isFinite(awayScore)) awayScore = Number(game && game.awayScore) || 0;
-    if (!isFinite(homeScore)) homeScore = Number(game && game.homeScore) || 0;
-    var raw = { awayScore: awayScore, homeScore: homeScore, applied: false, winner: null };
-    if (!input || nhlPickIsF5(pick)) return raw;
-    var market = nhlGradeMarket(pick, input.market);
-    if (market !== 'total' && market !== 'spread') return raw;
-    // An explicit dateISO (including null) is the card date. Omitting the key
-    // is the only path that may read pick.date. Pages pass the key they resolved.
-    var dateISO = null;
-    if (input && Object.prototype.hasOwnProperty.call(input, 'dateISO')) dateISO = input.dateISO;
-    else if (pick && pick.date) dateISO = pick.date;
-    if (!nhlShootoutExcluded(dateISO)) return raw;
-    var sport = (pick && pick.sport) || (game && (game.sport || game._sport)) || '';
-    if (String(sport).toUpperCase() !== 'NHL') return raw;
-    var info = shootoutFromGame(game, sport);
-    if (!info.shootout || !info.shootoutWinner) return raw;
-    if (info.shootoutWinner === 'away') awayScore = Math.max(0, awayScore - 1);
-    else homeScore = Math.max(0, homeScore - 1);
-    return { awayScore: awayScore, homeScore: homeScore, applied: true, winner: info.shootoutWinner };
   }
 
   function paintKpi(view) {
@@ -424,9 +261,5 @@
     ledgerTotals: ledgerTotals,
     mergeTodayKpi: mergeTodayKpi,
     paintKpi: paintKpi,
-    NHL_SHOOTOUT_RULE_FROM: NHL_SHOOTOUT_RULE_FROM,
-    nhlShootoutExcluded: nhlShootoutExcluded,
-    detectNhlShootout: detectNhlShootout,
-    nhlRegulationScores: nhlRegulationScores,
   };
 });

@@ -9,7 +9,7 @@ const wf = require(path.join(root, 'walk_forward'));
 const store = require(path.join(root, 'store'));
 const config = require(path.join(root, 'config'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 assert.strictEqual(wf.KPI_FLOOR, config.CLV_KPI_FLOOR);
 assert.strictEqual(wf.OBSERVER_ONLY, true);
@@ -243,9 +243,9 @@ assert.ok(/clv-\$\{dateISO\}/.test(captureSrc));
 assert.ok(/storeWalkforwardSamples/.test(captureSrc));
 
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
-assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15,16 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23,0 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "5 14,15 \* \* \*"/.test(toml), '10:05am ET generate fires both UTC hours');
+assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "30 13 \* \* \*"/.test(toml), 'Wednesday generate stays 9:30am EDT');
 assert.ok(/2026-11-01/.test(toml));
 assert.ok(/"30 13" → "30 14"/.test(toml) || /30 13.+\u2192.+30 14/.test(toml) || toml.includes('"30 13" → "30 14"'));
 assert.ok(/Do not switch it before/.test(toml));

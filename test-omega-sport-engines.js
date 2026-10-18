@@ -1,9 +1,5 @@
 'use strict';
 /** Omega v12.2 sport engines — synthetic events only, no network. */
-// These fixtures lock the unshifted MLB engine. The level correction is
-// test-omega-mlb-total-center.js. Both toggles off matches that engine.
-process.env.OMEGA_MLB_ROOTFIX = '0';
-process.env.OMEGA_MLB_TOTAL_RECENTER = '0';
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -18,28 +14,26 @@ const nhl = require(path.join(root, 'sports/nhl'));
 const epa = require(path.join(root, 'sports/epa'));
 const env = require(path.join(root, 'sports/mlb_env'));
 const { powerFromStandings } = require(path.join(root, 'sports/_common'));
-const { eloMargin } = require(path.join(root, 'sports/nfl_elo'));
 const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NCAAF, true);
 assert.strictEqual(config.SPORTS_ENABLED.MLB, true);
 assert.strictEqual(config.MAX_STRAIGHTS, 3);
-assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
-assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 4.5);
+assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
-assert.strictEqual(config.LEAN_PAD, true);
+assert.strictEqual(config.LEAN_PAD, false);
 assert.strictEqual(config.DAY_SCOPE_STRICT, true);
 assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
 assert.strictEqual(config.QUALITY_GRADE.a, 0.035);
 assert.strictEqual(config.QUALITY_GRADE.aminus, 0.02);
-assert.strictEqual(config.HFA.NFL, 2.0);
-assert.ok(config.HFA.NFL >= 1.5 && config.HFA.NFL <= 2);
+assert.strictEqual(config.HFA.NFL, 2.1);
 assert.strictEqual(config.HFA.NCAAF, 2.6);
 assert.strictEqual(config.HFA.MLB, 0.12);
 assert.ok(/EPA-style/.test(config.MODEL_NOTES));
@@ -65,13 +59,17 @@ assert.deepStrictEqual(config.PM_SOFT, {
   venueCombine: 'average',
 });
 assert.deepStrictEqual(config.SELECT_WEIGHTS, {
+  w_ev: 0.35,
+  w_clv: 0.45,
+  w_uncertainty: 0.20,
+  corr_penalty: 0.15,
   softSportMixBonus: 0.02,
 });
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
 assert.deepStrictEqual(config.MLB_CALIBRATION, {
   shrinkK: { Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46 },
 });
-assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB has no separate band; the legacy band is global');
+assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB keeps the global isotonic band');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.ok(epa.SPORT_CFG.NFL.epaUncertainty >= 0.12 && epa.SPORT_CFG.NFL.epaUncertainty <= 0.14);
@@ -84,10 +82,10 @@ const touched = [
 assert.ok(!/tsp\.live/i.test(touched), 'sport engines must not call tsp.live');
 assert.ok(!/generate-picks-alpha/.test(touched));
 assert.ok(touched.includes('blendWithMarket'));
-assert.ok(touched.includes('calibrateAll(candidates, { cardDate: dateISO })'));
+assert.ok(touched.includes('calibrateAll(candidates)'));
 {
   const idx = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
-  assert.ok(idx.indexOf('calibrateAll(candidates, { cardDate: dateISO })') > idx.indexOf('projectAll(snap, dateISO)'));
+  assert.ok(idx.indexOf('calibrateAll(candidates)') > idx.indexOf('projectAll(snap)'));
 }
 
 function synthEvent(home, away, opts = {}) {
@@ -118,13 +116,6 @@ function byMarket(cands, market) {
   const row = cands.find(c => c.market === market);
   assert.ok(row, `missing ${market}`);
   return row;
-}
-
-/** Home margin after the Elo blend. w = 0 is the pre-Elo number. */
-function blendedNflMargin(base, home, away) {
-  const w = config.nflEloWeight();
-  if (!(w > 0)) return base;
-  return (1 - w) * base + w * eloMargin(home, away, false);
 }
 
 // ── NFL / CFB formula ──
@@ -170,11 +161,10 @@ function blendedNflMargin(base, home, away) {
 }
 
 // Sierra blend only when standings are clean; unclean keeps the seed.
-// pf/pa are season sums: 136 and 64 over 4 games are 34 and 16 per game.
 {
   const clean = epa.sierraAdjust(
     { offEpa: 0, defEpa: 0 },
-    { pf: 136, pa: 64, wins: 3, losses: 1 },
+    { pf: 34, pa: 16, wins: 3, losses: 1 },
     epa.SPORT_CFG.NFL
   );
   assert.strictEqual(clean.adjusted, true);
@@ -188,54 +178,6 @@ function blendedNflMargin(base, home, away) {
   assert.strictEqual(dirty.adjusted, false);
   assert.strictEqual(dirty.offEpa, 0.1);
   assert.strictEqual(epa.isCleanEpa({ offEpa: 5, defEpa: 0.1 }), false);
-}
-
-// Season sums are divided whenever gp >= 2. 36 in 3 games is 12, not 36.
-{
-  const cfg = epa.SPORT_CFG.NFL;
-  const seed = { offEpa: 0, defEpa: 0 };
-  const early = epa.sierraAdjust(seed, { pf: 36, pa: 90, wins: 0, losses: 3 }, cfg);
-  const w3 = epa.sierraWeight(3, cfg);
-  const offFrom12 = (12 - cfg.leaguePpg) / cfg.plays;
-  assert.strictEqual(early.adjusted, true);
-  assert.ok(Math.abs(early.offEpa - ((1 - w3) * seed.offEpa + w3 * offFrom12)) < 1e-12);
-  assert.ok(early.offEpa <= seed.offEpa, 'pf 36 in 3 games must not raise offEpa');
-
-  const high = epa.sierraAdjust(seed, { pf: 120, pa: 80, games: 4 }, cfg);
-  const w4 = epa.sierraWeight(4, cfg);
-  const offFrom30 = (120 / 4 - cfg.leaguePpg) / cfg.plays;
-  assert.strictEqual(high.adjusted, true);
-  assert.ok(Math.abs(high.offEpa - w4 * offFrom30) < 1e-12, 'pf 120 in 4 games is divided');
-
-  const rateSeed = { offEpa: 0.12, defEpa: -0.04 };
-  const summedRate = epa.sierraAdjust(rateSeed, { pf: 22, pa: 22, games: 4 }, cfg);
-  assert.strictEqual(summedRate.adjusted, false, 'pf 22 in 4 games is 5.5, outside the band');
-  assert.strictEqual(summedRate.offEpa, rateSeed.offEpa);
-  const rate = epa.sierraAdjust(rateSeed, {
-    pf: 40,
-    pa: 40,
-    games: 4,
-    avgPointsFor: 22,
-    avgPointsAgainst: 22,
-  }, cfg);
-  const offFrom22 = (22 - cfg.leaguePpg) / cfg.plays;
-  const defFrom22 = (cfg.leaguePpg - 22) / cfg.plays;
-  assert.strictEqual(rate.adjusted, true);
-  assert.ok(Math.abs(rate.offEpa - ((1 - w4) * rateSeed.offEpa + w4 * offFrom22)) < 1e-12);
-  assert.ok(Math.abs(rate.defEpa - ((1 - w4) * rateSeed.defEpa + w4 * defFrom22)) < 1e-12);
-  assert.ok(Math.abs(rate.offEpa - rateSeed.offEpa) > 1e-6, 'avgPointsFor 22 is the rate, not 40/4');
-
-  const cfbCfg = epa.SPORT_CFG.NCAAF;
-  const cfb = epa.sierraAdjust(
-    seed,
-    { pf: 40, pa: 120, wins: 2, losses: 1 },
-    cfbCfg
-  );
-  const wCfb = epa.sierraWeight(3, cfbCfg);
-  const cfbOff = (40 / 3 - cfbCfg.leaguePpg) / cfbCfg.plays;
-  assert.strictEqual(cfb.adjusted, true);
-  assert.ok(Math.abs(cfb.offEpa - wCfb * cfbOff) < 1e-12, 'NCAAF uses the same season-sum band');
-  assert.ok(cfb.offEpa <= seed.offEpa);
 }
 
 // ── NFL candidates: EPA vs fallback ──
@@ -252,12 +194,9 @@ function blendedNflMargin(base, home, away) {
   assert.ok(missing.length >= 6, 'fallback must still emit a slate');
   assert.ok(absent.length === missing.length);
   for (const c of missing) assert.ok(/nfl-normal-|nfl-total-baseline/.test(c.projMethod), c.projMethod);
-  const hPow = powerFromStandings(standings[home], 'NFL');
-  const aPow = powerFromStandings(standings[away], 'NFL');
-  assert.strictEqual(
-    byMarket(missing, 'Spread').modelProjection,
-    +blendedNflMargin((hPow - aPow) + config.HFA.NFL, home, away).toFixed(2),
-  );
+  const hPow = powerFromStandings(standings[home]);
+  const aPow = powerFromStandings(standings[away]);
+  assert.strictEqual(byMarket(missing, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NFL).toFixed(2));
   assert.strictEqual(byMarket(missing, 'Total').modelProjection, +(45 + Math.abs(hPow + aPow) * 0.05).toFixed(2));
   assert.strictEqual(byMarket(missing, 'Moneyline').uncertainty, 0.16);
   assert.strictEqual(byMarket(missing, 'Moneyline').projMethod, 'nfl-normal-ml');
@@ -308,7 +247,7 @@ function blendedNflMargin(base, home, away) {
   assert.ok(calibrated.every(c => Number.isFinite(c.coverProb)));
   assert.ok(calibrated.some(c => Math.abs(c.coverProb - c.modelRawP) > 1e-6));
 
-  // Bare mascot is not an NFL identity. Chiefs must not inherit Kansas City's EPA.
+  // Fuzzy mascot match still finds the prior.
   const fuzzy = nfl.project({
     oddsEvents: [synthEvent('Chiefs', 'Bills')],
     standings: {},
@@ -317,9 +256,7 @@ function blendedNflMargin(base, home, away) {
       'Buffalo Bills': { offEpa: 0.00, defEpa: 0.00 },
     },
   });
-  assert.ok(fuzzy.length >= 6);
-  assert.ok(fuzzy.every((c) => c.unknownTeam === true));
-  assert.ok(!/nfl-epa/.test(byMarket(fuzzy, 'Moneyline').projMethod));
+  assert.strictEqual(byMarket(fuzzy, 'Moneyline').projMethod, 'nfl-epa-v1-ml');
 }
 
 // ── CFB ──
@@ -337,8 +274,8 @@ function blendedNflMargin(base, home, away) {
   assert.strictEqual(byMarket(missing, 'Spread').projMethod, 'cfb-normal-spread');
   assert.strictEqual(byMarket(missing, 'Total').projMethod, 'cfb-total-baseline');
   assert.strictEqual(byMarket(missing, 'Moneyline').uncertainty, 0.22);
-  const hPow = powerFromStandings(standings[home], 'NCAAF');
-  const aPow = powerFromStandings(standings[away], 'NCAAF');
+  const hPow = powerFromStandings(standings[home]);
+  const aPow = powerFromStandings(standings[away]);
   assert.strictEqual(byMarket(missing, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NCAAF).toFixed(2));
 
   const withEpa = cfb.project({
@@ -422,18 +359,8 @@ function blendedNflMargin(base, home, away) {
   assert.strictEqual(byMarket(coors, 'Total').projMethod, 'mlb-sp-park-v1-total');
   assert.strictEqual(byMarket(coors, 'Moneyline').projMethod, 'mlb-sp-park-v1-ml');
   assert.strictEqual(byMarket(coors, 'Spread').projMethod, 'mlb-sp-park-v1-spread');
-  // Venue park does not scale margin. This table has only the Rockies row,
-  // so their rates are neutralized and the Dodgers (no row, adj 1) stay raw.
-  // Equal raw powers no longer share a margin once only one club is neutralized.
-  const rs = 700 / 150;
-  const ra = 680 / 150;
-  const colAdj = (1.21 + 1) / 2;
-  const coorsHomeRuns = (rs / colAdj + ra) / 2;
-  const coorsAwayRuns = (rs + ra / colAdj) / 2;
-  const coorsMargin = (coorsHomeRuns - coorsAwayRuns) + config.HFA.MLB;
-  assert.strictEqual(byMarket(coors, 'Spread').modelProjection, +coorsMargin.toFixed(2));
-  assert.strictEqual(byMarket(neutral, 'Spread').modelProjection, +config.HFA.MLB.toFixed(2));
-  assert.notStrictEqual(byMarket(coors, 'Spread').modelProjection, +(coorsMargin * 1.21).toFixed(2));
+  // Park does not invent a side's margin by itself when powers match.
+  assert.strictEqual(byMarket(coors, 'Spread').modelProjection, byMarket(neutral, 'Spread').modelProjection);
 
   const spStats = {
     byId: {
@@ -568,7 +495,7 @@ function blendedNflMargin(base, home, away) {
   assert.strictEqual(env.resolvePark('Colorado Rockies', { 'Colorado Rockies': { park: 1.8 } }, null), null);
 }
 
-// v12.3.11: ML, spreads, and totals blend to no-vig Pinnacle. Never prices[0].
+// v12.3.11: ML, spreads, and totals blend to no-vig Pinnacle/Circa. Never prices[0].
 {
   const edgeMod = require(path.join(root, 'edge'));
   const common = require(path.join(root, 'sports/_common'));
@@ -576,7 +503,7 @@ function blendedNflMargin(base, home, away) {
   for (const f of ['sports/mlb.js', 'sports/nfl.js', 'sports/cfb.js']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     assert.strictEqual((src.match(/prices\[0\]/g) || []).length, 0, `${f} must not blend to prices[0]`);
-    assert.ok(src.includes('noVigPinnacleImplied'), f);
+    assert.ok(src.includes('noVigPinnacleCircaImplied'), f);
   }
   const home = 'Los Angeles Dodgers';
   const away = 'San Francisco Giants';
@@ -584,13 +511,13 @@ function blendedNflMargin(base, home, away) {
     home_team: home,
     away_team: away,
     commence_time: '2026-09-24T23:10:00Z',
-    bookmakers: ['draftkings', 'fanduel', 'pinnacle', 'altbook'].map((key) => {
-      const spreadHome = key === 'pinnacle' ? -110 : key === 'altbook' ? -108 : -105;
-      const spreadAway = key === 'pinnacle' ? -110 : key === 'altbook' ? -112 : -115;
-      const over = key === 'pinnacle' ? -110 : key === 'altbook' ? -112 : -105;
-      const under = key === 'pinnacle' ? -110 : key === 'altbook' ? -104 : -115;
-      const mlHome = key === 'pinnacle' ? -130 : key === 'altbook' ? -128 : -125;
-      const mlAway = key === 'pinnacle' ? 110 : key === 'altbook' ? 108 : 105;
+    bookmakers: ['draftkings', 'fanduel', 'pinnacle', 'circa'].map((key) => {
+      const spreadHome = key === 'pinnacle' ? -110 : key === 'circa' ? -108 : -105;
+      const spreadAway = key === 'pinnacle' ? -110 : key === 'circa' ? -112 : -115;
+      const over = key === 'pinnacle' ? -110 : key === 'circa' ? -112 : -105;
+      const under = key === 'pinnacle' ? -110 : key === 'circa' ? -104 : -115;
+      const mlHome = key === 'pinnacle' ? -130 : key === 'circa' ? -128 : -125;
+      const mlAway = key === 'pinnacle' ? 110 : key === 'circa' ? 108 : 105;
       return {
         key,
         markets: [
@@ -613,12 +540,11 @@ function blendedNflMargin(base, home, away) {
   const ml = cands.find(c => c.market === 'Moneyline' && c.side === home);
   const spreadBundles = edgeMod.collectMarketOutcomes(ev, 'spreads');
   const totalBundles = edgeMod.collectMarketOutcomes(ev, 'totals');
-  const spreadAnchor = edgeMod.noVigPinnacleImplied(spreadBundles, spreadBundles.find(b => b.side === home));
-  const totalAnchor = edgeMod.noVigPinnacleImplied(totalBundles, totalBundles.find(b => b.side === 'Over'));
+  const spreadAnchor = edgeMod.noVigPinnacleCircaImplied(spreadBundles, spreadBundles.find(b => b.side === home));
+  const totalAnchor = edgeMod.noVigPinnacleCircaImplied(totalBundles, totalBundles.find(b => b.side === 'Over'));
   const pinSpread = oddsMath.noVigTwoWay(-110, -110).p1;
-  const altSpread = oddsMath.noVigTwoWay(-108, -112).p1;
-  assert.ok(Math.abs(spreadAnchor - pinSpread) < 1e-9, 'Pinnacle paired no-vig is the anchor');
-  assert.ok(Math.abs(spreadAnchor - altSpread) > 1e-6);
+  const circaSpread = oddsMath.noVigTwoWay(-108, -112).p1;
+  assert.ok(Math.abs(spreadAnchor - (pinSpread + circaSpread) / 2) < 1e-9, 'Pinnacle and Circa share the anchor equally');
   const dkSpread = oddsMath.americanToImplied(-105);
   assert.ok(Math.abs(spreadAnchor - dkSpread) > 0.005);
   const pSpread = common.spreadCoverProb(config.HFA.MLB, -1.5, 'MLB');
@@ -628,7 +554,8 @@ function blendedNflMargin(base, home, away) {
   assert.ok(Math.abs(total.modelRawP - common.blendWithMarket(pTotal, totalAnchor, 0.45)) < 1e-9);
   const pMl = common.mlFromSpread(config.HFA.MLB, 'MLB');
   const pinMl = oddsMath.noVigTwoWay(-130, 110).p1;
-  const mlAnchor = pinMl;
+  const circaMl = oddsMath.noVigTwoWay(-128, 108).p1;
+  const mlAnchor = (pinMl + circaMl) / 2;
   assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, mlAnchor, 0.5)) < 1e-9);
   assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, oddsMath.americanToImplied(-130), 0.5)) > 1e-3, 'ML anchor is no-vig, not the vigged Pinnacle price');
 
@@ -636,18 +563,16 @@ function blendedNflMargin(base, home, away) {
     { side: 'Home', point: -3, prices: [{ book: 'draftkings', american: -105 }, { book: 'bookmaker', american: -110 }] },
     { side: 'Away', point: 3, prices: [{ book: 'draftkings', american: -115 }, { book: 'bookmaker', american: -110 }] },
   ];
-  const fallback = edgeMod.noVigPinnacleImplied(softOnly, softOnly[0]);
-  assert.ok(Math.abs(fallback - 0.5) < 1e-9, 'missing Pinnacle falls back to sharp no-vig, not prices[0]');
+  const fallback = edgeMod.noVigPinnacleCircaImplied(softOnly, softOnly[0]);
+  assert.ok(Math.abs(fallback - 0.5) < 1e-9, 'missing Pinnacle/Circa falls back to sharp no-vig, not prices[0]');
 
-  // Broken Pinnacle pair must not be mixed with DraftKings. Bookmaker posts both sides.
+  // Broken Pinnacle pair must not be mixed with DraftKings. Circa posts both sides.
   const splitPin = [
-    { side: 'Home', point: -1.5, prices: [{ book: 'pinnacle', american: -150 }, { book: 'bookmaker', american: -110 }, { book: 'draftkings', american: -105 }] },
-    { side: 'Away', point: 1.5, prices: [{ book: 'bookmaker', american: -110 }, { book: 'draftkings', american: -115 }] },
+    { side: 'Home', point: -1.5, prices: [{ book: 'pinnacle', american: -150 }, { book: 'circa', american: -110 }, { book: 'draftkings', american: -105 }] },
+    { side: 'Away', point: 1.5, prices: [{ book: 'circa', american: -110 }, { book: 'draftkings', american: -115 }] },
   ];
   const paired = edgeMod.sharpFairForSide(splitPin, 'Home', -1.5);
-  assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Bookmaker pair when Pinnacle is one-sided');
-  const nextAnchor = edgeMod.noVigPinnacleImplied(splitPin, splitPin[0]);
-  assert.ok(Math.abs(nextAnchor - 0.5) < 1e-9, 'the next sharp pair is the anchor when Pinnacle has no two-way price');
+  assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Circa pair when Pinnacle is one-sided');
 }
 
 // Season run totals must not saturate the moneyline, and a starter still moves it.
@@ -698,7 +623,7 @@ function blendedNflMargin(base, home, away) {
   assert.ok(Math.abs(perGame.modelMargin - (0.6 + config.HFA.MLB)) < 1e-9);
   const seasonNfl = powerFromStandings({ pf: 360, pa: 240, wins: 12, losses: 4 }, 'NFL');
   assert.ok(Math.abs(seasonNfl - ((360 - 240) / 16)) < 1e-9);
-  assert.ok(Math.abs(powerFromStandings({ pf: 30, pa: 20, wins: 2, losses: 1 }, 'NFL') - (10 / 3)) < 1e-9);
+  assert.strictEqual(powerFromStandings({ pf: 30, pa: 20, wins: 2, losses: 1 }, 'NFL'), 10);
   const chiefs = 'Kansas City Chiefs';
   const bills = 'Buffalo Bills';
   const seasonFb = nfl.project({
@@ -711,10 +636,7 @@ function blendedNflMargin(base, home, away) {
   });
   const hPow = powerFromStandings({ pf: 360, pa: 240, wins: 12, losses: 4 }, 'NFL');
   const aPow = powerFromStandings({ pf: 280, pa: 300, wins: 8, losses: 8 }, 'NFL');
-  assert.strictEqual(
-    byMarket(seasonFb, 'Spread').modelProjection,
-    +blendedNflMargin((hPow - aPow) + config.HFA.NFL, chiefs, bills).toFixed(2),
-  );
+  assert.strictEqual(byMarket(seasonFb, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NFL).toFixed(2));
   assert.ok(Math.abs(byMarket(seasonFb, 'Spread').modelProjection) < 20);
 }
 
@@ -1326,20 +1248,15 @@ function blendedNflMargin(base, home, away) {
       'Buffalo Bills': { offEpa: 0, defEpa: 0, offSuccess: 0.1, defSuccess: 0.1 },
     },
     gameDay: {
-      qbStatusBySport: { NFL: { 'Buffalo Bills': { qbStatus: 'out', qbName: 'X', depthChartRank: 1 } } },
+      qbStatusBySport: { NFL: { 'Buffalo Bills': { qbStatus: 'out', qbName: 'X' } } },
     },
   });
   const plainM = byMarket(plain, 'Moneyline').modelProjection;
   const deepRow = byMarket(deep, 'Moneyline');
   const deepM = deepRow.modelProjection;
   assert.ok(Math.abs(deepRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-9);
-  // QB out is priced once. Continuity does not add. The Elo blend dilutes the
-  // success stack only. The injury points are added back at full weight.
-  const eloW = config.nflEloWeight();
-  const inj = deepRow.gameDay.injuryMarginAdj;
-  assert.ok(Math.abs(inj - config.QB_INJURY.NFL.outMarginPts) < 1e-9, inj);
-  const expectedMove = (1 - eloW) * deepRow.engineSoft.stacked.sum + inj;
-  assert.ok(Math.abs((deepM - plainM) - expectedMove) < 0.02, `${deepM - plainM} != ${expectedMove}`);
+  // QB out is priced once (qbSoftAdjust); continuity adds nothing for an out QB.
+  assert.ok(Math.abs((deepM - plainM) - (config.QB_INJURY.NFL.outMarginPts + deepRow.engineSoft.stacked.sum)) < 0.02);
 
   const cfbDeep = cfb.project({
     oddsEvents: [synthEvent('Ohio State Buckeyes', 'Iowa Hawkeyes', { total: 51.5, spread: -6.5 })],
@@ -1349,7 +1266,7 @@ function blendedNflMargin(base, home, away) {
       'Iowa Hawkeyes': { offEpa: 0, defEpa: 0, talent: -3.5, talentScale: 'centered' },
     },
     gameDay: {
-      qbStatusBySport: { NCAAF: { 'Iowa Hawkeyes': { qbStatus: 'out', qbName: 'X', depthChartRank: 1 } } },
+      qbStatusBySport: { NCAAF: { 'Iowa Hawkeyes': { qbStatus: 'out', qbName: 'X' } } },
     },
   });
   const cfbRow = byMarket(cfbDeep, 'Moneyline');

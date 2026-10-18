@@ -2,55 +2,20 @@
 /**
  * NCAAF/CFB — EPA-style off/def prior when both teams match (cfb-epa-v1*),
  * else standings power + HFA (cfb-normal-*). Game-day rest/QB soft adj
- * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday.
- * 2026-10-17: Pinnacle is CLV-only, no pull toward the market line on
- * NCAAF pick probabilities. NCAAF_MODEL_WEIGHT is 1, so modelPureP and
- * betProjection are the raw model margin or total (moneyline, spread,
- * and total). Anchors stay no-vig Pinnacle for CLV. The legacy modelRawP
- * blend uses the same weight: at 1, blendWithMarket is the model cover
- * with no market mix and no division. POINT_SHRINK, the FCS point lambda,
- * calibration, tempo, and gates are unchanged.
- * A tempo total (plays x points per play) blends into the total when the
- * tempo weight is above 0 (default 0.25) and a pregame table is already in hand.
- * A frozen snap does not fetch that table.
- * Wind still adjusts that blended total on the existing football weather path.
+ * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. Blend weights
+ * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
+ * Calibrate shrink runs later in the pipeline.
  */
 const {
-  formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
-  spreadDetail, totalDetail, mlDetail, gamesPlayed,
-  sharpMarketLine, footballPointState, footballAudit, pricedFootball, pureFootballCover, pureForecastPoint,
+  formatMatchup, mapGamesSoft,
+  spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
-const { footballProjection, applyEngineStack, blendNcaafTempo } = require('./epa');
-const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
-const { stampPersonnel } = require('../personnel');
-const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD, NCAAF_MODEL_WEIGHT, ratingGamesN } = require('../config');
-const { homeFieldPoints } = require('./altitude');
-const { resolveTeamId, isFbsTeamId } = require('./team_identity');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
+const { footballProjection, applyEngineStack } = require('./epa');
+const { applyGameDayAdjustments } = require('./game_day');
+const { HFA } = require('../config');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'NCAAF';
-
-/** Unset is on. OMEGA_NCAAF_FCS=0 disables the FCS std and point pull. */
-function ncaafFcsOn() {
-  const raw = process.env.OMEGA_NCAAF_FCS;
-  if (raw == null) return true;
-  return String(raw).trim() !== '0';
-}
-
-/** Either side not FBS. A missing id is not FBS. Disabled env returns false. */
-function isFcsGame(home, away) {
-  if (!ncaafFcsOn()) return false;
-  return !isFbsTeamId(resolveTeamId(SPORT, home)) || !isFbsTeamId(resolveTeamId(SPORT, away));
-}
-
-function withIdentity(raw, env) {
-  if (env && env.unknownTeam) {
-    raw.unknownTeam = true;
-    raw.unknownNames = env.unknownNames || [];
-  }
-  return raw;
-}
 
 function tagMethods(methods, gameDayApplied, enginesOn) {
   let out = methods ? { ...methods } : methods;
@@ -76,13 +41,11 @@ function tagMethods(methods, gameDayApplied, enginesOn) {
   return out;
 }
 
-function projectGame(event, standings, efficiency, gameDay, espnGame) {
+function projectGame(event, standings, efficiency, gameDay) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const neutral = !!(espnGame && espnGame.neutralSite === true);
-  const hfaPts = homeFieldPoints(HFA.NCAAF, { home, neutral, espnGame }).hfa;
-  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
+  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency });
   const gd = applyGameDayAdjustments({
     sport: SPORT,
     modelMargin: env.modelMargin,
@@ -92,13 +55,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     away,
     restByTeam: (gameDay && gameDay.restByTeam && gameDay.restByTeam.NCAAF) || (gameDay && gameDay.restByTeam) || {},
     qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NCAAF) || (gameDay && gameDay.qbByTeam) || {},
-    hfaBase: hfaPts,
-    commenceTime,
-    restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NCAAF) || null,
-    neutralSite: neutral,
-    last5ByTeam: (gameDay && gameDay.last5ByTeam) || null,
-    personnelByTeam: (gameDay && gameDay.personnelBySport) || null,
-    depthByTeam: (gameDay && gameDay.depthCharts && gameDay.depthCharts.NCAAF) || null,
+    hfaBase: HFA.NCAAF,
   });
   const stacked = applyEngineStack({
     sport: SPORT,
@@ -106,107 +63,28 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     engineSoft: env.engineSoft,
     gameDay: gd.gameDay,
   });
-  const tempo = blendNcaafTempo({
-    modelTotal: gd.modelTotal,
-    home,
-    away,
-    gameDay,
-  });
-  const fb = footballTotalFromGameDay({
-    sport: SPORT,
-    modelTotal: tempo.modelTotal,
-    gameDay,
-    event,
-    espnGame,
-  });
   const modelMargin = stacked.modelMargin;
-  // Weather off keeps the tempo blend. Weight 0 leaves tempo.modelTotal equal to the pre-blend total.
-  const modelTotal = fb.used ? fb.modelTotal : tempo.modelTotal;
+  const modelTotal = gd.modelTotal;
   const uncertainty = gd.uncertainty;
-  let gameDayApplied = !!(stacked.gameDay && stacked.gameDay.applied);
-  let gameDayMeta = stacked.gameDay;
-  if (fb.used && fb.applied) {
-    gameDayApplied = true;
-    gameDayMeta = {
-      ...(stacked.gameDay || {}),
-      weatherNote: fb.weatherNote,
-      weatherTotalAdj: fb.totalAdj,
-      applied: true,
-    };
-  }
-  if (fb.used && fb.fbWeather) {
-    gameDayMeta = {
-      ...(gameDayMeta || {}),
-      fbWeather: fb.fbWeather,
-      weatherSource: fb.fbWeather.source,
-      weatherFetchedAt: fb.fbWeather.fetchedAt,
-    };
-  }
-  const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
-  function stampCardInputs(raw) {
-    stampPersonnel(raw, gd);
-    if (gd.startingQbOut) raw.startingQbOut = true;
-    if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
-    return raw;
-  }
+  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, stacked.enginesOn);
+  const gameDayMeta = stacked.gameDay;
   const engineSoft = stacked.engineSoft;
-  const fcs = isFcsGame(home, away);
-  const spreadStd = fcs ? SPORT_SPREAD_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
-  const totalStd = fcs ? SPORT_TOTAL_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
-  // Name key only. A miss stays unknown (n = 6, full rating-error base).
-  // Do not call rowByIdentity here: that logs a second miss for the same club.
-  const homeGp = standings && standings[home] ? gamesPlayed(standings[home]) : 0;
-  const awayGp = standings && standings[away] ? gamesPlayed(standings[away]) : 0;
-  const nGames = ratingGamesN(homeGp, awayGp);
-  const nOpt = nGames != null ? { n: nGames } : {};
-  const pts = footballPointState(
-    SPORT,
-    modelTotal,
-    modelMargin,
-    sharpMarketLine(event, 'total'),
-    sharpMarketLine(event, 'spreadHome'),
-    fcs ? NCAAF_FCS.pointLambda : undefined,
-  );
   const out = [];
 
   {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      const detailAt = (proj) => {
-        const q = mlDetail(proj, SPORT, spreadStd, nOpt);
-        if (isHome) return q;
-        return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
-      };
-      const priced = pricedFootball(
-        detailAt,
-        pts.modelMarginRaw,
-        pts.modelMarginShrunk,
-        null,
-        noVigPinnacleImplied(bundles, b),
-        NCAAF_MODEL_WEIGHT.ml,
-      );
-      const pureAt = (proj) => {
-        const q = mlDetail(proj, SPORT, spreadStd, { distribution: 'normal', ...nOpt });
-        if (isHome) return q;
-        return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
-      };
-      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, NCAAF_MODEL_WEIGHT.ml);
-      // pureAt already flips the away side. Negating the margin here too
-      // priced both moneylines at the home win probability.
-      const modelPureP = pureFootballCover(pureAt, homeForecast, null);
+      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.45);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, modelPureP, projMethod: methods.ml, uncertainty,
-        ratingN: nGames,
-        consensusLine: null, modelProjection: +modelMargin.toFixed(2), betProjection: homeForecast,
+        market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
+        consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-        ...footballAudit(pts, 'Moneyline'),
       };
-      if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      if (fcs) raw.fcsGame = true;
-      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
   {
@@ -214,109 +92,41 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     for (const b of bundles) {
       if (b.point == null) continue;
       const isHome = b.side === home;
-      const projRaw = isHome ? pts.modelMarginRaw : -pts.modelMarginRaw;
-      const detailAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd, nOpt);
-      const priced = pricedFootball(
-        detailAt,
-        projRaw,
-        isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
-        b.point,
-        noVigPinnacleImplied(bundles, b),
-        NCAAF_MODEL_WEIGHT.spread,
-      );
-      const pureAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd, { distribution: 'normal', ...nOpt });
-      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, NCAAF_MODEL_WEIGHT.spread);
-      const modelPureP = pureFootballCover(pureAt, isHome ? homeForecast : -homeForecast, b.point);
+      let p = spreadCoverProb(isHome ? modelMargin : -modelMargin, b.point, SPORT);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.45);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Spread', side: sideLabel, line: b.point, modelRawP: priced.p, modelPureP, projMethod: methods.spread, uncertainty,
-        ratingN: nGames,
-        consensusLine: b.point, modelProjection: +modelMargin.toFixed(2), betProjection: homeForecast,
+        market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
+        consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-        ...footballAudit(pts, 'Spread'),
       };
-      if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      if (fcs) raw.fcsGame = true;
-      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
   {
     const bundles = collectMarketOutcomes(event, 'totals');
     for (const b of bundles) {
       if (b.point == null) continue;
-      const detailAt = (proj, line) => totalDetail(proj, line, b.side, SPORT, totalStd, nOpt);
-      const priced = pricedFootball(
-        detailAt,
-        pts.modelTotalRaw,
-        pts.modelTotalShrunk,
-        b.point,
-        noVigPinnacleImplied(bundles, b),
-        NCAAF_MODEL_WEIGHT.total,
-      );
-      const totalForecast = pureForecastPoint(pts.modelTotalRaw, pts.marketTotal, NCAAF_MODEL_WEIGHT.total);
-      const modelPureP = pureFootballCover(detailAt, totalForecast, b.point);
+      let p = totalCoverProb(modelTotal, b.point, b.side, SPORT);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.4);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p, modelPureP,
-        ratingN: nGames,
-        projMethod: tempo.applied ? `${methods.total}-tempo` : methods.total,
-        uncertainty: uncertainty + env.totalUncBump,
-        consensusLine: b.point, modelProjection: +modelTotal.toFixed(2), betProjection: totalForecast,
+        market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
+        projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
+        consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-        ...footballAudit(pts, 'Total'),
       };
-      if (tempo.applied) {
-        raw.ncaafTempo = {
-          weight: tempo.weight,
-          tempoTotal: +Number(tempo.tempoTotal).toFixed(2),
-          proxy: tempo.proxy,
-          source: tempo.source,
-          fcs: tempo.fcs === true,
-        };
-      }
-      if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      if (fcs) raw.fcsGame = true;
-      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
-  const conf = conferenceStamp(espnGame);
-  if (conf) {
-    for (const row of out) Object.assign(row, conf);
-  }
   return out;
 }
 
-/** Copy scoreboard conference tokens onto the candidate. Missing stays missing. */
-function conferenceStamp(espnGame) {
-  if (!espnGame) return null;
-  const home = espnGame.homeConference || null;
-  const away = espnGame.awayConference || null;
-  let conference = espnGame.conference || null;
-  if (!conference && home && away && String(home).toLowerCase() === String(away).toLowerCase()) {
-    conference = home;
-  }
-  if (!home && !away && !conference) return null;
-  const out = {};
-  if (home) out.homeConference = String(home);
-  if (away) out.awayConference = String(away);
-  if (conference) out.conference = String(conference);
-  return out;
-}
-
-function stampNeutral(raw, neutral) {
-  if (neutral) raw.diag = { neutralSite: true };
-  return raw;
-}
-
-function project({ oddsEvents, standings, efficiency, gameDay, espnGames } = {}) {
-  const games = (espnGames && espnGames.games) || espnGames || [];
-  return mapGamesSoft(oddsEvents, (ev) => {
-    const eg = matchEspnGameByIdentity(SPORT, ev, games);
-    return projectGame(ev, standings || {}, efficiency || {}, gameDay || {}, eg);
-  });
+function project({ oddsEvents, standings, efficiency, gameDay } = {}) {
+  return mapGamesSoft(oddsEvents, (ev) => projectGame(ev, standings || {}, efficiency || {}, gameDay || {}));
 }
 
 module.exports = { project, SPORT };

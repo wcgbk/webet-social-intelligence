@@ -5,20 +5,8 @@ const {
   summarizeBySportMarket,
   etIsoWeekKey,
   isSundayET,
-  gradeRealizedClv,
-  pointsEqual,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
-const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
-const oddsMaster = require('./lib/omega-vnext/odds_master');
-const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
-const { gradeCandidateResults } = require('./lib/omega-vnext/candidate_closes_v2');
-const { loadLinePath } = require('./lib/omega-vnext/line_path');
-const omegaGradingRules = require('./lib/omega-grading-rules');
-const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
-const { etCalendarDate } = require('./lib/omega-vnext/odds_math');
-const { fetchESPNScores: fetchSharedScoreboard, detectNhlShootout } = require('./lib/espn-scoreboard');
-const resultsGrader = require('./get-results-omega');
 
 function attachModelClvFields(rec, pick) {
   if (!rec || !pick) return rec;
@@ -90,7 +78,7 @@ async function writeWeeklyObserver(store, dateISO, forceWeekly) {
 //
 // What "true close" means here (upgraded 2026-06-25):
 //   1. SHARP ANCHOR, not soft-book median. We prefer Pinnacle, then a sharp-book
-//      consensus (Betfair Exchange / Matchbook), and only fall back to an
+//      consensus (Betfair Exchange / Matchbook / Circa), and only fall back to an
 //      all-book median when no sharp book is present. Regions us,us2,eu surface them.
 //   2. AS CLOSE TO FIRST PITCH AS POSSIBLE. For games that have already started
 //      (e.g. a past/graded date, or the morning settle pass) we pull the Odds API
@@ -142,12 +130,13 @@ const ODDS_SPORTS_MAP = {
 };
 
 // ── Sharp-book anchor priority (the-odds-api book keys) ──
-// Pinnacle first, then Bookmaker and the reduced-juice sharps. Exchanges stay
-// a labeled fallback when no US sharp posts both sides. Order is the priority:
-// the first book with a two-way price wins. Regions us,us2,eu. If none are
-// present, all-book median.
+// Pinnacle first, then Circa / Bookmaker (the US closing-line books), then the
+// reduced-juice sharps. Exchanges stay a labeled fallback when no US sharp
+// posts both sides. Order is the priority: the first book with a two-way
+// price wins. Regions us,us2,eu. If none are present, all-book median.
 const SHARP_BOOKS = [
   'pinnacle',
+  'circa', 'circasports',
   'bookmaker', 'betonlineag', 'lowvig',
   'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook',
 ];
@@ -177,16 +166,8 @@ function lastWord(name) {
   return parts[parts.length - 1] || '';
 }
 
-// Check if two team names are a fuzzy match.
-// sport + dateISO are optional. Before IDENTITY_V2_FROM (or when omitted) the
-// body below is the only path. On/after that date, two resolved ids compare
-// directly so a shared last word cannot match the other club.
-function teamsMatch(a, b, sport, dateISO) {
-  if (omegaGradingRules.identityV2(dateISO)) {
-    const idA = resolveTeamId(sport, a);
-    const idB = resolveTeamId(sport, b);
-    if (idA && idB) return String(idA) === String(idB);
-  }
+// Check if two team names are a fuzzy match
+function teamsMatch(a, b) {
   if (!a || !b) return false;
   const na = normalizeTeam(a);
   const nb = normalizeTeam(b);
@@ -222,11 +203,14 @@ function medianOdds(arr) {
   return m === null ? null : Math.round(m);
 }
 
-// ET calendar date (America/New_York). en-CA yields YYYY-MM-DD in that zone.
-// Parsing an en-US locale string as local time rolls an evening ET kickoff
-// forward on any host behind UTC.
+// ET calendar date (America/New_York) for an ISO timestamp — the product runs on ET.
 function etDate(iso) {
-  return etCalendarDate(iso);
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      .toISOString().split('T')[0];
+  } catch (e) { return null; }
 }
 
 // ── Describe which side/market a pick is on ──
@@ -304,35 +288,12 @@ function sourceKey(pick) {
 // gameObj may be a full-game bulk game object OR a per-event (F5) object — both carry
 // { home_team, away_team, bookmakers:[{ key, title, markets:[{ key, outcomes:[{name, price, point}] }] }] }.
 // Returns { sideOdds, sideRaw, overround, closingLine, anchor, anchorBook } or null.
-function closeSides(gameObj, teamText, pick, dateISO) {
-  const sport = pick && pick.sport;
-  if (omegaGradingRules.identityV2(dateISO)) {
-    const byId = matchSides(sport, teamText, gameObj.away_team, gameObj.home_team, null, null);
-    if (byId.decided) return { pickedAway: byId.pickedAway, pickedHome: byId.pickedHome };
-    const pickedAway = teamsMatch(teamText, gameObj.away_team);
-    const pickedHome = teamsMatch(teamText, gameObj.home_team);
-    const pickId = resolveTeamId(sport, teamText);
-    if (!pickId) return { pickedAway, pickedHome };
-    const awayId = resolveTeamId(sport, gameObj.away_team);
-    const homeId = resolveTeamId(sport, gameObj.home_team);
-    return {
-      pickedAway: !!(pickedAway && (!awayId || String(awayId) === String(pickId))),
-      pickedHome: !!(pickedHome && (!homeId || String(homeId) === String(pickId))),
-    };
-  }
-  return {
-    pickedHome: teamsMatch(teamText, gameObj.home_team),
-    pickedAway: teamsMatch(teamText, gameObj.away_team),
-  };
-}
-
-function extractClose(gameObj, sideInfo, pick, dateISO) {
+function extractClose(gameObj, sideInfo, pick) {
   if (!gameObj || !gameObj.bookmakers) return null;
   const teamText = stripLine(pick.pick || '');
   const isTeamMarket = sideInfo.marketBase !== 'totals' && !sideInfo.isDraw;
-  const sides = isTeamMarket ? closeSides(gameObj, teamText, pick, dateISO) : { pickedHome: false, pickedAway: false };
-  const pickedHome = sides.pickedHome;
-  const pickedAway = sides.pickedAway;
+  const pickedHome = isTeamMarket && teamsMatch(teamText, gameObj.home_team);
+  const pickedAway = isTeamMarket && teamsMatch(teamText, gameObj.away_team);
 
   // Per-book view of the target market's outcomes
   const perBook = [];
@@ -357,7 +318,7 @@ function extractClose(gameObj, sideInfo, pick, dateISO) {
       let hit = false;
       if (sideInfo.marketBase === 'totals') hit = (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
       else if (sideInfo.isDraw) hit = (n === 'draw');
-      else hit = (pickedHome && teamsMatch(o.name, gameObj.home_team, pick && pick.sport, dateISO)) || (pickedAway && teamsMatch(o.name, gameObj.away_team, pick && pick.sport, dateISO));
+      else hit = (pickedHome && teamsMatch(o.name, gameObj.home_team)) || (pickedAway && teamsMatch(o.name, gameObj.away_team));
       if (hit) { sidePrice = o.price; line = (o.point !== undefined ? o.point : null); break; }
     }
     if (sidePrice == null) return null;
@@ -374,9 +335,6 @@ function extractClose(gameObj, sideInfo, pick, dateISO) {
     if (s) return {
       sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
       anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
-      // Same book's full outcome list, so a later point-aware grade can read an
-      // alternate at the bet's number. Consensus anchors have no single book.
-      bookOutcomes: b.outcomes,
     };
   }
 
@@ -406,88 +364,8 @@ function extractClose(gameObj, sideInfo, pick, dateISO) {
   return null;
 }
 
-function outcomeIsSide(o, sideInfo, pick, gameObj, dateISO) {
-  const n = (o && o.name || '').toLowerCase();
-  if (sideInfo.marketBase === 'totals') {
-    return (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
-  }
-  if (sideInfo.isDraw) return n === 'draw';
-  if (!gameObj) return false;
-  const teamText = stripLine(pick.pick || '');
-  const sides = closeSides(gameObj, teamText, pick, dateISO);
-  if (sides.pickedHome && teamsMatch(o.name, gameObj.home_team, pick && pick.sport, dateISO)) return true;
-  if (sides.pickedAway && teamsMatch(o.name, gameObj.away_team, pick && pick.sport, dateISO)) return true;
-  return false;
-}
-
-// Both sides at the bet's point, from one sharp book's outcomes. Null when the
-// snapshot has only the moved main line.
-function altAtBetPoint(outcomes, sideInfo, pick, gameObj, dateISO, betPoint) {
-  if (!Array.isArray(outcomes) || betPoint == null) return null;
-  const priced = [];
-  for (const o of outcomes) {
-    if (!o || !pointsEqual(o.point, betPoint)) continue;
-    const r = impliedProbability(o.price);
-    if (r != null) priced.push({ o, r });
-  }
-  if (priced.length < 2) return null;
-  const side = priced.find(p => outcomeIsSide(p.o, sideInfo, pick, gameObj, dateISO));
-  if (!side) return null;
-  return {
-    sideRaw: side.r,
-    sideOdds: side.o.price,
-    overround: priced.reduce((a, p) => a + p.r, 0),
-  };
-}
-
-// Pricing fields for a captured close. Pre-cutover and unchanged points match
-// the historical price-only record (no clvMethod / clvReason / clvLine).
-function priceClvRecord(close, pick, sideInfo, dateISO, gameObj) {
-  const betRaw = impliedProbability(pick.odds);
-  const betPoint = parseBetLine(pick, sideInfo);
-  const alt = altAtBetPoint(close && close.bookOutcomes, sideInfo, pick, gameObj, dateISO, betPoint);
-  const graded = gradeRealizedClv({
-    dateISO,
-    betRaw,
-    closeRaw: close.sideRaw,
-    overround: close.overround,
-    closeAmerican: close.sideOdds,
-    betPoint,
-    closePoint: close.closingLine,
-    sport: pick && pick.sport,
-    marketBase: sideInfo && sideInfo.marketBase,
-    isOver: !!(sideInfo && sideInfo.isOver),
-    isF5: !!(sideInfo && sideInfo.isF5),
-    altSideRaw: alt && alt.sideRaw,
-    altOverround: alt && alt.overround,
-    altAmerican: alt && alt.sideOdds,
-  });
-  const rec = {
-    closingOdds: graded.closingOdds != null ? String(graded.closingOdds) : null,
-    closingLine: close.closingLine ?? null,
-    anchor: close.anchor,
-    anchorBook: close.anchorBook,
-    pickTimeImplied: graded.pickTimeImplied,
-    closingImplied: graded.closingImplied,
-    pickTimeNoVig: graded.pickTimeNoVig,
-    closingNoVig: graded.closingNoVig,
-    closingOverround: graded.closingOverround,
-    betDevigMethod: graded.betDevigMethod,
-    clv: graded.clv,
-    clvCents: graded.clvCents,
-    clvRaw: graded.clvRaw,
-    beatClosing: graded.beatClosing,
-  };
-  if (graded.clvMethod) {
-    rec.clvMethod = graded.clvMethod;
-    if (graded.clvReason) rec.clvReason = graded.clvReason;
-    rec.clvLine = betPoint;
-  }
-  return rec;
-}
-
 // ── Find matching game in an odds-feed array for a pick ──
-function findMatchingGameLegacy(pick, oddsData) {
+function findMatchingGame(pick, oddsData) {
   const matchup = (pick.matchup || '').toLowerCase();
   const pickText = (pick.pick || '').toLowerCase();
 
@@ -501,31 +379,6 @@ function findMatchingGameLegacy(pick, oddsData) {
     if ((homeInMatchup || homeInPick) && (awayInMatchup || awayInPick)) return game;
   }
   return null;
-}
-
-function findMatchingGame(pick, oddsData, dateISO) {
-  if (omegaGradingRules.identityV2(dateISO)) {
-    const sport = (pick && pick.sport) || '';
-    const parts = String((pick && pick.matchup) || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-    if (parts.length >= 2) {
-      const id0 = resolveTeamId(sport, parts[0]);
-      const id1 = resolveTeamId(sport, parts[1]);
-      if (id0 && id1 && String(id0) !== String(id1)) {
-        const left = String(id0);
-        const right = String(id1);
-        for (const game of oddsData || []) {
-          const awayId = resolveTeamId(sport, game.away_team);
-          const homeId = resolveTeamId(sport, game.home_team);
-          if (!awayId || !homeId) continue;
-          const away = String(awayId);
-          const home = String(homeId);
-          if ((away === left && home === right) || (away === right && home === left)) return game;
-        }
-        return null;
-      }
-    }
-  }
-  return findMatchingGameLegacy(pick, oddsData);
 }
 
 // ── Odds API fetchers (live or historical-at-timestamp), with in-run caching ──
@@ -573,20 +426,14 @@ const ESPN_ENDPOINTS = {
   'Europa': 'soccer/uefa.europa',
 };
 
-function footballGraderOn(dateISO, sport) {
-  return omegaGradingRules.rulesV2(dateISO) && (sport === 'NFL' || sport === 'NCAAF');
-}
-
 async function fetchESPNScores(dateISO, sport) {
-  // NFL/NCAAF were absent from ESPN_ENDPOINTS, so football stayed pending.
-  // From GRADING_RULES_V2_FROM, use the shared board (NCAAF groups 80+90, adjacent dates).
-  if (footballGraderOn(dateISO, sport)) return fetchSharedScoreboard(dateISO, sport);
   const endpoint = ESPN_ENDPOINTS[sport];
   if (!endpoint) return [];
   try {
     const dateParam = dateISO.replace(/-/g, '');
-    const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard?dates=${dateParam}`;
-    const data = await memoFetchJson(url, 6000);
+    const resp = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard?dates=${dateParam}`, { signal: AbortSignal.timeout(6000) });
+    if (!resp.ok) return [];
+    const data = await resp.json();
     return (data.events || []).map(ev => {
       const comp = ev.competitions?.[0];
       if (!comp) return null;
@@ -605,13 +452,10 @@ async function fetchESPNScores(dateISO, sport) {
       const period = status.period || 0;
       const st = status.type?.state || 'pre';
       const f5Complete = isMLB && ((period > 5) || (st === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
-      const so = detectNhlShootout(status, away, home, sport);
       return {
         awayTeam: away.team?.displayName || '', awayAbbr: away.team?.abbreviation || '',
-        awayId: away.team && away.team.id != null && away.team.id !== '' ? String(away.team.id) : '',
         awayScore: parseInt(away.score) || 0,
         homeTeam: home.team?.displayName || '', homeAbbr: home.team?.abbreviation || '',
-        homeId: home.team && home.team.id != null && home.team.id !== '' ? String(home.team.id) : '',
         homeScore: parseInt(home.score) || 0,
         state: st,
         statusName: status.type?.name || '',
@@ -622,25 +466,12 @@ async function fetchESPNScores(dateISO, sport) {
         awayInnings: awayLS.length,
         homeInnings: homeLS.length,
         f5Complete: !!f5Complete,
-        period: period,
-        detail: status.type?.shortDetail || status.type?.detail || '',
-        shortDetail: status.type?.shortDetail || '',
-        statusDetail: status.type?.detail || '',
-        shootout: so.shootout,
-        shootoutWinner: so.shootoutWinner,
       };
     }).filter(Boolean);
   } catch (e) { return []; }
 }
 
-function findGameForGrading(pick, games, dateISO) {
-  const cardDate = dateISO || (pick && pick.date) || null;
-  if (omegaGradingRules.identityV2(cardDate)) {
-    return resultsGrader._test.findGame(pick, games, cardDate);
-  }
-  if (footballGraderOn(cardDate, pick && pick.sport)) {
-    return resultsGrader._test.findGame(pick, games);
-  }
+function findGameForGrading(pick, games) {
   const matchup = (pick.matchup || '').toLowerCase();
   const parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const matches = [];
@@ -667,13 +498,7 @@ function findGameForGrading(pick, games, dateISO) {
   return best;
 }
 
-function gradePick(pick, game, opts) {
-  const dateISO = (opts && opts.dateISO) || (pick && pick.date) || null;
-  const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
-  if (footballGraderOn(dateISO, pick && pick.sport)) {
-    return resultsGrader._test.gradePick(pick, game, gradeOpts);
-  }
-  if (omegaGradingRules.earlyPush(pick, game, gradeOpts) === 'push') return 'push';
+function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   // Postponed / canceled / suspended games are voided by every major US book (no action).
   // ESPN marks them state:'post' with completed:false — catch BEFORE score-based grading,
@@ -684,53 +509,20 @@ function gradePick(pick, game, opts) {
   const betType = (pick.betType || pick.market || '').toLowerCase();
   const src = (pick.source || '').toLowerCase();
   const isF5 = src === 'f5' || betType.startsWith('f5') || /\bf5\b/.test(pickStr.toLowerCase());
-  const snap = omegaGradingRules.mlbSnapshot(pick, game, gradeOpts);
   // F5 bets settle on the score THROUGH 5 innings. Require >=5 recorded innings per side —
   // a final game missing linescores must stay pending (retried next run), never settle as
   // a phantom 0-0 F5 final or a false void.
-  if (isF5 && snap && snap.f5Mode === 'void') return 'push';
-  if (isF5 && !(snap && snap.f5Mode === 'partial') && ((game.awayInnings || 0) < 5 || (game.homeInnings || 0) < 5)) return 'pending';
-  const awayScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.awayScore : (isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore);
-  const homeScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.homeScore : (isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore);
-  function nhlScores(market) {
-    if (typeof omegaGradingRules === 'undefined' || typeof omegaGradingRules.nhlRegulationScores !== 'function') {
-      return { awayScore: awayScore, homeScore: homeScore };
-    }
-    return omegaGradingRules.nhlRegulationScores({
-      pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: dateISO, market: market,
-    });
-  }
+  if (isF5 && ((game.awayInnings || 0) < 5 || (game.homeInnings || 0) < 5)) return 'pending';
+  const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
+  const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  let pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
-  let pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
-  if (omegaGradingRules.identityV2(dateISO)) {
-    const byId = matchSides(pick.sport, pickTeamRaw, game.awayTeam, game.homeTeam, game.awayId, game.homeId);
-    if (byId.decided) {
-      pickedAway = byId.pickedAway;
-      pickedHome = byId.pickedHome;
-    } else {
-      const pickId = resolveTeamId(pick.sport, pickTeamRaw);
-      if (pickId) {
-        const awayId = (game.awayId != null && game.awayId !== '') ? String(game.awayId) : (resolveTeamId(pick.sport, game.awayTeam) || null);
-        const homeId = (game.homeId != null && game.homeId !== '') ? String(game.homeId) : (resolveTeamId(pick.sport, game.homeTeam) || null);
-        if (pickedAway && awayId && String(awayId) !== String(pickId)) pickedAway = false;
-        if (pickedHome && homeId && String(homeId) !== String(pickId)) pickedHome = false;
-      }
-    }
-  }
+  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
+  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
 
   if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
     if (lineMatch) {
-      const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]);
-      const scored = nhlScores('total');
-      const total = scored.awayScore + scored.homeScore;
-      // Short completed game: only an Over already past the line has action.
-      if (snap && !isF5 && !snap.fullOfficial) {
-        if (total > line && ou === 'over') return 'win';
-        if (total > line && ou === 'under') return 'loss';
-        return 'push';
-      }
+      const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]), total = awayScore + homeScore;
       if (total === line) return 'push';
       return (ou === 'over' && total > line) || (ou === 'under' && total < line) ? 'win' : 'loss';
     }
@@ -738,27 +530,21 @@ function gradePick(pick, game, opts) {
   if (/spread|puck|run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
     const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
     if (spreadMatch && (pickedAway || pickedHome)) {
-      if (snap && !isF5 && !snap.fullOfficial) return 'push';
       const spread = parseFloat(spreadMatch[1]);
-      const scored = nhlScores('spread');
-      const pickedScore = pickedAway ? scored.awayScore : scored.homeScore;
-      const oppScore = pickedAway ? scored.homeScore : scored.awayScore;
+      const pickedScore = pickedAway ? awayScore : homeScore;
+      const oppScore = pickedAway ? homeScore : awayScore;
       const adj = pickedScore + spread;
       if (adj === oppScore) return 'push';
       return adj > oppScore ? 'win' : 'loss';
     }
   }
   if (pickedAway || pickedHome) {
-    if (snap && !isF5 && !snap.mlOfficial) return 'push';
     const pickedScore = pickedAway ? awayScore : homeScore;
     const oppScore = pickedAway ? homeScore : awayScore;
     if (pickedScore === oppScore) return 'push';
     return pickedScore > oppScore ? 'win' : 'loss';
   }
-  if (/draw/i.test(pickStr)) {
-    if (snap && !isF5 && !snap.mlOfficial) return 'push';
-    return awayScore === homeScore ? 'win' : 'loss';
-  }
+  if (/draw/i.test(pickStr)) return awayScore === homeScore ? 'win' : 'loss';
   return 'pending';
 }
 
@@ -835,22 +621,18 @@ async function writePicksData(dateISO, picksData) {
 // Grade every unsettled pick for a date via ESPN finals and write results back to the picks
 // blob. Mutates picksData in place (so later steps in the same run see the results and the
 // Step 6.5 guard doesn't re-write). Returns the number of picks settled this call.
-async function settleResultsForDate(dateISO, picksData, opts) {
+async function settleResultsForDate(dateISO, picksData) {
   const unsettled = (picksData.picks || []).filter(p => !p.result || p.result === 'pending');
   if (!unsettled.length) return 0;
   const sports = [...new Set(unsettled.map(p => p.sport).filter(Boolean))];
   const scoresBySport = {};
-  await Promise.all(sports.map(async s => {
-    scoresBySport[s] = (opts && opts.gamesBySport && opts.gamesBySport[s])
-      ? opts.gamesBySport[s]
-      : await fetchESPNScores(dateISO, s);
-  }));
+  await Promise.all(sports.map(async s => { scoresBySport[s] = await fetchESPNScores(dateISO, s); }));
   let settledCount = 0;
   for (const p of picksData.picks) {
     if (p.result && p.result !== 'pending') continue;
-    const game = findGameForGrading(p, scoresBySport[p.sport] || [], dateISO);
+    const game = findGameForGrading(p, scoresBySport[p.sport] || []);
     if (!game) continue;
-    const result = gradePick(p, game, { dateISO: dateISO, now: opts && opts.now });
+    const result = gradePick(p, game);
     if (result === 'pending') continue;
     p.result = result;
     p.profit = calcProfit(result, p.units, p.odds || p.pickTimeOdds);
@@ -858,89 +640,17 @@ async function settleResultsForDate(dateISO, picksData, opts) {
     p.settledAt = new Date().toISOString();
     settledCount++;
   }
-  if (settledCount > 0 && !(opts && opts.skipWrite)) {
+  if (settledCount > 0) {
     const ok = await writePicksData(dateISO, picksData);
     if (!ok) console.log(`[track-clv] WARNING: settled ${settledCount} picks for ${dateISO} but blob write failed`);
   }
   return settledCount;
 }
 
-async function openOmegaStore() {
-  try {
-    const { getStore } = await import('@netlify/blobs');
-    return getStore('edge-picks-omega');
-  } catch (_) {
-    return null;
-  }
-}
-
-async function fetchCandidateEvents(sportKey) {
-  const apiKey = process.env.ODDS_API_KEY;
-  if (!apiKey || !sportKey) return null;
-  const url = `https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/events?dateFormat=iso&apiKey=${encodeURIComponent(apiKey)}`;
-  try {
-    const body = await memoFetchJson(url, 12000);
-    return Array.isArray(body) ? body : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-/**
- * Non-published candidate closes. Writes clv-candidates-{date} only.
- * `publishedSnapshotKeys` / `getBulk` are the snapshots the published pass already bought.
- */
-async function recordCandidateCloses({
-  dateISO, picksData, nowMs, publishedSnapshotKeys, getBulk, espnBySport,
-}) {
-  let lateSnaps = [];
-  try {
-    const loaded = await loadLinePath(dateISO);
-    lateSnaps = (loaded && loaded.path && Array.isArray(loaded.path.polls)) ? loaded.path.polls : [];
-  } catch (_) {
-    lateSnaps = [];
-  }
-  const store = await openOmegaStore();
-  // getStore() has no Lambda blobs context here: setJSON throws. allowRest
-  // writes clv-candidates-{date} through the same NETLIFY_AUTH_TOKEN path the
-  // published clv-{date} blob already uses. Published keys are not passed in.
-  await captureCandidateCloses({
-    dateISO,
-    picksData,
-    nowMs,
-    publishedSnapshotKeys,
-    getBulk,
-    bulkCache: null,
-    lateSnaps,
-    espnBySport: espnBySport || {},
-    store,
-    allowRest: true,
-    fetchEvents: fetchCandidateEvents,
-    fetchESPNScores,
-    extractClose: (gameObj, sideInfo, pick) => extractClose(gameObj, sideInfo, pick, dateISO),
-    pickSideInfo,
-    findMatchingGame: (pick, oddsData) => findMatchingGame(pick, oddsData, dateISO),
-    teamsMatch,
-    gradePick: (pick, game) => gradePick(pick, game, { dateISO: dateISO, now: nowMs }),
-    findGameForGrading: (pick, games) => findGameForGrading(pick, games, dateISO),
-  });
-}
-
-const trackClvOmegaHandler = async (event) => {
+exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
-  // Omega closing lines come from the 3:00 ET historical capture.
-  // This job used to pull live odds. It does not.
-  return {
-    statusCode: 200,
-    headers: CORS,
-    body: JSON.stringify({
-      ok: true,
-      skipped: 'odds-api-window',
-      message: 'Omega closing lines come from the 3:00 ET historical capture. This job does not call the Odds API.',
-    }),
-  };
 
   try {
     // Determine date — default to today ET
@@ -973,21 +683,6 @@ const trackClvOmegaHandler = async (event) => {
           const n = await settleResultsForDate(swISO, swPicks);
           if (n > 0) console.log(`[track-clv] Sweep settled ${n} picks for ${swISO}`);
         } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
-        // Private research rows only. ESPN is free. Does not read or write
-        // picks-{date}, clv-{date}, or any KPI bucket.
-        try {
-          const graded = await gradeCandidateResults({
-            dateISO: swISO,
-            fetchESPNScores,
-            gradePick: (pick, game) => gradePick(pick, game, { dateISO: swISO }),
-            findGameForGrading: (pick, games) => findGameForGrading(pick, games, swISO),
-          });
-          if (graded && graded.graded > 0) {
-            console.log(`[track-clv] candidate v2 graded ${graded.graded} for ${swISO}`);
-          }
-        } catch (e) {
-          console.log(`[track-clv] candidate v2 grade ${swISO} failed (non-fatal): ${e.message}`);
-        }
       }
       // Yesterday's TRUE close capture (historical odds) still runs via self-POST — best
       // effort only; settlement above no longer depends on it surviving.
@@ -1002,18 +697,6 @@ const trackClvOmegaHandler = async (event) => {
     const picksData = await loadPicksData(dateISO);
 
     if (!picksData || !picksData.picks || picksData.picks.length === 0) {
-      // Empty published card. Candidate closes still record into their own blob.
-      // This return body stays the published "no picks" contract.
-      try {
-        await recordCandidateCloses({
-          dateISO,
-          picksData,
-          nowMs,
-          publishedSnapshotKeys: new Set(),
-        });
-      } catch (e) {
-        console.error(`[track-clv] candidate closes failed (non-fatal): ${e.message}`);
-      }
       return {
         statusCode: 200,
         headers: CORS,
@@ -1059,12 +742,8 @@ const trackClvOmegaHandler = async (event) => {
     // Caches keyed within this run so multiple picks on the same game/snapshot reuse one call.
     const bulkCache = new Map();   // `${sportKey}|${atISO||'live'}` -> games[]
     const eventCache = new Map();  // `${eventId}|${atISO||'live'}`  -> eventObj
-    // Snapshots bought for published picks. Candidate closes reuse these at 0 credits.
-    const publishedSnapshotKeys = new Set();
-    let markPublishedSnapshots = true;
     const getBulk = async (sportKey, atISO) => {
       const k = `${sportKey}|${atISO || 'live'}`;
-      if (markPublishedSnapshots) publishedSnapshotKeys.add(k);
       if (!bulkCache.has(k)) bulkCache.set(k, await fetchBulk(sportKey, atISO));
       return bulkCache.get(k);
     };
@@ -1103,64 +782,22 @@ const trackClvOmegaHandler = async (event) => {
         continue;
       }
 
-      // A stored historical close at commence (score 0) cannot be improved by
-      // another pull of that same timestamp. Keep the row and skip Odds.
-      if (hasTrueClosingCapture(prev)) {
-        clvPicks.push({
-          ...prev,
-          betType: baseRecord.betType,
-          market: baseRecord.market,
-          segment: baseRecord.segment,
-          source: baseRecord.source,
-        });
-        continue;
-      }
-
       // Resolve the game + decide live vs historical close.
       let commenceISO = pick.commenceTime || null;
       let commenceMs = commenceISO ? Date.parse(commenceISO) : NaN;
       let gameObj = null;
       let snapAt = null; // null → live current; ISO → historical snapshot
-      let masterHit = false;
-
-      // A pregame close already on odds-master is the close. Do not pull it again.
-      if (!sideInfo.isF5) {
-        try {
-          const parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map((s) => s.trim()).filter(Boolean);
-          const stored = await oddsMaster.readCloseEvent({
-            sport: pick.sport,
-            eventId: pick.eventId || pick.event_id,
-            awayTeam: pick.awayTeam || parts[0] || null,
-            homeTeam: pick.homeTeam || parts[1] || null,
-            commenceTime: pick.commenceTime || null,
-          });
-          if (stored && stored.event) {
-            const trial = extractClose(stored.event, sideInfo, pick, dateISO);
-            if (trial && trial.overround) {
-              gameObj = stored.event;
-              snapAt = stored.snapshotAt || pick.commenceTime || null;
-              masterHit = true;
-              if (gameObj.commence_time) {
-                commenceISO = gameObj.commence_time || commenceISO;
-                commenceMs = Date.parse(commenceISO);
-              }
-            }
-          }
-        } catch (err) {
-          console.log(`[track-clv] odds-master read soft-fail: ${err.message}`);
-        }
-      }
 
       // Upcoming (or commence unknown) → current line.
-      if (!masterHit && (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000)) {
+      if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
         const games = await getBulk(sportKey, null);
-        gameObj = findMatchingGame(pick, games, dateISO);
+        gameObj = findMatchingGame(pick, games);
         if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
       }
       // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
-      if (!masterHit && !gameObj && Number.isFinite(commenceMs)) {
+      if (!gameObj && Number.isFinite(commenceMs)) {
         const games = await getBulk(sportKey, commenceISO);
-        gameObj = findMatchingGame(pick, games, dateISO);
+        gameObj = findMatchingGame(pick, games);
         if (gameObj) snapAt = commenceISO;
       }
 
@@ -1171,20 +808,7 @@ const trackClvOmegaHandler = async (event) => {
         if (ev) extractObj = ev;
       }
 
-      const close = gameObj ? extractClose(extractObj, sideInfo, pick, dateISO) : null;
-
-      if (!masterHit && snapAt && gameObj && gameObj.id) {
-        try {
-          await oddsMaster.storeCloseFromOddsEvent(gameObj, {
-            sport: pick.sport,
-            snapshotAt: snapAt,
-            requestedAt: commenceISO,
-            source: 'track-clv',
-          });
-        } catch (err) {
-          console.log(`[track-clv] odds-master write soft-fail: ${err.message}`);
-        }
-      }
+      const close = gameObj ? extractClose(extractObj, sideInfo, pick) : null;
 
       // Capture provenance: how close to first pitch this snapshot was.
       let captureMinsToCommence = null;
@@ -1210,24 +834,38 @@ const trackClvOmegaHandler = async (event) => {
           error: gameObj ? 'Could not extract sharp closing price for this market' : 'No matching game found in odds feed',
         };
       } else {
+        const betRaw = impliedProbability(pick.odds);
+        const closingNoVig = +(close.sideRaw / close.overround).toFixed(4);
         // De-vig the price we bet with the close market's two-sided overround as the
         // entry-overround proxy (vig is ~stable intraday). This is a real two-sided
         // de-vig, not a flat haircut — the haircut is the actual per-game/market overround.
-        // From CLV_POINT_AWARE_FROM a moved point uses the alt at the bet's number,
-        // or a normal shift of this no-vig (see gradeRealizedClv). Earlier dates
-        // stay on the price-only numbers below.
-        const priced = priceClvRecord(close, pick, sideInfo, dateISO, extractObj);
+        const pickTimeNoVig = betRaw != null ? +(betRaw / close.overround).toFixed(4) : null;
+        const clv = (pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null;
+        const clvRaw = (betRaw != null && close.sideRaw != null) ? +(close.sideRaw - betRaw).toFixed(4) : null;
+
         rec = {
           ...baseRecord,
-          ...priced,
+          closingOdds: String(close.sideOdds),
+          closingLine: close.closingLine ?? null,
+          anchor: close.anchor,
+          anchorBook: close.anchorBook,
+          pickTimeImplied: betRaw != null ? +betRaw.toFixed(4) : null,
+          closingImplied: close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
+          pickTimeNoVig,
+          closingNoVig,
+          closingOverround: +close.overround.toFixed(4),
+          betDevigMethod: 'closing-overround',
           // 'clv' is the TRUE two-sided no-vig CLV. Field name preserved for the generator's
           // CLV-feedback loop and get-analytics, which both read pick.clv numerically.
+          clv,
+          clvCents: clv != null ? +(clv * 100).toFixed(2) : null,
+          clvRaw, // legacy raw-implied (closing − bet) difference, for transparency
+          beatClosing: clv != null ? clv > 0 : null,
           closeSnapshotAt: snapAt || new Date().toISOString(),
           captureMinsToCommence,
           captureScore,
         };
-        const methodNote = rec.clvMethod ? ` method=${rec.clvMethod}` : '';
-        console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}${methodNote}`);
+        console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
       }
 
       // Merge: keep whichever capture is closer to first pitch (and ideally pre-pitch).
@@ -1251,8 +889,8 @@ const trackClvOmegaHandler = async (event) => {
     let settledCount = 0;
     for (const clvPick of clvPicks) {
       const sportGames = espnScoresBySport[clvPick.sport] || [];
-      const game = findGameForGrading(clvPick, sportGames, dateISO);
-      const result = gradePick(clvPick, game, { dateISO: dateISO, now: nowMs });
+      const game = findGameForGrading(clvPick, sportGames);
+      const result = gradePick(clvPick, game);
       const profit = calcProfit(result, clvPick.units, clvPick.pickTimeOdds);
       clvPick.result = result;
       clvPick.profit = profit;
@@ -1425,22 +1063,6 @@ const trackClvOmegaHandler = async (event) => {
       }
     }
 
-    // Candidate closes are a separate private blob. Published clv-{date} is already stored
-    // and is not passed in, so this cannot change those rows or any KPI bucket.
-    try {
-      markPublishedSnapshots = false;
-      await recordCandidateCloses({
-        dateISO,
-        picksData,
-        nowMs,
-        publishedSnapshotKeys,
-        getBulk,
-        espnBySport: espnScoresBySport,
-      });
-    } catch (e) {
-      console.error(`[track-clv] candidate closes failed (non-fatal): ${e.message}`);
-    }
-
     // ── Step 6.5: Write results back to picks blob (settlement) — unchanged ──
     const settledPicks = clvPicks.filter(p => p.result && p.result !== 'pending');
     if (settledPicks.length > 0) {
@@ -1499,15 +1121,11 @@ const trackClvOmegaHandler = async (event) => {
   }
 };
 
-exports.handler = (event) => runWithFetchMemo(() => trackClvOmegaHandler(event));
-
 // ── Test-only exports (offline validation; no effect on the deployed handler) ──
 // Mirrors the generator's `module.exports.extractF5FromEvent` pattern so the de-vig /
 // sharp-anchor / side-parsing logic can be unit-tested without network or blob writes.
 module.exports._test = {
-  impliedProbability, median, medianOdds, teamsMatch, etDate, stripLine, parseBetLine,
+  impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
-  priceClvRecord, altAtBetPoint,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
-  footballGraderOn,
 };

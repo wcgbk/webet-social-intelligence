@@ -9,9 +9,9 @@ const gd = require(path.join(root, 'sports/game_day'));
 const nfl = require(path.join(root, 'sports/nfl'));
 const mlb = require(path.join(root, 'sports/mlb'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.ok(/game-day rest\/B2B/i.test(config.MODEL_NOTES) || /game-day/.test(config.MODEL_NOTES));
-assert.strictEqual(config.LEAN_PAD, true);
+assert.strictEqual(config.LEAN_PAD, false);
 
 assert.strictEqual(gd.prevEtDate('2026-09-22'), '2026-09-21');
 assert.strictEqual(gd.prevEtDate('2026-03-01'), '2026-02-28');
@@ -46,7 +46,7 @@ const qbAdj = gd.applyGameDayAdjustments({
   away: 'Miami Dolphins',
   restByTeam: {},
   qbByTeam: {
-    'Buffalo Bills': { qbStatus: 'out', qbName: 'Josh Allen', depthChartRank: 1 },
+    'Buffalo Bills': { qbStatus: 'out', qbName: 'Josh Allen' },
   },
   hfaBase: config.HFA.NFL,
 });
@@ -58,7 +58,7 @@ assert.ok(qbAdj.gameDay.qbNote);
 assert.ok(qbAdj.modelMargin <= 0.0 + 1e-9, `home QB out moves margin >= 3 pts: ${qbAdj.modelMargin}`);
 assert.ok(qbAdj.modelTotal < 45, `QB out lowers total: ${qbAdj.modelTotal}`);
 {
-  const d = gd.qbSoftAdjust('NFL', null, { qbStatus: 'doubtful', qbName: 'X', depthChartRank: 1 });
+  const d = gd.qbSoftAdjust('NFL', null, { qbStatus: 'doubtful', qbName: 'X' });
   assert.ok(Math.abs(d.marginAdj - 2.25) < 1e-9, `doubtful away = +2.25: ${d.marginAdj}`);
   assert.ok(Math.abs(d.totalAdj + 1.125) < 1e-9, `doubtful total: ${d.totalAdj}`);
   const m = gd.qbSoftAdjust('MLB', { qbStatus: 'out' }, null);

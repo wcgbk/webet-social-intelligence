@@ -1,17 +1,21 @@
 'use strict';
 
 /**
- * Grok as VERIFIER + NARRATOR only. Cannot invent sides.
+ * Claude as VERIFIER + NARRATOR only. Cannot invent sides.
  * May reject on news; unit cuts ≤50% allowed.
- * Narratives: ESPN-style 4–6 sentence journalistic blurbs that state the locked probability, price, edge, and expected value.
+ * Narratives: ESPN-style 4–6 sentence journalistic blurbs (not math templates).
  * Voice: feature-desk matchup storytelling plus a sharp handicapper's price logic.
- * A failed xAI call keeps the locked card (sports-desk fallback). It never blocks publish.
  */
 
-const { narrateErrorShouldRetry } = require('./fetch_memo');
-const { xaiChat, resolveXaiKey } = require('../xai-chat');
-
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const NARRATIVE_MAX_TOKENS = 5800;
+
+function resolveAnthropicKey(explicit) {
+  return explicit
+    || process.env.ANTHROPIC_API_KEY
+    || process.env.ANTHROPIC_KEY
+    || '';
+}
 
 /** Percent or fraction → 0–1 rate. "4.2%" and 0.042 both work. */
 function parseContextRate(v) {
@@ -89,195 +93,93 @@ function joinSentences(parts) {
 }
 
 /**
- * Card copy must not claim the rest of the board is empty, or that
- * injuries, lineups, goalies, or weather are already in the price.
- * A sentence that matches is dropped. Fewer than two sentences left
- * falls back to the template (or the original text when there is none).
- */
-const BAD_CARD_COPY = [
-  /no other sports/i,
-  /already price[sd]? in/i,
-  /price[sd]? in the usual injur/i,
-  /injur\w* and lineup variables/i,
-];
-
-function copySentenceBad(sentence) {
-  return BAD_CARD_COPY.some((re) => re.test(sentence));
-}
-
-function splitCopySentences(text) {
-  const src = String(text || '').trim();
-  if (!src) return [];
-  return src.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
-}
-
-function sanitizeCardCopy(text, fallback) {
-  const raw = String(text || '').trim();
-  const sentences = splitCopySentences(raw);
-  const bad = sentences.some(copySentenceBad);
-  if (!bad && sentences.length >= 2) return raw;
-  const kept = sentences.filter((s) => !copySentenceBad(s));
-  if (kept.length >= 2) return joinSentences(kept);
-  const fb = fallback == null ? '' : String(fallback).trim();
-  if (fb && fb !== raw) return sanitizeCardCopy(fb, null);
-  if (kept.length) return joinSentences(kept);
-  return raw;
-}
-
-/** "4.2%", 0.042, and 4.2 all become "4.2%". Missing stays null. */
-function displayedRate(raw) {
-  if (raw == null || raw === '') return null;
-  if (typeof raw === 'string') {
-    const s = raw.trim();
-    if (!s) return null;
-    if (s.includes('%')) return s;
-    const n = parseFloat(s);
-    if (!Number.isFinite(n)) return null;
-    const frac = Math.abs(n) > 1 ? n / 100 : n;
-    return `${(frac * 100).toFixed(1)}%`;
-  }
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    const frac = Math.abs(raw) > 1 ? raw / 100 : raw;
-    return `${(frac * 100).toFixed(1)}%`;
-  }
-  return null;
-}
-
-function shownEdge(p) {
-  if (!p) return null;
-  return displayedRate(p.edge != null && p.edge !== '' ? p.edge : p.edgePct);
-}
-
-function shownEv(p) {
-  if (!p) return null;
-  return displayedRate(p.ev != null && p.ev !== '' ? p.ev : p.evRaw);
-}
-
-function shownProb(p) {
-  if (!p) return null;
-  const raw = p.winProbability != null && p.winProbability !== '' ? p.winProbability : p.coverProb;
-  return displayedRate(raw);
-}
-
-/** Grok prose that drops the locked edge or EV, or invents a cause, is replaced. */
-function proseKeepsMath(prose, base) {
-  const text = String(prose || '');
-  const edge = shownEdge(base);
-  const ev = shownEv(base);
-  if (edge && !text.includes(edge)) return false;
-  if (ev && !text.includes(ev)) return false;
-  if (/\b(probShown|edgeShown|evShown)\b/.test(text)) return false;
-  if (/half[- ]point|little high|little low|strong edge|stayed firm|price has stayed|mostly held|held since/i.test(text)) return false;
-  if (/because/i.test(text) && !/because the probability and the price/i.test(text)) return false;
-  return true;
-}
-
-/**
- * The number named by the ticket. The sentence quotes that number.
- * A stored line from another quote does not replace it.
- */
-function narrativeLine(p) {
-  const market = String((p && (p.market || p.betType)) || '');
-  if (!/moneyline/i.test(market)) {
-    const text = String((p && (p.pick || p.side)) || '');
-    const match = text.match(/([+-]?\d+(?:\.\d+)?)\s*$/);
-    if (match) {
-      const n = Number(match[1]);
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  const lineRaw = p && (p.line != null ? p.line : p.consensusLine);
-  const line = Number(lineRaw);
-  return Number.isFinite(line) ? line : null;
-}
-
-/**
- * Sports-desk fallback when Grok is unavailable.
+ * Sports-desk fallback when Claude is unavailable.
  * 5 sentences, argues for the side, no gate jargon.
  */
 function buildFallbackNarrative(p) {
   const pick = p.pick || p.side || 'this side';
   const matchup = p.matchup || "today's game";
   const sport = p.sport || '';
+  const betType = p.betType || p.market || '';
   const odds = p.odds != null && p.odds !== '' ? String(p.odds) : '';
   const units = p.units ? String(p.units) : '';
+  const shape = sideShape(pick, betType);
+  const band = edgeBandFrom(p);
+  const steam = steamHintFrom(p);
   const grade = gradeLabel(p);
-  const price = odds || 'the posted price';
-  const prob = shownProb(p);
-  const edge = shownEdge(p);
-  const ev = shownEv(p);
-  const proj = Number(p && p.modelProjection);
-  const line = narrativeLine(p);
+  const price = odds || 'this price';
 
-  const hook = `${sport ? `${sport}: ` : ''}WeBetAI locked ${pick} in ${matchup} at ${price}.`;
-  const probLine = prob
-    ? `WeBetAI rates this side at ${prob}.`
-    : 'WeBetAI is pricing this side from the posted number on this pass.';
-  let valueLine = `The posted price is ${price}.`;
-  if (edge && ev) valueLine = `At ${price} that is a ${edge} edge and a ${ev} expected value.`;
-  else if (edge) valueLine = `At ${price} that is a ${edge} edge.`;
-  else if (ev) valueLine = `At ${price} that is a ${ev} expected value.`;
+  const hook = `${sport ? `${sport}: ` : ''}WeBetAI locked ${pick} in ${matchup}${odds ? ` at ${odds}` : ''}.`;
 
-  let gapLine = null;
-  if (Number.isFinite(proj) && Number.isFinite(line)) {
-    const market = String((p && (p.market || p.betType)) || '');
-    const side = String((p && (p.side || p.pick)) || '').toLowerCase();
-    const home = String((p && p.homeTeam) || '').toLowerCase();
-    const away = String((p && p.awayTeam) || '').toLowerCase();
-    const spread = /spread|puck|run line/i.test(market);
-    const total = /total/i.test(market);
-    // modelProjection on a football spread is the home margin. The sentence
-    // quotes the side being bet, so an away favorite is not printed as a
-    // negative home number. The gap uses the two magnitudes a reader can
-    // subtract: a win of 8.6 against a line of -3.5 is 5.1, not 12.1.
-    const awaySide = spread && away && side.startsWith(away);
-    const sideProj = awaySide ? -proj : proj;
-    let residual = sideProj - line;
-    if (spread) residual = sideProj + line;
-    const unit = /nhl/i.test(sport) ? 'goals' : (/mlb/i.test(sport) ? 'runs' : 'points');
-    const abs = Math.abs(residual);
-    const posted = line > 0 ? `+${line.toFixed(1)}` : line.toFixed(1);
-    if (spread && sideProj < 0) {
-      const loss = Math.abs(sideProj).toFixed(1);
-      gapLine = abs <= 0.05
-        ? `The side is projected to lose by ${loss}. The posted line is ${posted}.`
-        : `The side is projected to lose by ${loss}. The posted line is ${posted}, ${abs.toFixed(1)} ${unit} ${residual < 0 ? 'short of' : 'past'} that number.`;
-    } else if (spread && sideProj > 0) {
-      const winBy = sideProj.toFixed(1);
-      gapLine = abs <= 0.05
-        ? `The side is projected to win by ${winBy}. The posted line is ${posted}.`
-        : `The side is projected to win by ${winBy}. The posted line is ${posted}, ${abs.toFixed(1)} ${unit} ${residual > 0 ? 'inside' : 'past'} that win.`;
-    } else if (total) {
-      const totalLine = Math.abs(line).toFixed(1);
-      gapLine = abs <= 0.05
-        ? `The projection is ${sideProj.toFixed(1)} and the total is ${totalLine}.`
-        : `The projection is ${sideProj.toFixed(1)} and the total is ${totalLine}, ${abs.toFixed(1)} ${unit} ${residual < 0 ? 'under' : 'over'} that total.`;
-    } else if (abs <= 0.05) {
-      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${posted}.`;
-    } else {
-      const relation = residual < 0 ? 'short of' : 'past';
-      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${posted}, ${abs.toFixed(1)} ${unit} ${relation} that number.`;
-    }
+  let why;
+  if (shape === 'under') {
+    why = 'The way these teams have been playing points to a slower script than the total assumes, with fewer clean scoring trips than a high number needs.';
+  } else if (shape === 'over') {
+    why = 'The way these teams have been playing points to a livelier script than the total assumes, with more scoring chances than a low number allows.';
+  } else if (shape === 'dog') {
+    why = 'WeBetAI reads the favorite as priced for a cleaner win than this matchup figures to produce, which is why the plus points are the side.';
+  } else if (shape === 'favorite' || shape === 'spread') {
+    why = 'WeBetAI reads this side as the one that should control the game long enough to clear a short number with a normal winning margin.';
+  } else {
+    why = 'WeBetAI reads this side as the right team in the matchup, and the moneyline is how you get paid for that read.';
   }
 
-  let moveLine = null;
-  if (p && p.steamAgainst === true) moveLine = 'The line has moved against this side.';
-  else if (p && p.steamToward === true) moveLine = 'The line has moved toward this side.';
-
-  let stake = null;
-  if (grade && units) stake = `WeBetAI has this graded ${grade} and sized at ${units}.`;
-  else if (units) stake = `The stake is ${units}.`;
-  else if (grade) stake = `WeBetAI has this graded ${grade}.`;
-
-  const close = `WeBetAI is on ${pick} because the probability and the price are the case for the bet.`;
-  const parts = [hook, probLine, valueLine, gapLine, moveLine, stake, close].filter(Boolean);
-  while (parts.length > 6) {
-    const stakeAt = parts.indexOf(stake);
-    if (stake && stakeAt !== -1) parts.splice(stakeAt, 1);
-    else if (moveLine && parts.indexOf(moveLine) !== -1) parts.splice(parts.indexOf(moveLine), 1);
-    else break;
+  let value;
+  if (shape === 'under') {
+    value = `The total still looks a little high versus how these offenses have been scoring, and ${price} is still paying on the under.`;
+  } else if (shape === 'over') {
+    value = `The total still looks a little low versus how these offenses have been scoring, and ${price} has not caught all the way up.`;
+  } else if (shape === 'dog') {
+    value = `The points are the soft side of the number, and ${price} still leaves ${pick} as a bettable price.`;
+  } else if (shape === 'favorite' || shape === 'spread') {
+    value = `The spread still looks short for a side WeBetAI expects to win by enough, and ${price} is a fair way to lay it.`;
+  } else if (/^\+/.test(odds)) {
+    value = `Plus money is the case: WeBetAI wants this side, and ${price} still pays more than a short favorite would.`;
+  } else {
+    value = `The moneyline at ${price} still offers a better payout than the matchup risk WeBetAI sees.`;
   }
-  return joinSentences(parts);
+
+  let compass = '';
+  if (band === 'strong') compass = 'WeBetAI sees a strong disagreement with the posted number';
+  else if (band === 'solid') compass = 'WeBetAI sees a solid disagreement with the posted number';
+  else if (band === 'modest') compass = 'WeBetAI has this as a modest disagreement with the posted number';
+  if (steam && /toward/i.test(steam)) {
+    compass = compass
+      ? `${compass}, and the line is already leaning this way.`
+      : 'The line is already leaning this way.';
+  } else if (steam && /against/i.test(steam)) {
+    compass = compass
+      ? `${compass}, even with the line leaning the other way.`
+      : 'The read holds even with the line leaning the other way.';
+  } else if (compass) {
+    compass = `${compass}.`;
+  }
+
+  let stake;
+  if (grade && units) {
+    stake = `WeBetAI has this graded ${grade} and sized at ${units}, enough to matter without making one game the whole day.`;
+  } else if (units) {
+    stake = `The stake is ${units}, big enough to matter and small enough that one game is not the whole day.`;
+  } else if (grade) {
+    stake = `WeBetAI has this graded ${grade}, a card play with a measured stake rather than a max swing.`;
+  } else {
+    stake = 'WeBetAI kept the stake disciplined, enough to matter without making one game the whole day.';
+  }
+
+  let close;
+  if (shape === 'under') {
+    close = 'WeBetAI is on the under because the game should land quieter than the posted total.';
+  } else if (shape === 'over') {
+    close = 'WeBetAI is on the over because the game should land higher than the posted total.';
+  } else if (shape === 'dog') {
+    close = `WeBetAI is on ${pick} because the favorite still has to win by more than this matchup should produce.`;
+  } else if (shape === 'favorite' || shape === 'spread') {
+    close = `WeBetAI is on ${pick} because a normal win should be enough to cover.`;
+  } else {
+    close = `WeBetAI is on ${pick} because the payout still respects the risk in ${matchup}.`;
+  }
+
+  return joinSentences([hook, why, value, compass, stake, close]);
 }
 
 function ensureNarrative(p) {
@@ -290,9 +192,10 @@ function ensureNarrative(p) {
 function emptyEdgeSummary() {
   return joinSentences([
     "WeBetAI went through today's board and did not lock a side.",
-    'A price that is no longer the posted number, or a projection too far from that number, does not get a stake.',
-    'An empty card is the call when nothing on the board is both current and worth a bet.',
+    'The numbers on the screen are already close to where they should be, so there is no soft price worth a stake.',
+    'An empty Omega card is the call on a day like this.',
     'Forcing a pick would turn a pass into a guess.',
+    'When a total, spread, or moneyline is actually off, it will show up here with a real reason.',
   ]);
 }
 
@@ -334,7 +237,7 @@ function templateEdgeSummary(picks, dateFormatted) {
   }
   return joinSentences([
     `WeBetAI's Omega card${dateBit} covers ${sportBit}, built around ${listLead(names)}.`,
-    'Each locked side is there because its win rate is above the price on the card.',
+    'The thesis is that the posted prices still give the picked side a cleaner number than the matchup deserves.',
     where,
     'Stakes stay inside the daily card because a good slate is a set of prices, not a pile of units.',
     'Read each blurb for the why, then bet the side WeBetAI locked.',
@@ -362,11 +265,7 @@ function templateInsights(picks) {
   return joinSentences([
     sportLine,
     watch,
-    list.length === 1
-      ? 'Only one bet cleared the WeBetAI bar today, so the card is one straight and no parlay.'
-      : list.length === 2
-        ? '2 straights are on the card, and the parlay is those two teams.'
-        : `${list.length} straights are on the card.`,
+    'WeBetAI built this as a few straights plus a small parlay, not a pile of leans.',
     'Each play argues for one side, and the stake matches how far off the price looks.',
     'If a blurb does not convince you, pass on that leg.',
   ]);
@@ -374,29 +273,27 @@ function templateInsights(picks) {
 
 function buildCardFallbackCopy({ picks, dateFormatted } = {}) {
   if (!picks || !picks.length) {
-    return {
-      edgeSummary: sanitizeCardCopy(emptyEdgeSummary(), null),
-      insights: sanitizeCardCopy(emptyInsights(), null),
-    };
+    return { edgeSummary: emptyEdgeSummary(), insights: emptyInsights() };
   }
   return {
-    edgeSummary: sanitizeCardCopy(templateEdgeSummary(picks, dateFormatted), null),
-    insights: sanitizeCardCopy(templateInsights(picks), null),
+    edgeSummary: templateEdgeSummary(picks, dateFormatted),
+    insights: templateInsights(picks),
   };
 }
 
-/** Concrete what-loses / closing-line / verification lines when Grok omits them. */
+/** Concrete what-loses / closing-line / verification lines when Claude omits them. */
 function ensureExtraFields(p) {
   const next = { ...p };
   const pick = next.pick || next.side || 'this side';
   const matchup = next.matchup || 'this matchup';
   const sport = next.sport || 'this slate';
   const shape = sideShape(pick, next.betType || next.market || '');
+  const band = edgeBandFrom(next);
   const steam = steamHintFrom(next);
 
   if (!next.whatLoses || String(next.whatLoses).trim().length < 15) {
     if (shape === 'under') {
-      next.whatLoses = `${pick} loses if ${matchup} scores past the posted total.`;
+      next.whatLoses = `${pick} loses if ${matchup} turns into a track meet and the teams score past the total WeBetAI thinks is too high.`;
     } else if (shape === 'over') {
       next.whatLoses = `${pick} loses if ${matchup} stalls into a low-event game and the scoring stays under the number.`;
     } else if (shape === 'dog') {
@@ -417,15 +314,17 @@ function ensureExtraFields(p) {
       next.clvExpectation = `WeBetAI expects the closing number to keep leaning toward ${pick}, so the price on this card should still look fair or better by the close.`;
     } else if (steam && /against/i.test(steam)) {
       next.clvExpectation = `The number has already leaned the other way, so WeBetAI expects a close that holds near ${pick} rather than a big further move.`;
+    } else if (band === 'strong' || band === 'solid') {
+      next.clvExpectation = `WeBetAI expects the closing number to drift toward ${pick} as the rest of the market finds the same side.`;
     } else {
-      next.clvExpectation = `The closing number on ${pick} is not a second pick. WeBetAI is grading the price already on the card.`;
+      next.clvExpectation = `WeBetAI expects a quiet close around ${pick}, and a number that simply holds is still a fair ticket.`;
     }
   }
   return next;
 }
 
 /**
- * Context for Grok. Sport, price, grade, and soft hints are translatable.
+ * Context for Claude. Sport, price, grade, and soft hints are translatable.
  * _contextEv / _contextCover are a compass only. Do not strip them before the call.
  */
 function lockedRow(p, i, kind) {
@@ -449,12 +348,6 @@ function lockedRow(p, i, kind) {
   const steam = steamHintFrom(p);
   if (band) row.edgeBand = band;
   if (steam) row.steamHint = steam;
-  const edgeShown = shownEdge(p);
-  const evShown = shownEv(p);
-  const probShown = shownProb(p);
-  if (edgeShown) row.edgeShown = edgeShown;
-  if (evShown) row.evShown = evShown;
-  if (probShown) row.probShown = probShown;
   return row;
 }
 
@@ -466,29 +359,24 @@ VOICE:
 - Always say "WeBetAI". Never say "the model", "our model", or "the algorithm".
 - No em dashes. Use periods and commas.
 - No help-desk tone. No filler like "form and injuries line up".
-- State the locked probability, the price, the edge, and the expected value as the numbers themselves. Do not print the words probShown, edgeShown, or evShown. When a projection and a line are on the row, state both numbers and the gap. Do not invent a cause the numbers do not support. Do not say the total is a half-point high, that an edge band is strong, or that the price has stayed firm or mostly held.
-- edgeBand is not copy. Do not write "strong", "solid", or "modest" as a reason. steamHint may be stated only as a line that moved toward or against the side.
-- Never say "the model". Never use EV%, coverProb, CLV, Kelly, ORtg, DRtg, DVOA, ATS, FIP, xFIP, WAR, or wRC+.
+- Translate value into English. Good: "the total still looks a half-point high versus how these offenses have been scoring" or "the price is still paying." Bad: pasting EV%, coverProb, cover probability, CLV cents, Kelly, or an edge percent.
+- Never use ORtg, DRtg, DVOA, ATS, FIP, xFIP, WAR, wRC+, or other advanced-stat abbreviations.
 - Do not lead with bad news about the side you are picking.
 - Do not apply baseball starter logic to football, or football quarterback logic to baseball.
 
 YOUR JOB:
 1. When web search is available, use it sparingly to verify injuries, recent news, starting pitchers (MLB), quarterback status (NFL/NCAAF), outdoor weather, and recent form. When tools are disabled, write from the locked table only. Do NOT invent specific injuries, records, scores, or weather.
-2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, starter scratch, severe weather, material lineup change). Do NOT reject a football pick because a quarterback is out, doubtful, or questionable. You do NOT choose replacements. Do not say that injury, lineup, goalie, or weather news is already priced in.
+2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, starter scratch, severe weather, material lineup change). Do NOT reject a football pick because a quarterback is out, doubtful, or questionable: WeBetAI already priced the quarterback injury report into the number. You do NOT choose replacements.
 3. Write coreReasoning for every ACCEPTED straight (4-6 sentences) and every parlay leg (3-5 sentences).
 4. You MAY reduce straight units by up to 50% with a reason. You MUST NOT increase units. Do not change parlay leg units.
 5. You MUST NOT invent new picks, swap sides, or override the locked direction.
 6. Every specific fact must come from web search this run or the locked table. If you cannot verify a detail, describe the handicap in general terms instead of inventing one.
 
-SLATE AND PRICED INPUTS:
-- Never say other sports are absent, that no other sports are on the slate, or that no other sports appear. The locked table is the card. Other games can be on the slate with no qualifying edge. Only say the card's picks are in sport X.
-- Never say injuries, lineups, goalies, or weather are priced in, already in the number, or covered by the usual injury and lineup variables, unless that pick's own locked data says so.
-
 HOW TO BUILD coreReasoning (straights, 4-6 sentences):
 1. Open with a concrete fact. Use verified news when you have it. Otherwise open on the matchup and the number.
-2. Name the matchup and the posted number. Do not invent a cause the table does not contain.
-3. State the locked probability, the edge, and the expected value as those numbers. A projection gap is the two numbers and their difference. Do not invent a scoring script.
-4. Close on the probability and the price. Do not add a reason the table does not contain.
+2. Explain the matchup or the situation: why this side, in this game, today.
+3. Explain the price in plain English. Use edgeBand and steamHint when they are present. A strong or solid band means the number is meaningfully off. A modest band means the price is only a little off, so keep the tone measured.
+4. Close on why WeBetAI locked this side.
 
 Parlay legs use the same voice in 3-5 sentences. Do not write a stub. Argue for that leg.
 
@@ -498,16 +386,15 @@ insights (3-5 sentences): the sport mix, what to watch before lock (starter, qua
 
 whatLoses: one concrete sentence. Name the game script that beats this side. Do not write "the opposite happens."
 
-clvExpectation: one plain-English sentence. If the row has no steam flag, say the close is not called on this pass. Do not say the line held. Do not say "CLV" and do not quote cents.
+clvExpectation: one plain-English sentence on where the closing number should land (toward the side, against it, or holding). Do not say "CLV" and do not quote cents.
 
 dataVerified: a short note on what you actually checked (form, injuries, starter, quarterback, weather), or "locked number and price only; no live news on this pass."
 
 CONTEXT FIELDS on each locked row are a compass. They are not copy:
 - rating, grade, odds, units, sport, betType: fine to mention in English.
-- The probability, edge, and expected-value numbers on the row must appear in coreReasoning. Do not print the field names probShown, edgeShown, or evShown.
-- edgeBand: do not translate it and do not print it.
-- steamHint: state the direction only if it is present. If it is missing, do not invent line movement and do not say the price stayed firm or mostly held.
-- _contextEv and _contextCover: the same numbers as the shown edge and probability. Print those numbers, not a different rounding.
+- edgeBand: modest, solid, or strong. Translate it. Do not print a percent.
+- steamHint: translate the direction if it is present. If it is missing, do not invent line movement.
+- _contextEv and _contextCover: private. Use them only to decide how hard to talk about value. Never print them, and never print EV, expected value, cover probability, or a percent edge.
 
 OUTPUT: Return ONLY valid JSON (no markdown fences):
 {
@@ -535,7 +422,7 @@ OUTPUT: Return ONLY valid JSON (no markdown fences):
   "insights": "3-5 sentences. Sport mix, what to watch, how the card is built. Plain English."
 }`;
 
-async function callGrokOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted }) {
+async function callClaudeOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted, useWebSearch }) {
   // Send the full locked row, including _contextEv, _contextCover, edgeBand, and steamHint.
   const userPrompt = `Date: ${dateFormatted}
 
@@ -547,41 +434,54 @@ ${JSON.stringify(lockedLegs || [], null, 2)}
 
 Write the JSON now.
 Straights need 4-6 sentence coreReasoning. Parlay legs need 3-5 sentences. edgeSummary and insights need 3-5 sentences each.
-Print the probability, edge, and expected value as the numbers on the row. Do not print the field names. State the price. If a projection and a line are present, state the gap as those two numbers. Do not invent a half-point, a strong edge band, or a price that stayed firm or mostly held. Say WeBetAI. No em dashes.`;
+Fields named edgeBand, steamHint, _contextEv, and _contextCover are a compass for plain-English value talk. Do not print EV, cover probability, CLV cents, Kelly, or those raw context numbers.
+Argue for the picked side. Say WeBetAI. No em dashes.`;
 
-  // No web search. The previous tool path was flaky on Netlify and both attempts
-  // already ran with tools off. Same prompt, same max tokens, 60s budget.
-  const text = await xaiChat({
-    apiKey,
+  const body = {
+    model: CLAUDE_MODEL,
+    max_tokens: NARRATIVE_MAX_TOKENS,
     system: SYSTEM_PROMPT,
-    user: userPrompt,
-    maxTokens: NARRATIVE_MAX_TOKENS,
-    timeoutMs: 60000,
+    messages: [{ role: 'user', content: userPrompt }],
+  };
+  if (useWebSearch) {
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+  }
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(useWebSearch ? 120000 : 60000),
   });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`Anthropic HTTP ${resp.status}${errText ? `: ${errText.slice(0, 180)}` : ''}`);
+  }
+  const data = await resp.json();
+  const text = (data.content || [])
+    .filter(c => c.type === 'text' || c.text)
+    .map(c => c.text || '')
+    .join('\n');
   const jsonStart = text.indexOf('{');
   const jsonEnd = text.lastIndexOf('}');
-  if (jsonStart < 0 || jsonEnd < 0) throw new Error('no JSON in Grok response');
+  if (jsonStart < 0 || jsonEnd < 0) throw new Error('no JSON in Claude response');
   return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
 }
 
-/**
- * No web_search (flaky on Netlify). Retry once on transient failures.
- * A 400/401/403 is the same request failing twice — do not spend the second call.
- * The fallback card keeps the locked sides either way.
- */
-async function callGrok(opts) {
+/** Prefer no-web_search first (web_search is flaky on Netlify). Retry once without tools. */
+async function callClaude(opts) {
   try {
-    return await callGrokOnce(opts);
+    return await callClaudeOnce({ ...opts, useWebSearch: false });
   } catch (e) {
-    if (!narrateErrorShouldRetry(e)) {
-      console.error(`[omega-vnext/narrate] Grok call failed (${e.message}) — not retrying a rejected request`);
-      throw e;
-    }
-    console.error(`[omega-vnext/narrate] Grok no-tools call failed (${e.message}) — retrying once without tools`);
+    console.error(`[omega-vnext/narrate] Anthropic no-tools call failed (${e.message}) — retrying once without tools`);
     try {
-      return await callGrokOnce(opts);
+      return await callClaudeOnce({ ...opts, useWebSearch: false });
     } catch (e2) {
-      console.error(`[omega-vnext/narrate] Grok retry failed: ${e2.message}`);
+      console.error(`[omega-vnext/narrate] Anthropic retry failed: ${e2.message}`);
       throw e2;
     }
   }
@@ -600,7 +500,7 @@ function applyStraightRows(templated, parsed) {
       rejections.push({
         matchup: base.matchup,
         side: base.pick,
-        reason: row.coreReasoning || 'news veto',
+        reason: row.coreReasoning || 'Claude news veto',
       });
       continue;
     }
@@ -614,7 +514,7 @@ function applyStraightRows(templated, parsed) {
     const next = {
       ...base,
       units,
-      coreReasoning: prose.length > 40 && proseKeepsMath(prose, base) ? prose : base.coreReasoning,
+      coreReasoning: prose.length > 40 ? prose : base.coreReasoning,
     };
     const wl = (row.whatLoses || '').trim();
     const dv = (row.dataVerified || '').trim();
@@ -640,7 +540,7 @@ function applyLegRows(legsTemplated, parsed) {
   return legsTemplated.map((leg, i) => {
     const row = byIdx.get(i);
     const prose = row && (row.coreReasoning || '').trim();
-    const base = (prose && prose.length > 30 && proseKeepsMath(prose, leg)) ? { ...leg, coreReasoning: prose } : ensureNarrative(leg);
+    const base = (prose && prose.length > 30) ? { ...leg, coreReasoning: prose } : ensureNarrative(leg);
     if (!row) return base;
     const wl = (row.whatLoses || '').trim();
     const dv = (row.dataVerified || '').trim();
@@ -664,7 +564,7 @@ function decorateParlays(parlayLegs) {
  * @returns {{ picks, parlayLegs, edgeSummary, insights, claudeVerified, rejections }}
  */
 async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
-  const key = resolveXaiKey(apiKey);
+  const key = resolveAnthropicKey(apiKey);
 
   if (!picks || !picks.length) {
     const copy = buildCardFallbackCopy({ picks: [], dateFormatted });
@@ -693,7 +593,7 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
   const templateInsights = fallbackCopy.insights;
 
   if (!key) {
-    console.error('[omega-vnext/narrate] XAI_API_KEY missing — using sports-desk fallbacks');
+    console.error('[omega-vnext/narrate] ANTHROPIC_API_KEY missing — using sports-desk fallbacks');
     return {
       picks: templated.map(ensureExtraFields),
       parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, flatLegs, legOwners)),
@@ -707,7 +607,7 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
   try {
     const lockedStraights = templated.map((p, i) => lockedRow(p, i, 'straight'));
     const lockedLegs = flatLegs.map((p, i) => lockedRow(p, i, 'parlay'));
-    const parsed = await callGrok({
+    const parsed = await callClaude({
       apiKey: key,
       lockedStraights,
       lockedLegs,
@@ -721,8 +621,8 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
       return {
         picks: templated.map(ensureExtraFields),
         parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, narratedLegs, legOwners)),
-        edgeSummary: sanitizeCardCopy(parsed.edgeSummary, templateSummary),
-        insights: sanitizeCardCopy(parsed.insights, templateInsights),
+        edgeSummary: parsed.edgeSummary || templateSummary,
+        insights: parsed.insights || templateInsights,
         claudeVerified: false,
         rejections: [],
       };
@@ -733,8 +633,8 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
     return {
       picks: finals,
       parlayLegs: mergeLegsBack(parlayLegs, finalsLegs, legOwners),
-      edgeSummary: sanitizeCardCopy(parsed.edgeSummary, templateSummary),
-      insights: sanitizeCardCopy(parsed.insights, templateInsights),
+      edgeSummary: parsed.edgeSummary || templateSummary,
+      insights: parsed.insights || templateInsights,
       claudeVerified: true,
       rejections,
     };
@@ -746,7 +646,7 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
       edgeSummary: templateSummary,
       insights: templateInsights,
       claudeVerified: false,
-      rejections: [{ matchup: 'narrator', side: 'verifier', reason: `Narrate failed: ${e.message}` }],
+      rejections: [{ matchup: 'Claude', side: 'verifier', reason: `Narrate failed: ${e.message}` }],
     };
   }
 }
@@ -767,7 +667,7 @@ function mergeLegsBack(parlayLegs, flatLegs, legOwners) {
 
 /** Re-narrate only parlay legs (after veto-driven re-optimize). Same prompt, row, and token path. */
 async function narrateParlayLegsOnly({ parlayLegs, dateFormatted, apiKey, straightPicks }) {
-  const key = resolveXaiKey(apiKey);
+  const key = resolveAnthropicKey(apiKey);
   if (!parlayLegs || !parlayLegs.length) return parlayLegs || [];
 
   const flatLegs = [];
@@ -787,7 +687,7 @@ async function narrateParlayLegsOnly({ parlayLegs, dateFormatted, apiKey, straig
   if (!key) return mergeLegsBack(parlayLegs, flatLegs.map(ensureExtraFields), legOwners);
 
   try {
-    const parsed = await callGrok({
+    const parsed = await callClaude({
       apiKey: key,
       lockedStraights: [],
       lockedLegs: flatLegs.map((p, i) => lockedRow(p, i, 'parlay')),
@@ -807,11 +707,10 @@ module.exports = {
   narrateParlayLegsOnly,
   buildFallbackNarrative,
   buildCardFallbackCopy,
-  sanitizeCardCopy,
   ensureNarrative,
   ensureExtraFields,
   lockedRow,
   edgeBandFrom,
   steamHintFrom,
-  resolveXaiKey,
+  resolveAnthropicKey,
 };

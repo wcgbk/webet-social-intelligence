@@ -472,10 +472,10 @@
       <div class="standings-rank-wrap" id="circa-standings-rank">
         <table class="standings-table" id="circa-standings-table" aria-label="Our Circa Million VIII entries">
           <thead>
-            <tr><th>Place</th><th>Entry</th><th>Points</th><th>Record</th></tr>
+            <tr><th>Place</th><th>Entry</th><th>Points</th></tr>
           </thead>
           <tbody id="circa-standings-body">
-            <tr><td colspan="4" class="entry-muted">Loading standings...</td></tr>
+            <tr><td colspan="3" class="entry-muted">Loading standings...</td></tr>
           </tbody>
         </table>
         <div class="standings-rank-meta" id="circa-standings-rank-meta">Matching our entries to the latest Circa Million VIII standings PDF...</div>
@@ -864,21 +864,20 @@
     const body = document.getElementById('circa-standings-body');
     if (!body) return;
     if (!rows || !rows.length) {
-      body.innerHTML = '<tr><td colspan="4" class="entry-muted">Standings unavailable</td></tr>';
+      body.innerHTML = '<tr><td colspan="3" class="entry-muted">Standings unavailable</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (row) {
       const found = !!row.found;
       const place = found ? escapeHtml(row.placeDisplay || '--') : '--';
       const pts = found ? escapeHtml(formatStandingsPoints(row.points)) : '--';
-      const rec = found ? escapeHtml(row.recordDisplay || row.record || '--') : '--';
       const name = escapeHtml(row.entry || row.alias || '');
       const badge = row.isWebetai ? '<span class="standings-badge">WeBetAI</span>' : '';
       const entryHtml = found
         ? (name + badge)
         : ('<span class="entry-muted">' + name + badge + ' · not found</span>');
       const cls = row.isWebetai ? ' class="webetai-row"' : '';
-      return '<tr' + cls + '><td>' + place + '</td><td>' + entryHtml + '</td><td>' + pts + '</td><td>' + rec + '</td></tr>';
+      return '<tr' + cls + '><td>' + place + '</td><td>' + entryHtml + '</td><td>' + pts + '</td></tr>';
     }).join('');
   }
   function fetchStandingsRank() {
@@ -886,7 +885,7 @@
     const metaEl = document.getElementById('circa-standings-rank-meta');
     const linksEl = document.getElementById('circa-standings-pdf-links');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="4" class="entry-muted">Loading standings...</td></tr>';
+    body.innerHTML = '<tr><td colspan="3" class="entry-muted">Loading standings...</td></tr>';
     if (metaEl) metaEl.textContent = 'Matching our entries to the latest Circa Million VIII standings PDF...';
     const req = ++_standingsReq;
     fetch('/api/get-circa-standings')
@@ -895,16 +894,15 @@
         if (req !== _standingsReq) return;
         if (linksEl) {
           const bits = [];
-          // Official Circa PDFs, labeled exactly as Circa titles them.
           if (data && data.seasonPdfUrl) {
-            bits.push('<a href="' + esc(data.seasonPdfUrl).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener" data-circa-pdf="season">' + esc(data.seasonPdfLabel || data.seasonTitle || 'Full Season Standings (official PDF)') + '</a>');
+            bits.push('<a href="' + data.seasonPdfUrl + '" target="_blank" rel="noopener">Season standings PDF</a>');
           }
           if (data && data.lastPlacePdfUrl) {
-            bits.push('<a href="' + esc(data.lastPlacePdfUrl).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener" data-circa-pdf="last-place">' + esc(data.lastPlacePdfLabel || data.lastPlaceTitle || 'Full Season Last Place Standings (official PDF)') + '</a>');
+            bits.push('<a href="' + data.lastPlacePdfUrl + '" target="_blank" rel="noopener">Last Place / booby PDF</a>');
           }
           linksEl.innerHTML = bits.join('');
         }
-        if (!data || data.error || !Array.isArray(data.ourEntries) || data.parseError) {
+        if (!data || data.error || !Array.isArray(data.ourEntries)) {
           renderStandingsRows([]);
           if (metaEl) {
             metaEl.textContent = (data && data.message)
@@ -935,8 +933,7 @@
     const liveHasGrade = live.wins + live.losses + live.pushes + live.live > 0;
     // Week 1 overlay: current card IS the season. Later weeks keep the API rollup
     // (client poll re-fetches get-picks-circa when a live game goes final).
-    // Season total is graded server-side from frozen Saturday final cards only.
-    if (!sec.seasonTotal && liveHasGrade && (Number(sec.weekNum) === 1 || (k.wins + k.losses + k.pushes) === 0)) {
+    if (liveHasGrade && (Number(sec.weekNum) === 1 || (k.wins + k.losses + k.pushes) === 0)) {
       k.points = live.points;
       k.wins = live.wins;
       k.losses = live.losses;
@@ -953,8 +950,7 @@
       <div class="cum-card"><div class="cum-value ${ (k.points||0) > 0 ? 'positive' : ''}">${pts}</div><div class="cum-label">Contest Pts</div></div>
       <div class="cum-card"><div class="cum-value">${record}</div><div class="cum-label">ATS Record</div></div>
       <div class="cum-card"><div class="cum-value">${winRate}</div><div class="cum-label">Win Rate</div></div>
-      <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`
-      + (sec.seasonTotal ? `<div class="cum-note" id="circa-season-total" style="grid-column:1/-1; font-size:.7rem; color:var(--txt-l); text-align:center;">Season total: ${esc(Number(sec.seasonTotal.points || 0).toFixed(1))} pts · ${esc(String(sec.seasonTotal.record || ''))} (W-L-P) over ${esc(String(sec.seasonTotal.weeksGraded || 0))} week(s), graded from each week's frozen Saturday final card</div>` : '');
+      <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`;
     fetchStandingsRank();
   }
 
@@ -1032,19 +1028,6 @@
     });
   }
 
-  function frozenTag(wk) {
-    if (wk && wk.frozen) {
-      const when = wk.frozen.sourceGeneratedAtPT ? (' · ' + wk.frozen.sourceGeneratedAtPT) : '';
-      const warn = wk.frozen.uncertain ? ' ⚠' : '';
-      const title = (wk.frozen.uncertaintyNotes || []).join('; ');
-      return `<span class="frozen-tag" data-frozen="1" title="${esc(title).replace(/"/g, '&quot;')}" style="display:block; font-size:.6rem; color:var(--teal); font-weight:600;">🔒 Frozen final card${esc(when)}${warn}</span>`;
-    }
-    if (wk && wk.provisional) {
-      return '<span class="frozen-tag" style="display:block; font-size:.6rem; color:var(--txt-l);">Provisional · freezes at Sat ~1 PM PT final</span>';
-    }
-    return '';
-  }
-
   function renderWeeksTable(sec, picks) {
     let tbl = '';
     const weeks = visibleWeeks(sec.weeks || [], picks || []);
@@ -1068,7 +1051,7 @@
         : (unplayed ? '--' : (wk.rate || '--'));
       tbl += `<tr class="week-row" onclick="toggleWeek('nfl-${w}')"${highlight}>
         <td><button class="day-toggle" type="button" style="font-weight:700;">${esc(wk.label)}</button>
-          <span style="display:block; font-size:.625rem; color:var(--txt-l); font-weight:400;">${esc(wk.dates)}</span>${frozenTag(wk)}</td>
+          <span style="display:block; font-size:.625rem; color:var(--txt-l); font-weight:400;">${esc(wk.dates)}</span></td>
         <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${esc(wkRecord)}</span></td>
         <td>${esc(wkRate)}</td>
         <td>${esc(wkPts)}</td>

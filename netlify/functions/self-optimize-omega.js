@@ -197,9 +197,6 @@ async function fetchOddsUsageLine() {
   } catch (e) { return null; }
 }
 async function postObserverDigest(token, params) {
-  // PAUSED 2026-10-15 (Ben): all Discord posts off. QA/report still run. Flip to false to re-enable.
-  const DISCORD_POSTS_PAUSED = true;
-  if (DISCORD_POSTS_PAUSED) { console.log("[self-optimize] Discord posts paused, skipping"); return; }
   let webhook = process.env.DISCORD_OBSERVER_WEBHOOK || null;
   if (!webhook) {
     try {

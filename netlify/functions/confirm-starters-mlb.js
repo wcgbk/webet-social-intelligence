@@ -1,7 +1,5 @@
 // confirm-starters-mlb.js
 const { samePlayerName } = require('./lib/player-name');
-const { writeSummaryStakeDisplay } = require('./lib/omega-vnext/odds_math');
-const { resolveTeamId } = require('./lib/omega-vnext/sports/team_identity');
 // 1:30pm ET re-check of ESPN probable starters against today's Alpha + Omega cards.
 // Flags SP changes; KILLS SP-dependent picks (MLB Total / Moneyline / F5 / Run Line)
 // when the starter used at generation time no longer matches ESPN.
@@ -48,20 +46,15 @@ async function fetchCurrentStarters(dateISO) {
       if (!away || !home) continue;
       const awayProb = away.probables?.[0] || {};
       const homeProb = home.probables?.[0] || {};
-      const awayName = away.team?.displayName || "";
-      const homeName = home.team?.displayName || "";
-      const awayEspn = resolveTeamId("MLB", awayName);
-      const homeEspn = resolveTeamId("MLB", homeName);
-      const row = {
+      const key = [away.team?.displayName, home.team?.displayName]
+        .map(t => normalizeTeam(t).split(" ").pop()).join("_");
+      map[key] = {
         awayTeam: away.team?.displayName || "",
         homeTeam: home.team?.displayName || "",
         awaySP: awayProb.athlete?.displayName || awayProb.displayName || "TBD",
         homeSP: homeProb.athlete?.displayName || homeProb.displayName || "TBD",
         status: ev.status?.type?.state || "pre",
       };
-      if (awayEspn && homeEspn) map[awayEspn + "_" + homeEspn] = row;
-      const key = [awayName, homeName].map(t => normalizeTeam(t).split(" ").pop()).join("_");
-      map[key] = row;
     }
     return map;
   } catch (e) {
@@ -102,64 +95,27 @@ async function blobPut(store, key, value, token) {
   } catch (e) { /* fall through */ }
 }
 
-function noteIdentityFallback(seen, name) {
-  const token = String(name || "");
-  if (seen && seen.has(token)) return;
-  if (seen) seen.add(token);
-  console.warn(`[omega-team-identity] fallback sport=MLB name=${token}`);
-}
-
-function lookupEspn(currentStarters, pick, fallbackSeen) {
+function lookupEspn(currentStarters, pick) {
   const parts = matchupParts(pick.matchup);
   if (parts.length < 2) return null;
-  const awayId = resolveTeamId("MLB", parts[0]);
-  const homeId = resolveTeamId("MLB", parts[1]);
-  if (awayId && homeId) {
-    return currentStarters[awayId + "_" + homeId] || currentStarters[homeId + "_" + awayId] || null;
-  }
   const awayKey = normalizeTeam(parts[0]).split(" ").pop();
   const homeKey = normalizeTeam(parts[1]).split(" ").pop();
-  const legacy = currentStarters[awayKey + "_" + homeKey] || currentStarters[homeKey + "_" + awayKey] || null;
-  if (!legacy) return null;
-  const rowAway = resolveTeamId("MLB", legacy.awayTeam);
-  const rowHome = resolveTeamId("MLB", legacy.homeTeam);
-  if (awayId && rowAway && rowHome && awayId !== rowAway && awayId !== rowHome) return null;
-  if (homeId && rowAway && rowHome && homeId !== rowAway && homeId !== rowHome) return null;
-  for (const name of parts) {
-    if (!resolveTeamId("MLB", name)) noteIdentityFallback(fallbackSeen, name);
-  }
-  return legacy;
+  return currentStarters[`${awayKey}_${homeKey}`] || currentStarters[`${homeKey}_${awayKey}`] || null;
 }
 
-function omegaCardIsLogOnly(store) {
-  return store === "edge-picks-omega";
-}
-
-function processPicks(picksData, currentStarters, opts = {}) {
-  if (opts && opts.logOnly) {
-    const copy = JSON.parse(JSON.stringify(picksData));
-    const stats = processPicks(copy, currentStarters);
-    return {
-      ...stats,
-      logOnly: true,
-      wrote: false,
-      wouldScratch: stats.scratches,
-      wouldKill: stats.killed,
-    };
-  }
+function processPicks(picksData, currentStarters) {
   const picks = picksData.picks || [];
   let scratches = 0;
   let killed = 0;
   const kept = [];
   const killedPicks = picksData.killedPicks || [];
-  const fallbackSeen = new Set();
 
   for (const pick of picks) {
     if (String(pick.sport || "") !== "MLB") {
       kept.push(pick);
       continue;
     }
-    const current = lookupEspn(currentStarters, pick, fallbackSeen);
+    const current = lookupEspn(currentStarters, pick);
     if (!current) {
       kept.push(pick);
       continue;
@@ -214,27 +170,21 @@ function processPicks(picksData, currentStarters, opts = {}) {
 
   picksData.picks = kept;
   picksData.killedPicks = killedPicks;
+  if (picksData.summary) {
+    const totalUnits = kept.reduce((s, p) => s + (parseFloat(p.units) || 0), 0);
+    picksData.summary.totalPicks = kept.length;
+    picksData.summary.totalStraightBets = kept.length;
+    picksData.summary.totalUnits = `${totalUnits.toFixed(2)}u`;
+    picksData.summary.sportsCovered = [...new Set(kept.map(p => p.sport))];
+  }
   if (kept.length < 2 && Array.isArray(picksData.parlayLegs)) {
     picksData.parlayLegs = [];
     picksData.parlayKilledReason = "Parlay dropped — fewer than 2 live legs after SP kill";
   }
-  if (picksData.summary) {
-    picksData.summary.totalPicks = kept.length;
-    picksData.summary.totalStraightBets = kept.length;
-    writeSummaryStakeDisplay(picksData.summary, kept, picksData.parlayLegs);
-    picksData.summary.sportsCovered = [...new Set(kept.map(p => p.sport))];
-  }
   return { scratches, killed, remaining: kept.length };
 }
 
-const { rejectUnlessEtSlot } = require('./lib/et-schedule');
-
-exports.processPicks = processPicks;
-exports.omegaCardIsLogOnly = omegaCardIsLogOnly;
-
-exports.handler = async (event) => {
-  const etSkip = rejectUnlessEtSlot('confirm-starters-mlb', event);
-  if (etSkip) return etSkip;
+exports.handler = async () => {
   try {
     const todayISO = todayET();
     console.log(`[confirm-starters] Running starter check for ${todayISO} (ET) on Alpha+Omega`);
@@ -254,19 +204,12 @@ exports.handler = async (event) => {
         perStore.push({ store, skipped: true, reason: "no picks today" });
         continue;
       }
-      if (omegaCardIsLogOnly(store)) {
-        const stats = processPicks(picksData, currentStarters, { logOnly: true });
-        const detail = (stats && stats.wouldKill) || 0;
-        console.log(`[confirm-starters] ${store} log-only wouldScratch=${stats.scratches} wouldKill=${detail} wrote=false`);
-        perStore.push({ store, date: todayISO, ...stats, wrote: false });
-        continue;
-      }
       const stats = processPicks(picksData, currentStarters);
       picksData.starterCheckAt = new Date().toISOString();
       picksData.starterScratchCount = stats.scratches;
       picksData.starterKilledCount = stats.killed;
       await blobPut(store, `picks-${todayISO}`, picksData, token);
-      perStore.push({ store, date: todayISO, ...stats, wrote: true });
+      perStore.push({ store, date: todayISO, ...stats });
       console.log(`[confirm-starters] ${store}: remaining=${stats.remaining} scratches=${stats.scratches} killed=${stats.killed}`);
     }
 

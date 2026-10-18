@@ -21,10 +21,6 @@
 /daily-omega/ /daily-omega/index.html  200
 /omega        /daily-omega             301
 /omega/       /daily-omega             301
-# Agentics — public display of the Omega shadow/paper ledger. Read-only.
-/agentics              /agentics/index.html                      200
-/agentics/             /agentics/index.html                      200
-/api/agentics-ledger   /.netlify/functions/agentics-ledger       200
 /api/get-picks-omega   /.netlify/functions/get-picks-omega   200
 /api/get-results-omega /.netlify/functions/get-results-omega 200
 /grokbot      /grokbot/index.html      200
@@ -74,11 +70,6 @@
 /users/   /users/index.html    200
 /api/admin-list-users  /.netlify/functions/admin-list-users  200
 /api/get-omega-clv-report /.netlify/functions/get-omega-clv-report 200
-/api/get-clv-report /.netlify/functions/get-clv-report 200
-/tracking              /tracking/index.html                      200
-/tracking/             /tracking/index.html                      200
-/api/get-tracking      /.netlify/functions/get-tracking          200
-/tracking/report.json  /.netlify/functions/get-tracking          200!
 
 /betty-guide   /betty-guide/index.html  200
 /betty-guide/  /betty-guide/index.html  200

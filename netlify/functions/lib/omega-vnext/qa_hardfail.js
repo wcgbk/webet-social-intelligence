@@ -2,8 +2,7 @@
 
 /**
  * Omega QA hard-fails — drop pick before publish unlock; try next diversified YES.
- * When the floor refill is still short of maxN and LEAN_PAD is on, the open
- * slots fill from the lean pool. Grok remains verifier/narrator only.
+ * NO lean force-fill. Claude remains verifier/narrator only.
  *
  * Checks:
  *  - MLB: starting pitcher scratched/changed vs assumed SP
@@ -11,16 +10,14 @@
  *  - Odds stale vs lockSnapshot / market gone at major books
  */
 
-const config = require('./config');
 const {
   QA_HARDFAIL, MAJOR_LIQUIDITY_BOOKS, MAX_STRAIGHTS, ESPN_LEAGUES,
-} = config;
+} = require('./config');
 const { americanJuiceDelta } = require('./odds_math');
 const { matchupKey, selectStraights, toPickObject } = require('./select');
 const { adverseSteamReason } = require('./line_path');
 
 const { samePlayerName } = require('../player-name');
-const { memoFetchJson } = require('./fetch_memo');
 
 function normName(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -64,7 +61,9 @@ function lineMove(a, b) {
 // ── Fetch helpers (best-effort; failures = no hard-fail from that signal) ──
 
 async function fetchJson(url, timeoutMs = 10000) {
-  return memoFetchJson(url, timeoutMs);
+  const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
 }
 
 /**
@@ -238,8 +237,14 @@ function evaluateHardFail(pick, ctx = {}) {
     }
   }
 
-  // Tracked-only (2026-10-18): adverse steam never hard-fails a pick.
-  void (pick && pick.lineMove);
+  // Open→pick adverse steam (generate annotate or verify recheck)
+  {
+    const move = pick.lineMove || ctx.lineMove || null;
+    if (move) {
+      const reason = adverseSteamReason(move, { verify: !!ctx.verifySteam });
+      if (reason) return reason;
+    }
+  }
 
   // Market no longer offered at major books
   if (cfg.requireMajorBookStillOffered && ctx.majorBooksOffering === false) {
@@ -335,11 +340,10 @@ async function loadQaContext(dateISO, sportsNeeded = []) {
 }
 
 /**
- * Apply hard-fails to selected picks. Refill from the floor yesPool, then
- * from leanPool when LEAN_PAD is on and the card is still short of maxN.
+ * Apply hard-fails to selected picks; refill from yesPool when possible.
  * @returns {{ picks, hardFails, yesPoolRemaining }}
  */
-function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool, pairedPool, drawdown } = {}) {
+function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion } = {}) {
   const fails = [];
   const kept = [];
   const usedGames = new Set();
@@ -372,19 +376,16 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     usedGames.add(matchupKey(c));
   }
 
-  // Refill from the remaining floor, then leans, then same-line pairs under 1%.
-  const pairedList = config.LEAN_PAD === true ? (pairedPool || []) : [];
-  if (kept.length < maxN && ((yesPool && yesPool.length) || (leanPool && leanPool.length) || pairedList.length)) {
-    const stillOpen = (c) => {
+  // Refill from remaining yes pool (diversified)
+  if (kept.length < maxN && yesPool && yesPool.length) {
+    const remaining = yesPool.filter(c => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
+      if (usedGames.has(matchupKey(c))) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
-      if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
       return true;
-    };
-    const remaining = (yesPool || []).filter(stillOpen);
-    const leanRemaining = (config.LEAN_PAD === true ? (leanPool || []) : []).filter(stillOpen);
-    const pairedRemaining = pairedList.filter(stillOpen);
-    const sorted = selectStraights(remaining, maxN - kept.length, leanRemaining, pairedRemaining);
+    });
+    // Re-select from remaining, skipping hard-fails
+    const sorted = selectStraights(remaining, maxN - kept.length);
     for (const c of sorted) {
       if (kept.length >= maxN) break;
       const reason = checkOne(c);
@@ -405,7 +406,7 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
   }
 
   const picks = kept.map(c => {
-    const obj = toPickObject(c, { modelVersion, drawdown: !!drawdown && c.tier !== 'lean' });
+    const obj = toPickObject(c, { modelVersion });
     // preserve lock snapshot seed from candidate odds
     obj.lockSnapshot = c.lockSnapshot || {
       odds: obj.odds,

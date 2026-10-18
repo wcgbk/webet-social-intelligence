@@ -1,35 +1,26 @@
 'use strict';
 
 /**
- * Game-day adjustments for NFL/CFB/MLB/NHL/NBA projections.
- * MLB/NHL/NBA rest is still the prior-day scoreboard (played yesterday).
- * NFL/NCAAF rest days come from the weekly scoreboard (rest_schedule.js)
- * when OMEGA_REST_ADJ is on (the default). OMEGA_REST_ADJ=0 keeps the
- * played-yesterday HFA proxy for football too.
- * NHL rest is goal-scale (B2B). NBA rest is point-scale (B2B).
- * No QB adjustment for hockey or basketball.
+ * Game-day adjustments for NFL/CFB/MLB/NHL projections.
+ * Rest/B2B from prior-day scoreboard; soft QB status; small HFA tweaks.
+ * NHL rest is goal-scale (B2B). No QB adjustment for hockey.
  * Soft-fail friendly: missing inputs leave margin/total/uncertainty unchanged.
- * Football rest does not move the total.
  */
 
-const { clamp, etCalendarDate } = require('../odds_math');
-const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId, isFbsTeamId, teamRecord } = require('./team_identity');
-const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, QB_MARGIN_SCALE, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
-const { shrinkLast5IntoRating, lookupLast5 } = require('../last5');
-const { conservativeNonQbAdj, rowsForTeam } = require('../personnel');
+const { clamp } = require('../odds_math');
+const { fuzzyTeam } = require('./_common');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
   NCAAF: { max: 0.5, shortRest: -0.4, extraRest: 0.3 },
   MLB: { max: 0.05, shortRest: -0.04, extraRest: 0.03 },
   NHL: { max: 0.10, shortRest: -0.08, extraRest: 0.05 },
-  // Point scale. Home B2B ≈ shortRest*0.5 (−1.5). Away B2B ≈ +1.8. Cap 2.5.
-  NBA: { max: 2.5, shortRest: -3.0, extraRest: 0.8 },
 };
 
 /** Days since last game considered "short rest" by sport. */
-const SHORT_REST_DAYS = { NFL: 6, NCAAF: 5, MLB: 1, NHL: 1, NBA: 1 };
-const EXTRA_REST_DAYS = { NFL: 9, NCAAF: 8, MLB: 2, NHL: 2, NBA: 3 };
+const SHORT_REST_DAYS = { NFL: 6, NCAAF: 5, MLB: 1, NHL: 1 };
+const EXTRA_REST_DAYS = { NFL: 9, NCAAF: 8, MLB: 2, NHL: 2 };
 
 function normTeamKey(name) {
   return String(name || '')
@@ -70,202 +61,17 @@ function restMapFromScoreboard(games, playedDateISO) {
   return out;
 }
 
-function lookupRest(teamName, restByTeam, sport, fallbackSeen) {
+function lookupRest(teamName, restByTeam) {
   if (!teamName || !restByTeam) return null;
   if (restByTeam[teamName]) return restByTeam[teamName];
-  if (sport === 'NBA') return rowByIdentity(sport, restByTeam, teamName);
-  if (sport === 'NFL' || sport === 'NCAAF') return modelRow(sport, restByTeam, teamName, { fallbackSeen }) || null;
-  return rowByIdentityOrFuzzy(sport, restByTeam, teamName, { fallbackSeen }) || null;
+  const hit = fuzzyTeam(teamName, restByTeam);
+  return hit || null;
 }
 
 function restDaysProxy(sport, restRow) {
   if (!restRow || !restRow.playedYesterday) return null;
   // Prior-day scoreboard only tells us "played yesterday" → rest ≈ 1 calendar day.
-  // REST-PROXY-EXTRA-DAYS-DEAD: this returns 1 or null. EXTRA_REST_DAYS is
-  // 2+ for every sport, so hfaAdjustment's extra-rest branch never fires on
-  // the proxy. That branch stays for a future schedule-fed restDays.
   return 1;
-}
-
-function round3(n) {
-  return Math.round(n * 1000) / 1000;
-}
-
-/** Weekday of the ET calendar date, so a 00:20Z Friday kick is Thursday. */
-function etWeekday(iso) {
-  const ymd = etCalendarDate(iso);
-  if (!ymd) return null;
-  const [y, m, d] = ymd.split('-').map(Number);
-  if (![y, m, d].every(Number.isInteger)) return null;
-  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    weekday: 'short',
-  });
-}
-
-/** Whole ET calendar days from the previous kickoff to this one. */
-function etCalendarDaysBetween(prevIso, nextIso) {
-  const a = etCalendarDate(prevIso);
-  const b = etCalendarDate(nextIso);
-  if (!a || !b) return null;
-  const [ay, am, ad] = a.split('-').map(Number);
-  const [by, bm, bd] = b.split('-').map(Number);
-  if (![ay, am, ad, by, bm, bd].every(Number.isInteger)) return null;
-  const ms = Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad);
-  return Math.round(ms / 86400000);
-}
-
-function restScheduleActive(sport, schedule) {
-  if (sport !== 'NFL' && sport !== 'NCAAF') return false;
-  if (!restAdjEnabled()) return false;
-  if (!schedule || typeof schedule !== 'object') return false;
-  return schedule.loaded === true || schedule.fetchFailed === true;
-}
-
-/** Same matchup listed up to 36h off the odds commence is still this game. */
-const CURRENT_GAME_WINDOW_MS = 36 * 60 * 60 * 1000;
-
-/**
- * Latest regular-season kickoff for this ESPN team id on an earlier ET
- * calendar date. The current game is not rest: the same team-id pair
- * within ±36h of the odds commence is skipped, and a kickoff on the same
- * ET date is skipped. An ESPN stamp 60s before the odds commence is the
- * current game (rest would otherwise be 0).
- */
-function priorKickoff(schedule, teamId, commenceTime, opponentId) {
-  if (!schedule || schedule.fetchFailed || !schedule.loaded) return null;
-  if (!teamId || !commenceTime) return null;
-  const cutoff = Date.parse(commenceTime);
-  if (!Number.isFinite(cutoff)) return null;
-  const cutoffEt = etCalendarDate(commenceTime);
-  if (!cutoffEt) return null;
-  const want = String(teamId);
-  const opp = opponentId != null && opponentId !== '' ? String(opponentId) : null;
-  let best = null;
-  let bestT = -Infinity;
-  for (const g of schedule.games || []) {
-    if (!g || String(g.teamId) !== want) continue;
-    const t = Date.parse(g.commence);
-    if (!Number.isFinite(t)) continue;
-    const rowOpp = g.opponentId != null && g.opponentId !== '' ? String(g.opponentId) : null;
-    if (opp && rowOpp && rowOpp === opp && Math.abs(t - cutoff) <= CURRENT_GAME_WINDOW_MS) continue;
-    const rowEt = etCalendarDate(g.commence);
-    if (!rowEt || rowEt >= cutoffEt) continue;
-    if (t > bestT) {
-      bestT = t;
-      best = g;
-    }
-  }
-  return best;
-}
-
-function categoryForRest(sport, restDays, prevIso, nextIso) {
-  if (restDays == null || !Number.isFinite(restDays) || restDays < 0) return 'unknown';
-  if (sport === 'NCAAF') {
-    const wd = etWeekday(nextIso);
-    if (restDays <= 5 && (wd === 'Tue' || wd === 'Wed' || wd === 'Thu')) return 'short';
-    if (restDays >= 13) return 'bye';
-    return 'normal';
-  }
-  if (restDays <= 4) return 'short';
-  if (restDays >= 13) return 'bye';
-  if (restDays >= 10) return 'mini-bye';
-  if (restDays === 6 && etWeekday(prevIso) === 'Mon' && etWeekday(nextIso) === 'Sun') return 'mnf';
-  return 'normal';
-}
-
-function categoryPoints(sport, category) {
-  const cfg = REST_ADJ[sport];
-  if (!cfg || !category || category === 'unknown' || category === 'normal') return 0;
-  if (category === 'short') return cfg.short;
-  if (category === 'mini-bye') return cfg.miniBye || 0;
-  if (category === 'bye') return cfg.bye || 0;
-  if (category === 'mnf') return cfg.mnf || 0;
-  return 0;
-}
-
-/** Home-margin points. Caps at REST_ADJ[sport].cap. Does not touch the total. */
-function restMarginAdj(sport, homeCat, awayCat, opts) {
-  const cfg = REST_ADJ[sport];
-  if (!cfg) return 0;
-  if (homeCat === 'unknown' || awayCat === 'unknown') return 0;
-  let adj = categoryPoints(sport, homeCat) - categoryPoints(sport, awayCat);
-  const neutral = !!(opts && opts.neutralSite === true);
-  if (!neutral && awayCat === 'short' && Number.isFinite(Number(cfg.roadShort))) adj += Number(cfg.roadShort);
-  const cap = Number(cfg.cap);
-  if (Number.isFinite(cap)) adj = clamp(adj, -Math.abs(cap), Math.abs(cap));
-  return round3(adj);
-}
-
-function teamRest(sport, schedule, teamName, commenceTime, opponentName) {
-  const unknown = { restDays: null, category: 'unknown', prevCommence: null, teamId: null };
-  if (!restScheduleActive(sport, schedule) || !schedule.loaded || schedule.fetchFailed) return unknown;
-  const teamId = resolveTeamId(sport, teamName);
-  if (!teamId) return unknown;
-  // FCS (and anyone outside the FBS id list) only shows up on groups=80
-  // when they play an FBS team. The gap between those games is not a bye.
-  if (sport === 'NCAAF' && !isFbsTeamId(teamId)) {
-    return { restDays: null, category: 'unknown', prevCommence: null, teamId: String(teamId) };
-  }
-  const opponentId = opponentName ? resolveTeamId(sport, opponentName) : null;
-  const prior = priorKickoff(schedule, teamId, commenceTime, opponentId);
-  if (!prior) return { restDays: null, category: 'unknown', prevCommence: null, teamId: String(teamId) };
-  const days = etCalendarDaysBetween(prior.commence, commenceTime);
-  return {
-    restDays: days,
-    category: categoryForRest(sport, days, prior.commence, commenceTime),
-    prevCommence: prior.commence,
-    teamId: String(teamId),
-  };
-}
-
-function describeMatchRest(sport, schedule, home, away, commenceTime, opts) {
-  const homeRow = teamRest(sport, schedule, home, commenceTime, away);
-  const awayRow = teamRest(sport, schedule, away, commenceTime, home);
-  return {
-    restDays: { home: homeRow.restDays, away: awayRow.restDays },
-    restCategory: { home: homeRow.category, away: awayRow.category },
-    restAdj: restMarginAdj(sport, homeRow.category, awayRow.category, opts),
-    totalAdj: 0,
-  };
-}
-
-function restCoverageCounts(sport, schedule, slateGames) {
-  const seen = new Set();
-  let slate = 0;
-  let known = 0;
-  const fetchFailed = !!(schedule && schedule.fetchFailed);
-  const canKnow = !!(schedule && schedule.loaded && !fetchFailed);
-  for (const g of slateGames || []) {
-    if (!g) continue;
-    for (const name of [g.home, g.away]) {
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      slate += 1;
-      if (!canKnow) continue;
-      const opponent = name === g.home ? g.away : g.home;
-      const row = teamRest(sport, schedule, name, g.commence, opponent);
-      if (row.restDays != null) known += 1;
-    }
-  }
-  return { known, slate, fetchFailed };
-}
-
-function stampRestAudit(raw, meta) {
-  if (!raw || !meta || meta.restPending !== true) return raw;
-  raw.restDays = meta.restDays;
-  raw.restCategory = meta.restCategory;
-  raw.restAdj = meta.restAdj;
-  return raw;
-}
-
-function restAuditFields(c) {
-  if (!c) return {};
-  const out = {};
-  if (c.restDays !== undefined) out.restDays = c.restDays;
-  if (c.restCategory !== undefined) out.restCategory = c.restCategory;
-  if (c.restAdj !== undefined) out.restAdj = c.restAdj;
-  return out;
 }
 
 function hfaAdjustment(sport, homeRestDays, awayRestDays) {
@@ -285,179 +91,23 @@ function hfaAdjustment(sport, homeRestDays, awayRestDays) {
   // If only home is fresh (no prior-day play) and away is short → already covered.
   // Extra rest home: we only know "didn't play yesterday" so skip strong extra-rest
   // unless restDays explicitly large (future schedule ingest).
-  // Dead on the played-yesterday proxy (restDaysProxy is 1 or null; extra is 2+).
   if (homeRestDays != null && homeRestDays >= extra) adj += cfg.extraRest;
   if (awayRestDays != null && awayRestDays >= extra) adj -= cfg.extraRest * 0.5;
   return clamp(adj, -cfg.max, cfg.max);
 }
 
-function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
+function lookupQb(teamName, qbByTeam) {
   if (!teamName || !qbByTeam || typeof qbByTeam !== 'object') return null;
   const direct = qbByTeam[teamName] || qbByTeam[normTeamKey(teamName)];
   if (direct) return direct;
-  if (sport === 'NFL' || sport === 'NCAAF') return modelRow(sport, qbByTeam, teamName, { fallbackSeen });
   for (const [k, v] of Object.entries(qbByTeam)) {
     if (normTeamKey(k) === normTeamKey(teamName)) return v;
-    if (rowByIdentityOrFuzzy(sport, { [k]: v }, teamName, { fallbackSeen })) return v;
+    if (fuzzyTeam(teamName, { [k]: v })) return v;
   }
   return null;
 }
 
-/**
- * New game-status Out. Doubtful and questionable stay on the point table.
- * IR / PUP / season-ending is not a fresh out. An NFL preseason QB1 on
- * injured reserve is priced in qbSoftAdjust and does not flip this flag.
- */
-// Starting QB only. The daily ESPN depth chart wins when that team has a
-// row: the injured player must be QB1 (athlete id, else normalized name).
-// A backup listed QB2 does not move the number, even if the injury row
-// claims depth 1. NFL exception: PRESEASON_QB1 counts as the rated starter
-// when the normalized name and the team match, even if the chart QB1 is
-// someone else. With no chart for the team, an injury-row depth of 1
-// (or an explicit starter bit) still counts, and NAMED_STARTING_QB is the
-// last fallback. Injured backups have no effect.
-const NAMED_STARTING_QB = Object.freeze({
-  'lamar jackson': 'BAL',
-});
-
-// ASSUMED week-1 QB1. Replace with a stored week-1 depth chart.
-const PRESEASON_QB1 = Object.freeze({
-  'jalen hurts': 'PHI',
-  'lamar jackson': 'BAL',
-  'baker mayfield': 'TB',
-  'caleb williams': 'CHI',
-});
-
-function nflAbbr(teamName) {
-  if (teamName == null || teamName === '') return null;
-  const id = resolveTeamId('NFL', teamName);
-  const rec = id ? teamRecord('NFL', id) : null;
-  if (rec && rec.abbreviation) return String(rec.abbreviation).toUpperCase();
-  const raw = String(teamName).trim().toUpperCase();
-  return /^[A-Z]{2,3}$/.test(raw) ? raw : null;
-}
-
-function preseasonRatedStarter(qb, teamName) {
-  if (!qb) return false;
-  const want = PRESEASON_QB1[normQbName(qb.qbName || qb.name)];
-  if (!want) return false;
-  return nflAbbr(teamName) === want;
-}
-
-function depthFeedEntry(sport, teamName, depthByTeam) {
-  if (!depthByTeam || typeof depthByTeam !== 'object' || Array.isArray(depthByTeam)) return null;
-  const table = depthByTeam.map && typeof depthByTeam.map === 'object' && !Array.isArray(depthByTeam.map)
-    ? depthByTeam.map
-    : depthByTeam;
-  if (!table || typeof table !== 'object' || Array.isArray(table)) return null;
-  const id = resolveTeamId(sport, teamName);
-  if (id && table[String(id)] && table[String(id)].qb1) return table[String(id)];
-  const want = normTeamKey(teamName);
-  for (const row of Object.values(table)) {
-    if (!row || typeof row !== 'object' || !row.qb1 || !row.qb1.name) continue;
-    if (id && row.teamId != null && String(row.teamId) === String(id)) return row;
-    if (row.displayName && normTeamKey(row.displayName) === want) return row;
-    if (row.abbr && want && normTeamKey(row.abbr) === want) return row;
-  }
-  return null;
-}
-
-/** Feed QB1. Athlete id decides when both sides have one. Otherwise the name. */
-function playerIsFeedQb1(qb, entry) {
-  const qb1 = entry && entry.qb1;
-  if (!qb || !qb1) return false;
-  const rawId = qb.athleteId != null && qb.athleteId !== '' ? qb.athleteId
-    : (qb.id != null && qb.id !== '' ? qb.id : null);
-  if (rawId != null && qb1.athleteId != null && String(qb1.athleteId) !== '') {
-    return String(rawId) === String(qb1.athleteId);
-  }
-  const name = normQbName(qb.qbName || qb.name);
-  const want = normQbName(qb1.name);
-  return !!(name && want && name === want);
-}
-
-function isStartingQb(qb, feedEntry, ctx) {
-  if (!qb) return false;
-  if (ctx && ctx.sport === 'NFL' && preseasonRatedStarter(qb, ctx.team)) return true;
-  if (feedEntry && feedEntry.qb1) return playerIsFeedQb1(qb, feedEntry);
-  const depth = qb.depthChartRank != null ? qb.depthChartRank : (qb.depthRank != null ? qb.depthRank : qb.depth);
-  if (depth != null && Number.isFinite(Number(depth))) return Number(depth) === 1;
-  if (qb.isStarter === true || qb.qb1 === true) return true;
-  return Object.prototype.hasOwnProperty.call(NAMED_STARTING_QB, normQbName(qb.qbName || qb.name));
-}
-
-function isFreshQbOut(qb, feedEntry, ctx) {
-  if (!qb) return false;
-  if (!isStartingQb(qb, feedEntry, ctx)) return false;
-  const st = String(qb.qbStatus || qb.status || '').toLowerCase();
-  if (!st) return false;
-  if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
-  if (/doubtful|questionable/.test(st)) return false;
-  return /\bout\b/.test(st);
-}
-
-function normQbName(name) {
-  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-/**
- * Named starter-vs-backup gaps. Not fit on CLV. A fresh Out uses this
- * when the row has no starterValue/backupValue. Lamar Jackson (BAL @ ATL
- * and any other Ravens game) is the worked example: larger than the
- * generic 3.0 / −1.5 table, still inside the sport cap. The total moves.
- * The total is not excluded.
- */
-const NAMED_BACKUP_QB = Object.freeze({
-  'lamar jackson': { marginPts: 4.5, totalPts: -2.25 },
-});
-
-/**
- * Points to move the margin (positive = starter is better than the backup)
- * and the total (negative = fewer points). Fresh Out only.
- * Explicit starterValue and backupValue win. A gap above 20 is Elo
- * (25 Elo ≈ 1 point). Otherwise the numbers are already points.
- */
-function backupQbDelta(qb, sport, feedEntry, ctx) {
-  if (!qb) return null;
-  // force prices an NFL preseason QB1 on IR without treating IR as a fresh out.
-  if (!(ctx && ctx.force) && !isFreshQbOut(qb, feedEntry, ctx)) return null;
-  const cfg = (QB_INJURY && QB_INJURY[sport]) || {
-    outMarginPts: 3.0, outTotalPts: -1.5, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0,
-  };
-  const capM = Math.abs(Number(cfg.maxAbsMarginAdj) || 5);
-  const capT = Math.abs(Number(cfg.maxAbsTotalAdj) || 3);
-  let marginPts = Number(cfg.outMarginPts);
-  let totalPts = Number(cfg.outTotalPts);
-  let source = 'table';
-  const starter = Number(qb.starterValue != null ? qb.starterValue : qb.qbValue);
-  const backup = Number(qb.backupValue != null ? qb.backupValue : qb.backupQbValue);
-  if (Number.isFinite(starter) && Number.isFinite(backup)) {
-    const gap = starter - backup;
-    const points = Math.abs(gap) > 20 ? gap / 25 : gap;
-    if (points > 0) {
-      marginPts = points;
-      totalPts = -Math.abs(points) * 0.5;
-      source = 'starter-backup';
-    }
-  } else {
-    const named = NAMED_BACKUP_QB[normQbName(qb.qbName || qb.name)];
-    if (named) {
-      marginPts = named.marginPts;
-      totalPts = named.totalPts;
-      source = 'named';
-    }
-  }
-  if (!Number.isFinite(marginPts) || marginPts < 0) marginPts = 0;
-  if (!Number.isFinite(totalPts) || totalPts > 0) totalPts = 0;
-  return {
-    marginPts: clamp(marginPts, 0, capM),
-    totalPts: clamp(totalPts, -capT, 0),
-    source,
-    qbName: qb.qbName || qb.name || null,
-  };
-}
-
-function qbSoftAdjust(sport, homeQb, awayQb, feed, teams) {
+function qbSoftAdjust(sport, homeQb, awayQb) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
   }
@@ -467,41 +117,14 @@ function qbSoftAdjust(sport, homeQb, awayQb, feed, teams) {
   let totalAdj = 0;
   let uncBump = 0;
   const notes = [];
-  const deltas = [];
-  const homeEntry = feed && (feed.home || feed.homeEntry) || null;
-  const awayEntry = feed && (feed.away || feed.awayEntry) || null;
-  const apply = (qb, side, entry, teamName) => {
+  const apply = (qb, side) => {
     if (!qb) return;
-    const ctx = { sport, team: teamName };
-    if (!isStartingQb(qb, entry, ctx)) return;
     const st = String(qb.qbStatus || qb.status || '').toLowerCase();
     if (!st) return;
-    // NFL rated starter: IR / ir / out once, via backupQbDelta (named gap
-    // or the generic 3.0 / -1.5 table). Doubtful stays on the 0.75 table.
-    // Questionable stays uncertainty-only. Not both paths, and not a backup.
-    const ratedIr = sport === 'NFL'
-      && preseasonRatedStarter(qb, teamName)
-      && /injured reserve|\bir\b/.test(st)
-      && !/doubtful|questionable/.test(st);
-    const fresh = isFreshQbOut(qb, entry, ctx);
     const isOut = outStatuses.some(k => st.includes(k));
     const isQ = /questionable|q\b/.test(st);
-    if (fresh || ratedIr) {
-      const delta = backupQbDelta(
-        qb,
-        sport,
-        entry,
-        ratedIr && !fresh ? { ...ctx, force: true } : ctx,
-      );
-      if (!delta) return;
-      marginAdj += (side === 'home' ? -1 : 1) * delta.marginPts;
-      totalAdj += delta.totalPts;
-      uncBump += 0.04;
-      deltas.push({ side, ...delta });
-      notes.push(`${side} QB ${qb.qbName || ''} backup-delta ${delta.source} (${st})`.trim());
-    } else if (isOut) {
-      // Doubtful and long-term tags stay on the table. A fresh Out uses
-      // backupQbDelta above and is not priced a second time here.
+    if (isOut) {
+      // Known QB injury is priced into the projection, never a cancel (2026-09-28).
       const w = /doubtful/.test(st) ? cfg.doubtfulWeight : 1;
       marginAdj += (side === 'home' ? -1 : 1) * cfg.outMarginPts * w;
       totalAdj += cfg.outTotalPts * w;
@@ -512,16 +135,13 @@ function qbSoftAdjust(sport, homeQb, awayQb, feed, teams) {
       notes.push(`${side} QB questionable${qb.qbName ? ` (${qb.qbName})` : ''}`);
     }
   };
-  apply(homeQb, 'home', homeEntry, teams && teams.home);
-  apply(awayQb, 'away', awayEntry, teams && teams.away);
+  apply(homeQb, 'home');
+  apply(awayQb, 'away');
   return {
-    // QB_MARGIN_SCALE=0 (2026-10-18): unfitted QB points move NOTHING —
-    // not margins, not totals, not uncertainty. Flags/statuses still report.
-    marginAdj: clamp(marginAdj * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE), -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
-    totalAdj: clamp(totalAdj * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE), -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
-    uncBump: uncBump * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE),
+    marginAdj: clamp(marginAdj, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
+    totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
+    uncBump,
     note: notes.length ? notes.join('; ') : null,
-    backupDeltas: deltas,
   };
 }
 
@@ -573,8 +193,7 @@ function qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam, caps) {
 }
 
 /**
- * Apply rest / QB soft adjustments. Weather is not applied here.
- * MLB totals use applyWeatherTotalAdj. NFL totals use applyNflWeatherTotalAdj.
+ * Apply rest / QB soft adjustments. Weather handled separately for MLB totals.
  */
 function applyGameDayAdjustments({
   sport,
@@ -586,61 +205,26 @@ function applyGameDayAdjustments({
   restByTeam,
   qbByTeam,
   hfaBase,
-  fallbackSeen,
-  commenceTime,
-  restSchedule,
-  neutralSite,
-  last5ByTeam,
-  personnelByTeam,
-  depthByTeam,
 } = {}) {
   let margin = Number(modelMargin);
   let total = Number(modelTotal);
   let unc = Number(uncertainty);
   if (!Number.isFinite(margin)) margin = 0;
   if (!Number.isFinite(total)) {
-    if (sport === 'MLB') total = 8.6;
-    else if (sport === 'NHL') total = 6.2;
-    else if (sport === 'NBA') total = 228;
-    else total = 45;
+    total = sport === 'MLB' ? 8.6 : (sport === 'NHL' ? 6.2 : 45);
   }
   if (!Number.isFinite(unc)) unc = 0.2;
 
-  const scheduleOn = restScheduleActive(sport, restSchedule);
-  // The schedule path does not use the played-yesterday map. modelRow on
-  // that map fuzzy-scans every football name and logs the refused match.
-  let homeRest = null;
-  let awayRest = null;
-  if (!scheduleOn) {
-    homeRest = lookupRest(home, restByTeam, sport, fallbackSeen);
-    awayRest = lookupRest(away, restByTeam, sport, fallbackSeen);
-  }
+  const homeRest = lookupRest(home, restByTeam);
+  const awayRest = lookupRest(away, restByTeam);
   const homeDays = restDaysProxy(sport, homeRest);
   const awayDays = restDaysProxy(sport, awayRest);
-  let restMeta = null;
-  let hfaAdj = 0;
-  if (scheduleOn) {
-    // Real kickoff gap replaces the played-yesterday proxy. The points
-    // are applied on the epa margin path (applyEngineStack), outside the
-    // stacked engine cap. A failed scoreboard stays at 0.
-    restMeta = describeMatchRest(sport, restSchedule, home, away, commenceTime, {
-      neutralSite: neutralSite === true,
-    });
-  } else {
-    hfaAdj = hfaAdjustment(sport, homeDays, awayDays);
-    margin += hfaAdj;
-  }
+  const hfaAdj = hfaAdjustment(sport, homeDays, awayDays);
+  margin += hfaAdj;
 
-  const homeQb = lookupQb(home, qbByTeam, sport, fallbackSeen);
-  const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
-  const homeEntry = depthFeedEntry(sport, home, depthByTeam);
-  const awayEntry = depthFeedEntry(sport, away, depthByTeam);
-  const qb = qbSoftAdjust(sport, homeQb, awayQb, { home: homeEntry, away: awayEntry }, { home, away });
-  // Fresh Out moves margin and total by the backup-QB delta. The total
-  // stays on the card. Edge and EV are recomputed downstream against the
-  // DraftKings price, and the floors are the only drop.
-  const startingQbOut = isFreshQbOut(homeQb, homeEntry, { sport, team: home })
-    || isFreshQbOut(awayQb, awayEntry, { sport, team: away });
+  const homeQb = lookupQb(home, qbByTeam);
+  const awayQb = lookupQb(away, qbByTeam);
+  const qb = qbSoftAdjust(sport, homeQb, awayQb);
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);
@@ -648,63 +232,9 @@ function applyGameDayAdjustments({
   const cont = qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam);
   margin += cont.marginAdj;
 
-  const restAdj = restMeta ? restMeta.restAdj : 0;
-
-  // Last-5 is inside the rating, before market blend and before the caller
-  // hands this margin to applyEngineStack. Missing games leave margin as-is.
-  let last5Meta = null;
-  if ((sport === 'NFL' || sport === 'NCAAF') && last5ByTeam) {
-    const homeRec = lookupLast5(sport, home, last5ByTeam, commenceTime);
-    const awayRec = lookupLast5(sport, away, last5ByTeam, commenceTime);
-    const shrunk = shrinkLast5IntoRating(margin, homeRec, awayRec);
-    if (shrunk.applied) {
-      margin = shrunk.margin;
-      last5Meta = shrunk;
-    }
-  }
-
-  // Non-QB personnel. QB points stay in the backup delta. A starter
-  // cluster is a probability haircut and a total-points haircut. It
-  // does not drop a side or the total. Depth outs never drop the game.
-  let personnelHomeExclude = false;
-  let personnelAwayExclude = false;
-  let personnelTotalExclude = false;
-  let personnelProbHaircut = 0;
-  let personnelHomeCluster = 0;
-  let personnelAwayCluster = 0;
-  let personnelLogs = [];
-  let personnelMarginAdj = 0;
-  if ((sport === 'NFL' || sport === 'NCAAF') && personnelByTeam) {
-    const game = { home, away };
-    const homeRows = rowsForTeam(personnelByTeam, sport, home, game);
-    const awayRows = rowsForTeam(personnelByTeam, sport, away, game);
-    if (homeRows.length || awayRows.length) {
-      const adj = conservativeNonQbAdj(homeRows, awayRows);
-      if (Number.isFinite(adj.marginAdj) && Math.abs(adj.marginAdj) > 1e-9) {
-        margin += adj.marginAdj;
-        personnelMarginAdj = adj.marginAdj;
-      }
-      if (Number.isFinite(adj.totalAdj) && Math.abs(adj.totalAdj) > 1e-9) total += adj.totalAdj;
-      personnelHomeExclude = false;
-      personnelAwayExclude = false;
-      personnelTotalExclude = false;
-      personnelProbHaircut = Number(adj.probHaircut) || 0;
-      personnelHomeCluster = Number(adj.homeCluster) || 0;
-      personnelAwayCluster = Number(adj.awayCluster) || 0;
-      if (Number(adj.uncertaintyBump) > 0) unc = Math.min(0.45, unc + Number(adj.uncertaintyBump));
-      personnelLogs = adj.logs || [];
-      for (const row of personnelLogs) {
-        console.log(`[omega-vnext/personnel] ${sport} ${away || ''} @ ${home || ''} ${row.action} ${row.name || ''} ${row.position || ''} ${row.status || ''} pts=${row.points || 0}`);
-      }
-      if (personnelHomeExclude || personnelAwayExclude || personnelTotalExclude || personnelProbHaircut > 0) {
-        console.log(`[omega-vnext/personnel] injury-cluster ${sport} ${away || ''} @ ${home || ''} homeW=${personnelHomeCluster} awayW=${personnelAwayCluster} homeSide=${personnelHomeExclude} awaySide=${personnelAwayExclude} total=${personnelTotalExclude} haircut=${personnelProbHaircut}`);
-      }
-    }
-  }
-
   const meta = {
-    restHome: scheduleOn && restMeta ? restMeta.restDays.home : homeDays,
-    restAway: scheduleOn && restMeta ? restMeta.restDays.away : awayDays,
+    restHome: homeDays,
+    restAway: awayDays,
     playedYesterdayHome: !!(homeRest && homeRest.playedYesterday),
     playedYesterdayAway: !!(awayRest && awayRest.playedYesterday),
     hfaAdj: +hfaAdj.toFixed(3),
@@ -712,50 +242,16 @@ function applyGameDayAdjustments({
     qbNote: qb.note,
     qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
-    injuryMarginAdj: (qb.marginAdj || 0) + (cont.marginAdj || 0) + personnelMarginAdj,
-    qbBackupDelta: (qb.backupDeltas && qb.backupDeltas.length) ? qb.backupDeltas : null,
-    startingQbOut,
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
-    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used || !!(last5Meta && last5Meta.applied) || personnelLogs.some((row) => row.action === 'assumption-adj') || personnelProbHaircut > 0 || personnelHomeExclude || personnelAwayExclude || personnelTotalExclude,
+    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used,
   };
-  if (last5Meta && last5Meta.applied) {
-    meta.last5 = {
-      delta: +last5Meta.delta.toFixed(3),
-      w: +last5Meta.w.toFixed(4),
-      note: last5Meta.note,
-    };
-    meta.applied = true;
-  }
-  if (personnelLogs.length || personnelProbHaircut > 0 || personnelHomeExclude || personnelAwayExclude || personnelTotalExclude) {
-    meta.personnelLogs = personnelLogs;
-    meta.personnelHomeExclude = personnelHomeExclude;
-    meta.personnelAwayExclude = personnelAwayExclude;
-    meta.personnelTotalExclude = personnelTotalExclude;
-    meta.personnelProbHaircut = personnelProbHaircut;
-    meta.homeCluster = personnelHomeCluster;
-    meta.awayCluster = personnelAwayCluster;
-  }
-  if (scheduleOn && restMeta) {
-    meta.restDays = restMeta.restDays;
-    meta.restCategory = restMeta.restCategory;
-    meta.restAdj = restMeta.restAdj;
-    meta.restPending = true;
-  }
 
   return {
     modelMargin: margin,
     modelTotal: total,
     uncertainty: unc,
     gameDay: meta,
-    personnelExclude: false,
-    personnelHomeExclude,
-    personnelAwayExclude,
-    personnelTotalExclude,
-    personnelProbHaircut,
-    personnelLogs,
-    last5: last5Meta,
-    startingQbOut,
   };
 }
 
@@ -801,87 +297,6 @@ function applyWeatherTotalAdj(modelTotal, weather) {
   return { modelTotal: total, weatherNote: notes.join('; '), applied: true };
 }
 
-function readNflTempF(weather) {
-  const raw = weather.tempF != null ? weather.tempF : weather.temperature;
-  if (raw == null || raw === '') return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
-function readNflWindMph(weather) {
-  if (weather.windMph != null && weather.windMph !== '') {
-    const n = Number(weather.windMph);
-    if (Number.isFinite(n)) return n;
-  }
-  if (weather.windSpeed != null && weather.windSpeed !== '') {
-    const n = Number(String(weather.windSpeed).replace(/[^\d.]/g, ''));
-    if (Number.isFinite(n)) return n;
-  }
-  const text = [weather.displayValue, weather.condition, weather.windDir]
-    .filter(v => v != null && v !== '')
-    .join(' ');
-  const m = text.match(/(\d+(?:\.\d+)?)\s*mph\b/i);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * NFL wind / cold total adjustment. Indoor or missing weather → 0.
- * Subtracts only. Does not read or return a margin.
- */
-function applyNflWeatherTotalAdj(modelTotal, weather, opts = {}) {
-  const total = Number(modelTotal);
-  const unchanged = {
-    modelTotal: Number.isFinite(total) ? total : modelTotal,
-    totalAdj: 0,
-    weatherNote: null,
-    applied: false,
-  };
-  if (!Number.isFinite(total)) return unchanged;
-  const indoor = opts.indoor === true || (weather && weather.indoor === true);
-  if (indoor) return unchanged;
-  if (!weather || typeof weather !== 'object') return unchanged;
-
-  const cfg = WEATHER_NFL || {};
-  const windOn = Number(cfg.windOnMph);
-  const windBase = Number(cfg.windBaseMph);
-  const perMph = Number(cfg.windPtsPerMph);
-  const windCap = Number(cfg.windCap);
-  const coldAt = Number(cfg.coldAtOrBelowF);
-  const coldPts = Number(cfg.coldAdj);
-  const totalCap = Number(cfg.totalCap);
-
-  const temp = readNflTempF(weather);
-  const wind = readNflWindMph(weather);
-  let windAdj = 0;
-  let coldAdj = 0;
-  const notes = [];
-  if (Number.isFinite(wind) && Number.isFinite(windOn) && wind >= windOn && Number.isFinite(perMph) && perMph > 0) {
-    const above = Number.isFinite(windBase) ? Math.max(0, wind - windBase) : 0;
-    let pts = perMph * above;
-    if (Number.isFinite(windCap) && windCap > 0) pts = Math.min(pts, windCap);
-    windAdj = -pts;
-    if (windAdj < 0) notes.push(`wind ${wind}mph ${windAdj}`);
-  }
-  if (Number.isFinite(temp) && Number.isFinite(coldAt) && temp <= coldAt && Number.isFinite(coldPts) && coldPts > 0) {
-    coldAdj = -coldPts;
-    notes.push(`cold ${temp}F ${coldAdj}`);
-  }
-  let adj = windAdj + coldAdj;
-  if (Number.isFinite(totalCap) && totalCap > 0 && adj < -totalCap) {
-    adj = -totalCap;
-    notes.push(`cap ${adj}`);
-  }
-  if (!(adj < 0)) return unchanged;
-  return {
-    modelTotal: total + adj,
-    totalAdj: adj,
-    weatherNote: notes.join('; '),
-    applied: true,
-  };
-}
-
 module.exports = {
   HFA_ADJ,
   SHORT_REST_DAYS,
@@ -891,27 +306,8 @@ module.exports = {
   restMapFromScoreboard,
   lookupRest,
   hfaAdjustment,
-  etWeekday,
-  etCalendarDaysBetween,
-  restScheduleActive,
-  CURRENT_GAME_WINDOW_MS,
-  priorKickoff,
-  categoryForRest,
-  restMarginAdj,
-  teamRest,
-  describeMatchRest,
-  restCoverageCounts,
-  stampRestAudit,
-  restAuditFields,
-  isFreshQbOut,
-  isStartingQb,
   qbSoftAdjust,
-  backupQbDelta,
-  NAMED_BACKUP_QB,
-  PRESEASON_QB1,
   qbContinuityAdjust,
-  lookupQb,
   applyGameDayAdjustments,
   applyWeatherTotalAdj,
-  applyNflWeatherTotalAdj,
 };

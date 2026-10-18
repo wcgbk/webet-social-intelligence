@@ -7,12 +7,8 @@
  */
 
 const { clamp } = require('../odds_math');
-const { ENGINE_SOFT, SPORT_SPREAD_STD, HFA, SHARP_BOOKS } = require('../config');
-const { rowByIdentityOrFuzzy } = require('./team_identity');
-
-function mlbTableRow(table, teamName, fallbackSeen) {
-  return rowByIdentityOrFuzzy('MLB', table, teamName, { fallbackSeen });
-}
+const { ENGINE_SOFT, SPORT_SPREAD_STD, HFA } = require('../config');
+const { fuzzyTeam } = require('./_common');
 
 const LEAGUE_FIP = 4.15;
 const FIP_C = 3.10;
@@ -181,7 +177,7 @@ function coerceQualityRow(row) {
  * If the starter is named but has no line, a discounted team rate is the prior.
  * No named probable → null (do not double-count team pitching already in Pythag).
  */
-function resolveSpQuality(probable, stats, teamName, fallbackSeen) {
+function resolveSpQuality(probable, stats, teamName) {
   const bag = stats && typeof stats === 'object' ? stats : {};
   const byId = bag.byId || {};
   const byName = bag.byName || {};
@@ -195,7 +191,7 @@ function resolveSpQuality(probable, stats, teamName, fallbackSeen) {
     if (row) return { ...row, source: 'player', name: row.name || probable.name };
   }
   if (!probable || !probable.name) return null;
-  const teamRow = coerceQualityRow(mlbTableRow(bag.byTeam || {}, teamName, fallbackSeen));
+  const teamRow = coerceQualityRow(fuzzyTeam(teamName, bag.byTeam || {}));
   if (!teamRow) return null;
   return {
     ...teamRow,
@@ -241,9 +237,9 @@ function splitParkTable(parkFactors) {
   return { nameTable, abbrTable };
 }
 
-function resolvePark(homeTeam, parkFactors, espnGame, fallbackSeen) {
+function resolvePark(homeTeam, parkFactors, espnGame) {
   const { nameTable, abbrTable } = splitParkTable(parkFactors);
-  let row = mlbTableRow(nameTable, homeTeam, fallbackSeen);
+  let row = fuzzyTeam(homeTeam, nameTable);
   if (!row && espnGame && espnGame.homeAbbr) {
     row = abbrTable[String(espnGame.homeAbbr).toUpperCase()] || null;
   }
@@ -253,68 +249,9 @@ function resolvePark(homeTeam, parkFactors, espnGame, fallbackSeen) {
   return row || null;
 }
 
-/** One multiplier per park row. Name and abbr keys share a row and count once. */
-function parkFactorValues(parkFactors) {
-  const { nameTable, abbrTable } = splitParkTable(parkFactors);
-  const seen = new Set();
-  const out = [];
-  const rows = Object.values(nameTable).concat(Object.values(abbrTable));
-  for (const row of rows) {
-    if (!row || seen.has(row)) continue;
-    seen.add(row);
-    if (Number.isFinite(row.factor)) out.push(row.factor);
-  }
-  return out;
-}
-
-/**
- * Home-park exposure for a club's season rates.
- * About half the games are at pfOwn and half on the road, so
- * teamParkAdj = (pfOwn + pfRoad) / 2.
- * pfRoad is the mean of the other parks in the table, (sum − pfOwn) / (n − 1).
- * A single-row table has no road sample, so pfRoad is 1.
- * Missing or non-positive own park → 1 (rates unchanged).
- */
-function teamParkAdj(pfOwn, parkFactors) {
-  const own = Number(pfOwn);
-  if (!Number.isFinite(own) || own <= 0) return 1;
-  const factors = parkFactorValues(parkFactors);
-  let pfRoad = 1;
-  let ownIndex = -1;
-  for (let i = 0; i < factors.length; i++) {
-    if (Math.abs(factors[i] - own) < 1e-9) { ownIndex = i; break; }
-  }
-  if (ownIndex >= 0 && factors.length >= 2) {
-    let sumOthers = 0;
-    for (let i = 0; i < factors.length; i++) {
-      if (i === ownIndex) continue;
-      sumOthers += factors[i];
-    }
-    const road = sumOthers / (factors.length - 1);
-    if (Number.isFinite(road)) pfRoad = road;
-  }
-  const adj = (own + pfRoad) / 2;
-  if (!Number.isFinite(adj) || adj <= 0) return 1;
-  return adj;
-}
-
-/**
- * Club's own home park, not today's venue. Missing row → 1.
- * espn home abbr is intentionally not consulted: it is the venue, and
- * would stick the visitor with the host's park.
- */
-function clubParkAdj(teamName, parkFactors, fallbackSeen) {
-  if (!teamName || !parkFactors) return 1;
-  const row = resolvePark(teamName, parkFactors, null, fallbackSeen);
-  if (!row || !Number.isFinite(row.factor) || row.factor <= 0) return 1;
-  return teamParkAdj(row.factor, parkFactors);
-}
-
 /**
  * Better SP (positive quality) adds margin for that side and lowers the total.
- * Park factor multiplies the run environment once (Coors > 1).
- * The total passed in is already park-neutral. This is the only venue multiply.
- * Margin is not scaled by the venue.
+ * Park factor multiplies the run environment (Coors > 1).
  */
 function applySpPark({ modelMargin, modelTotal, homeQ, awayQ, parkFactor }) {
   let margin = Number(modelMargin);
@@ -342,10 +279,10 @@ function applySpPark({ modelMargin, modelTotal, homeQ, awayQ, parkFactor }) {
  * Only when SP is player-source (named line) and team rate exists.
  * Soft-fail → null.
  */
-function resolveBullpenQuality(spQ, teamName, stats, fallbackSeen) {
+function resolveBullpenQuality(spQ, teamName, stats) {
   if (!spQ || spQ.source !== 'player' || !Number.isFinite(spQ.quality)) return null;
   const bag = stats && typeof stats === 'object' ? stats : {};
-  const teamRow = coerceQualityRow(mlbTableRow(bag.byTeam || {}, teamName, fallbackSeen));
+  const teamRow = coerceQualityRow(fuzzyTeam(teamName, bag.byTeam || {}));
   if (!teamRow || !Number.isFinite(teamRow.quality)) return null;
   return {
     quality: clamp(teamRow.quality - spQ.quality, -1.5, 1.5),
@@ -444,7 +381,6 @@ function standingsGames(st) {
 /**
  * Runs scored / allowed per game.
  * Season totals (pf 700) require a game count. Per-game rates (pf 4.6) pass through.
- * These rates still include the club's own home park (about half its games).
  * Unclean rows return null so the caller keeps the 8.6 / HFA baseline.
  */
 function teamRpg(st) {
@@ -464,36 +400,18 @@ function teamRpg(st) {
   return { rs, ra };
 }
 
-/** rs and ra divided by home-park exposure. adj 1 leaves the rates unchanged. */
-function neutralizeRpg(rpg, adj) {
-  if (!rpg || !Number.isFinite(rpg.rs) || !Number.isFinite(rpg.ra)) return null;
-  const a = Number(adj);
-  const d = Number.isFinite(a) && a > 0 ? a : 1;
-  return { rs: rpg.rs / d, ra: rpg.ra / d };
-}
-
 /**
  * Pregame run environment from team offense and opponent runs allowed.
- * Season rates are neutralized by each club's home-park exposure first.
- * Home margin = (neutral home runs − neutral away runs) + HFA. Total = the sum.
- * The venue park is not applied here. applySpPark multiplies the total once.
+ * Home margin = (home runs − away runs) + HFA. Total = the sum.
  * Equal clubs land on HFA and their own run environment, not a season-RD spike.
  * Missing either side → neutral { HFA, 8.6 }, which is the old zero-power baseline.
- * opts is optional: { parkFactors, homeTeam, awayTeam, fallbackSeen }.
- * No opts, or a club with no park row, uses adj 1 (previous rates).
  */
-function mlbStandingsEnv(homeSt, awaySt, opts) {
+function mlbStandingsEnv(homeSt, awaySt) {
   const hfa = Number.isFinite(Number(HFA && HFA.MLB)) ? Number(HFA.MLB) : 0.12;
   const neutral = { modelMargin: hfa, modelTotal: 8.6, usedStandings: false };
-  const hRaw = teamRpg(homeSt);
-  const aRaw = teamRpg(awaySt);
-  if (!hRaw || !aRaw) return neutral;
-  const parkFactors = opts && opts.parkFactors;
-  const seen = opts && opts.fallbackSeen;
-  const homeParkAdj = clubParkAdj(opts && opts.homeTeam, parkFactors, seen);
-  const awayParkAdj = clubParkAdj(opts && opts.awayTeam, parkFactors, seen);
-  const h = neutralizeRpg(hRaw, homeParkAdj);
-  const a = neutralizeRpg(aRaw, awayParkAdj);
+  const h = teamRpg(homeSt);
+  const a = teamRpg(awaySt);
+  if (!h || !a) return neutral;
   const homeRuns = (h.rs + a.ra) / 2;
   const awayRuns = (a.rs + h.ra) / 2;
   const modelTotal = homeRuns + awayRuns;
@@ -507,134 +425,7 @@ function mlbStandingsEnv(homeSt, awaySt, opts) {
     homeRa: h.ra,
     awayRs: a.rs,
     awayRa: a.ra,
-    homeParkAdj,
-    awayParkAdj,
   };
-}
-
-/**
- * Fixed prior for (model total − sharp no-vig total), in runs.
- * Frozen snaps 2026-09-22..2026-10-08, one row per MLB game with a sharp
- * total (Pinnacle, else the other sharp books).
- * n=106, mean of (finished model total − sharp total) +1.185, SD 0.833,
- * SE 0.081. Pitcher lines are the season StatsAPI pull the generator
- * already makes (gameType=R), not a refit. That window's sharp totals were Pinnacle.
- *
- * Where the +1.185 comes from, on all 113 priced games (means):
- *   standings run environment                              8.895
- *   starter quality                                        −0.081
- *   park multiply (mean park 0.999)                        −0.002
- *   bullpen residual                                       +0.021
- *   game-day total / weather                               0
- *   finished total                                         8.834
- *   sharp total on the 106 games that have one            7.637
- *   8.6 fallback                                           0 games
- *   season-sum divide (pf/pa already per game, all ≤ 5.4)  0 games
- * Home/away run splits are not on the standings feed. A symmetric
- * home/road split moves the margin, not this total level.
- * Park neutralization (the single-apply fix) moves the mean by about
- * −0.04 and leaves the lean. It is not re-applied here.
- *
- * The prior is that level. It is not fit per game. A slate with at least
- * MLB_TOTAL_RECENTER_MIN sharp totals replaces it with that slate's own
- * mean. After the prior is removed, the expected leftover is 0, so a
- * short slate does not subtract the prior a second time.
- */
-const MLB_TOTAL_PRIOR_OFFSET = 1.185;
-const MLB_TOTAL_RECENTER_MIN = 3;
-
-function mlbToggleOn(name) {
-  const raw = process.env[name];
-  if (raw == null) return true;
-  const s = String(raw).trim().toLowerCase();
-  if (s === '0' || s === 'off') return false;
-  return true;
-}
-
-/** Read at call time. Unset is on. "0" and "off" disable. */
-function mlbTotalFlags() {
-  return {
-    rootfix: mlbToggleOn('OMEGA_MLB_ROOTFIX'),
-    recenter: mlbToggleOn('OMEGA_MLB_TOTAL_RECENTER'),
-  };
-}
-
-function totalPointForBook(event, book) {
-  const want = String(book || '').toLowerCase();
-  const bk = (event && event.bookmakers || []).find(b => String(b.key || '').toLowerCase() === want);
-  if (!bk) return null;
-  const mkt = (bk.markets || []).find(m => m.key === 'totals');
-  if (!mkt) return null;
-  const over = (mkt.outcomes || []).find(o => /^over$/i.test(o.name) && o.point != null);
-  if (over && Number.isFinite(Number(over.point))) return Number(over.point);
-  const any = (mkt.outcomes || []).find(o => o.point != null && Number.isFinite(Number(o.point)));
-  return any ? Number(any.point) : null;
-}
-
-/**
- * Posted total point. Not a de-vigged probability.
- * Pinnacle's point when it posts one. Otherwise the median of the other
- * sharp books. No sharp total → null (that game does not enter the slate mean).
- * sharpNoVigTotal is the historical name.
- */
-function sharpPostedTotal(event) {
-  if (!event) return null;
-  const pin = totalPointForBook(event, 'pinnacle');
-  if (Number.isFinite(pin)) return pin;
-  const sharpSet = new Set((SHARP_BOOKS || []).map(b => String(b).toLowerCase()));
-  const pts = [];
-  const seen = new Set();
-  for (const bk of event.bookmakers || []) {
-    const key = String(bk.key || '').toLowerCase();
-    if (!key || seen.has(key) || !sharpSet.has(key)) continue;
-    seen.add(key);
-    const p = totalPointForBook(event, key);
-    if (Number.isFinite(p)) pts.push(p);
-  }
-  if (!pts.length) return null;
-  pts.sort((a, b) => a - b);
-  return pts[Math.floor(pts.length / 2)];
-}
-
-const sharpNoVigTotal = sharpPostedTotal;
-
-/**
- * Runs to subtract from every MLB modelTotal this generate.
- * rows: { total, sharp } for each game. sharp may be null.
- * Root fix subtracts MLB_TOTAL_PRIOR_OFFSET (the 2026 environment gap).
- * Recenter, when n >= 3 sharp totals, replaces that fixed gap with the
- * slate mean of (raw total − sharp). The prior is not added on top of
- * the slate mean. n < 3 uses the prior once.
- * Both flags off → 0.
- */
-function mlbTotalLevelShift(rows, flags) {
-  const rootfix = !!(flags && flags.rootfix);
-  const recenter = !!(flags && flags.recenter);
-  if (!rootfix && !recenter) return 0;
-  const prior = MLB_TOTAL_PRIOR_OFFSET;
-  const base = rootfix ? prior : 0;
-  if (!recenter) return base;
-  const gaps = [];
-  for (const row of rows || []) {
-    if (!row || !Number.isFinite(row.total) || !Number.isFinite(row.sharp)) continue;
-    gaps.push((row.total - base) - row.sharp);
-  }
-  if (gaps.length >= MLB_TOTAL_RECENTER_MIN) {
-    const mean = gaps.reduce((s, x) => s + x, 0) / gaps.length;
-    return base + mean;
-  }
-  // Short slate: the prior stands in for the mean. Root fix already
-  // applied it, so the residual prior is 0.
-  return base + (rootfix ? 0 : prior);
-}
-
-/** Shift 0 returns the same total. Any other shift stays inside the existing band. */
-function applyMlbTotalShift(modelTotal, shift) {
-  const s = Number(shift);
-  if (!Number.isFinite(s) || s === 0) return modelTotal;
-  const t = Number(modelTotal);
-  if (!Number.isFinite(t)) return modelTotal;
-  return clamp(t - s, MLB_TOTAL_MIN, MLB_TOTAL_MAX);
 }
 
 /** MLB season year. Jan/Feb still belong to the previous season. */
@@ -670,15 +461,5 @@ module.exports = {
   mlbSpKnownStd,
   mlbSeasonFromDate,
   teamRpg,
-  teamParkAdj,
-  neutralizeRpg,
   mlbStandingsEnv,
-  MLB_TOTAL_PRIOR_OFFSET,
-  MLB_TOTAL_RECENTER_MIN,
-  mlbToggleOn,
-  mlbTotalFlags,
-  sharpPostedTotal,
-  sharpNoVigTotal,
-  mlbTotalLevelShift,
-  applyMlbTotalShift,
 };

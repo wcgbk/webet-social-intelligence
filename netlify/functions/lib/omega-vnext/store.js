@@ -1,20 +1,17 @@
 'use strict';
 
 const { SITE_ID, BLOB_STORE } = require('./config');
-const { canonicalBlobKey } = require('./blob_key');
-const { replayNoWrite, logBlocked } = require('./no_write');
-const { resolveFetch, auditBlobCall } = require('./audit_log');
 
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
-  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${canonicalBlobKey(path)}`;
+  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${path}`;
   const opts = {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   };
   if (body != null) opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-  const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, opts);
+  const resp = await fetch(url, opts);
   return resp;
 }
 
@@ -22,7 +19,7 @@ async function readPicks(dateISO) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await auditBlobCall('GET', `picks-${dateISO}`, () => store.get(`picks-${dateISO}`, { type: 'json' }));
+    return await store.get(`picks-${dateISO}`, { type: 'json' });
   } catch (_) {
     try {
       const resp = await blobFetch(`picks-${dateISO}`);
@@ -77,10 +74,6 @@ function shadowPayload(dateISO, picksData, key) {
 }
 
 async function storePicks(dateISO, picksData, opts = {}) {
-  if (replayNoWrite()) {
-    logBlocked('storePicks');
-    return false;
-  }
   const force = !!opts.force;
   // A shadow-marked payload must not fall through onto live keys.
   const shadow = opts.shadow === true || !!(picksData && picksData.shadow === true);
@@ -90,18 +83,7 @@ async function storePicks(dateISO, picksData, opts = {}) {
   if (target.shadow && !String(pickKey).startsWith('omega-shadow/')) {
     throw new Error(`shadow store refused non-shadow key: ${pickKey}`);
   }
-  // Every live card write passes the integrity gate: no hard-fail pick or
-  // parlay leg, text matches the final picks, no empty reasoning, Hard Rock
-  // placeability flagged.
-  let gated = picksData;
-  if (!target.shadow && picksData && Array.isArray(picksData.picks) && opts.skipIntegrity !== true) {
-    try {
-      gated = require('./card_integrity').applyCardIntegrity(picksData).card;
-    } catch (err) {
-      console.error(`[card-integrity] soft-fail: ${err && err.message}`);
-    }
-  }
-  const payload = target.shadow ? shadowPayload(dateISO, gated, pickKey) : gated;
+  const payload = target.shadow ? shadowPayload(dateISO, picksData, pickKey) : picksData;
 
   if (target.overwriteGuard && !force) {
     const existing = await readPicks(dateISO);
@@ -116,18 +98,18 @@ async function storePicks(dateISO, picksData, opts = {}) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await auditBlobCall('PUT', pickKey, () => store.setJSON(pickKey, payload));
+    await store.setJSON(pickKey, payload);
     if (target.touchLatestDate) {
-      await auditBlobCall('PUT', 'latest-date', () => store.set('latest-date', dateISO));
+      await store.set('latest-date', dateISO);
     }
     if (target.touchPicksDates) {
       try {
-        let dates = await auditBlobCall('GET', 'picks-dates', () => store.get('picks-dates', { type: 'json' }));
+        let dates = await store.get('picks-dates', { type: 'json' });
         if (!Array.isArray(dates)) dates = [];
         if (!dates.includes(dateISO)) {
           dates.push(dateISO);
           dates.sort();
-          await auditBlobCall('PUT', 'picks-dates', () => store.setJSON('picks-dates', dates));
+          await store.setJSON('picks-dates', dates);
         }
       } catch (e) {
         console.error(`[omega-vnext/store] picks-dates: ${e.message}`);
@@ -169,14 +151,10 @@ async function storeShadowPicks(dateISO, picksData) {
 
 
 async function storeJson(key, data) {
-  if (replayNoWrite()) {
-    logBlocked(`storeJson ${key}`);
-    return false;
-  }
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await auditBlobCall('PUT', key, () => store.setJSON(key, data));
+    await store.setJSON(key, data);
     console.log(`[omega-vnext/store] wrote ${key}`);
     return true;
   } catch (sdkErr) {
@@ -192,7 +170,7 @@ async function readJson(key) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await auditBlobCall('GET', key, () => store.get(key, { type: 'json' }));
+    return await store.get(key, { type: 'json' });
   } catch (_) {
     try {
       const resp = await blobFetch(key);
@@ -377,8 +355,8 @@ async function storeReplaySummary(runId, summary) {
   return key;
 }
 
-/** Ops-only capture-health and late-news runs — NEVER live picks / latest-date. */
-const OPS_KEY_RE = /^omega-ops\/(?:capture-health(?:-latest|-\d{4}-\d{2}-\d{2})|late-news(?:-latest|-\d{4}-\d{2}-\d{2})|snapshot-coverage-\d{4}-\d{2}-\d{2}|missed-pull-\d{4}-\d{2}-\d{2})$/;
+/** Ops-only capture-health snapshots — NEVER live picks / latest-date. */
+const OPS_KEY_RE = /^omega-ops\/capture-health(?:-latest|-\d{4}-\d{2}-\d{2})$/;
 
 function assertOpsKey(key) {
   const k = String(key || '');
@@ -417,150 +395,14 @@ async function storeCaptureHealthSnapshot(dateISO, snapshot) {
   return { dated, latest };
 }
 
-async function storeSnapshotCoverage(dateISO, report) {
-  const d = String(dateISO || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    throw new Error(`omega-ops refused bad date: ${dateISO}`);
-  }
-  const key = assertOpsKey(`omega-ops/snapshot-coverage-${d}`);
-  const payload = {
-    ...(report || {}),
-    date: d,
-    opsOnly: true,
-    storedAt: new Date().toISOString(),
-  };
-  await storeJson(key, payload);
-  return { key };
-}
-
-async function storeMissedPull(dateISO, report) {
-  const d = String(dateISO || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    throw new Error(`omega-ops refused bad date: ${dateISO}`);
-  }
-  const key = assertOpsKey(`omega-ops/missed-pull-${d}`);
-  const payload = {
-    ...(report || {}),
-    date: d,
-    opsOnly: true,
-    storedAt: new Date().toISOString(),
-  };
-  await storeJson(key, payload);
-  return { key };
-}
-
 async function readCaptureHealthLatest() {
   return readJson(assertOpsKey('omega-ops/capture-health-latest'));
-}
-
-/**
- * Append one late-news ops run. Dated key plus late-news-latest.
- * Caps the dated runs list at 48. Soft-fail at the call site.
- */
-async function storeLateNewsOps(dateISO, run) {
-  const d = String(dateISO || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    throw new Error(`omega-ops refused bad date: ${dateISO}`);
-  }
-  const datedKey = assertOpsKey(`omega-ops/late-news-${d}`);
-  const latestKey = assertOpsKey('omega-ops/late-news-latest');
-  let prev = null;
-  try {
-    prev = await readJson(datedKey);
-  } catch (e) {
-    prev = null;
-  }
-  const prior = Array.isArray(prev && prev.runs) ? prev.runs : [];
-  const runs = prior.slice(-47);
-  runs.push(run || {});
-  const payload = {
-    date: d,
-    opsOnly: true,
-    storedAt: new Date().toISOString(),
-    runs,
-  };
-  await storeJson(datedKey, payload);
-  try {
-    await storeJson(latestKey, payload);
-  } catch (e) {
-    console.error(`[omega-vnext/store] late-news latest: ${e.message}`);
-  }
-  return { dated: datedKey, latest: latestKey };
 }
 
 async function readCaptureHealthDate(dateISO) {
   const d = String(dateISO || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
   return readJson(assertOpsKey(`omega-ops/capture-health-${d}`));
-}
-
-function healthBlobKey(dateISO) {
-  const d = String(dateISO || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    throw new Error(`omega-health refused bad date: ${dateISO}`);
-  }
-  return `omega-health-${d}`;
-}
-
-/** Full generate-time health record. Dated key plus omega-health-latest. */
-async function storeHealthRecord(dateISO, record) {
-  const key = healthBlobKey(dateISO);
-  const payload = { ...(record || {}), date: String(dateISO), storedAt: new Date().toISOString() };
-  await storeJson(key, payload);
-  try {
-    await storeJson('omega-health-latest', payload);
-  } catch (e) {
-    console.error(`[omega-vnext/store] health latest: ${e.message}`);
-  }
-  return { key, latest: 'omega-health-latest' };
-}
-
-/**
- * Read a health blob. A missing blob is null. Transport and non-404 HTTP
- * failures throw so the ops endpoint can return 5xx.
- */
-async function readBlobStrict(key) {
-  try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore(BLOB_STORE);
-    return await auditBlobCall('GET', key, () => store.get(key, { type: 'json' }));
-  } catch (sdkErr) {
-    let resp;
-    try {
-      resp = await blobFetch(key);
-    } catch (e) {
-      const err = new Error(`blob read ${key} failed: ${sdkErr.message}`);
-      err.status = 502;
-      throw err;
-    }
-    if (resp.status === 404) return null;
-    if (!resp.ok) {
-      const err = new Error(`blob read ${key} → ${resp.status}`);
-      err.status = resp.status >= 500 ? resp.status : 502;
-      throw err;
-    }
-    return await resp.json();
-  }
-}
-
-async function readHealthRecord(dateISO) {
-  return readBlobStrict(healthBlobKey(dateISO));
-}
-
-async function readHealthLatest() {
-  return readBlobStrict('omega-health-latest');
-}
-
-/** Private daily unmatched football names. Null on a bad date or a missing blob. */
-async function readUnmatchedTeams(dateISO) {
-  const d = String(dateISO || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
-  try {
-    return await readJson(`omega-unmatched-${d}`);
-  } catch (e) {
-    console.warn(`[omega-vnext/store] unmatched read soft-fail: ${e.message}`);
-    return null;
-  }
 }
 
 module.exports = {
@@ -571,9 +413,4 @@ module.exports = {
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
-  storeSnapshotCoverage,
-  storeMissedPull,
-  storeLateNewsOps,
-  readUnmatchedTeams,
-  healthBlobKey, storeHealthRecord, readHealthRecord, readHealthLatest,
 };

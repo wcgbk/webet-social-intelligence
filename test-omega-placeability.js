@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.PLACEABILITY.minMajorBooks, 2);
 assert.strictEqual(config.PLACEABILITY.maxImpliedWorsePp, 3);
 assert.strictEqual(config.PLACEABILITY.maxAmericanCentsWorse, 15);
@@ -22,9 +22,9 @@ assert.ok(!config.US_BOOK_PRIORITY.includes('pinnacle'), 'placeability is US ret
 assert.ok(!config.US_BOOK_PRIORITY.includes('barstool'));
 assert.ok(!config.US_BOOK_PRIORITY.includes('wynnbet'));
 assert.ok(!config.US_BOOK_PRIORITY.includes('superbook'));
-assert.strictEqual(config.LEAN_PAD, true);
-assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
-assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 4.5);
+assert.strictEqual(config.LEAN_PAD, false);
+assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.LINE_MOVE.rejectSteamAgainstCents, 18);
 assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
@@ -46,7 +46,7 @@ assert.strictEqual(edge.withinPlaceableJuice(130, 200), false);
 {
   const onlySharp = edge.assessPlaceability([
     { book: 'pinnacle', american: -110 },
-    { book: 'bookmaker', american: -110 },
+    { book: 'circa', american: -110 },
     { book: 'bovada', american: -110 },
   ], -110, null);
   assert.deepStrictEqual(onlySharp.placeableBooks, []);
@@ -130,11 +130,9 @@ const baseRaw = {
   assert.strictEqual(c.placeable, false);
   assert.strictEqual(c.bestPlaceable.book, 'draftkings');
   c = eligible(c);
-  assert.strictEqual(c.placeable, false);
-  assert.strictEqual(gates.gateReason(c), null);
-  const { yesPool, rejected } = gates.applyGates([c]);
-  assert.strictEqual(rejected.length, 0);
-  assert.strictEqual(yesPool.length, 1);
+  assert.strictEqual(gates.gateReason(c), 'placeability-soft-veto');
+  const { rejected } = gates.applyGates([c]);
+  assert.strictEqual(rejected[0].rejectReason, 'placeability-soft-veto');
 }
 
 // Published +130 only at Fanatics; DK/FD are a different price. Do not publish it.
@@ -157,8 +155,7 @@ const baseRaw = {
   assert.deepStrictEqual(c.placeableBooks, ['fanatics']);
   assert.strictEqual(c.placeable, false);
   c = eligible(c);
-  assert.strictEqual(c.placeable, false);
-  assert.strictEqual(gates.gateReason(c), null);
+  assert.strictEqual(gates.gateReason(c), 'placeability-soft-veto');
 }
 
 // Two US majors inside the juice ballpark pass and travel onto the pick object.
@@ -412,9 +409,7 @@ const VETO = 'placeability-soft-veto: Hard Rock + majors coverage failed';
   assert.ok(verifySrc.includes('applyPlaceabilityDrops'));
   assert.ok(verifySrc.includes('blockStraightRefill'));
   assert.ok(verifySrc.includes('blockParlayRefill'));
-  assert.ok(/Placeability, late-news, and auto-fix drops refill from the private reserve up to 3/.test(verifySrc));
-  assert.ok(/Steam does not refill/.test(verifySrc));
-  assert.ok(/A blocked side never returns/.test(verifySrc));
+  assert.ok(/Placeability soft-veto and adverse steam drops do not refill/.test(verifySrc));
   const steamAt = verifySrc.indexOf('let droppedSteam = 0');
   const steamRegion = verifySrc.slice(steamAt, verifySrc.indexOf('Step 3: Sharp handicapper review', steamAt));
   assert.ok(/steamDropBlocksStraightRefill\(\s*droppedSteam/.test(steamRegion));

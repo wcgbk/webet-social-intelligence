@@ -17,10 +17,6 @@
 //      where the no-vig probability is the side's raw implied divided by the market
 //      overround (sum of both/all sides' raw implied) from the sharp anchor.
 //
-const { hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
-const omegaGradingRules = require('./lib/omega-grading-rules');
-const { detectNhlShootout } = require('./lib/espn-scoreboard');
-
 // Positive CLV = the fair (de-vigged) closing probability for our side is higher
 // than the fair probability we bet at → the line moved toward us → we beat the close.
 //
@@ -374,7 +370,6 @@ async function fetchESPNScores(dateISO, sport) {
       const period = status.period || 0;
       const st = status.type?.state || 'pre';
       const f5Complete = isMLB && ((period > 5) || (st === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
-      const so = detectNhlShootout(status, away, home, sport);
       return {
         awayTeam: away.team?.displayName || '', awayAbbr: away.team?.abbreviation || '',
         awayScore: parseInt(away.score) || 0,
@@ -384,13 +379,6 @@ async function fetchESPNScores(dateISO, sport) {
         awayScoreF5: isMLB ? sum5(awayLS) : null,
         homeScoreF5: isMLB ? sum5(homeLS) : null,
         f5Complete: !!f5Complete,
-        period: period,
-        statusName: status.type?.name || '',
-        detail: status.type?.shortDetail || status.type?.detail || '',
-        shortDetail: status.type?.shortDetail || '',
-        statusDetail: status.type?.detail || '',
-        shootout: so.shootout,
-        shootoutWinner: so.shootoutWinner,
       };
     }).filter(Boolean);
   } catch (e) { return []; }
@@ -409,7 +397,7 @@ function findGameForGrading(pick, games) {
   return null;
 }
 
-function gradePick(pick, game, opts) {
+function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || pick.market || '').toLowerCase();
@@ -420,15 +408,6 @@ function gradePick(pick, game, opts) {
   if (isF5 && !game.f5Complete) return 'push';
   const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
   const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
-  const nhlDate = (opts && opts.dateISO) || null;
-  function nhlScores(market) {
-    if (typeof omegaGradingRules === 'undefined' || typeof omegaGradingRules.nhlRegulationScores !== 'function') {
-      return { awayScore: awayScore, homeScore: homeScore };
-    }
-    return omegaGradingRules.nhlRegulationScores({
-      pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: nhlDate, market: market,
-    });
-  }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
@@ -436,9 +415,7 @@ function gradePick(pick, game, opts) {
   if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
     if (lineMatch) {
-      const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]);
-      const scored = nhlScores('total');
-      const total = scored.awayScore + scored.homeScore;
+      const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]), total = awayScore + homeScore;
       if (total === line) return 'push';
       return (ou === 'over' && total > line) || (ou === 'under' && total < line) ? 'win' : 'loss';
     }
@@ -447,9 +424,8 @@ function gradePick(pick, game, opts) {
     const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
     if (spreadMatch && (pickedAway || pickedHome)) {
       const spread = parseFloat(spreadMatch[1]);
-      const scored = nhlScores('spread');
-      const pickedScore = pickedAway ? scored.awayScore : scored.homeScore;
-      const oppScore = pickedAway ? scored.homeScore : scored.awayScore;
+      const pickedScore = pickedAway ? awayScore : homeScore;
+      const oppScore = pickedAway ? homeScore : awayScore;
       const adj = pickedScore + spread;
       if (adj === oppScore) return 'push';
       return adj > oppScore ? 'win' : 'loss';
@@ -613,19 +589,6 @@ exports.handler = async (event) => {
         continue;
       }
 
-      // A stored historical close at commence (score 0) cannot be improved by
-      // another pull of that same timestamp. Keep the row and skip Odds.
-      if (hasTrueClosingCapture(prev)) {
-        clvPicks.push({
-          ...prev,
-          betType: baseRecord.betType,
-          market: baseRecord.market,
-          segment: baseRecord.segment,
-          source: baseRecord.source,
-        });
-        continue;
-      }
-
       // Resolve the game + decide live vs historical close.
       let commenceISO = pick.commenceTime || null;
       let commenceMs = commenceISO ? Date.parse(commenceISO) : NaN;
@@ -734,7 +697,7 @@ exports.handler = async (event) => {
     for (const clvPick of clvPicks) {
       const sportGames = espnScoresBySport[clvPick.sport] || [];
       const game = findGameForGrading(clvPick, sportGames);
-      const result = gradePick(clvPick, game, { dateISO: dateISO });
+      const result = gradePick(clvPick, game);
       const profit = calcProfit(result, clvPick.units, clvPick.pickTimeOdds);
       clvPick.result = result;
       clvPick.profit = profit;
@@ -891,5 +854,5 @@ exports.handler = async (event) => {
 module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
-  gradePick, calcProfit, fetchESPNScores,
+  gradePick, calcProfit,
 };

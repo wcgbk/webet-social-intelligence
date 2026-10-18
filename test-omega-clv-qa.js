@@ -9,10 +9,10 @@ const grade = require(path.join(root, 'clv_grade'));
 const clvLog = require(path.join(root, 'clv_log'));
 const qa = require(path.join(root, 'qa_hardfail'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.ok(config.QA_HARDFAIL);
 assert.strictEqual(config.QA_HARDFAIL.staleOddsCents, 15);
-assert.strictEqual(config.LEAN_PAD, true);
+assert.strictEqual(config.LEAN_PAD, false);
 
 // ── CLV grade ──
 const g = grade.gradeNoVigClv(-110, -105, 1.0476);
@@ -31,11 +31,9 @@ assert.ok(g2.clvCents > 0);
 
 const track = require('./netlify/functions/track-clv-omega')._test;
 const sharpOrder = track.SHARP_BOOKS;
-assert.deepStrictEqual(sharpOrder, [
-  'pinnacle',
-  'bookmaker', 'betonlineag', 'lowvig',
-  'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook',
-]);
+assert.strictEqual(sharpOrder[0], 'pinnacle');
+assert.ok(sharpOrder.indexOf('circa') > 0 && sharpOrder.indexOf('circa') < sharpOrder.indexOf('betfair_ex_eu'));
+assert.ok(sharpOrder.indexOf('bookmaker') < sharpOrder.indexOf('matchbook'));
 const closeGame = {
   home_team: 'Los Angeles Dodgers',
   away_team: 'San Francisco Giants',
@@ -49,8 +47,8 @@ const closeGame = {
       ] }],
     },
     {
-      key: 'bookmaker',
-      title: 'Bookmaker',
+      key: 'circa',
+      title: 'Circa Sports',
       markets: [{ key: 'h2h', outcomes: [
         { name: 'Los Angeles Dodgers', price: -125 },
         { name: 'San Francisco Giants', price: 105 },
@@ -61,7 +59,7 @@ const closeGame = {
 const closePick = { pick: 'Los Angeles Dodgers ML', betType: 'Moneyline', sport: 'MLB' };
 const close = track.extractClose(closeGame, track.pickSideInfo(closePick), closePick);
 assert.strictEqual(close.sideOdds, -125);
-assert.ok(/bookmaker/i.test(close.anchorBook));
+assert.ok(/circa/i.test(close.anchorBook));
 
 const aliases = grade.attachRealizedAliases({
   clv: 0.0123,
@@ -216,19 +214,19 @@ assert.strictEqual(enriched[0].line, -3);
   const yesPool = [
     {
       sport: 'NFL', matchup: 'A @ B', side: 'B -3', market: 'Spread', odds: -110,
-      coverProb: 0.56, ev: 0.05, edgePct: 0.03, predictedClv: 2.5, liquid: true, uncertainty: 0.1,
+      coverProb: 0.56, ev: 0.05, predictedClv: 2.5, liquid: true, uncertainty: 0.1,
       commenceTime: now, homeTeam: 'B', awayTeam: 'A', book: 'dk',
       lockSnapshot: { odds: -110, line: -3, book: 'dk', capturedAt: now },
     },
     {
       sport: 'MLB', matchup: 'C @ D', side: 'Under 8.5', market: 'Total', odds: -105,
-      coverProb: 0.55, ev: 0.045, edgePct: 0.03, predictedClv: 1.2, liquid: true, uncertainty: 0.12,
+      coverProb: 0.55, ev: 0.045, predictedClv: 1.2, liquid: true, uncertainty: 0.12,
       commenceTime: now, homeTeam: 'D', awayTeam: 'C', book: 'dk', line: 8.5,
       lockSnapshot: { odds: -105, line: 8.5, book: 'dk', capturedAt: now },
     },
     {
       sport: 'NCAAF', matchup: 'E @ F', side: 'F -7', market: 'Spread', odds: -110,
-      coverProb: 0.54, ev: 0.04, edgePct: 0.03, predictedClv: 0.8, liquid: true, uncertainty: 0.2,
+      coverProb: 0.54, ev: 0.04, predictedClv: 0.8, liquid: true, uncertainty: 0.2,
       commenceTime: now, homeTeam: 'F', awayTeam: 'E', book: 'dk',
       lockSnapshot: { odds: -110, line: -7, book: 'dk', capturedAt: now },
     },

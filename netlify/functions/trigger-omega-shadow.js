@@ -7,20 +7,32 @@
  * See docs/OMEGA-SHADOW-DRYRUN.md.
  */
 
-const { rejectUnlessEtSlot } = require('./lib/et-schedule');
-
-exports.handler = async (event) => {
-  const etSkip = rejectUnlessEtSlot('trigger-omega-shadow', event);
-  if (etSkip) return etSkip;
-  // The 9:05 generate would pull the Odds API. Pulls are 3:00 and 10:00 only.
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ok: true,
-      skipped: 'odds-api-window',
-      shadow: false,
-      message: 'The 9:05 shadow generate is suspended. Odds API pulls are 3:00 and 10:00 ET only.',
-    }),
-  };
+exports.handler = async () => {
+  console.log('[trigger-omega-shadow] Scheduled shadow dry-run (isolated omega-shadow/*)');
+  const siteURL = process.env.URL || 'https://webetsocial.com';
+  try {
+    const response = await fetch(
+      `${siteURL}/.netlify/functions/generate-picks-omega-background`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shadow: true,
+          scheduled: true,
+          force: true,
+          skipNarrate: true,
+          timestamp: new Date().toISOString(),
+        }),
+      }
+    );
+    console.log(`[trigger-omega-shadow] upstream status=${response.status}`);
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: true, shadow: true, upstream: response.status }),
+    };
+  } catch (err) {
+    console.error(`[trigger-omega-shadow] Failed: ${err.message}`);
+    return { statusCode: 500, body: err.message };
+  }
 };

@@ -13,23 +13,16 @@
  * Default dryRun=true. Hard cap MAX_DAYS=14.
  */
 
-const { SPORTS_ENABLED, MODEL_VERSION, nbaModuleEnabled } = require('./config');
-const { sportsForCard } = require('./season_calendar');
+const { SPORTS_ENABLED, MODEL_VERSION } = require('./config');
 const { storeReplayCard, storeReplaySummary, assertReplayKey, readJson, readPicks } = require('./store');
-const { replayNoWrite } = require('./no_write');
 const { gradeNoVigClv, attachRealizedAliases, summarizeBySportMarket } = require('./clv_grade');
 const { americanToDecimal } = require('./odds_math');
 
 const DEFAULT_MAX_DAYS = 7;
 const HARD_MAX_DAYS = 14;
 
-function enabledSports(dateISO) {
-  if (!dateISO) {
-    const sports = Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
-    if (nbaModuleEnabled() && sports.indexOf('NBA') === -1) sports.push('NBA');
-    return sports;
-  }
-  return sportsForCard(dateISO);
+function enabledSports() {
+  return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
 }
 
 function parseDateRange(from, to, { maxDays = DEFAULT_MAX_DAYS } = {}) {
@@ -446,7 +439,7 @@ async function runReplayDay(opts = {}) {
   }
 
   let key = null;
-  if (!dryRun && !replayNoWrite()) {
+  if (!dryRun) {
     key = await storeReplayCard(runId, dateISO, {
       ...card,
       historicalSnapshot,
@@ -533,7 +526,7 @@ async function runReplayRange(opts = {}) {
   };
   const summary = summarizeReplay(run);
   let summaryKey = null;
-  if (!dryRun && !replayNoWrite()) {
+  if (!dryRun) {
     try {
       summaryKey = await storeReplaySummary(runId, { ...summary, days });
     } catch (e) {

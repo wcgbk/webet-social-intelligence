@@ -13,14 +13,12 @@ const {
   enabledSportLabels,
 } = require('./lib/omega-vnext/ingest');
 const { etDateISO } = require('./lib/omega-vnext/line_path');
-const { runWithFetchMemo } = require('./lib/omega-vnext/fetch_memo');
-const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
 function countKeys(obj) {
   return obj && typeof obj === 'object' ? Object.keys(obj).length : 0;
 }
 
-async function warmHandler(event) {
+exports.handler = async (event) => {
   const softErrors = [];
   const now = new Date();
   const qs = (event && event.queryStringParameters) || {};
@@ -30,7 +28,7 @@ async function warmHandler(event) {
   let engines = { mlbPitcherStats: { byId: {}, byTeam: {}, byName: {} } };
 
   try {
-    const labels = enabledSportLabels(dateISO);
+    const labels = enabledSportLabels();
     const parts = await Promise.all(labels.map(async (label) => {
       try {
         return await fetchEspnScoreboard(label, dateISO);
@@ -115,10 +113,4 @@ async function warmHandler(event) {
       softErrors,
     }),
   };
-}
-
-exports.handler = (event) => {
-  const etSkip = rejectUnlessEtSlot('warm-omega-feeds', event);
-  if (etSkip) return etSkip;
-  return runWithFetchMemo(() => warmHandler(event));
 };

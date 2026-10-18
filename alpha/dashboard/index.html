@@ -425,13 +425,7 @@ function getResult(p,g){
   if(!isNaN(pStart)&&pStart>Date.now()+15*60*1000)return{status:'sched',isLive:false};
   if(!g||g.state==='pre')return{status:'sched',isLive:false};
   const live=g.state==='in',pick=(p.pick||'').toLowerCase(),bt=(p.betType||'').toLowerCase();
-  let hs=g.homeScore,as=g.awayScore;
-  if(typeof WeBetLive!=='undefined'&&WeBetLive&&typeof WeBetLive.nhlRegulationScores==='function'){
-    const nhlDate=(p&&p.date)||(PICKS_DATA&&PICKS_DATA.date)||null;
-    const nhlReg=WeBetLive.nhlRegulationScores({pick:p,game:g,awayScore:as,homeScore:hs,dateISO:nhlDate});
-    if(nhlReg&&nhlReg.applied){as=nhlReg.awayScore;hs=nhlReg.homeScore;}
-  }
-  const tot=hs+as;let won=null;
+  const hs=g.homeScore,as=g.awayScore,tot=hs+as;let won=null;
   if(bt.includes('total')||pick.includes('over')||pick.includes('under')){
     const m=(p.consensusLine||p.pick||'').match(/(\d+\.?\d*)/);
     if(m){const l=parseFloat(m[1]);if(pick.includes('over'))won=tot>l;else if(pick.includes('under'))won=tot<l;if(tot===l)won=null;}}
@@ -470,23 +464,11 @@ async function fetchESPN(dateISO,sports){
       const aw=comp.competitors?.find(c=>c.homeAway==='away'),hm=comp.competitors?.find(c=>c.homeAway==='home');
       if(!aw||!hm)continue;
       const startISO=ev.date||comp.date||'';
-      const status=comp.status||ev.status||{};
-      const state=status.type?.state||'pre';
+      const state=(comp.status||ev.status||{}).type?.state||'pre';
       const key=((aw.team?.abbreviation||aw.team?.displayName||'')+'|'+(hm.team?.abbreviation||hm.team?.displayName||'')+'|'+startISO).toLowerCase();
       if(seen.has(key)) continue;
       seen.add(key);
-      const so=(window.WeBetLive&&WeBetLive.detectNhlShootout)?WeBetLive.detectNhlShootout(status,aw,hm,''):null;
-      games.push({
-        awayTeam:aw.team?.displayName||'',awayScore:parseInt(aw.score)||0,
-        homeTeam:hm.team?.displayName||'',homeScore:parseInt(hm.score)||0,
-        state,startISO,
-        detail:status.type?.shortDetail||status.type?.detail||'',
-        shortDetail:status.type?.shortDetail||'',
-        statusDetail:status.type?.detail||'',
-        period:status.period||0,
-        shootout:!!(so&&so.shootout),
-        shootoutWinner:(so&&so.shootoutWinner)||null,
-      });}}
+      games.push({awayTeam:aw.team?.displayName||'',awayScore:parseInt(aw.score)||0,homeTeam:hm.team?.displayName||'',homeScore:parseInt(hm.score)||0,state,startISO});}}
   return games;}
 
 /* ═══════════════════════════════════

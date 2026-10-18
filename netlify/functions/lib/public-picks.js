@@ -1,11 +1,6 @@
 // Trim public get-picks payloads. The blob still stores the full generator dump
-// (candidateTable, modelProjections, thinkingText, rejections, gapReview,
-// Kelly internals). Those are unused on /omega /nfl /cfb cards and dominate
-// TTFB + parse time. gapReview is the private model-vs-line flag list.
-// shortfall is the private "fewer than 3 straights / no 3-leg" debug list.
-// reserve is the private next-best straight list. It is not a public pick.
-// lateNews, voidedPregame, and audit stay on the stored card. The public
-// payload drops all three, and it omits void-pregame picks and parlay legs.
+// (candidateTable, modelProjections, thinkingText, rejections, Kelly internals).
+// Those are unused on /omega /nfl /cfb cards and dominate TTFB + parse time.
 // Premium Sharp Depth still comes from get-picks-premium.
 //
 // CFB: pick/matchup stay full names (ESPN match keys). pickDisplay/matchupDisplay
@@ -15,43 +10,20 @@ const { isCfbSport, formatCfbPickDisplay, formatCfbMatchupDisplay } = require('.
 
 const PICK_KEEP = [
   'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
-  'betType', 'coreReasoning', 'commenceTime', 'gameTime', 'edgePct', 'edge', 'ev',
+  'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
-  'dataReviewFlag', 'placeabilityFlag', 'p_fair', 'p_model', 'calK', 'label', 'grade', 'riskDollars', 'toWinDollars',
-  // fairSource is anchorFairSource (pinnacle, sharp-books, consensus, a book key, or none).
-  // evAtFair is that same p_fair at the bet price.
-  'fairP', 'fairSource', 'evAtFair', 'modelWeight',
 ];
 
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
-  'evAtModel', 'evAtFair', 'isLean',
-  'evLabel', 'riskDollars', 'toWinDollars',
-  'uniqueGames', 'uniqueSports', 'independent', 'mirrorsCard', 'legMarkets', 'correlationNote',
-  'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote', 'label',
+  'uniqueGames', 'uniqueSports', 'independent', 'legMarkets', 'correlationNote',
+  'candidatesScanned', 'stake', 'source',
 ];
 
 const ROOT_DROP = [
-  'candidateTable', 'modelProjections', 'thinkingText', 'sgps', 'selectionTrace',
-  'rejections', 'rejectionCounts', 'edgeCandidatesCount',
-  'teamIdentity',
-  'gapReview',
-  'health',
-  'captureGate',
-  'shortfall',
-  'reserve',
-  'voidedPregame',
-  'lateNews',
-  'audit',
-  'gateCounts',
-  'hardRockCorrections',
-  'selection',
-  'bugLog',
+  'candidateTable', 'modelProjections', 'thinkingText', 'sgps',
+  'rejections', 'edgeCandidatesCount',
 ];
-
-function isVoidPregame(p) {
-  return !!(p && p.status === 'void-pregame');
-}
 
 function pickPublic(p) {
   if (!p || typeof p !== 'object') return p;
@@ -59,9 +31,6 @@ function pickPublic(p) {
   for (const k of PICK_KEEP) {
     if (p[k] !== undefined) out[k] = p[k];
   }
-  // Execution book (draftkings and the other US books). Empty stays off the card.
-  // tier is a stored selection field. The public card does not copy it.
-  if (p.book != null && String(p.book).trim() !== '') out.book = String(p.book).trim();
   if (isCfbSport(out.sport)) {
     if (out.pick) out.pickDisplay = formatCfbPickDisplay(out.pick);
     if (out.matchup) out.matchupDisplay = formatCfbMatchupDisplay(out.matchup);
@@ -76,8 +45,7 @@ function parlayPublic(parlayLegs) {
     for (const k of PARLAY_KEEP) {
       if (pl[k] !== undefined) out[k] = pl[k];
     }
-    const legs = Array.isArray(pl.legs) ? pl.legs.filter((leg) => !isVoidPregame(leg)) : [];
-    out.legs = legs.map(pickPublic);
+    out.legs = Array.isArray(pl.legs) ? pl.legs.map(pickPublic) : [];
     return out;
   });
 }
@@ -86,13 +54,8 @@ function publicPicksPayload(data) {
   if (!data || typeof data !== 'object') return data;
   const clone = { ...data };
   for (const k of ROOT_DROP) delete clone[k];
-  clone.picks = Array.isArray(data.picks)
-    ? data.picks.filter((p) => !isVoidPregame(p)).map(pickPublic)
-    : [];
+  clone.picks = Array.isArray(data.picks) ? data.picks.map(pickPublic) : [];
   clone.parlayLegs = parlayPublic(data.parlayLegs);
-  // Board price time for fans (2026-10-18): when the stored board prices
-  // were captured (generate does not re-pull paid odds).
-  if (data.priceLock) clone.boardPriceTime = data.priceLock.servedAt || data.priceLock.requested || null;
   clone.rejections = [];
   return clone;
 }

@@ -1,20 +1,10 @@
 {
   "_meta": {
-    "season": 2025,
-    "appliesToSeason": 2026,
-    "seasonNote": "season is the prior season these EPA numbers represent. appliesToSeason is the season this seed covers. The loader warns when the card date's calendar year differs. The label does not change the blend.",
     "units": "epa_per_play",
     "defEpa": "higher is better (EPA prevented per play, not EPA allowed)",
     "offSuccess": "offensive success rate",
     "defSuccess": "defensive success rate (higher = more stops)",
-    "note": "v1 cached NFL prior. Not a live EPA scrape. Opponent blend is applied in code when standings are clean.",
-    "centered": {
-      "method": "load-time symmetric zero-sum",
-      "date": "2026-10-05",
-      "dEpa": 0.02375,
-      "dSuccess": 0.008125,
-      "note": "Raw offEpa/defEpa/offSuccess/defSuccess stay the source of truth. loadEfficiencySeeds calls centerSeed, which recomputes d and does not read these fields. d = mean(off) - mean(def); off' = off - d/2; def' = def + d/2. Margins unchanged. Success uses the same shift because defSuccess is higher-is-better and successTotalAdj's environment term is (mean offSuccess - mean defSuccess) * 12."
-    }
+    "note": "v1 cached NFL prior. Not a live EPA scrape. Opponent blend is applied in code when standings are clean."
   },
   "Arizona Cardinals": {
     "offEpa": 0.02,

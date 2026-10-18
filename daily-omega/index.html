@@ -119,7 +119,6 @@
       border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
     }
     .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
-    .pick-grade-cluster { display: inline-flex; align-items: center; gap: .35rem; }
     .sport-tag {
       font-size: .6875rem; font-weight: 600; color: var(--teal);
       background: var(--teal-light); border: 1px solid var(--teal-border);
@@ -135,6 +134,7 @@
     .badge-aminus { background: #1abc9c; }
     .badge-bplus { background: #f39c12; }
     .badge-b { background: #f9a825; }
+    .badge-lean { background: #5b6b7a; }
 
     .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pick-matchup-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .375rem; min-width: 0; }
@@ -681,7 +681,7 @@
   </div>
 
   <!-- Edge grade legend (record lives in KPI / results) -->
-  <div id="record-legend-bar" class="record-legend-bar" title="Exact 5.0% and 3.5% default to the higher grade. Stake is flat by letter: A+ 1.5u, A 1u, A- 0.75u, B or any lean 0.5u.">
+  <div id="record-legend-bar" class="record-legend-bar" title="Exact 5.0% and 3.5% default to the higher grade. Units on each card are Kelly stake, separate from the letter.">
     <span class="edge-legend-label">Edge:</span>
     <span><span class="legend-dot dot-aplus"></span>A+ Strong 5%+</span>
     <span><span class="legend-dot dot-a"></span>A Solid 3.5% - 5%</span>
@@ -718,7 +718,6 @@
 </div>
 
 <script src="/js/live-score.js"></script>
-<script src="/js/omega-team-identity.js"></script>
 <script>
   if (window.self !== window.top) document.body.classList.add('in-iframe');
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -829,20 +828,11 @@
     return matchup.replace(/\s+@\s+/, ' vs ').replace(/\s+vs\.\s+/i, ' vs ');
   }
 
-  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b' };
-  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B' };
+  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
+  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
 
   /* Round UP to whole dollars — no cents anywhere (37.5 -> 38); -1e-9 keeps wholes whole. */
-  function wholeUp(n) {
-    const up = Math.ceil((n || 0) - 1e-9);
-    return Object.is(up, -0) ? 0 : up;
-  }
-  /* Summary rows round each stake up to a whole unit. 1u is $150. The pick footer keeps the real stake. */
-  function displayStakeUnits(units) {
-    const n = parseFloat(String(units == null ? '' : units).replace(/[^0-9.]/g, ''));
-    if (!Number.isFinite(n)) return 0;
-    return n;
-  }
+  function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
   /* ── Calculate winnings from American odds ── */
   function calcWinnings(atRisk, oddsStr) {
     const odds = parseInt((oddsStr||'-110').replace(/[^0-9+-]/g, ''));
@@ -863,16 +853,8 @@
     return '+' + Math.round(((1 - prob) / prob) * 100);
   }
   function calcParlayOdds(legs) {
-    // Payout price is the product of each leg's decimal odds, not the implied product.
-    let dec = 1;
-    for (const oddsStr of legs) {
-      const odds = parseInt(String(oddsStr || '-110').replace(/[^0-9+-]/g, ''));
-      if (isNaN(odds) || odds === 0) { dec *= (100 / 110) + 1; continue; }
-      dec *= odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
-    }
-    if (!(dec > 1)) return '+100';
-    if (dec >= 2) return '+' + Math.round((dec - 1) * 100);
-    return '-' + Math.round(100 / (dec - 1));
+    const combined = legs.reduce((acc, o) => acc * americanToImplied(o), 1);
+    return impliedToAmerican(combined);
   }
   function calcParlayWinnings(risk, legs) {
     // Multiply decimal odds for each leg, subtract 1 for profit, times risk
@@ -974,34 +956,15 @@
     const period = status.period || 0;
     const state = (status.type && status.type.state) || 'pre';
     const f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
-    var shootout = false;
-    var shootoutWinner = null;
-    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.detectNhlShootout === 'function') {
-      var so = WeBetLive.detectNhlShootout(status, away, home, sport);
-      if (so) { shootout = !!so.shootout; shootoutWinner = so.shootoutWinner || null; }
-    }
-    const teamId = (side) => {
-      const id = side && side.team && side.team.id;
-      return (id != null && id !== '') ? String(id) : '';
-    };
     return {
-      id: ev.id != null ? String(ev.id) : '',
       awayTeam: (away.team && (away.team.displayName || away.team.shortDisplayName)) || '',
       awayAbbr: (away.team && away.team.abbreviation) || '',
-      awayId: teamId(away),
       awayScore: parseInt(away.score, 10) || 0,
       homeTeam: (home.team && (home.team.displayName || home.team.shortDisplayName)) || '',
       homeAbbr: (home.team && home.team.abbreviation) || '',
-      homeId: teamId(home),
       homeScore: parseInt(home.score, 10) || 0,
       state,
-      statusName: (status.type && status.type.name) || '',
-      completed: !!(status.type && status.type.completed),
       detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
-      shortDetail: (status.type && status.type.shortDetail) || '',
-      statusDetail: (status.type && status.type.detail) || '',
-      shootout: shootout,
-      shootoutWinner: shootoutWinner,
       clock: status.displayClock || '',
       period,
       startTimeEST,
@@ -1065,234 +1028,6 @@
     return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
   }
 
-  // Odds names ("Southern Mississippi") and ESPN display names ("Southern Miss")
-  // differ. Normalized alias -> ESPN displayName, from scripts/data/football-team-aliases.json.
-  function ncaafAliasMap() {
-    return {
-      "albany": "UAlbany Great Danes",
-      "albany great danes": "UAlbany Great Danes",
-      "appalachian st": "App State Mountaineers",
-      "appalachian st mountaineers": "App State Mountaineers",
-      "appalachian state": "App State Mountaineers",
-      "appalachian state mountaineers": "App State Mountaineers",
-      "arizona": "Arizona Wildcats",
-      "army": "Army Black Knights",
-      "boise st": "Boise State Broncos",
-      "boise state": "Boise State Broncos",
-      "brigham young": "BYU Cougars",
-      "brigham young cougars": "BYU Cougars",
-      "byu": "BYU Cougars",
-      "central florida": "UCF Knights",
-      "central florida knights": "UCF Knights",
-      "citadel": "The Citadel Bulldogs",
-      "citadel bulldogs": "The Citadel Bulldogs",
-      "connecticut": "UConn Huskies",
-      "connecticut huskies": "UConn Huskies",
-      "dixie state": "Utah Tech Trailblazers",
-      "dixie state trailblazers": "Utah Tech Trailblazers",
-      "georgia st": "Georgia State Panthers",
-      "georgia state": "Georgia State Panthers",
-      "grambling": "Grambling Tigers",
-      "grambling state": "Grambling Tigers",
-      "grambling state tigers": "Grambling Tigers",
-      "hawaii": "Hawai'i Rainbow Warriors",
-      "hawaii rainbow warriors": "Hawai'i Rainbow Warriors",
-      "houston baptist": "Houston Christian Huskies",
-      "houston baptist huskies": "Houston Christian Huskies",
-      "houston christian": "Houston Christian Huskies",
-      "johnson c smith": "Johnson C. Smith Golden Bulls",
-      "johnson c smith golden bulls": "Johnson C. Smith Golden Bulls",
-      "kansas st": "Kansas State Wildcats",
-      "kansas state": "Kansas State Wildcats",
-      "kentucky": "Kentucky Wildcats",
-      "kentucky state": "Kentucky State Thorobreds",
-      "kentucky state university thorobreds": "Kentucky State Thorobreds",
-      "kstate": "Kansas State Wildcats",
-      "liu": "Long Island University Sharks",
-      "liu sharks": "Long Island University Sharks",
-      "long island sharks": "Long Island University Sharks",
-      "louisiana monroe": "UL Monroe Warhawks",
-      "louisiana monroe warhawks": "UL Monroe Warhawks",
-      "louisiana state": "LSU Tigers",
-      "louisiana state tigers": "LSU Tigers",
-      "louisianamonroe": "UL Monroe Warhawks",
-      "louisianamonroe warhawks": "UL Monroe Warhawks",
-      "lsu": "LSU Tigers",
-      "mcneese": "McNeese Cowboys",
-      "mcneese st": "McNeese Cowboys",
-      "mcneese state": "McNeese Cowboys",
-      "mcneese state cowboys": "McNeese Cowboys",
-      "miami": "Miami Hurricanes",
-      "miami fl": "Miami Hurricanes",
-      "miami florida": "Miami Hurricanes",
-      "miami hurricanes": "Miami Hurricanes",
-      "miami oh": "Miami (OH) RedHawks",
-      "miami oh redhawks": "Miami (OH) RedHawks",
-      "miami ohio": "Miami (OH) RedHawks",
-      "miami ohio redhawks": "Miami (OH) RedHawks",
-      "mississippi": "Ole Miss Rebels",
-      "mississippi rebels": "Ole Miss Rebels",
-      "nc state": "NC State Wolfpack",
-      "nc state wolfpack": "NC State Wolfpack",
-      "nevada las vegas": "UNLV Rebels",
-      "nevadalas vegas": "UNLV Rebels",
-      "nicholls": "Nicholls Colonels",
-      "nicholls state": "Nicholls Colonels",
-      "nicholls state colonels": "Nicholls Colonels",
-      "north carolina state": "NC State Wolfpack",
-      "north carolina state wolfpack": "NC State Wolfpack",
-      "northwestern": "Northwestern Wildcats",
-      "ole miss": "Ole Miss Rebels",
-      "pitt": "Pittsburgh Panthers",
-      "pitt panthers": "Pittsburgh Panthers",
-      "pittsburgh": "Pittsburgh Panthers",
-      "presbyterian": "Presbyterian Blue Hose",
-      "presbyterian college": "Presbyterian Blue Hose",
-      "presbyterian college blue hose": "Presbyterian Blue Hose",
-      "saint francis": "Saint Francis Red Flash",
-      "saint francis pa red flash": "Saint Francis Red Flash",
-      "saint thomas mn tommies": "St. Thomas Tommies",
-      "sam houston st": "Sam Houston Bearkats",
-      "sam houston state": "Sam Houston Bearkats",
-      "sam houston state bearkats": "Sam Houston Bearkats",
-      "san jos st": "San José State Spartans",
-      "san jos state": "San José State Spartans",
-      "san jose st": "San José State Spartans",
-      "san jose state": "San José State Spartans",
-      "san jose state spartans": "San José State Spartans",
-      "se louisiana": "SE Louisiana Lions",
-      "smu": "SMU Mustangs",
-      "southeastern louisiana": "SE Louisiana Lions",
-      "southeastern louisiana lions": "SE Louisiana Lions",
-      "southern california": "USC Trojans",
-      "southern california trojans": "USC Trojans",
-      "southern methodist": "SMU Mustangs",
-      "southern methodist mustangs": "SMU Mustangs",
-      "southern miss": "Southern Miss Golden Eagles",
-      "southern mississippi": "Southern Miss Golden Eagles",
-      "southern mississippi golden eagles": "Southern Miss Golden Eagles",
-      "southern university": "Southern Jaguars",
-      "southern university jaguars": "Southern Jaguars",
-      "st francis pa": "Saint Francis Red Flash",
-      "st francis pa red flash": "Saint Francis Red Flash",
-      "st thomas": "St. Thomas Tommies",
-      "st thomas mn": "St. Thomas Tommies",
-      "st thomas mn tommies": "St. Thomas Tommies",
-      "tcu": "TCU Horned Frogs",
-      "texas christian": "TCU Horned Frogs",
-      "texas christian horned frogs": "TCU Horned Frogs",
-      "the citadel": "The Citadel Bulldogs",
-      "ualbany": "UAlbany Great Danes",
-      "ucf": "UCF Knights",
-      "uconn": "UConn Huskies",
-      "ul monroe": "UL Monroe Warhawks",
-      "ulm": "UL Monroe Warhawks",
-      "umass": "Massachusetts Minutemen",
-      "umass minutemen": "Massachusetts Minutemen",
-      "unlv": "UNLV Rebels",
-      "usc": "USC Trojans",
-      "ut rio grande valley": "UT Rio Grande Valley Vaqueros",
-      "utah tech": "Utah Tech Trailblazers",
-      "utrgv": "UT Rio Grande Valley Vaqueros",
-      "utrgv vaqueros": "UT Rio Grande Valley Vaqueros",
-      "utsa": "UTSA Roadrunners",
-      "western michigan": "Western Michigan Broncos",
-      "western michigan broncos": "Western Michigan Broncos",
-      "yale": "Yale Bulldogs",
-      "yale university": "Yale Bulldogs",
-      "yale university bulldogs": "Yale Bulldogs",
-      "youngstown st": "Youngstown State Penguins",
-      "youngstown st penguins": "Youngstown State Penguins",
-    };
-  }
-
-  // Full alias, or its school-only form (last word dropped). Unknown names stay unchanged.
-  function canonNcaafTeam(name) {
-    const n = normalizeTeam(name);
-    if (!n) return name;
-    const map = ncaafAliasMap();
-    if (map[n]) return map[n];
-    const school = schoolKey(name);
-    if (school && school !== n && map[school]) return map[school];
-    return name;
-  }
-
-  // Equal school keys, or equal once a trailing "state" is removed
-  // (McNeese State Cowboys vs ESPN "McNeese Cowboys"). Mascots are already gone.
-  function ncaafSchoolKeysMatch(aName, bName) {
-    const a = schoolKey(aName);
-    const b = schoolKey(bName);
-    if (!a || !b || a.length <= 2 || b.length <= 2) return false;
-    if (a === b) return true;
-    if (a.endsWith(' state') && a.slice(0, -6) === b) return true;
-    if (b.endsWith(' state') && b.slice(0, -6) === a) return true;
-    return false;
-  }
-
-  // Michigan State also matches Michigan. When both sides of one game match,
-  // keep the exact schoolKey. If that does not pick one side, match neither.
-  function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, sport, awayEspnId, homeEspnId) {
-    const rawPick = pickTeam;
-    function finish(side) {
-      if (!(typeof cardIdentityOn === 'function' && cardIdentityOn() && typeof OmegaTeamIdentity !== 'undefined' && OmegaTeamIdentity)) return side;
-      if (typeof OmegaTeamIdentity.matchSides === 'function') {
-        const byId = OmegaTeamIdentity.matchSides(sport, rawPick, awayTeam, homeTeam, awayEspnId, homeEspnId);
-        if (byId && byId.decided) return { pickedAway: !!byId.pickedAway, pickedHome: !!byId.pickedHome };
-      }
-      const pickId = OmegaTeamIdentity.resolveTeamId(sport, rawPick);
-      if (!pickId) return side;
-      const aId = (awayEspnId != null && awayEspnId !== '') ? String(awayEspnId) : OmegaTeamIdentity.resolveTeamId(sport, awayTeam);
-      const hId = (homeEspnId != null && homeEspnId !== '') ? String(homeEspnId) : OmegaTeamIdentity.resolveTeamId(sport, homeTeam);
-      return {
-        pickedAway: !!(side.pickedAway && (!aId || String(aId) === String(pickId))),
-        pickedHome: !!(side.pickedHome && (!hId || String(hId) === String(pickId))),
-      };
-    }
-    if (sport === 'NCAAF' && typeof canonNcaafTeam === 'function') pickTeam = canonNcaafTeam(pickTeam);
-    const pickedAway = teamsMatch(pickTeam, awayTeam, awayAbbr, sport);
-    const pickedHome = teamsMatch(pickTeam, homeTeam, homeAbbr, sport);
-    if (sport !== 'NCAAF' || !pickedAway || !pickedHome) {
-      return finish({ pickedAway: !!pickedAway, pickedHome: !!pickedHome });
-    }
-    const pS = schoolKey(pickTeam);
-    const awayExact = pS.length > 2 && pS === schoolKey(awayTeam);
-    const homeExact = pS.length > 2 && pS === schoolKey(homeTeam);
-    if (awayExact && !homeExact) return finish({ pickedAway: true, pickedHome: false });
-    if (homeExact && !awayExact) return finish({ pickedAway: false, pickedHome: true });
-    return finish({ pickedAway: false, pickedHome: false });
-  }
-
-  // Michigan State @ Iowa and Michigan @ Iowa can both pass a trailing-"state" match.
-  // Keep the games whose school keys match exactly so the other one is not graded.
-  function preferExactSchoolGames(pick, games) {
-    if (!pick || (pick.sport || '') !== 'NCAAF' || !games || games.length < 2) return games;
-    let parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-    let pickTeam = String(pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-    if (typeof canonNcaafTeam === 'function') {
-      parts = parts.map((part) => canonNcaafTeam(part));
-      if (pickTeam) pickTeam = canonNcaafTeam(pickTeam);
-    }
-    const probes = pickTeam ? parts.concat([pickTeam]) : parts;
-    let best = -1;
-    const scored = games.map(game => {
-      let score = 0;
-      for (const side of [game.awayTeam, game.homeTeam]) {
-        let sideBest = 0;
-        for (const probe of probes) {
-          const pS = schoolKey(probe);
-          const eS = schoolKey(side);
-          if (pS.length > 2 && pS === eS) sideBest = 2;
-          else if (sideBest < 1 && ncaafSchoolKeysMatch(probe, side)) sideBest = 1;
-        }
-        score += sideBest;
-      }
-      if (score > best) best = score;
-      return { game, score };
-    });
-    const top = scored.filter(row => row.score === best).map(row => row.game);
-    return top.length ? top : games;
-  }
-
   function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
     const p = normalizeTeam(pickTeam);
     const e = normalizeTeam(espnTeam);
@@ -1308,7 +1043,8 @@
       if (pWords.includes(a)) return true;
     }
     if (sport === 'NCAAF') {
-      if (ncaafSchoolKeysMatch(pickTeam, espnTeam)) return true;
+      const pS = schoolKey(pickTeam), eS = schoolKey(espnTeam);
+      if (pS.length > 2 && pS === eS) return true;
       return false;
     }
     // Last word match (team nickname) — not for CFB (Tigers/Bulldogs collide)
@@ -1332,62 +1068,12 @@
     return true;
   }
 
-  function cardIdentityOn() {
-    try {
-      if (typeof OmegaTeamIdentity === 'undefined' || !OmegaTeamIdentity || !OmegaTeamIdentity.IDENTITY_V2_FROM) return false;
-      var date = '';
-      if (typeof picksData !== 'undefined' && picksData && picksData.date) date = String(picksData.date);
-      return date >= OmegaTeamIdentity.IDENTITY_V2_FROM;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // undefined = names did not both resolve, keep the legacy matcher.
-  // null = both resolved and no ESPN id pair matched.
-  function findGameByIdentity(pick) {
-    if (!cardIdentityOn()) return undefined;
-    const sport = (pick && pick.sport) || '';
-    const games = ((typeof cachedScores !== 'undefined' && cachedScores[sport]) || []).filter(g => gameMatchesPickWindow(g, pick));
-    const parts = String((pick && pick.matchup) || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-    if (parts.length < 2) return undefined;
-    const id0 = OmegaTeamIdentity.resolveTeamId(sport, parts[0]);
-    const id1 = OmegaTeamIdentity.resolveTeamId(sport, parts[1]);
-    if (!id0 || !id1 || String(id0) === String(id1)) return undefined;
-    const left = String(id0);
-    const right = String(id1);
-    const hits = [];
-    for (const g of games) {
-      const awayId = (g.awayId != null && g.awayId !== '') ? String(g.awayId) : OmegaTeamIdentity.resolveTeamId(sport, g.awayTeam);
-      const homeId = (g.homeId != null && g.homeId !== '') ? String(g.homeId) : OmegaTeamIdentity.resolveTeamId(sport, g.homeTeam);
-      if (!awayId || !homeId) continue;
-      const away = String(awayId);
-      const home = String(homeId);
-      if ((away === left && home === right) || (away === right && home === left)) hits.push(g);
-    }
-    if (hits.length) return disambiguateDoubleheader(hits, pick);
-    return null;
-  }
-
   function findGame(pick) {
-    if (typeof findGameByIdentity === 'function') {
-      const identHit = findGameByIdentity(pick);
-      if (identHit !== undefined) return identHit;
-    }
     const sport = pick.sport || '';
     const ncaaf = sport === 'NCAAF';
     const games = (cachedScores[sport] || []).filter(g => gameMatchesPickWindow(g, pick));
-    let matchup = (pick.matchup || '').toLowerCase();
-    let matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-    if (ncaaf && typeof canonNcaafTeam === 'function') {
-      const canonParts = matchupParts.map((part) => canonNcaafTeam(part));
-      const changed = canonParts.some((part, i) => normalizeTeam(part) !== normalizeTeam(matchupParts[i]));
-      if (changed) {
-        const sep = (matchup.match(/\s+(?:@|vs\.?|at|v)\s+/i) || [' @ '])[0];
-        matchupParts = canonParts;
-        matchup = canonParts.map((part) => normalizeTeam(part)).join(sep);
-      }
-    }
+    const matchup = (pick.matchup || '').toLowerCase();
+    const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
 
     const primary = [];
     for (const g of games) {
@@ -1399,10 +1085,9 @@
                          (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
       if (awayMatch && homeMatch) primary.push(g);
     }
-    if (primary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, primary), pick);
+    if (primary.length) return disambiguateDoubleheader(primary, pick);
     // Try matching by pick name (the team we bet on)
-    let pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
-    if (ncaaf && pickTeam && typeof canonNcaafTeam === 'function') pickTeam = canonNcaafTeam(pickTeam);
+    const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
     if (pickTeam) {
       const secondary = [];
       for (const g of games) {
@@ -1415,7 +1100,7 @@
           if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
         }
       }
-      if (secondary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, secondary), pick);
+      if (secondary.length) return disambiguateDoubleheader(secondary, pick);
     }
     // Last resort: match on both team last-words / school keys from matchup parts
     if (matchupParts.length >= 2) {
@@ -1430,16 +1115,7 @@
         else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
             (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
       }
-      if (tertiary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, tertiary), pick);
-    }
-    // Unique exact display name in the commence window. Opponent school-key
-    // substring misses when the odds name is not an ESPN substring.
-    if (ncaaf && pickTeam) {
-      const pFull = normalizeTeam(pickTeam);
-      if (pFull) {
-        const exact = games.filter((g) => normalizeTeam(g.awayTeam) === pFull || normalizeTeam(g.homeTeam) === pFull);
-        if (exact.length === 1) return exact[0];
-      }
+      if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
     }
     return null;
   }
@@ -1471,26 +1147,13 @@
     }
     if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
 
-    // Server already voids these for every card date. Do it before any score
-    // so a postponed 0-0 cannot grade as an Under win.
-    if (game.state === 'post' && (/POSTPONED|CANCELL?ED/i.test(game.statusName || '') || game.completed === false)) {
-      return { status: 'push', label: 'Postponed' };
-    }
-
     const isF5 = isF5Pick(pick);
     // Game called before 5 full innings → an F5 bet is void (no action).
     if (isF5 && game.state === 'post' && !game.f5Complete) {
       return { status: 'push', label: 'No F5 result' };
     }
-    let awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
-    let homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
-    // NHL shootout goal counts on the moneyline only, from 2026-10-15.
-    // Extracts of this function have no WeBetLive and keep the ESPN final.
-    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.nhlRegulationScores === 'function') {
-      var nhlDate = (pick && pick.date) || (typeof picksData !== 'undefined' && picksData && picksData.date) || null;
-      var nhlReg = WeBetLive.nhlRegulationScores({ pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: nhlDate });
-      if (nhlReg && nhlReg.applied) { awayScore = nhlReg.awayScore; homeScore = nhlReg.homeScore; }
-    }
+    const awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const isFinal = isF5 ? !!game.f5Complete : (game.state === 'post');
 
     if (!isFinal) {
@@ -1500,9 +1163,8 @@
       const liveAwayScore = awayScore;
       const liveHomeScore = homeScore;
       const livePickTeam = livePickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
-      const liveSide = ncaafPickedSides(livePickTeam, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
-      const livePickedAway = liveSide.pickedAway;
-      const livePickedHome = liveSide.pickedHome;
+      const livePickedAway = teamsMatch(livePickTeam, game.awayTeam, game.awayAbbr, pick.sport);
+      const livePickedHome = teamsMatch(livePickTeam, game.homeTeam, game.homeAbbr, pick.sport);
       let projected = 'live';
 
       if (liveBetType === 'total' || liveBetType === 'f5 total' || /over|under/i.test(livePickStr)) {
@@ -1539,9 +1201,8 @@
 
     // Figure out which team was picked
     const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
-    const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
-    const pickedAway = side.pickedAway;
-    const pickedHome = side.pickedHome;
+    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
 
     // Total (Over/Under)
     if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
@@ -1640,13 +1301,8 @@
     const sport = pick.sport || '';
     const pickStr = (pick.pick || '').trim();
     const betType = (pick.betType || '').toLowerCase();
-    let away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
-    let home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
-    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.nhlRegulationScores === 'function') {
-      var nhlDate = (pick && pick.date) || (typeof picksData !== 'undefined' && picksData && picksData.date) || null;
-      var nhlReg = WeBetLive.nhlRegulationScores({ pick: pick, game: game, awayScore: away, homeScore: home, dateISO: nhlDate });
-      if (nhlReg && nhlReg.applied) { away = nhlReg.awayScore; home = nhlReg.homeScore; }
-    }
+    const away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const t = gameElapsed(sport, game.period, game.clock, isF5);
     const sigmaPerMin = { 'NFL': 1.75, 'NCAAF': 2.1, 'NBA': 1.8, 'NCAAB': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
     const sigma = sigmaPerMin[sport] || 1.0;
@@ -1676,9 +1332,8 @@
       if (!spreadMatch) return null;
       const spread = parseFloat(spreadMatch[1]);
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
-      const pickedAway = side.pickedAway;
-      const pickedHome = side.pickedHome;
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1695,9 +1350,8 @@
     // Moneyline (full-game or F5) — live prob from the current score margin vs a pick'em prior.
     if (betType === 'moneyline' || betType === 'f5 moneyline' || /\bml\b/i.test(pickStr)) {
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
-      const pickedAway = side.pickedAway;
-      const pickedHome = side.pickedHome;
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1720,13 +1374,8 @@
     const isF5 = isF5Pick(pick);
     const pickStr = (pick.pick || '').trim();
     const betType = (pick.betType || '').toLowerCase();
-    let away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
-    let home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
-    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.nhlRegulationScores === 'function') {
-      var nhlDate = (pick && pick.date) || (typeof picksData !== 'undefined' && picksData && picksData.date) || null;
-      var nhlReg = WeBetLive.nhlRegulationScores({ pick: pick, game: game, awayScore: away, homeScore: home, dateISO: nhlDate });
-      if (nhlReg && nhlReg.applied) { away = nhlReg.awayScore; home = nhlReg.homeScore; }
-    }
+    const away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const decided = isF5 ? !!game.f5Complete : (game.state === 'post');
 
     if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
@@ -1747,9 +1396,8 @@
       if (!spreadMatch) return '';
       const spread = parseFloat(spreadMatch[1]);
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
-      const pickedAway = side.pickedAway;
-      const pickedHome = side.pickedHome;
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return '';
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1789,13 +1437,8 @@
     // Hide score bar for pre-game — time is shown in the card header
     if (game.state === 'pre') return '';
     const isF5 = isF5Pick(pick);
-    let aScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
-    let hScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
-    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.nhlRegulationScores === 'function') {
-      var nhlDate = (pick && pick.date) || (typeof picksData !== 'undefined' && picksData && picksData.date) || null;
-      var nhlReg = WeBetLive.nhlRegulationScores({ pick: pick, game: game, awayScore: aScore, homeScore: hScore, dateISO: nhlDate });
-      if (nhlReg && nhlReg.applied) { aScore = nhlReg.awayScore; hScore = nhlReg.homeScore; }
-    }
+    const aScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const hScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const decided = isF5 ? !!game.f5Complete : (game.state === 'post');
     const displayStatus = result.isLive ? 'live' : result.status;
     const barClass = `score-bar-${displayStatus}`;
@@ -1843,9 +1486,9 @@
       'A-': 'aminus', 'a-': 'aminus', aminus: 'aminus',
       'B+': 'bplus', 'b+': 'bplus', bplus: 'bplus',
       'B': 'b', b: 'b',
+      'Lean': 'lean', lean: 'lean',
     };
     if (typeof p.rating === 'string' && map[p.rating] != null) return map[p.rating];
-    if (typeof p.grade === 'string' && map[p.grade] != null) return map[p.grade];
     if (typeof p.confidence === 'string' && badgeClass[p.confidence]) return p.confidence;
     const u = parseFloat(String(p.units || '0').replace(/[^0-9.]/g, '')) || 0;
     if (u >= 1.5) return 'aplus';
@@ -1856,7 +1499,7 @@
     return null;
   }
 
-  /** Full pick-card chrome for a straight. Parlay legs stay in the compact bottom section. */
+  /** Full pick-card chrome — reused for straights and each parlay leg. */
   function renderPickCard(p, opts) {
     opts = opts || {};
     const dollarPerUnit = opts.dollarPerUnit || 150;
@@ -1877,18 +1520,10 @@
       gameTimeStr = game.startTimeEST + ' EST';
     } else if (isPreGame && game && game.detail) {
       gameTimeStr = game.detail;
-    } else if (isPreGame && p.gameTime) {
-      gameTimeStr = p.gameTime;
     } else if (isPreGame && p.commenceTime) {
       try {
         const ct = new Date(p.commenceTime);
-        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
-      } catch (e) {}
-    }
-    if (isPreGame && !gameTimeStr && p.commenceTime) {
-      try {
-        const ct = new Date(p.commenceTime);
-        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
+        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST';
       } catch (e) {}
     }
 
@@ -1905,12 +1540,8 @@
       timeChip = '';
     }
 
-    const edgeShown = p.edgePct || p.edge;
-    const edgeBadgeHTML = edgeShown
-      ? `<span class="edge-badge" title="Letter grade uses the model probability minus the implied probability of this price. Pinnacle is the closing-line check, not this edge."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(edgeShown)}</span>`
-      : '';
-    const evBadgeHTML = (p.ev != null && p.ev !== '')
-      ? `<span class="edge-badge" title="Stake EV is that same probability times the decimal odds, minus 1.">EV ${esc(p.ev)}</span>`
+    const edgeBadgeHTML = (p.edgePct || p.ev)
+      ? `<span class="edge-badge" title="Calibrated model edge after shrink vs no-vig sharp (not CLV cents)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>`
       : '';
 
     const ratingHTML = badge && label
@@ -1932,7 +1563,7 @@
     const card = `<div class="pick-card" data-wb-pick="${esc(p.pick)}"${borderStyle}>
         <div class="pick-header" style="margin-bottom:.25rem;">
           <span class="sport-tag">${esc(p.sport || '')}</span>
-          <span class="pick-grade-cluster">${ratingHTML}</span>
+          ${ratingHTML}
         </div>
         <div class="pick-matchup-row">
           <div class="pick-matchup">${esc(shortMatchup(p.matchup, p.sport))}</div>
@@ -1940,7 +1571,7 @@
         </div>
         ${scorebar}
         <div class="pick-line">
-          <span class="pick-name">${esc(displayPick(p.pick, p.sport, p.betType))}${deltaChip}${probChip}${(edgeBadgeHTML || evBadgeHTML) ? `<span class="edge-inline-mobile">${edgeBadgeHTML}${evBadgeHTML}</span>` : ''}</span>
+          <span class="pick-name">${esc(displayPick(p.pick, p.sport, p.betType))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
           <span class="pick-odds">${esc(p.odds || '')}</span>
         </div>
         <div class="pick-divider"></div>
@@ -1949,7 +1580,7 @@
           <div class="pick-units">${footerLeft}</div>
           <div class="pick-footer-right">
             ${liveResultHTML}
-            ${edgeBadgeHTML || ''}${evBadgeHTML || ''}
+            ${edgeBadgeHTML || ''}
           </div>
         </div>
         ${opts.depthSlot ? '<div class="wb-depth-slot"></div>' : ''}
@@ -1976,8 +1607,8 @@
     html += `<div class="bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
       <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Total</span>
       <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); font-weight:600; text-align:right;">${parseFloat(totalUnits.toFixed(2))}u</span>
-      <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${wholeUp(totalRisk).toLocaleString()}</span>
-      <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">+$${wholeUp(totalWin).toLocaleString()}</span>
+      <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${Number(totalRisk).toLocaleString()}</span>
+      <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">+$${Math.round(totalWin).toLocaleString()}</span>
     </div></div>`;
     return html;
   }
@@ -2042,64 +1673,41 @@
       insightsEl.style.display = 'block';
     } else if (picks.length > 0) {
       const sportSet = [...new Set(picks.map(p => p.sport))];
-      const totalUnitsInsight = picks.reduce((s, p) => s + displayStakeUnits(p.units), 0);
+      const totalUnitsInsight = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
       insightsText.textContent = `The mix on the card is ${sportSet.join(' and ')}. Straight exposure is ${totalUnitsInsight}u, sized to the price rather than piled onto one game. Before lock, check the starter in any baseball game and the quarterback plus the weather in any football game. The card is a short list on purpose. You do not have to play every line.`;
       insightsEl.style.display = 'block';
     }
 
     const dollarPerUnit = 150;
-    // A published +EV ticket is the only parlay. An explicit empty list or a
-    // "no qualifying parlay" marker is not filled from the straights.
-    const rawParlayList = Array.isArray(data.parlayLegs) ? data.parlayLegs : null;
-    const rawParlay = rawParlayList && rawParlayList[0] ? rawParlayList[0] : null;
-    const noQualifyingParlay = !!(rawParlay && (
-      rawParlay.qualifying === false
-      || rawParlay.status === 'no qualifying parlay'
-      || rawParlay.type === 'no-qualifying-parlay'
-    ));
-    const apiParlay = (!noQualifyingParlay && rawParlay && rawParlay.legs && rawParlay.legs.length)
-      ? rawParlay : null;
-    const parlayEvNum = apiParlay && apiParlay.ev != null && apiParlay.ev !== ''
-      ? parseFloat(String(apiParlay.ev).replace('%', ''))
-      : null;
-    // v12.3.74: '3-leg-parlay-labeled' is a published ticket whose combined EV
-    // is not positive. It still renders, with its label shown as a note.
-    const parlayLabeled = !!(apiParlay && (apiParlay.type === '3-leg-parlay-labeled' || apiParlay.type === '2-leg-parlay-labeled'));
-    const parlayEvFails = !parlayLabeled && !!(apiParlay && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
-    const parlaySource = (apiParlay && !parlayEvFails)
-      ? apiParlay.legs
-      : (!rawParlayList && picks.length >= 3 ? picks.slice(0, 3) : null);
-    const showNoQualifying = noQualifyingParlay || parlayEvFails || (!!(rawParlayList) && !parlaySource && picks.length > 0);
+    // Optimized parlay ONLY from API — never fake with 3 straights
+    const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0 && data.parlayLegs[0].legs && data.parlayLegs[0].legs.length)
+      ? data.parlayLegs[0] : null;
+    const optimizedParlayLegs = apiParlay ? apiParlay.legs : null;
 
     let parlayUnits = 0.5;
     if (apiParlay && apiParlay.units) parlayUnits = parseFloat(apiParlay.units) || 0.5;
     else if (picks.some(p => p.thinSlate)) parlayUnits = 0.25;
-    const parlayRisk = parlaySource ? wholeUp(parlayUnits * dollarPerUnit) : 0;
-    const parlayOddsStr = parlaySource
-      ? ((apiParlay && apiParlay.combinedOdds) || calcParlayOdds(parlaySource.map(l => l.odds || '-110')))
+    const parlayRisk = apiParlay ? wholeUp(parlayUnits * dollarPerUnit) : 0;
+    const parlayOddsStr = apiParlay
+      ? (apiParlay.combinedOdds || calcParlayOdds(apiParlay.legs.map(l => l.odds || '-110')))
       : null;
-    const parlayWin = parlaySource
-      ? wholeUp(calcParlayWinnings(parlayRisk, parlaySource.map(l => l.odds || '-110')))
+    const parlayWin = apiParlay
+      ? wholeUp(calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110')))
       : 0;
 
     let totalStraightUnits = 0;
     let totalStraightRisk = 0;
     let totalStraightWin = 0;
     for (const p of picks) {
-      const displayU = displayStakeUnits(p.units) || (p.units ? 0 : 1);
-      const risk = wholeUp(displayU * dollarPerUnit);
+      const u = parseFloat(p.units) || 1;
+      const risk = wholeUp(u * dollarPerUnit);
       const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
-      totalStraightUnits += displayU;
+      totalStraightUnits += u;
       totalStraightRisk += risk;
       totalStraightWin += win;
     }
-    const parlayDisplayUnits = parlaySource ? (displayStakeUnits(parlayUnits) || 1) : 0;
-    const parlayDisplayRisk = wholeUp(parlayDisplayUnits * dollarPerUnit);
-    const parlayDisplayWin = parlaySource
-      ? wholeUp(calcParlayWinnings(parlayDisplayRisk, parlaySource.map(l => l.odds || '-110')))
-      : 0;
 
-    const combinedUnits = totalStraightUnits + parlayDisplayUnits;
+    const combinedUnits = totalStraightUnits + (apiParlay ? parlayUnits : 0);
     const _hp = document.getElementById('hero-picks');
     const _hu = document.getElementById('hero-units');
     const _ha = document.getElementById('hero-accuracy');
@@ -2158,8 +1766,8 @@
       else if (rendered.result.status === 'push') pushes++;
       else pending++;
 
-      const displayU = displayStakeUnits(p.units) || (p.units ? 0 : 1);
-      const risk = wholeUp(displayU * dollarPerUnit);
+      const u = parseFloat(p.units) || 1;
+      const risk = wholeUp(u * dollarPerUnit);
       const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
       let resultBadge = '';
       if (rendered.result.isLive) resultBadge = '<span class="leg-result leg-live">LIVE</span>';
@@ -2171,50 +1779,77 @@
         label: esc(displayPick(p.pick, p.sport, p.betType)),
         sub: esc(shortMatchup(p.matchup, p.sport)),
         meta: resultBadge,
-        units: `${displayU}u`,
+        units: `${(p.units || '1u').toString().replace(/u$/i, '')}u`,
         risk: risk.toLocaleString(),
-        win: win.toLocaleString(),
+        win: Math.round(win).toLocaleString(),
       });
     }
 
-    // Brief stake summary, then the card-section closes. The parlay block is the last section.
+    // ONE summary table: straights + Daily Lock Parlay row (no separate bottom parlay summary)
     const combinedSummaryRows = straightSummaryRows.slice();
-    if (parlaySource && parlaySource.length) {
+    if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
+      const legCount = optimizedParlayLegs.length;
       combinedSummaryRows.push({
         label: esc(`Daily Lock Parlay ${parlayOddsStr || ''}`.trim()),
         sub: '',
         meta: '',
-        units: `${parlayDisplayUnits}u`,
-        risk: parlayDisplayRisk.toLocaleString(),
-        win: parlayDisplayWin.toLocaleString(),
+        units: `${parlayUnits}u`,
+        risk: parlayRisk.toLocaleString(),
+        win: Math.round(parlayWin).toLocaleString(),
         highlight: true,
       });
     }
-    const summaryTotalUnits = totalStraightUnits + parlayDisplayUnits;
-    const summaryTotalRisk = totalStraightRisk + (parlaySource ? parlayDisplayRisk : 0);
-    const summaryTotalWin = totalStraightWin + (parlaySource ? parlayDisplayWin : 0);
+    const summaryTotalUnits = totalStraightUnits + (apiParlay ? parlayUnits : 0);
+    const summaryTotalRisk = totalStraightRisk + (apiParlay ? parlayRisk : 0);
+    const summaryTotalWin = totalStraightWin + (apiParlay ? parlayWin : 0);
     html += sectionSummaryHTML('Bet Slip — Summary', combinedSummaryRows, summaryTotalUnits, summaryTotalRisk, summaryTotalWin);
     html += `</div>`;
 
-    if (showNoQualifying && !(parlaySource && parlaySource.length)) {
-      html += `<div class="parlay-section">
-        <div class="parlay-title">Parlay</div>
-        <div class="parlay-header">
-          <span class="parlay-name">no qualifying parlay</span>
-        </div>
-      </div>`;
-    }
+    // ═══ SECTION 2: Daily Lock Parlay legs only (API) — no redundant odds/units card ═══
+    let parlayBonusResult = null;
+    if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
+      const sortedParlayLegs = optimizedParlayLegs.slice().sort((a, b) => {
+        const keyA = (typeof a.rating === 'string' && ratingOrder[a.rating] != null) ? a.rating
+          : (typeof a.confidence === 'string' ? a.confidence : a.rating);
+        const keyB = (typeof b.rating === 'string' && ratingOrder[b.rating] != null) ? b.rating
+          : (typeof b.confidence === 'string' ? b.confidence : b.rating);
+        const rA = ratingOrder[keyA] ?? 4;
+        const rB = ratingOrder[keyB] ?? 4;
+        if (rA !== rB) return rA - rB;
+        const eA = parseFloat(String(a.edgePct || a.ev || '0').replace(/[^0-9.+-]/g, '')) || 0;
+        const eB = parseFloat(String(b.edgePct || b.ev || '0').replace(/[^0-9.+-]/g, '')) || 0;
+        return eB - eA;
+      });
+      const legCount = sortedParlayLegs.length;
 
-    // One parlay section at the bottom. Compact legs only — each leg's write-up stays on its straight card.
-    if (parlaySource && parlaySource.length) {
-      const legCount = parlaySource.length;
-      const parlayLegResults = parlaySource.map(rawLeg => {
-        const enriched = enrichParlayLeg(rawLeg, picks);
+      html += `<div class="card-section">
+        <div class="card-section-title parlay-sec">Daily Lock - Top 3 Leg Parlay</div>`;
+
+      for (const rawLeg of sortedParlayLegs) {
+        const leg = enrichParlayLeg(rawLeg, picks);
+        const isStraightDup = picks.some(p => p.pick === leg.pick || p.pick === ensureMlLabel(leg.pick, leg.betType));
+        const rendered = renderPickCard(leg, {
+          dollarPerUnit,
+          showStake: false,
+          parlayOnly: true,
+          footerNote: '',
+          depthSlot: false,
+        });
+        html += rendered.html;
+        if (!isStraightDup) {
+          parlayBonusResult = { pick: leg, game: rendered.game, result: rendered.result };
+          if (rendered.result.isLive) hasAnyLive = true;
+        }
+      }
+
+      // Parlay status bar
+      const parlayLegResults = sortedParlayLegs.map(leg => {
+        const enriched = enrichParlayLeg(leg, picks);
         const straightMatch = legResults.find(lr => WeBetLive.sameGradeTarget(lr.pick, enriched));
         if (straightMatch) return straightMatch;
+        if (parlayBonusResult && WeBetLive.sameGradeTarget(parlayBonusResult.pick, enriched)) return parlayBonusResult;
         const g = findGame(enriched);
         const r = determineResult(enriched, g);
-        if (r.isLive) hasAnyLive = true;
         return { pick: enriched, game: g, result: r };
       });
       const parlayAnyLive = parlayLegResults.some(l => l.result.isLive);
@@ -2229,50 +1864,15 @@
         if (pushCount === parlayFinalStatuses.length) { parlayStatus = 'push'; parlayLabel = 'Push'; }
         else { parlayStatus = 'win'; parlayLabel = 'Win (reduced)'; }
       }
-      const parlayEvLabel = (apiParlay && apiParlay.evLabel) ? String(apiParlay.evLabel) : '';
-      const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${wholeUp(parlayWin).toLocaleString()}`;
-
-      html += `<div class="parlay-section">
-        <div class="parlay-title">Recommended ${legCount}-Team Parlay</div>
-        <div class="parlay-header">
-          <span class="parlay-name">Daily Lock Parlay</span>
-          <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
-        </div>
-        <div class="parlay-payout">${parlayPayStr}</div>
-        ${parlayEvLabel ? `<div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">Parlay EV ${esc(parlayEvLabel)}</div>` : ''}
-        ${(parlayLabeled && apiParlay.label) ? `<div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">${esc(String(apiParlay.label).charAt(0).toUpperCase() + String(apiParlay.label).slice(1))}</div>` : ''}`;
-
-      for (const lr of parlayLegResults) {
-        const p = lr.pick;
-        const r = lr.result;
-        const g = lr.game;
-        let legResultHTML = '';
-        if (r.isLive) legResultHTML = '<span class="leg-result leg-live">LIVE</span>';
-        else if (r.status === 'win') legResultHTML = '<span class="leg-result leg-win">✓ W</span>';
-        else if (r.status === 'loss') legResultHTML = '<span class="leg-result leg-loss">✗ L</span>';
-        else if (r.status === 'push') legResultHTML = '<span class="leg-result leg-push">— P</span>';
-        let scoreStr = '';
-        if (g && (g.state === 'in' || g.state === 'post')) {
-          scoreStr = ` <span style="font-size:.6875rem; color:var(--txt-m);">(${esc(String(g.awayScore))}-${esc(String(g.homeScore))})</span>`;
-        }
-        html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="leg-pick">${esc(displayPick(p.pick, p.sport, p.betType))}</span>
-            <span class="leg-odds">${esc(p.odds || '')}</span>
-          </div>
-          <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}${scoreStr}</div>
-          ${legResultHTML ? `<div>${legResultHTML}</div>` : ''}
-        </div>`;
-      }
-
       if (parlayStatus !== 'scheduled') {
         const legsHit = parlayFinalStatuses.filter(s => s === 'win').length;
         const note = parlayStatus === 'live' ? `${legsHit} of ${legCount} legs hit` : parlayLabel;
-        html += `<div class="pick-score-bar score-bar-${parlayStatus}" style="margin:.5rem 0 0;">
+        html += `<div class="pick-score-bar score-bar-${parlayStatus}" style="margin-bottom:.5rem;">
           <span style="font-weight:600;">Parlay ${parlayLabel}</span>
           <span class="score-status status-${parlayStatus}">${note}</span>
         </div>`;
       }
+
       html += `</div>`;
     }
 
@@ -2379,19 +1979,7 @@
       return { status: st, risk, winAmt };
     });
     const api = (picksData.parlayLegs && picksData.parlayLegs[0]) || null;
-    const parlayRejected = !!(api && (
-      api.qualifying === false
-      || api.status === 'no qualifying parlay'
-      || api.type === 'no-qualifying-parlay'
-    ));
-    const parlayEvNum = api && api.ev != null && api.ev !== ''
-      ? parseFloat(String(api.ev).replace('%', ''))
-      : null;
-    const parlayEvFails = !(api && (api.type === '3-leg-parlay-labeled' || api.type === '2-leg-parlay-labeled'))
-      && !!(api && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
-    const rawLegs = (!parlayRejected && !parlayEvFails && api && api.legs && api.legs.length >= 2)
-      ? api.legs
-      : null;
+    const rawLegs = api && api.legs && api.legs.length >= 2 ? api.legs : null;
     let parlay = null;
     if (rawLegs) {
       let parlayUnits = 0.5;
@@ -2450,7 +2038,7 @@
 
     // Profit & ROI = ALL BETS (straights + parlays combined)
     const profitEl = document.getElementById('cum-profit');
-    const profit = wholeUp(cum.totalProfit || 0);
+    const profit = cum.totalProfit || 0;
     profitEl.textContent = (profit >= 0 ? '+$' : '-$') + Math.abs(profit).toLocaleString();
     profitEl.className = 'cum-value ' + (profit >= 0 ? 'positive' : 'negative');
 
@@ -2499,9 +2087,8 @@
         if (isPreGame) {
           let t = '';
           if (game && game.startTimeEST) t = game.startTimeEST;
-          else if (p.gameTime) t = p.gameTime;
           else if (p.commenceTime) { try { t = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
-          if (t) { const tz = /ET|EST|EDT/.test(t) ? t : t + ' ET'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
+          if (t) { const tz = t.includes('EST') || t.includes('EDT') ? t : t + ' EST'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
         } else if (isLiveGame) {
           const scoreStr = game ? `(${game.awayScore}-${game.homeScore})` : '';
           rightSide = `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">${scoreStr}</span><span class="result-badge result-pending">LIVE</span>`;
@@ -2522,7 +2109,7 @@
       // Today's P/L follows the card grades when ESPN scores are loaded. Historical days stay on the server row.
       const todayServerDay = (data.days || []).find(d => picksData && d.date === picksData.date);
       const liveToday = clientTodayLedger();
-      const todayProfit = liveToday ? wholeUp(liveToday.profit) : (todayServerDay ? wholeUp(todayServerDay.profit || 0) : 0);
+      const todayProfit = liveToday ? liveToday.profit : (todayServerDay ? Math.round(todayServerDay.profit || 0) : 0);
       const todayProfitStr = (todayProfit >= 0 ? '+$' : '-$') + Math.abs(todayProfit).toLocaleString();
       html += `<tr style="background:var(--teal-light);">
         <td><button class="day-toggle" onclick="toggleDay('today')" style="font-weight:700;">${esc(todayDate)}</button></td>
@@ -2547,9 +2134,8 @@
       const day = days[i];
       if (picksData && picksData.date === day.date) continue;
       const record = `${day.wins}W-${day.losses}L${day.pushes ? '-' + day.pushes + 'P' : ''}`;
-      const dayProfit = wholeUp(day.profit || 0);
-      const profitClass = dayProfit >= 0 ? 'profit-positive' : 'profit-negative';
-      const profitStr = (dayProfit >= 0 ? '+$' : '-$') + Math.abs(dayProfit).toLocaleString();
+      const profitClass = day.profit >= 0 ? 'profit-positive' : 'profit-negative';
+      const profitStr = (day.profit >= 0 ? '+$' : '-$') + Math.abs(day.profit).toLocaleString();
       const d = new Date(day.date + 'T12:00:00');
       const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 

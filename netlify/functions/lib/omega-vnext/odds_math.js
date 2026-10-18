@@ -1,6 +1,6 @@
 'use strict';
 
-const { QUALITY_GRADE, UNIT_DOLLARS, GRADE_STAKE_UNITS } = require('./config');
+const { QUALITY_GRADE } = require('./config');
 
 function americanToImplied(american) {
   const a = Number(american);
@@ -26,48 +26,6 @@ function formatAmerican(american) {
   return a > 0 ? `+${a}` : `${a}`;
 }
 
-/**
- * Power de-vig only past −250 or +210, and only when the raw implieds
- * sum to more than 1. Inside the band, and when a plus-money pair already
- * sums to less than 1, the split is proportional. Fair probabilities sum to 1.
- */
-function lopsidedAmerican(a1, a2) {
-  return [a1, a2].some((a) => {
-    const n = Number(a);
-    return Number.isFinite(n) && (n < -250 || n > 210);
-  });
-}
-
-/**
- * k such that i1^k + i2^k = 1. Used when the pair is outside the band
- * and the raw implieds already sum to more than 1. k stays at least 1:
- * raising k shrinks probabilities that are under 1. A pair that already
- * sums to less than 1 has no such k, and the caller uses proportional.
- */
-function powerFair(i1, i2) {
-  const raw = i1 + i2;
-  if (!(raw > 1)) return null;
-  let lo = 1;
-  let hi = 1;
-  let sumHi = raw;
-  while (sumHi > 1 && hi < 32) {
-    hi *= 2;
-    sumHi = Math.pow(i1, hi) + Math.pow(i2, hi);
-  }
-  if (!(sumHi <= 1)) return null;
-  for (let n = 0; n < 60; n += 1) {
-    const mid = (lo + hi) / 2;
-    const sum = Math.pow(i1, mid) + Math.pow(i2, mid);
-    if (sum > 1) lo = mid;
-    else hi = mid;
-  }
-  const k = (lo + hi) / 2;
-  const p1 = Math.pow(i1, k);
-  const p2 = Math.pow(i2, k);
-  if (!(Math.abs(p1 + p2 - 1) < 1e-8)) return null;
-  return { p1, p2, k };
-}
-
 /** Two-way no-vig probabilities from a pair of American prices. */
 function noVigTwoWay(a1, a2) {
   const i1 = americanToImplied(a1);
@@ -75,14 +33,10 @@ function noVigTwoWay(a1, a2) {
   if (i1 == null || i2 == null) return null;
   const s = i1 + i2;
   if (s <= 0) return null;
-  const proportional = { p1: i1 / s, p2: i2 / s, vig: s - 1 };
-  if (!lopsidedAmerican(a1, a2) || !(s > 1)) return proportional;
-  const powered = powerFair(i1, i2);
-  if (!powered) return proportional;
-  return { p1: powered.p1, p2: powered.p2, vig: s - 1, method: 'power' };
+  return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
 }
 
-/** De-vig a list of {side, american} sharing one market. Two-way uses noVigTwoWay. */
+/** De-vig a list of {side, american} sharing one market. */
 function deVigMarket(outcomes) {
   const rows = (outcomes || []).map(o => ({
     ...o,
@@ -90,15 +44,6 @@ function deVigMarket(outcomes) {
   })).filter(o => o.implied != null);
   const sum = rows.reduce((s, r) => s + r.implied, 0);
   if (sum <= 0) return rows;
-  if (rows.length === 2) {
-    const nv = noVigTwoWay(rows[0].american, rows[1].american);
-    if (nv) {
-      return [
-        { ...rows[0], fairP: nv.p1, vig: nv.vig },
-        { ...rows[1], fairP: nv.p2, vig: nv.vig },
-      ];
-    }
-  }
   return rows.map(r => ({ ...r, fairP: r.implied / sum, vig: sum - 1 }));
 }
 
@@ -120,12 +65,13 @@ function kellyFraction(p, american, fraction = 0.25) {
   return full * fraction;
 }
 
-/** Quarter-Kelly fraction → units. ×50, nearest 0.5u, floor 0.5u when Kelly > 0. */
+/** Convert Kelly fraction → display units (0.25u steps, min 0.25 when positive). */
 function kellyToUnits(kellyFrac, unitCap = 2.0) {
   if (!kellyFrac || kellyFrac <= 0) return 0;
-  let u = kellyFrac * 50;
-  u = Math.round(u * 2) / 2;
-  u = Math.max(0.5, Math.min(unitCap, u));
+  // Heuristic: 1% bankroll Kelly ≈ 1.0u at $150 unit / ~$15k roll feel
+  let u = kellyFrac * 100;
+  u = Math.round(u * 4) / 4; // 0.25 steps
+  u = Math.max(0.25, Math.min(unitCap, u));
   return u;
 }
 
@@ -191,19 +137,10 @@ function calibratedEdgeFraction(coverProb, american) {
   return evAtOdds(coverProb, american);
 }
 
-/**
- * Format as "X.X%" for card badges.
- * Half up on the tenth. A float just under n.5 (15.499999… for 1.55%)
- * still prints the higher tenth. Math.round is half toward +inf, so the
- * sign is applied after rounding the absolute value.
- */
+/** Format as "X.X%" for card badges. */
 function formatEdgePct(edgeFrac) {
   if (!Number.isFinite(edgeFrac)) return null;
-  const negative = edgeFrac < 0;
-  const tenths = Math.round(Math.abs(edgeFrac) * 1000 + 1e-8);
-  const whole = Math.trunc(tenths / 10);
-  const frac = tenths % 10;
-  return `${negative && tenths !== 0 ? '-' : ''}${whole}.${frac}%`;
+  return `${(edgeFrac * 100).toFixed(1)}%`;
 }
 
 /**
@@ -223,15 +160,13 @@ function formatMoneylinePick(side, market) {
 }
 
 
-/** Parse edge as fraction — accepts 0.053, 5.3, or "5.3%". A percent sign always scales. */
+/** Parse edge as fraction — accepts 0.053, 5.3, or "5.3%". */
 function parseEdgeFraction(v) {
   if (v == null || v === '') return null;
-  if (typeof v === 'number' && Number.isFinite(v)) return Math.abs(v) > 1 ? v / 100 : v;
-  const s = String(v).trim();
-  const n = parseFloat(s.replace(/[^0-9.+-]/g, ''));
+  if (typeof v === 'number' && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  const n = parseFloat(String(v).replace(/[^0-9.+-]/g, ''));
   if (!Number.isFinite(n)) return null;
-  if (s.includes('%') || Math.abs(n) > 1) return n / 100;
-  return n;
+  return Math.abs(n) > 1 ? n / 100 : n;
 }
 
 /**
@@ -251,86 +186,6 @@ function qualityScore(edgeFrac, predictedClv, uncertainty) {
     ? clamp((0.18 - unc) * 0.005, -0.001, 0.001)
     : 0;
   return edge + clvBonus + uncertaintyAdj;
-}
-
-/** aplus / a / aminus / bplus / b / lean, or ''. */
-function normalizeRatingKey(rating) {
-  const r = String(rating == null ? '' : rating).trim().toLowerCase().replace(/\s+/g, '');
-  if (r === 'a+' || r === 'aplus') return 'aplus';
-  if (r === 'a') return 'a';
-  if (r === 'a-' || r === 'aminus') return 'aminus';
-  if (r === 'b+' || r === 'bplus') return 'bplus';
-  if (r === 'b') return 'b';
-  if (r === 'lean') return 'lean';
-  return '';
-}
-
-/** Display letter. A+ / A / A- / B+ / B. */
-function ratingLetter(rating) {
-  const key = normalizeRatingKey(rating);
-  return ({
-    aplus: 'A+', a: 'A', aminus: 'A-', bplus: 'B+', b: 'B', lean: 'Lean',
-  })[key] || null;
-}
-
-/**
- * Flat published stake. A lean is 0.5u at every letter.
- * A+ 1.5, A 1, A- 0.75, B and anything else 0.5.
- */
-function gradeStakeUnits(rating, tier) {
-  const t = String(tier || '').trim().toLowerCase();
-  if (t === 'lean') {
-    const lean = Number(GRADE_STAKE_UNITS && GRADE_STAKE_UNITS.lean);
-    return Number.isFinite(lean) ? lean : 0.5;
-  }
-  const key = normalizeRatingKey(rating);
-  const table = GRADE_STAKE_UNITS || {};
-  const raw = key && table[key] != null ? Number(table[key]) : Number(table.b);
-  return Number.isFinite(raw) ? raw : 0.5;
-}
-
-/** True when the letter is A- or better. That straight makes the card full. */
-function isFullCardGrade(rating) {
-  const key = normalizeRatingKey(rating);
-  return key === 'aplus' || key === 'a' || key === 'aminus';
-}
-
-/**
- * Full card: any straight is graded A- or better.
- * A missing letter falls back to the edge fraction (A- starts at 2%).
- * No such straight is a lean-only card.
- */
-function cardHasFullGrade(picks) {
-  return (picks || []).some((p) => {
-    if (!p) return false;
-    const explicit = p.rating != null && String(p.rating).trim() !== ''
-      ? p.rating
-      : (p.qualityGrade != null && String(p.qualityGrade).trim() !== ''
-        ? p.qualityGrade
-        : p.grade);
-    if (explicit != null && String(explicit).trim() !== '') return isFullCardGrade(explicit);
-    const edge = parseEdgeFraction(p.edgePct != null ? p.edgePct : p.edge);
-    if (edge != null) return edge + 1e-12 >= QUALITY_GRADE.aminus;
-    return false;
-  });
-}
-
-/** Kickoff clock in America/New_York, or null. */
-function formatGameTimeET(iso) {
-  if (iso == null || iso === '') return null;
-  try {
-    const d = iso instanceof Date ? iso : new Date(iso);
-    if (!Number.isFinite(d.getTime())) return null;
-    const clock = d.toLocaleTimeString('en-US', {
-      timeZone: 'America/New_York',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-    return clock ? `${clock} ET` : null;
-  } catch (_) {
-    return null;
-  }
 }
 
 /** Letter grade from edge-first quality. Thresholds come from shared config. */
@@ -404,77 +259,6 @@ function isSameEtDay(commenceTime, cardDateISO) {
   return et != null && et === String(cardDateISO || '');
 }
 
-/** Display round-up. An already-whole number stays whole. */
-function wholeUpNumber(n) {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return 0;
-  const up = Math.ceil(x - 1e-9);
-  return Object.is(up, -0) ? 0 : up;
-}
-
-function parseStakeUnits(units) {
-  if (units == null || units === '') return null;
-  const n = parseFloat(String(units).replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Whole dollars at risk. 0.75u is $113. 0.25u is $38. */
-function stakeDollars(units) {
-  const n = typeof units === 'number' && Number.isFinite(units) ? units : parseStakeUnits(units);
-  if (n == null) return 0;
-  return wholeUpNumber(n * UNIT_DOLLARS);
-}
-
-/** Profit if the stake wins, rounded up to a whole dollar. Risk is already ceiled. */
-function toWinDollars(units, american) {
-  const risk = stakeDollars(units);
-  if (!risk) return 0;
-  const a = Number(String(american == null ? '' : american).replace(/[^0-9.+-]/g, ''));
-  if (!Number.isFinite(a) || a === 0) return 0;
-  const profit = a > 0 ? risk * (a / 100) : risk * (100 / Math.abs(a));
-  return wholeUpNumber(profit);
-}
-
-function isPublishedParlay(pl) {
-  if (!pl || typeof pl !== 'object') return false;
-  if (pl.qualifying === false) return false;
-  if (pl.status === 'no qualifying parlay') return false;
-  if (pl.type === 'no-qualifying-parlay') return false;
-  return true;
-}
-
-/**
- * Summary display. Real unit stakes are summed and the parlay counts once.
- * Each stake's dollars round up on their own, then those dollars sum.
- * pick.units is left as the real stake.
- */
-function summaryStakeDisplay(picks, parlayLegs) {
-  let units = 0;
-  let dollars = 0;
-  const add = (raw) => {
-    const n = parseStakeUnits(raw);
-    if (n == null) return;
-    units += n;
-    dollars += stakeDollars(n);
-  };
-  for (const p of picks || []) add(p && p.units);
-  const legs = (parlayLegs || []).filter(isPublishedParlay);
-  if (legs.length) {
-    const n = legs.map(l => parseStakeUnits(l.units)).find(v => v != null);
-    if (n != null) add(n);
-  }
-  units = Math.round(units * 100) / 100;
-  return { units, dollars, totalUnits: `${units}u`, totalDollars: dollars };
-}
-
-function writeSummaryStakeDisplay(summary, picks, parlayLegs) {
-  if (!summary || typeof summary !== 'object') return null;
-  const shown = summaryStakeDisplay(picks, parlayLegs);
-  summary.totalUnits = shown.totalUnits;
-  summary.totalDollars = shown.totalDollars;
-  return shown;
-}
-
 module.exports = {
   americanToImplied,
   americanToDecimal,
@@ -498,19 +282,8 @@ module.exports = {
   parseEdgeFraction,
   qualityScore,
   qualityToRating,
-  normalizeRatingKey,
-  ratingLetter,
-  gradeStakeUnits,
-  isFullCardGrade,
-  cardHasFullGrade,
-  formatGameTimeET,
-  stakeDollars,
-  toWinDollars,
   pickQualityScore,
   sortByGradeThenUnits,
   etCalendarDate,
   isSameEtDay,
-  wholeUpNumber,
-  summaryStakeDisplay,
-  writeSummaryStakeDisplay,
 };

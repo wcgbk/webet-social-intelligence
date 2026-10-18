@@ -436,7 +436,7 @@
   <main class="main">
 
     <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">All versions</span></h1>
-    <p class="page-sub">Architecture scorecard for Daily Edge Picks. The card prices the better of DraftKings and Hard Rock. Edge is the model probability minus the implied probability of that price. Expected value is that same probability times the decimal odds, minus 1. Pinnacle is the closing-line check. Straights rank by that edge. A sport whose margin residual is more than three times its limit is off the card. A parlay publishes only when three games clear 45% cover and positive stake EV at or under 12%. The card cap is 5.0 units, and stakes are flat by grade. NBA stays off through 2026-10-19. The percentiles below are an elite-desk engineering judgment scored 2026-10-15. They are not a live results rank and not computed from the ROI table. Live KPIs below are the full historical line across all model versions combined with Omega.</p>
+    <p class="page-sub">Architecture scorecard for Daily Edge Picks. Prices anchor to a paired no-vig line, Pinnacle first and Circa when Pinnacle is missing. Sport engines cover MLB, NFL, college football, and NHL. Basketball stays off. A card is up to three gate-clear straights plus one 3-leg parlay, inside a 4.0 unit cap (3.5 on straights, 0.5 on the parlay). Walk-forward jobs only store lock-to-close samples. Coefficient fit is off, so those samples do not change the next card. The four percentiles below are the September 23, 2026 elite-desk QA. They are an engineering judgment on that desk lock, not a live results rank, and they were scored before the September 30 hockey engine. Live KPIs below are the full historical line across all model versions combined with Omega.</p>
     <div style="text-align:center; margin-bottom:1.25rem; display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; align-items:center;">
       <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary</button>
       <span class="kpi-view-toggle" role="group" aria-label="KPI view">
@@ -454,81 +454,45 @@
       <div id="live-stats-body"><div class="stats-loading">Loading stats...</div></div>
     </div>
 
-    <!-- Elite desk QA — scored 2026-10-15 on the live publisher -->
+    <!-- Elite desk QA — documented scores only (2026-09-23 write-up) -->
     <div class="scorecard">
       <div class="scorecard-title">Elite Desk QA</div>
-      <p class="qa-note">Scored 2026-10-15 on the live publisher: Processes 82, Architecture 84, Math 70, Verify 78, Straights 70, Parlay 65, Overall 65. The hockey rating stays near 46 until a replay. The 2026-10-05/06 scores (Processes 89, Architecture 88, Math 85, Overall 85) described a different publisher. These numbers are engineering judgments. They are not the record above.</p>
+      <p class="qa-note">Scored September 23, 2026 against a sharp closing-line desk, on the v12.3.12 desk lock. Processes 86, Architecture 86, Math 84, Overall 84. Overall follows Math, the weakest lens. These are engineering judgments from that review. They are not a forecast, not computed from the record above, and they predate the September 30 hockey engine.</p>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Processes</span>
-          <span class="metric-pct pct-strong">82</span>
+          <span class="metric-pct pct-strong">86</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:82%"></div></div>
-        <div class="metric-rationale">The 3:00 and 10:00 ET board snaps, the 10:05 draft, the 10:45 narration, and the 11:00 publish are on the clock. A stored morning card with no picks can be rebuilt. A card that already has picks stays locked unless a manual rebuild is forced. The November 1 clock change is written down. Live schedules stay on fixed UTC until that change is applied.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:86%"></div></div>
+        <div class="metric-rationale">Morning snaps, generate, verify, and an evening write-only resample bracket the card. The November 1 clock change is written down and was not applied on the day this score was given. The live schedules stay on fixed UTC until that change is applied.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Architecture</span>
-          <span class="metric-pct pct-strong">84</span>
+          <span class="metric-pct pct-strong">86</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
-        <div class="metric-rationale">Generate publishes the sport-engine probability. Verify can drop a broken straight and cannot add one. Walk-forward samples stay off the selection path. The market-anchor blend is off in code. A sport whose mean margin is more than three times its limit is removed for that run. Hockey's shrink-to-the-mean rating is still the open leak when the margin is inside that line.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:86%"></div></div>
+        <div class="metric-rationale">Generate publishes the card. Verify may drop a broken straight, flag copy, or resize a stake inside the existing cap. It does not add a pick. Walk-forward samples, prediction-market logs, and outside research stay off the selection path.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Math</span>
-          <span class="metric-pct pct-good">70</span>
+          <span class="metric-pct pct-strong">84</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-good" style="width:70%"></div></div>
-        <div class="metric-rationale">Edge, expected value, and the one-decimal win probability come from the same model probability and the same retail price. At +130, 48.7% is a 5.2% edge and a 12.0% expected value. Hockey shrink mode is all, so every club is pulled to the league mean. The 2026-10-15 board was about one goal off on all 11 games. Football weights were not refit off one Thursday game.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Verify</span>
-          <span class="metric-pct pct-good">78</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-good" style="width:78%"></div></div>
-        <div class="metric-rationale">Verify can drop, flag, or resize a stake inside the cap. It does not add a pick. After narration, copy that omits the printed edge and expected value, or that invents a cause the number does not support, is replaced with the factual line. Closing-line value is recorded. It is not a publish gate yet.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Straights</span>
-          <span class="metric-pct pct-good">70</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-good" style="width:70%"></div></div>
-        <div class="metric-rationale">Rank is probability edge. Stake EV from 2% through 12% decides inclusion and breaks a tie inside 0.2 percentage points. A plus-money price cannot outrank a higher edge. Grades are A+ at 5% edge (1.5u), A at 3.5% (1u), A− at 2% (0.75u), and B at 1% as a 0.5u lean. A short card is published when a sport fails the margin check.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Parlay</span>
-          <span class="metric-pct pct-mid">65</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-mid" style="width:65%"></div></div>
-        <div class="metric-rationale">A 3-leg needs a sport that passed the margin check, cover of at least 45%, and positive stake EV at or under 12%. Three such games make that ticket. When the card is two straights, the parlay is those two teams, and the 45% cover is not reapplied. One straight is no parlay. Cover of 45% at +150 is 12.5% stake EV, so that leg stays off a 3-leg. The stake is 0.5u on a full-grade card and 0.25u on a lean-only card. Omega parlays since 2026-09-22 are 3–17.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">NHL rating</span>
-          <span class="metric-pct pct-mid">46</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-mid" style="width:46%"></div></div>
-        <div class="metric-rationale">Shrink mode is all. Every club is pulled to the league mean. On 2026-09-22 through 2026-10-08, out-of-band shrink changed no picks, and shrink-all changed 8 picks and lost $72 versus the unshrunk base. The default stays all until a replay puts the margin residual inside 0.3 goals without a worse close.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
+        <div class="metric-rationale">Steam uses the American juice ladder, so a plus-to-minus cross is not treated as a 200-cent move. Straights rank on the same quality score as the letter grade. The published probability is still shrunk with hand-set constants and a 0.42–0.58 isotonic band. That is why this lens stays under 85.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Overall</span>
-          <span class="metric-pct pct-mid">65</span>
+          <span class="metric-pct pct-strong">84</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-mid" style="width:65%"></div></div>
-        <div class="metric-rationale">Overall follows the parlay and the hockey leak. The scale is 50 for no advantage, 70 for competent with a leak, and 80 for a number you can bet small. The top band needs a forward window after this build: the displayed identity holds, closing-line value is clearly positive on a few hundred new bets, and each sport's margin sits inside its limit for a month.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
+        <div class="metric-rationale">Overall follows Math. The card shape in that review is unchanged: up to three gate-clear straights, a 3-leg ranked by combined hit probability, a 4.0 unit cap, and no lean pad. An empty card is allowed.</div>
       </div>
 
     </div>
@@ -537,8 +501,8 @@
       <div class="scorecard-title">What Feeds the Card</div>
       <div class="sources-grid">
         <div class="source-chip">
-          <span class="source-name">Closing line</span>
-          <span class="source-desc">Pinnacle is the closing-line check. The published edge uses the model probability and the better of DraftKings and Hard Rock.</span>
+          <span class="source-name">Sharp anchors</span>
+          <span class="source-desc">Paired no-vig price. Pinnacle first, then Circa, then the other sharp books. One book’s two-way price is never mixed with another book’s other side.</span>
         </div>
         <div class="source-chip">
           <span class="source-name">US retail books</span>
@@ -554,7 +518,7 @@
         </div>
         <div class="source-chip">
           <span class="source-name">NHL engine</span>
-          <span class="source-desc">Per-game goals for and against, plus home ice. Shrink mode all pulls every club to the league mean. That is the open leak, and the sport is off the card when the margin residual is past three times its limit.</span>
+          <span class="source-desc">Enabled September 30, 2026. Per-game goals for and against, plus home ice. Shot and goalie residuals are capped and fail soft to zero.</span>
         </div>
         <div class="source-chip">
           <span class="source-name">Walk-forward store</span>
@@ -569,8 +533,8 @@
       <div class="pipeline-step">
         <div class="step-num">1</div>
         <div class="step-content">
-          <div class="step-title">Retail board</div>
-          <div class="step-desc">The 3:00 ET snap records the open. The 10:00 ET snap is the board the card prices. The published number is the better of DraftKings and Hard Rock. Pinnacle is stored for the close. Publish does not call the odds feed again.</div>
+          <div class="step-title">Sharp line</div>
+          <div class="step-desc">Morning snaps record the open. The fair price is a paired no-vig from one book: Pinnacle, then Circa. Open-to-now steam is measured on the American juice ladder.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -579,7 +543,7 @@
         <div class="step-num">2</div>
         <div class="step-content">
           <div class="step-title">Sport engines</div>
-          <div class="step-desc">MLB builds the run environment from per-game runs. NFL and college football use EPA and a capped QB adjustment. NHL uses per-game goals, home ice, and shrink-all to the league mean. NBA stays off through 2026-10-19. A missing feed adds zero and the rest of that slate still runs.</div>
+          <div class="step-desc">MLB builds the run environment from per-game runs. NFL and college football use EPA and a capped QB adjustment. NHL uses per-game goals and home ice. Basketball is off. A missing feed adds zero and the rest of that slate still runs.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -587,8 +551,8 @@
       <div class="pipeline-step">
         <div class="step-num">3</div>
         <div class="step-content">
-          <div class="step-title">Probability</div>
-          <div class="step-desc">The published probability is the sport-engine number. Edge is that probability minus the implied probability of the retail price. Expected value is that probability times the decimal odds, minus 1. Walk-forward samples do not change the next card.</div>
+          <div class="step-title">Calibration</div>
+          <div class="step-desc">The model probability shrinks toward the sharp price with a fixed constant, then sits inside a 0.42–0.58 isotonic band. Fit is off. There is no shrink map, isotonic table, or gate override loaded from the walk-forward store.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -597,7 +561,7 @@
         <div class="step-num">4</div>
         <div class="step-content">
           <div class="step-title">Straights</div>
-          <div class="step-desc">Same-day games only. Straights rank by probability edge. Stake EV from 2% to 12% is the inclusion check and the tie-break inside 0.2 percentage points. Up to three. A short card is allowed. A sport past the extreme margin line is off.</div>
+          <div class="step-desc">Same-day games only. Gate-clear plays rank by quality score, the same number as the letter grade. Up to three straights. The card may be short. Nothing is padded in to fill a quota.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -606,7 +570,7 @@
         <div class="step-num">5</div>
         <div class="step-content">
           <div class="step-title">Parlay</div>
-          <div class="step-desc">One parlay. Three distinct games, each with cover of at least 45% and positive stake EV at or under 12%, make a 3-leg. When the card is two straights, the parlay is those two teams. One straight is no parlay. Stake is 0.5 units on a full-grade card and 0.25 units on a lean-only card. The card cap is 5.0 units. One straight is capped at 1.5 units.</div>
+          <div class="step-desc">One parlay. A clean 3-leg is published when one exists, ranked by combined hit probability, with expected value only as a tie-break. Stake is 0.5 units. Straights share a 3.5 unit budget. The card cap is 4.0 units.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -615,7 +579,7 @@
         <div class="step-num">6</div>
         <div class="step-content">
           <div class="step-title">Verify and observers</div>
-          <div class="step-desc">Verify can drop, flag, or resize. It cannot add a straight. Narration has to print the probability, the price, the edge, and the expected value. Copy that invents a cause is replaced with the factual line. Morning and evening walk-forward jobs write samples only.</div>
+          <div class="step-desc">Verify can drop, flag, or resize. It cannot add a straight or rebuild the parlay from the straight card. Morning and evening walk-forward jobs write samples only. A null close is not a fit.</div>
           <span class="step-tag tag-auto">Automated</span>
         </div>
       </div>
@@ -625,19 +589,19 @@
     <div class="gap-card">
       <div class="gap-title">Design Rules</div>
       <div class="gap-item">
-        <span class="gap-label">One probability:</span> Edge is the model probability minus the implied probability of the bet price. Expected value is that same probability times the decimal odds, minus 1. Pinnacle is the closing-line check.
+        <span class="gap-label">One fair price:</span> Spreads, totals, and moneylines share a paired no-vig anchor. The Edge figure is the shrink-adjusted gap versus that price.
       </div>
       <div class="gap-item">
         <span class="gap-label">Engines fail soft:</span> A missing starter, EPA row, or goalie rate adds zero. It does not blank the slate and it does not invent the missing number.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Short cards are allowed:</span> Three straights is a maximum. A sport the margin check calls broken does not fill the open slots. A parlay needs three qualifying games or it is not published.
+        <span class="gap-label">Short cards are allowed:</span> Three straights is a maximum. Steam and placeability can leave the card empty. Verify does not refill it.
       </div>
       <div class="gap-item">
         <span class="gap-label">Observers do not publish:</span> Walk-forward fit is off. Samples from September 22, 2026 forward are stored for a later review. Generate does not read them.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Caps live in code:</span> 5.0 units on the card and 1.5 on any one straight. Flat grade stakes: A+ 1.5u, A 1.0u, A− 0.75u, B and lean 0.5u. The parlay is 0.5u on a full-grade card and 0.25u on a lean-only card.
+        <span class="gap-label">Caps live in code:</span> 3.5 units across straights, 0.5 on the parlay, 4.0 for the card, and 1.25 on any one straight. Quarter-Kelly sizes the straight before those caps.
       </div>
     </div>
 
@@ -653,7 +617,7 @@
         <span class="gap-label">Evening</span> Runs after the close pass and writes the same store again. Still write-only.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Fit stays off</span> No coefficient or gate from those samples is applied. Generate does not read them. The published probability stays the sport-engine number.
+        <span class="gap-label">Fit stays off</span> No coefficient, shrink map, or gate from those samples is applied. The calibrator keeps the fixed constants already on the card.
       </div>
       <div class="gap-item">
         <span class="gap-label">What a sample holds</span> Sport, market, side, matchup, lock price, close price, closing-line cents, cover probability, sharp fair price, Edge, units, and a result only when the grade is win, loss, push, or void.
@@ -751,18 +715,6 @@
         const roiClass = tone(parseFloat(cum.roi));
         const strRoi = roiOf(str.totalProfit, str.totalWagered);
         const parRoi = roiOf(par.totalProfit, par.totalWagered);
-        function legBucketLine(label, bucket) {
-          if (!bucket) return '';
-          const decided = (bucket.wins || 0) + (bucket.losses || 0);
-          const pending = bucket.pending || 0;
-          if (!decided && !pending) return '';
-          const rec = (bucket.wins || 0) + 'W-' + (bucket.losses || 0) + 'L';
-          const roi = bucket.roi || '--';
-          const wait = pending ? ' · ' + pending + ' pending' : '';
-          return '<div class="split-row-item"><span class="split-row-label">' + label + '</span><span class="split-row-val">' + rec + wait + ' · ' + roi + '</span></div>';
-        }
-        const byLegs = data.parlayByLegs || {};
-        const legLines = legBucketLine('2-team', byLegs['2']) + legBucketLine('3-leg', byLegs['3']);
 
         let html = `
           <div class="stats-date-range">${fmt(first)} – ${fmt(last)} &nbsp;·&nbsp; All model versions since ${fmt(floor)} &nbsp;·&nbsp; ${days.length} card days</div>
@@ -800,7 +752,6 @@
               <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${par.totalWagered != null ? '$' + Number(par.totalWagered).toLocaleString() : '--'}</span></div>
               <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val ${tone(par.totalProfit)}">${par.totalProfit != null ? money(par.totalProfit) : '--'}</span></div>
               <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val ${tone(par.totalProfit)}">${parRoi}</span></div>
-              ${legLines}
             </div>
           </div>
           <table class="daily-mini-table">

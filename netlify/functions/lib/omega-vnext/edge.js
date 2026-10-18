@@ -3,10 +3,8 @@
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
 const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
-  noVigTwoWay, americanJuiceDelta, writeSummaryStakeDisplay,
+  noVigTwoWay, americanJuiceDelta,
 } = require('./odds_math');
-const { pushAwareEv } = require('./push_ev');
-const { sharpFairEnabled } = require('./sharp_fair');
 
 function bookKey(b) {
   return String(b || '').toLowerCase();
@@ -24,7 +22,6 @@ function collectMarketOutcomes(event, marketKey) {
     const key = bookKey(bk.key);
     const mkt = (bk.markets || []).find(m => m.key === marketKey);
     if (!mkt) continue;
-    const lastUpdate = mkt.last_update || mkt.lastUpdate || null;
     for (const o of mkt.outcomes || []) {
       const point = o.point != null ? Number(o.point) : null;
       const sideName = o.name;
@@ -32,9 +29,7 @@ function collectMarketOutcomes(event, marketKey) {
       if (!bySide.has(sideKey)) {
         bySide.set(sideKey, { side: sideName, point, prices: [] });
       }
-      const row = { book: key, american: Number(o.price) };
-      if (lastUpdate) row.lastUpdate = lastUpdate;
-      bySide.get(sideKey).prices.push(row);
+      bySide.get(sideKey).prices.push({ book: key, american: Number(o.price) });
     }
   }
   return [...bySide.values()];
@@ -112,7 +107,7 @@ function withinPlaceableJuice(bookAmerican, publishedAmerican, cfg = PLACEABILIT
 
 /**
  * US retail books in US_BOOK_PRIORITY that offer this side near the published
- * price. Pinnacle and the other sharp books do not count. One brand once.
+ * price. Pinnacle / Circa / other sharp books do not count. One brand once.
  * @returns {{ placeableBooks: string[], bestPlaceable: {book: string, american: number, point?: number}|null, placeable: boolean }}
  */
 function assessPlaceability(prices, publishedAmerican, point) {
@@ -222,6 +217,11 @@ function placeabilitySideKey(row) {
   return `${String((row && (row.pick || row.side)) || '').trim().toLowerCase()}@@${String((row && row.matchup) || '').trim().toLowerCase()}`;
 }
 
+function parseUnitsLoose(u) {
+  const n = parseFloat(String(u == null ? '' : u).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 /**
  * Drop straights whose verify decision says so. Clear the parlay when any
  * leg fails (do not refill or invent a replacement leg). Other straights stay.
@@ -281,17 +281,15 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
   if (kept.length === 0) {
     data.parlayLegs = [];
     parlayCleared = true;
-    const { shouldPublishNoPlays } = require('./select');
-    const leanRows = [].concat(data.leanPool || []);
-    if (shouldPublishNoPlays(kept, leanRows)) {
-      Object.assign(data, require('../no-plays').noPlaysFields(
-        "Today's candidates are no longer offered at a playable price at the major books, so Omega is passing."));
-    }
+    Object.assign(data, require('../no-plays').noPlaysFields(
+      "Today's candidates are no longer offered at a playable price at the major books, so Omega is passing."));
   }
   if (data.summary) {
+    const straightU = kept.reduce((s, p) => s + parseUnitsLoose(p.units), 0);
+    const parlayU = (data.parlayLegs || []).reduce((s, pl) => s + parseUnitsLoose(pl.units), 0);
     data.summary.totalPicks = kept.length;
     data.summary.totalStraightBets = kept.length;
-    writeSummaryStakeDisplay(data.summary, kept, data.parlayLegs);
+    data.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
     if (Array.isArray(data.summary.sportsCovered)) {
       data.summary.sportsCovered = [...new Set(kept.map(p => p.sport).filter(Boolean))];
     }
@@ -332,25 +330,17 @@ function noVigForBook(sideBundles, target, book) {
 }
 
 /**
- * One-book no-vig. Pinnacle when that book posts both sides.
- * Null when Pinnacle has no pair. Does not mix books and does not
- * fall through to sharpFairForSide.
+ * Spread/total market anchor: no-vig Pinnacle and Circa at equal weight.
+ * One book alone is used when the other has no two-way price.
+ * Missing both falls back to the existing sharp no-vig pair (still not prices[0]).
  */
-function pairedSharpNoVig(sideBundles, target) {
+function noVigPinnacleCircaImplied(sideBundles, target) {
   if (!target) return null;
   const pin = noVigForBook(sideBundles, target, 'pinnacle');
-  if (pin != null && Number.isFinite(pin)) return { p: pin, book: 'pinnacle' };
-  return null;
-}
-
-/**
- * Spread/total/ML market anchor: Pinnacle's paired no-vig when that book
- * posts both sides. Missing Pinnacle falls back to sharpFairForSide.
- */
-function noVigPinnacleImplied(sideBundles, target) {
-  const paired = pairedSharpNoVig(sideBundles, target);
-  if (paired) return paired.p;
-  if (!target) return null;
+  const circa = noVigForBook(sideBundles, target, 'circa');
+  const circaAlt = circa != null ? circa : noVigForBook(sideBundles, target, 'circasports');
+  const parts = [pin, circaAlt].filter(v => v != null && Number.isFinite(v));
+  if (parts.length) return parts.reduce((s, v) => s + v, 0) / parts.length;
   return sharpFairForSide(sideBundles, target.side, target.point);
 }
 
@@ -359,8 +349,8 @@ function noVigPinnacleImplied(sideBundles, target) {
  */
 /**
  * No-vig fair for one side.
- * Prefer a paired same-book price (Pinnacle, then the other sharp books).
- * Mixing Pinnacle on one side with a different book's number
+ * Prefer a paired same-book price (Pinnacle, then Circa, then the other
+ * sharp books). Mixing Pinnacle on one side with a different book's number
  * on the other is not a de-vig. The mixed sharpConsensus path remains only
  * when no book posts both sides.
  */
@@ -369,13 +359,9 @@ function sharpFairForSide(sideBundles, targetSide, targetPoint) {
   if (!target) return null;
 
   for (const book of SHARP_BOOKS) {
-    if (sharpFairEnabled() && book !== 'pinnacle') continue;
     const paired = noVigForBook(sideBundles, target, book);
     if (paired != null) return paired;
   }
-
-  // Pinnacle had no pair at this point. A DK/HR median is not a fair.
-  if (sharpFairEnabled()) return null;
 
   const opposite = oppositeBundle(sideBundles, target);
   if (!opposite) {
@@ -418,87 +404,10 @@ function predictedClvCents(bestUsAmerican, sharpAmerican, pModel, fairSharpP) {
   return +((0.55 * priceClv + 0.45 * modelClv)).toFixed(2);
 }
 
-const DK_EXEC_BOOK = 'draftkings';
-
-/** Hard Rock quote for this side at this number. A different number is another bet. */
-function hardRockQuote(allBundles, side, point) {
-  let best = null;
-  const target = point != null && point !== '' ? Number(point) : null;
-  const targetOk = target != null && Number.isFinite(target);
-  for (const b of allBundles || []) {
-    if (!b || b.side !== side) continue;
-    const pt = b.point != null && b.point !== '' ? Number(b.point) : null;
-    const ptOk = pt != null && Number.isFinite(pt);
-    if (targetOk) {
-      if (!ptOk || Math.abs(pt - target) > 1e-6) continue;
-    } else if (ptOk) continue;
-    for (const p of b.prices || []) {
-      if (canonicalizeBook(p.book) !== 'hardrockbet') continue;
-      const american = Number(p.american);
-      if (!Number.isFinite(american)) continue;
-      const row = { book: 'hardrockbet', american, point: ptOk ? pt : null };
-      if (!best || american > best.american) best = row;
-    }
-  }
-  return best;
-}
-
-/**
- * Pinnacle two-way half a point away, only when this side has no pair
- * and the integer between the points is an NFL 3 or 7. Other gaps stay null.
- */
-function nflHookPair(raw, sideBundle, allBundles) {
-  if (!raw || !sideBundle || String(raw.sport || '').toUpperCase() !== 'NFL') return null;
-  if (!/spread/i.test(String(raw.market || ''))) return null;
-  const pt = sideBundle.point != null ? Number(sideBundle.point) : null;
-  if (!Number.isFinite(pt)) return null;
-  for (const delta of [0.5, -0.5]) {
-    const want = pt + delta;
-    const bundle = (allBundles || []).find((b) => b && b.side === sideBundle.side && b.point != null && Math.abs(Number(b.point) - want) < 1e-6);
-    if (!bundle) continue;
-    const integer = Math.abs(pt - Math.round(pt)) < 1e-6 ? Math.round(pt) : Math.round(want);
-    if (Math.abs(integer) !== 3 && Math.abs(integer) !== 7) continue;
-    const opp = oppositeBundle(allBundles, bundle);
-    const sideRow = (bundle.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
-    const oppRow = opp
-      ? (opp.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)))
-      : null;
-    if (!sideRow || !oppRow) continue;
-    const last = sideRow.lastUpdate || oppRow.lastUpdate || null;
-    return {
-      american: Number(sideRow.american),
-      oppAmerican: Number(oppRow.american),
-      point: Number(bundle.point),
-      ...(last ? { lastUpdate: last } : {}),
-    };
-  }
-  return null;
-}
-
-function bundleHasPinnacle(bundle) {
-  return ((bundle && bundle.prices) || []).some((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
-}
-
-/** Pinnacle's home spread, or Pinnacle's total. Moneyline has no point. */
-function pinnaclePointOf(raw, allBundles) {
-  const market = String((raw && raw.market) || '');
-  if (/total/i.test(market)) {
-    const row = (allBundles || []).find((b) => b && b.point != null && bundleHasPinnacle(b));
-    return row ? Number(row.point) : null;
-  }
-  if (/spread/i.test(market)) {
-    const home = raw && raw.homeTeam;
-    const row = (allBundles || []).find((b) => b && b.side === home && b.point != null && bundleHasPinnacle(b));
-    return row ? Number(row.point) : null;
-  }
-  return null;
-}
-
 function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
   const fairSharp = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
-  const anchor = pairedSharpNoVig(allBundles, sideBundle);
   const odds = bestUs ? bestUs.american : sharpAm;
   const book = bestUs ? bestUs.book : 'consensus';
   const liquid = hasMajorLiquidity(sideBundle.prices);
@@ -508,35 +417,6 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     ? evAtOdds(raw.coverProb, odds)
     : (odds != null && Number.isFinite(raw.modelRawP) ? evAtOdds(raw.modelRawP, odds) : null);
 
-  const bookPrices = (sideBundle.prices || []).map((p) => ({
-    book: canonicalizeBook(p.book),
-    american: Number(p.american),
-    point: sideBundle.point != null ? sideBundle.point : null,
-  })).filter((p) => Number.isFinite(p.american));
-  const dkRaw = bestPrice(bookPrices, [DK_EXEC_BOOK]);
-  const dkQuote = dkRaw
-    ? { book: DK_EXEC_BOOK, american: dkRaw.american, point: sideBundle.point != null ? sideBundle.point : null }
-    : null;
-  const pinnacleNoVig = noVigForBook(allBundles, sideBundle, 'pinnacle');
-  const pinnaclePoint = pinnaclePointOf(raw, allBundles);
-  const oppForPin = oppositeBundle(allBundles, sideBundle);
-  const pinSideRow = (sideBundle.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
-  const pinOppRow = oppForPin
-    ? (oppForPin.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)))
-    : null;
-  const pinSideAm = pinSideRow ? Number(pinSideRow.american) : null;
-  const pinOppAm = pinOppRow ? Number(pinOppRow.american) : null;
-  const pinLast = (pinSideRow && pinSideRow.lastUpdate) || (pinOppRow && pinOppRow.lastUpdate) || null;
-  const pinnacleSide = (pinSideAm != null && pinOppAm != null)
-    ? {
-      american: pinSideAm,
-      oppAmerican: pinOppAm,
-      point: sideBundle.point != null && sideBundle.point !== '' ? Number(sideBundle.point) : null,
-      oppPoint: oppForPin.point != null && oppForPin.point !== '' ? Number(oppForPin.point) : null,
-      ...(pinLast ? { lastUpdate: pinLast } : {}),
-    }
-    : null;
-  const pinnacleHook = pinnacleSide ? null : nflHookPair(raw, sideBundle, allBundles);
   return {
     ...raw,
     odds,
@@ -545,8 +425,6 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     sharpAmerican: sharpAm,
     fair_sharp_p: fairSharp,
     sharpFairP: fairSharp,
-    pinnacleNoVigP: anchor ? +anchor.p.toFixed(6) : null,
-    sharpAnchorBook: anchor ? anchor.book : null,
     predictedClv: predClv,
     liquid,
     majorBookCount: new Set((sideBundle.prices || []).map(p => p.book)
@@ -554,15 +432,6 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     placeableBooks: place.placeableBooks,
     bestPlaceable: place.bestPlaceable,
     placeable: place.placeable,
-    // Ladder for the selection pass. The chosen odds stay the best US price
-    // until applyExecutionBook reprices at DraftKings.
-    bookPrices,
-    dkQuote,
-    hardRock: hardRockQuote(allBundles, sideBundle.side, sideBundle.point),
-    ...(pinnacleNoVig != null && Number.isFinite(pinnacleNoVig) ? { pinnacleNoVig } : {}),
-    ...(pinnaclePoint != null && Number.isFinite(pinnaclePoint) ? { pinnaclePoint } : {}),
-    ...(pinnacleSide ? { pinnacleSide } : {}),
-    ...(pinnacleHook ? { pinnacleHook } : {}),
   };
 }
 
@@ -573,26 +442,10 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
  *   coverProb - fair_sharp_p
  * Fallback when sharp fair missing: coverProb - vigged book implied.
  * NOT predictedClv cents, NOT raw coverProb, NOT full Kelly EV% (dogs inflate EV%).
- * `ev` is stake EV at posted odds. A push returns the stake, so when
- * OMEGA_PUSH_EV is on, ev = (1 − pPush) × (coverProb × decimal − 1).
- * edgePct stays coverProb − fair_sharp. Both of those are conditional.
+ * `ev` remains true EV at posted odds for sizing/gates.
  */
 function attachEv(c) {
-  // A sharp-priced row already holds p_fair in coverProb. Keep edge and EV
-  // on that fair. Do not put the model gap back on the badge.
-  if (c && c.sharpFairPriced && Number.isFinite(Number(c.coverProb))) {
-    const p = Number(c.coverProb);
-    const impliedSharp = americanToImplied(c.odds);
-    const sharpEv = evAtOdds(p, c.odds);
-    const sharpEdge = impliedSharp != null ? p - impliedSharp : null;
-    return {
-      ...c,
-      ev: sharpEv != null ? +sharpEv.toFixed(4) : null,
-      edgePct: sharpEdge != null ? +sharpEdge.toFixed(4) : null,
-      edgePctDisplay: formatEdgePct(sharpEdge),
-    };
-  }
-  const ev = pushAwareEv(c.coverProb, c.odds, c && c.pPush);
+  const ev = evAtOdds(c.coverProb, c.odds);
   const implied = americanToImplied(c.odds);
   const fair = (c.fair_sharp_p != null && Number.isFinite(c.fair_sharp_p))
     ? c.fair_sharp_p
@@ -622,12 +475,10 @@ module.exports = {
   verifyPlaceabilityDecision,
   applyPlaceabilityDrops,
   sharpFairForSide,
-  pairedSharpNoVig,
-  noVigPinnacleImplied,
+  noVigPinnacleCircaImplied,
   oppositeBundle,
   predictedClvCents,
   enrichCandidateWithEdge,
   attachEv,
-  canonicalizeBook,
   PLACEABILITY_VETO_REASON,
 };

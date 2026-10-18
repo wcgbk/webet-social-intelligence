@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
@@ -24,8 +24,7 @@ assert.ok(config.LINE_MOVE.rejectSteamAgainstCents === 18);
 assert.ok(config.LINE_MOVE.verifyAdverseCents === 20);
 assert.ok(config.GATES.rejectAdverseSteam === true);
 assert.ok(config.SHRINK_K.Spread >= 0.68);
-assert.strictEqual(config.HFA.NFL, 2.0);
-assert.ok(config.HFA.NFL >= 1.5 && config.HFA.NFL <= 2);
+assert.ok(config.HFA.NFL >= 2.1);
 
 // Day-scope still intact
 assert.ok(math.isSameEtDay('2026-09-22T23:05:00Z', '2026-09-22'));
@@ -83,24 +82,24 @@ assert.ok(extracted.usConsensus.spreadHome === -3);
 assert.ok(extracted.sharpConsensus.spreadHome === -2.5);
 
 // --- Move math: steam toward dog (line moves from +3 to +4) ---
-function withPin(row) {
-  return { draftkings: row, pinnacle: { ...row } };
-}
-const openRow = {
-  spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-  total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
-};
 const openGame = {
   ...extracted,
-  books: withPin(openRow),
+  books: {
+    draftkings: {
+      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
+    },
+  },
   capturedAt: '2026-09-22T10:00:00Z',
 };
 const nowToward = {
   ...extracted,
-  books: withPin({
-    spreadHome: -4, spreadHomeOdds: -110, spreadAway: 4, spreadAwayOdds: -110,
-    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -165, mlAway: 145,
-  }),
+  books: {
+    draftkings: {
+      spreadHome: -4, spreadHomeOdds: -110, spreadAway: 4, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -165, mlAway: 145,
+    },
+  },
 };
 
 const billsSpread = {
@@ -117,17 +116,6 @@ assert.ok(moveToward.steamToward, 'Bills getting more points = steam toward');
 assert.ok(!moveToward.steamAgainst);
 assert.ok(moveToward.openPrint && moveToward.openPrint.book === 'draftkings');
 assert.ok(moveToward.lineMovePts === 1 || moveToward.lineMovePts === 1.0);
-const usOnly = linePath.computeOpenToNowMove(billsSpread, {
-  ...extracted,
-  books: { draftkings: openRow },
-}, {
-  ...extracted,
-  books: { draftkings: nowToward.books.draftkings },
-});
-assert.strictEqual(usOnly.steamToward, false, 'a US-only move does not set steam toward');
-assert.strictEqual(usOnly.steamAgainst, false);
-assert.strictEqual(usOnly.oddsMoveCents, null);
-assert.ok(usOnly.usOddsMoveCents != null);
 
 // --- Move math: steam against (odds shorten on ML dog) ---
 const billsMl = {
@@ -140,10 +128,12 @@ const billsMl = {
 };
 const nowAgainstMl = {
   ...extracted,
-  books: withPin({
-    spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -180, mlAway: 105,
-  }),
+  books: {
+    draftkings: {
+      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -180, mlAway: 105,
+    },
+  },
 };
 const moveAgainst = linePath.computeOpenToNowMove(billsMl, openGame, nowAgainstMl);
 assert.ok(moveAgainst.steamAgainst, 'ML shortened 130→105 = steam against');
@@ -152,17 +142,21 @@ assert.ok(moveAgainst.oddsMoveCents === -25);
 // Crossing +100/-100 is about 10 cents, not 210. Must not false-reject.
 const crossOpen = {
   ...extracted,
-  books: withPin({
-    spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -115, mlAway: 105,
-  }),
+  books: {
+    draftkings: {
+      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -115, mlAway: 105,
+    },
+  },
 };
 const crossNow = {
   ...extracted,
-  books: withPin({
-    spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -105, mlAway: -105,
-  }),
+  books: {
+    draftkings: {
+      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -105, mlAway: -105,
+    },
+  },
 };
 const crossMove = linePath.computeOpenToNowMove(billsMl, crossOpen, crossNow);
 assert.strictEqual(crossMove.oddsMoveCents, -10);
@@ -196,7 +190,7 @@ const genReject = linePath.adverseSteamReason(moveAgainst, { verify: false });
 assert.ok(genReject && /steam_against_odds/.test(genReject), 'generate should reject -25c');
 
 const verifyReject = linePath.adverseSteamReason(moveAgainst, { verify: true });
-assert.strictEqual(verifyReject, null, 'there is no 10:30 verify recheck');
+assert.ok(verifyReject && /steam_against_odds/.test(verifyReject), 'verify should reject -25c');
 
 // Just under generate threshold (-18): -17 should NOT reject at generate
 const mild = {
@@ -208,10 +202,9 @@ const mild = {
   missingOpen: false,
 };
 assert.strictEqual(linePath.adverseSteamReason(mild, { verify: false }), null);
-// Retired 20-cent verify threshold is not applied.
+// But -20 should reject at verify
 const atVerify = { ...mild, oddsMoveCents: -20 };
-assert.strictEqual(linePath.adverseSteamReason(atVerify, { verify: true }), null);
-assert.strictEqual(config.LINE_MOVE.verifyRecheck, false);
+assert.ok(linePath.adverseSteamReason(atVerify, { verify: true }));
 
 // Spread adverse pts at generate threshold (1.0)
 const spreadAgainst = linePath.computeOpenToNowMove(
@@ -219,10 +212,12 @@ const spreadAgainst = linePath.computeOpenToNowMove(
   openGame,
   {
     ...extracted,
-    books: withPin({
-      spreadHome: -2, spreadHomeOdds: -110, spreadAway: 2, spreadAwayOdds: -110,
-      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
-    }),
+    books: {
+      draftkings: {
+        spreadHome: -2, spreadHomeOdds: -110, spreadAway: 2, spreadAwayOdds: -110,
+        total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
+      },
+    },
   }
 );
 assert.ok(spreadAgainst.steamAgainst, 'dog points cut 3→2 = against');
@@ -247,8 +242,7 @@ const nowSnap = {
 // Pregame gate compares commenceTime to Date.now(). Keep the kickoff ahead
 // of the clock and pass that ET date as cardDate so the steam assertion
 // is what fails the candidate, not a started game.
-const { sampleInSlateKick } = require('./netlify/functions/lib/omega-vnext/selection_pass');
-const kickoff = sampleInSlateKick();
+const kickoff = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
 const cardDay = math.etCalendarDate(kickoff);
 const cands = linePath.annotateLineMoves([
   {
@@ -308,17 +302,16 @@ const scoreWith = select.scoreCandidate(towardCands[0]);
 const scorePlain = select.scoreCandidate({
   ...towardCands[0],
   steamToward: false,
-  steamAgainst: false,
-  dkLagsSharp: false,
   _steamScoreAdj: 0,
+  predictedResidualClv: towardCands[0].predictedClv,
 });
-assert.strictEqual(scoreWith, scorePlain, `steam flags do not change the score ${scoreWith} vs ${scorePlain}`);
+assert.ok(scoreWith > scorePlain, `steam boost ${scoreWith} vs ${scorePlain}`);
 
 // Unit structure unchanged
-assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 4.5);
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
-assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
-assert.strictEqual(config.LEAN_PAD, true);
+assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
+assert.strictEqual(config.LEAN_PAD, false);
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 
 // earliest/latest poll helper
@@ -377,14 +370,10 @@ assert.deepStrictEqual(
 );
 
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
-const linesBlock = toml.split('[functions."capture-omega-lines"]')[1].split('\n[functions.')[0];
-const lateBlock = toml.split('[functions."capture-omega-lines-late"]')[1].split('\n[functions.')[0];
-assert.ok(/#\s*schedule = "0,30 10,11,12 \* \* \*"/.test(linesBlock), 'morning line snap schedule stays commented');
-assert.ok(!/^\s*schedule\s*=/m.test(linesBlock), 'capture-omega-lines must not have an active schedule');
-assert.ok(/#\s*schedule = "0,15 13,14 \* \* \*"/.test(lateBlock), 'late line snap schedule stays commented');
-assert.ok(!/^\s*schedule\s*=/m.test(lateBlock), 'capture-omega-lines-late must not have an active schedule');
-assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13,14 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13,14 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-lines"\]\s*\n\s*schedule = "0,30 10,11 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-lines-late"\]\s*\n\s*schedule = "0,15 13 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13 \* \* \*"/.test(toml));
 const tspBlock = toml.split('[functions."fetch-tsp-live"]')[1].split('\n[functions.')[0];
 // #82 paused the Hermes fetch. The schedule line stays commented; do not require it live.
 assert.ok(/HOLD intentional/.test(tspBlock), 'TSP hold note');
@@ -425,11 +414,9 @@ assert.ok(/shadow/.test(bgSrc));
   );
   assert.ok(/blockStraightRefill\s*=\s*true/.test(steamRegion), 'steam drop sets blockStraightRefill');
   assert.ok(
-    /Placeability, late-news, and auto-fix drops refill from the private reserve up to 3/.test(verifySrc),
-    'placeability, late-news, and auto-fix drops refill from the private reserve'
+    /Placeability soft-veto and adverse steam drops do not refill/.test(verifySrc),
+    'backfill comment gates placeability and steam'
   );
-  assert.ok(/Steam does not refill/.test(verifySrc), 'steam does not refill');
-  assert.ok(/A blocked side never returns/.test(verifySrc), 'a blocked side never returns');
   assert.ok(!/if\s*\(\s*!blockStraightRefill\s*&&/.test(verifySrc), 'straight refill is not a live branch');
   assert.ok(!/leg-parlay-verified/.test(verifySrc), 'verify must not stamp a rebuilt parlay');
   assert.strictEqual(
@@ -455,39 +442,6 @@ assert.ok(/shadow/.test(bgSrc));
     verify.straightRefillAllowed({ droppedSteam: 0, steamHardFails: 0, blockStraightRefill: false, cardLocked: false }),
     false,
     'verify does not invent a straight even if a caller marks the card unlocked'
-  );
-  assert.strictEqual(
-    verify.straightRefillAllowed({
-      droppedSteam: 0,
-      steamHardFails: 0,
-      blockStraightRefill: true,
-      straightCount: 2,
-      reserve: [{ pick: 'Eta -1', matchup: 'Eta @ Theta' }],
-    }),
-    true,
-    'a short card refills from the private reserve up to 3 even when blockStraightRefill is set'
-  );
-  assert.strictEqual(
-    verify.straightRefillAllowed({
-      droppedSteam: 0,
-      steamHardFails: 0,
-      blockStraightRefill: true,
-      straightCount: 2,
-      reserve: [],
-    }),
-    false,
-    'refill needs a reserve row'
-  );
-  assert.strictEqual(
-    verify.straightRefillAllowed({
-      droppedSteam: 0,
-      steamHardFails: 0,
-      blockStraightRefill: true,
-      straightCount: 3,
-      reserve: [{ pick: 'Eta -1' }],
-    }),
-    false,
-    'a full card does not refill'
   );
 
   const locked = [{

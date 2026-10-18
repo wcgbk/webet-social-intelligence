@@ -855,12 +855,6 @@
         const period = status.period || 0;
         const state = status.type?.state || 'pre';
         const f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
-        var shootout = false;
-        var shootoutWinner = null;
-        if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.detectNhlShootout === 'function') {
-          var so = WeBetLive.detectNhlShootout(status, away, home, sport);
-          if (so) { shootout = !!so.shootout; shootoutWinner = so.shootoutWinner || null; }
-        }
         return {
           awayTeam: away.team?.displayName || away.team?.shortDisplayName || '',
           awayAbbr: away.team?.abbreviation || '',
@@ -870,10 +864,6 @@
           homeScore: parseInt(home.score) || 0,
           state,  // pre, in, post
           detail: status.type?.shortDetail || status.type?.detail || '',
-          shortDetail: status.type?.shortDetail || '',
-          statusDetail: status.type?.detail || '',
-          shootout: shootout,
-          shootoutWinner: shootoutWinner,
           clock: status.displayClock || '',
           period,
           startTimeEST,
@@ -923,61 +913,6 @@
     return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
   }
 
-  // Equal school keys, or equal once a trailing "state" is removed
-  // (McNeese State Cowboys vs ESPN "McNeese Cowboys"). Mascots are already gone.
-  function ncaafSchoolKeysMatch(aName, bName) {
-    const a = schoolKey(aName);
-    const b = schoolKey(bName);
-    if (!a || !b || a.length <= 2 || b.length <= 2) return false;
-    if (a === b) return true;
-    if (a.endsWith(' state') && a.slice(0, -6) === b) return true;
-    if (b.endsWith(' state') && b.slice(0, -6) === a) return true;
-    return false;
-  }
-
-  // Michigan State also matches Michigan. When both sides of one game match,
-  // keep the exact schoolKey. If that does not pick one side, match neither.
-  function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, sport) {
-    const pickedAway = teamsMatch(pickTeam, awayTeam, awayAbbr, sport);
-    const pickedHome = teamsMatch(pickTeam, homeTeam, homeAbbr, sport);
-    if (sport !== 'NCAAF' || !pickedAway || !pickedHome) {
-      return { pickedAway: !!pickedAway, pickedHome: !!pickedHome };
-    }
-    const pS = schoolKey(pickTeam);
-    const awayExact = pS.length > 2 && pS === schoolKey(awayTeam);
-    const homeExact = pS.length > 2 && pS === schoolKey(homeTeam);
-    if (awayExact && !homeExact) return { pickedAway: true, pickedHome: false };
-    if (homeExact && !awayExact) return { pickedAway: false, pickedHome: true };
-    return { pickedAway: false, pickedHome: false };
-  }
-
-  // Michigan State @ Iowa and Michigan @ Iowa can both pass a trailing-"state" match.
-  // Keep the games whose school keys match exactly so the other one is not graded.
-  function preferExactSchoolGames(pick, games) {
-    if (!pick || (pick.sport || '') !== 'NCAAF' || !games || games.length < 2) return games;
-    const parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-    const pickTeam = String(pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-    const probes = pickTeam ? parts.concat([pickTeam]) : parts;
-    let best = -1;
-    const scored = games.map(game => {
-      let score = 0;
-      for (const side of [game.awayTeam, game.homeTeam]) {
-        let sideBest = 0;
-        for (const probe of probes) {
-          const pS = schoolKey(probe);
-          const eS = schoolKey(side);
-          if (pS.length > 2 && pS === eS) sideBest = 2;
-          else if (sideBest < 1 && ncaafSchoolKeysMatch(probe, side)) sideBest = 1;
-        }
-        score += sideBest;
-      }
-      if (score > best) best = score;
-      return { game, score };
-    });
-    const top = scored.filter(row => row.score === best).map(row => row.game);
-    return top.length ? top : games;
-  }
-
   function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
     const p = normalizeTeam(pickTeam);
     const e = normalizeTeam(espnTeam);
@@ -990,7 +925,8 @@
       if (pWords.includes(a)) return true;
     }
     if (sport === 'NCAAF') {
-      if (ncaafSchoolKeysMatch(pickTeam, espnTeam)) return true;
+      const pS = schoolKey(pickTeam), eS = schoolKey(espnTeam);
+      if (pS.length > 2 && pS === eS) return true;
       return false;
     }
     const pLast = p.split(' ').pop();
@@ -1032,7 +968,7 @@
                          (homeKey.length > minLen && matchup.includes(homeKey));
       if (awayMatch && homeMatch) primary.push(g);
     }
-    if (primary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, primary), pick);
+    if (primary.length) return disambiguateDoubleheader(primary, pick);
     const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
     if (pickTeam) {
       const secondary = [];
@@ -1044,7 +980,7 @@
           if (otherKey.length > minLen && matchup.includes(otherKey)) secondary.push(g);
         }
       }
-      if (secondary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, secondary), pick);
+      if (secondary.length) return disambiguateDoubleheader(secondary, pick);
     }
     if (matchupParts.length >= 2) {
       const tertiary = [];
@@ -1058,7 +994,7 @@
         else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
             (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
       }
-      if (tertiary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, tertiary), pick);
+      if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
     }
     return null;
   }
@@ -1095,15 +1031,8 @@
     if (isF5 && game.state === 'post' && !game.f5Complete) {
       return { status: 'push', label: 'No F5 result' };
     }
-    let awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
-    let homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
-    // NHL shootout goal counts on the moneyline only, from 2026-10-15.
-    // Extracts of this function have no WeBetLive and keep the ESPN final.
-    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.nhlRegulationScores === 'function') {
-      var nhlDate = (pick && pick.date) || (typeof picksData !== 'undefined' && picksData && picksData.date) || null;
-      var nhlReg = WeBetLive.nhlRegulationScores({ pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: nhlDate });
-      if (nhlReg && nhlReg.applied) { awayScore = nhlReg.awayScore; homeScore = nhlReg.homeScore; }
-    }
+    const awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const isFinal = isF5 ? !!game.f5Complete : (game.state === 'post');
 
     if (!isFinal) {
@@ -1113,9 +1042,8 @@
       const liveAwayScore = awayScore;
       const liveHomeScore = homeScore;
       const livePickTeam = livePickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
-      const liveSide = ncaafPickedSides(livePickTeam, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
-      const livePickedAway = liveSide.pickedAway;
-      const livePickedHome = liveSide.pickedHome;
+      const livePickedAway = teamsMatch(livePickTeam, game.awayTeam, game.awayAbbr, pick.sport);
+      const livePickedHome = teamsMatch(livePickTeam, game.homeTeam, game.homeAbbr, pick.sport);
       let projected = 'live';
 
       if (liveBetType === 'total' || liveBetType === 'f5 total' || /over|under/i.test(livePickStr)) {
@@ -1152,9 +1080,8 @@
 
     // Figure out which team was picked
     const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
-    const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
-    const pickedAway = side.pickedAway;
-    const pickedHome = side.pickedHome;
+    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
 
     // Total (Over/Under)
     if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
@@ -1282,9 +1209,8 @@
       if (!spreadMatch) return null;
       const spread = parseFloat(spreadMatch[1]);
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
-      const pickedAway = side.pickedAway;
-      const pickedHome = side.pickedHome;
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1301,9 +1227,8 @@
     // Moneyline (full-game or F5) — live prob from the current score margin vs a pick'em prior.
     if (betType === 'moneyline' || betType === 'f5 moneyline' || /\bml\b/i.test(pickStr)) {
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
-      const pickedAway = side.pickedAway;
-      const pickedHome = side.pickedHome;
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1348,9 +1273,8 @@
       if (!spreadMatch) return '';
       const spread = parseFloat(spreadMatch[1]);
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
-      const pickedAway = side.pickedAway;
-      const pickedHome = side.pickedHome;
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return '';
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;

@@ -2,7 +2,7 @@
 /**
  * NHL projection — standings GF/GA + HFA, then optional soft residuals.
  * Moneyline, puck line (market Spread), and total. Blend matches MLB
- * (0.50 / 0.50 / 0.45) on no-vig Pinnacle. Calibrate runs later.
+ * (0.50 / 0.50 / 0.45) on no-vig Pinnacle/Circa. Calibrate runs later.
  *
  * SPORTS_ENABLED.NHL enabled 2026-09-30 (WeBet voice order). This module does not
  * read that flag: projectAll is the gate. A direct project() call still
@@ -11,29 +11,15 @@
  * Missing shots, savePct, or goalie rates soft-fail to 0. Residuals sit
  * under ENGINE_SOFT.NHL. Final margin/total soft-clamp (|spread| 6, total 12)
  * and still emit a candidate.
- *
- * GF/GA per game. The default OMEGA_NHL_SHRINK_MODE is 'all' (WeBet order
- * 10/09): every club shrinks to the league mean with the a-priori K=34,
- * clamped into [1.5, 5.2]. OMEGA_NHL_SHRINK_K overrides K at call time.
- * 'oob' and 'off' stay selectable. 'oob' applies that shrink only when the
- * raw rate is outside the band. 'off' is the pre-shrink path.
- *
- * Replay gate, frozen inputs 2026-09-22..2026-10-08: mode 'all' (K 34, and
- * also K 10 and K 20) changed 8 picks and lost $72 versus the unshrunk base.
- * Mode 'oob' changed 0 picks and $0. WeBet ordered 'all' as the default
- * anyway.
  */
 const { clamp } = require('../odds_math');
-const { HFA, ENGINE_SOFT, NHL_PRIOR_K, nhlPriorK, ratingGamesN, ratingErrorSd } = require('../config');
+const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, mapGamesSoft, LEAGUE_PPG, bindEspnGameByTeamAndTime,
+  formatMatchup, fuzzyTeam, mapGamesSoft, LEAGUE_PPG,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
-const { resolveTeamId, rowByIdentityOrFuzzy, logUnknownTeam } = require('./team_identity');
 const { applyGameDayAdjustments } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
-const { nhlPeriodEnabled, flagEnabled } = require('../gaps_flags');
-const { nhlMarketQuote } = require('../nhl_period');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'NHL';
 const LEAGUE_GPG = LEAGUE_PPG.NHL; // 3.1
@@ -43,147 +29,10 @@ const NHL_TOTAL_MIN = 3;
 const NHL_TOTAL_MAX = 12;
 const NHL_GPG_FLOOR = 1.5;
 const NHL_GPG_CAP = 5.2;
-/**
- * Raw GF/GP or GA/GP above this is corrupt, not a hot start.
- * No NHL club averages 10+ over 2+ games. Real early extremes are ~7 and
- * still shrink. Above this returns the baseline ('implausible rate').
- */
-const NHL_GPG_IMPLAUSIBLE = 10;
-/**
- * Empirical-Bayes prior strength, in games, for GF/GP and GA/GP.
- * Per-game goals are roughly Poisson, so sampling variance ≈ LEAGUE_GPG (3.1).
- * Between-team true-talent SD is about 0.30 goals/game.
- * K = variance / talentSD^2 = 3.1 / 0.30^2 ≈ 34.4, taken as 34.
- * The shipped default is NHL_PRIOR_K (config). priorW(gp) = K/(K+gp).
- * gf_hat = (GF_sum + K * LEAGUE_GPG) / (gp + K), same for GA, then clamped
- * to [NHL_GPG_FLOOR, NHL_GPG_CAP]. OMEGA_NHL_PRIOR_K overrides K at call
- * time. OMEGA_NHL_SHRINK_K still overrides when PRIOR_K is unset.
- * 0 or "off" is no shrink. Under 'oob' that K applies only to a club
- * the band would have nulled; under 'all' it applies to every club.
- *
- * OMEGA_NHL_SHRINK_MODE, read at call time:
- *   'all' (default) — shrink every club to the league mean. WeBet order
- *     10/09. A rate just over the cap cannot rank below a rate just inside it.
- *   'oob' — rescue only. Out-of-band raw rates, the clubs that fall to the
- *     flat 6.2 for a band reason, get the shrunk rate clamped into
- *     [floor, cap]. In-band clubs keep the raw rate.
- *   'off' or "0" — exact pre-shrink behavior (out-of-band → null / 6.2).
- */
-const NHL_GPG_PRIOR_GAMES = NHL_PRIOR_K;
-/**
- * Season-sum GF/GA is eligible once games played reach this.
- * A sum is pf/pa above ~1.8× league gpg, or ingest's nhlSeasonGoals flag
- * (ESPN Goals For, which is cumulative even when the total is still small).
- * gp below this (one game) stays on the 6.2 / HFA baseline. Week-1 clubs
- * were stuck there when this was 5. [NHL_GPG_FLOOR, NHL_GPG_CAP] clamps the
- * shrunk rate; it does not drop the club. Win% and shot season-sums use
- * NHL_SOFT_MIN_GAMES, not this spine.
- */
-const NHL_MIN_GAMES = 2;
-const NHL_SOFT_MIN_GAMES = 5;
+const NHL_MIN_GAMES = 5;
 const LG_SAVE = 0.905;
 const LG_SHOOT = 0.10;
-/** replay NHL LL 0.6861->0.6775 */
-const BLEND = { ml: 0.10, spread: 0.50, total: 0.45 };
-
-/**
- * 3-point Gauss-Hermite nodes for a standard normal: 0, ±√3,
- * weights 2/3, 1/6, 1/6. Margin and total are independent, so the
- * rating-error mixture is the 9-point product rule.
- */
-const PERIOD_GH_Z = [0, Math.sqrt(3), -Math.sqrt(3)];
-const PERIOD_GH_W = [2 / 3, 1 / 6, 1 / 6];
-/**
- * Tail nodes can push the total under the Poisson floor. 2.0 keeps a
- * goal rate on the board when the margin is still inside ±NHL_MARGIN_CAP.
- */
-const PERIOD_TOTAL_FLOOR = 2;
-
-/**
- * 60-minute joint plus the OT/shootout split. The empty-net end game was
- * removed 2026-10-17 (season GF/GA already include those goals), so
- * OMEGA_NHL_EMPTY_NET does not add a second step. Moneyline, puck line,
- * and total share this one distribution. Null keeps the legacy normal
- * price and the old method string.
- *
- * The plain Poisson quote has no rating-error term. The legacy normal
- * path widens through ratingErrorSd (NHL margin 1.25, total 0.9, N0 6).
- * On the default period path, average the quote over that uncertainty.
- * sd 0, or OMEGA_NHL_PERIOD_RATING_SD=0, is the single quote.
- */
-function periodQuote(args) {
-  if (!nhlPeriodEnabled()) return null;
-  try {
-    const src = args || {};
-    const sdM = ratingErrorSd('NHL', 'spread', src.nGames);
-    const sdT = ratingErrorSd('NHL', 'total', src.nGames);
-    if (!flagEnabled('OMEGA_NHL_PERIOD_RATING_SD') || (!(sdM > 0) && !(sdT > 0))) {
-      return onePeriodQuote(src);
-    }
-    const margin0 = Number(src.modelMargin);
-    const total0 = Number(src.modelTotal);
-    if (!Number.isFinite(margin0) || !Number.isFinite(total0)) return onePeriodQuote(src);
-    const mixed = mixPeriodQuote(src, margin0, total0, sdM, sdT);
-    return mixed || onePeriodQuote(src);
-  } catch (_) {
-    return null;
-  }
-}
-
-function onePeriodQuote(args) {
-  const q = nhlMarketQuote(args);
-  if (!q || !Number.isFinite(q.coverProb)) return null;
-  return q;
-}
-
-function mixPeriodQuote(src, margin0, total0, sdM, sdT) {
-  const base = {
-    market: src.market,
-    sideIsHome: src.sideIsHome,
-    line: src.line,
-    side: src.side,
-  };
-  let cover = 0;
-  let push = 0;
-  let pWin = 0;
-  let pLoss = 0;
-  let expectedTotal = 0;
-  let pTie = 0;
-  let pHomeBy2 = 0;
-  for (let i = 0; i < PERIOD_GH_Z.length; i++) {
-    const margin = clamp(margin0 + PERIOD_GH_Z[i] * sdM, -NHL_MARGIN_CAP, NHL_MARGIN_CAP);
-    for (let j = 0; j < PERIOD_GH_Z.length; j++) {
-      const rawTotal = total0 + PERIOD_GH_Z[j] * sdT;
-      const total = rawTotal >= PERIOD_TOTAL_FLOOR ? rawTotal : PERIOD_TOTAL_FLOOR;
-      const q = nhlMarketQuote({ ...base, modelMargin: margin, modelTotal: total });
-      if (!q || !Number.isFinite(q.coverProb)) return null;
-      const w = PERIOD_GH_W[i] * PERIOD_GH_W[j];
-      cover += w * q.coverProb;
-      push += w * (Number.isFinite(q.pPush) ? q.pPush : 0);
-      pWin += w * (Number.isFinite(q.pWin) ? q.pWin : 0);
-      pLoss += w * (Number.isFinite(q.pLoss) ? q.pLoss : 0);
-      expectedTotal += w * (Number.isFinite(q.expectedTotal) ? q.expectedTotal : 0);
-      pTie += w * (Number.isFinite(q.pTie) ? q.pTie : 0);
-      pHomeBy2 += w * (Number.isFinite(q.pHomeBy2) ? q.pHomeBy2 : 0);
-    }
-  }
-  return {
-    coverProb: cover,
-    pWin,
-    pPush: push,
-    pLoss,
-    expectedTotal,
-    pTie,
-    pHomeBy2,
-  };
-}
-
-function periodMethod(base, on) {
-  if (!on) return base;
-  const s = String(base || '');
-  if (!s || s.includes('-60min')) return s;
-  return `${s}-60min`;
-}
+const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
 
 function capsOf(caps) {
   return caps || (ENGINE_SOFT && ENGINE_SOFT.NHL) || {
@@ -197,66 +46,17 @@ function capsOf(caps) {
   };
 }
 
-/**
- * Same count nhlGames() returns, plus where it came from.
- * `games` wins. Else wins+losses+OTL+ties when both W and L exist.
- * gamesPlayed is not read (the projector does not read it).
- * A record string is not read. winsOnly: losses missing, or `games` equals
- * wins while losses show more games were played.
- */
-function nhlGamesInfo(st) {
-  if (!st || typeof st !== 'object') return { gp: 0, source: 'unknown', known: false };
+function nhlGames(st) {
+  if (!st || typeof st !== 'object') return 0;
   const g = Number(st.games);
-  if (Number.isFinite(g) && g > 0) return tagNhlExplicit(st, g);
+  if (Number.isFinite(g) && g > 0) return g;
   const w = Number(st.wins);
   const l = Number(st.losses);
-  if (!Number.isFinite(w) || !Number.isFinite(l)) {
-    if (Number.isFinite(w) && !Number.isFinite(l)) return { gp: 0, source: 'winsOnly', known: false };
-    return { gp: 0, source: 'unknown', known: false };
-  }
+  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
   const otlRaw = st.otLosses != null ? st.otLosses : st.otl;
   const otl = Number(otlRaw);
   const t = Number(st.ties);
-  const gp = w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
-  return { gp, source: 'wl', known: true };
-}
-
-function tagNhlExplicit(st, gp) {
-  const w = Number(st.wins);
-  const l = Number(st.losses);
-  if (Number.isFinite(w) && Number.isFinite(l) && l > 0 && gp === w) {
-    const otlRaw = st.otLosses != null ? st.otLosses : st.otl;
-    const otl = Number(otlRaw);
-    const t = Number(st.ties);
-    const full = w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
-    if (full !== gp) return { gp, source: 'winsOnly', known: false };
-  }
-  return { gp, source: 'games', known: true };
-}
-
-function nhlGames(st) {
-  return nhlGamesInfo(st).gp;
-}
-
-/**
- * pf/pa the model will divide or trust, but the scale disagrees with that path.
- * Per-game rates flagged nhlSeasonGoals are divided as season sums.
- * A value above the per-game cap that the magnitude rule does not treat as a
- * season sum is used as a rate. Alerts only — teamGpg is unchanged.
- */
-function nhlRateMismatch(st) {
-  if (!st || typeof st !== 'object') return false;
-  const pf = Number(st.pf != null ? st.pf : st.gf);
-  const pa = Number(st.pa != null ? st.pa : st.ga);
-  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf <= 0 || pa <= 0) return false;
-  const g = nhlGames(st);
-  const inBand = (v) => v >= NHL_GPG_FLOOR && v <= NHL_GPG_CAP;
-  const seasonByMagnitude = pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
-  if (st.nhlSeasonGoals === true && inBand(pf) && inBand(pa)) return true;
-  if (!st.nhlSeasonGoals && !seasonByMagnitude && g >= NHL_MIN_GAMES && (pf > NHL_GPG_CAP || pa > NHL_GPG_CAP)) {
-    return true;
-  }
-  return false;
+  return w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
 }
 
 /**
@@ -277,165 +77,27 @@ function pfLooksLikeStandingsPoints(st, pf) {
   return Math.abs(pf - guess) <= Math.max(3, guess * 0.12);
 }
 
-function envToggle(name) {
-  const raw = process.env[name];
-  if (raw == null) return null;
-  const s = String(raw).trim().toLowerCase();
-  return s === '' ? null : s;
-}
-
 /**
- * Read at call time so a replay can switch variants without a new commit.
- * Unset is 'all' (WeBet order 10/09): every club shrinks to the league
- * mean. 'oob' and 'off' stay selectable. The 2026-09-22..10-08 gate passed
- * oob ($0) and failed 'all' (−$72, 8 pick changes); the order ships 'all'.
+ * Goals for/against per game.
+ * Season totals (pf 250) need a game count. Per-game rates (pf 3.2) pass through.
+ * Unclean rows return null so the caller keeps the 6.2 / HFA baseline.
  */
-function shrinkSettings() {
-  const modeText = envToggle('OMEGA_NHL_SHRINK_MODE');
-  let mode = 'all';
-  if (modeText === '0' || modeText === 'off') mode = 'off';
-  else if (modeText === 'oob' || modeText === 'all') mode = modeText;
-  return { mode, k: nhlPriorK() };
-}
-
-function noneGpg(baseline) {
-  return { gf: null, ga: null, gfRaw: null, gaRaw: null, gp: null, shrinkWeight: null, baseline };
-}
-
-function inGpgBand(x) {
-  return x >= NHL_GPG_FLOOR && x <= NHL_GPG_CAP;
-}
-
-function goalsPair(st) {
+function teamGpg(st) {
   if (!st || typeof st !== 'object') return null;
   const pf = Number(st.pf != null ? st.pf : st.gf);
   const pa = Number(st.pa != null ? st.pa : st.ga);
-  return { pf, pa };
-}
-
-/**
- * Pre-shrink teamGpg. Same nulls and the same { gf, ga } values as main
- * before this change. Kept so OMEGA_NHL_SHRINK_MODE=off matches that output.
- */
-function legacyDetail(st) {
-  const pair = goalsPair(st);
-  if (!pair) return noneGpg('no goals data');
-  const { pf, pa } = pair;
-  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf < 0 || pa < 0) return noneGpg('implausible rate');
-  if (pf === 0 || pa === 0) return noneGpg('no goals data');
-  if (st.nhlSeasonGoals !== true &&
-      (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa))) {
-    return noneGpg('standings-points guard');
-  }
+  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf <= 0 || pa <= 0) return null;
+  if (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa)) return null;
   let gf = pf;
   let ga = pa;
-  const g = nhlGames(st);
-  const seasonSum = st.nhlSeasonGoals === true || pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
-  if (seasonSum) {
-    if (g < NHL_MIN_GAMES) return noneGpg('gp<2');
+  if (pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8) {
+    const g = nhlGames(st);
+    if (g < NHL_MIN_GAMES) return null;
     gf = pf / g;
     ga = pa / g;
   }
-  if (!Number.isFinite(gf) || !Number.isFinite(ga)) return noneGpg('implausible rate');
-  if (gf > NHL_GPG_IMPLAUSIBLE || ga > NHL_GPG_IMPLAUSIBLE) return noneGpg('implausible rate');
-  if (!(inGpgBand(gf) && inGpgBand(ga))) return noneGpg('out of band');
-  return {
-    gf,
-    ga,
-    gfRaw: gf,
-    gaRaw: ga,
-    gp: seasonSum ? g : (g > 0 ? g : null),
-    shrinkWeight: 0,
-    baseline: null,
-  };
-}
-
-function finishFromSums(gfSum, gaSum, gp, k, mode) {
-  if (!(gp > 0) || !Number.isFinite(gfSum) || !Number.isFinite(gaSum)) return noneGpg('implausible rate');
-  const gfRaw = gfSum / gp;
-  const gaRaw = gaSum / gp;
-  if (!Number.isFinite(gfRaw) || !Number.isFinite(gaRaw) || gfRaw < 0 || gaRaw < 0) {
-    return noneGpg('implausible rate');
-  }
-  if (gfRaw > NHL_GPG_IMPLAUSIBLE || gaRaw > NHL_GPG_IMPLAUSIBLE) return noneGpg('implausible rate');
-  if (mode === 'oob' && inGpgBand(gfRaw) && inGpgBand(gaRaw)) {
-    return { gf: gfRaw, ga: gaRaw, gfRaw, gaRaw, gp, shrinkWeight: 0, baseline: null };
-  }
-  let gf = gfRaw;
-  let ga = gaRaw;
-  let shrinkWeight = 0;
-  if (k > 0) {
-    gf = (gfSum + k * LEAGUE_GPG) / (gp + k);
-    ga = (gaSum + k * LEAGUE_GPG) / (gp + k);
-    shrinkWeight = k / (gp + k);
-  }
-  return {
-    gf: clamp(gf, NHL_GPG_FLOOR, NHL_GPG_CAP),
-    ga: clamp(ga, NHL_GPG_FLOOR, NHL_GPG_CAP),
-    gfRaw,
-    gaRaw,
-    gp,
-    shrinkWeight,
-    baseline: null,
-  };
-}
-
-/**
- * Goals for/against per game.
- * Mode 'all' shrinks every season sum, and every per-game rate with a known
- * gp, as (sum + K * LEAGUE_GPG) / (gp + K) once gp reaches NHL_MIN_GAMES.
- * The default 'all' does that for every club. 'oob' does it only when the
- * raw rate is outside [NHL_GPG_FLOOR, NHL_GPG_CAP]; an in-band club then
- * keeps the raw rate.
- * A per-game rate with no gp keeps the old pass-through: in band, or null.
- * gp below NHL_MIN_GAMES on a season sum stays null (6.2 baseline).
- * The band clamps a shrunk rate. It does not null that rate.
- * Zero goals after 2+ games is real data. A raw rate above
- * NHL_GPG_IMPLAUSIBLE, or a non-finite / negative total, is 'implausible rate'.
- * Standings points (2*W+OTL) still null, unless nhlSeasonGoals is set.
- * Returns null from teamGpg when baseline is set. teamGpgDetail keeps the reason.
- */
-function teamGpgDetail(st) {
-  const cfg = shrinkSettings();
-  if (cfg.mode === 'off') return legacyDetail(st);
-  const pair = goalsPair(st);
-  if (!pair) return noneGpg('no goals data');
-  const { pf, pa } = pair;
-  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf < 0 || pa < 0) return noneGpg('implausible rate');
-  if (st.nhlSeasonGoals !== true &&
-      (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa))) {
-    return noneGpg('standings-points guard');
-  }
-  const g = nhlGames(st);
-  const seasonSum = st.nhlSeasonGoals === true || pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
-  if (seasonSum) {
-    if (g < NHL_MIN_GAMES) return noneGpg('gp<2');
-    return finishFromSums(pf, pa, g, cfg.k, cfg.mode);
-  }
-  if (!(g > 0)) {
-    if (!(pf > 0 && pa > 0)) return noneGpg('no goals data');
-    if (pf > NHL_GPG_IMPLAUSIBLE || pa > NHL_GPG_IMPLAUSIBLE) return noneGpg('implausible rate');
-    if (inGpgBand(pf) && inGpgBand(pa)) {
-      return { gf: pf, ga: pa, gfRaw: pf, gaRaw: pa, gp: null, shrinkWeight: 0, baseline: null };
-    }
-    return noneGpg('out of band');
-  }
-  if ((pf === 0 || pa === 0) && g < NHL_MIN_GAMES) return noneGpg('no goals data');
-  return finishFromSums(pf * g, pa * g, g, cfg.k, cfg.mode);
-}
-
-function teamGpg(st) {
-  const d = teamGpgDetail(st);
-  if (!d || d.baseline) return null;
-  if (shrinkSettings().mode === 'off') return { gf: d.gf, ga: d.ga };
-  return {
-    gf: d.gf,
-    ga: d.ga,
-    gfRaw: d.gfRaw,
-    gaRaw: d.gaRaw,
-    gp: d.gp,
-    shrinkWeight: d.shrinkWeight,
-  };
+  if (!(gf >= NHL_GPG_FLOOR && gf <= NHL_GPG_CAP && ga >= NHL_GPG_FLOOR && ga <= NHL_GPG_CAP)) return null;
+  return { gf, ga };
 }
 
 function teamWinPct(st) {
@@ -447,42 +109,26 @@ function teamWinPct(st) {
   }
   const g = nhlGames(st);
   const wins = Number(st.wins);
-  if (g >= NHL_SOFT_MIN_GAMES && Number.isFinite(wins) && wins >= 0 && wins <= g) return wins / g;
+  if (g >= NHL_MIN_GAMES && Number.isFinite(wins) && wins >= 0 && wins <= g) return wins / g;
   return null;
-}
-
-function sideDiag(prefix, detail) {
-  const d = detail || {};
-  const onBase = !d || !!d.baseline;
-  return {
-    [`${prefix}GfRaw`]: onBase ? null : d.gfRaw,
-    [`${prefix}GaRaw`]: onBase ? null : d.gaRaw,
-    [`${prefix}Gp`]: onBase ? null : d.gp,
-    [`${prefix}ShrinkWeight`]: onBase ? null : d.shrinkWeight,
-    [`${prefix}Baseline`]: d.baseline || null,
-  };
 }
 
 /**
  * Home margin = (home goals − away goals) + HFA. Total = the sum.
  * Equal clubs land on HFA and 6.2. Missing either side stays on that baseline.
- * gfRaw / gaRaw / gp / shrinkWeight are private diag on this env. They are
- * not copied onto candidates.
  */
 function nhlStandingsEnv(homeSt, awaySt) {
   const hfa = Number.isFinite(Number(HFA && HFA.NHL)) ? Number(HFA.NHL) : 0.15;
-  const h = teamGpgDetail(homeSt);
-  const a = teamGpgDetail(awaySt);
-  const diag = { ...sideDiag('home', h), ...sideDiag('away', a) };
   const neutral = {
     modelMargin: hfa,
     modelTotal: NEUTRAL_TOTAL,
     usedStandings: false,
     homeGoals: LEAGUE_GPG,
     awayGoals: LEAGUE_GPG,
-    ...diag,
   };
-  if (!h || h.baseline || !a || a.baseline) return neutral;
+  const h = teamGpg(homeSt);
+  const a = teamGpg(awaySt);
+  if (!h || !a) return neutral;
   const homeGoals = (h.gf + a.ga) / 2;
   const awayGoals = (a.gf + h.ga) / 2;
   const modelTotal = homeGoals + awayGoals;
@@ -498,7 +144,6 @@ function nhlStandingsEnv(homeSt, awaySt) {
     homeGa: h.ga,
     awayGf: a.gf,
     awayGa: a.ga,
-    ...diag,
   };
 }
 
@@ -530,7 +175,7 @@ function ratePerGame(raw, games, seasonMin) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   if (n > seasonMin) {
-    if (!(games >= NHL_SOFT_MIN_GAMES)) return null;
+    if (!(games >= NHL_MIN_GAMES)) return null;
     return n / games;
   }
   return n;
@@ -596,131 +241,26 @@ function goalieOf(espnGame, side) {
   return null;
 }
 
-function goalieRates(cfg) {
-  const c = cfg || {};
-  return {
-    perM: Number.isFinite(Number(c.goalieMarginPerSave)) ? Number(c.goalieMarginPerSave) : 8,
-    perT: Number.isFinite(Number(c.goalieTotalPerSave)) ? Number(c.goalieTotalPerSave) : 6,
-    capM: Number.isFinite(Number(c.goalieMaxAbsMarginAdj)) ? Number(c.goalieMaxAbsMarginAdj) : 0.12,
-    capT: Number.isFinite(Number(c.goalieMaxAbsTotalAdj)) ? Number(c.goalieMaxAbsTotalAdj) : 0.10,
-  };
-}
-
-function goalieScenario(hs, asv, cfg) {
-  if (hs == null || asv == null) return null;
-  if (hs < 0.85 || hs > 0.95 || asv < 0.85 || asv > 0.95) return null;
-  const { perM, perT, capM, capT } = goalieRates(cfg);
-  // Better home save → fewer away goals. Both above-average saves trim the total.
-  const rawM = (hs - asv) * perM;
-  const rawT = -((hs - LG_SAVE) + (asv - LG_SAVE)) * perT;
-  return capPiece(rawM, rawT, capM, capT);
-}
-
-/**
- * ASSUMPTION: an unconfirmed starter with no backup save rate uses a backup
- * 0.010 worse than the projected starter. Both scenarios are priced. The
- * residual closer to zero is kept. A missing starter save rate still returns
- * none. confirmed === undefined is not this path and keeps the single rate.
- */
-const UNCONFIRMED_BACKUP_SAVE_HAIRCUT = 0.010;
-
-function saveRateOf(g) {
-  if (!g) return null;
-  return asUnitRate(g.savePct != null ? g.savePct : g.svPct, 'save');
-}
-
-function backupSave(g, starter) {
-  if (!g) return null;
-  const explicit = g.backupSavePct != null ? g.backupSavePct : g.backupSvPct;
-  if (explicit != null && explicit !== '') {
-    const r = asUnitRate(explicit, 'save');
-    if (r != null) return r;
-  }
-  if (starter == null) return null;
-  return starter - UNCONFIRMED_BACKUP_SAVE_HAIRCUT;
-}
-
-function priceUnconfirmedGoalies(hg, ag, cfg) {
-  const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
-  const hs = saveRateOf(hg);
-  const asv = saveRateOf(ag);
-  if (hs == null || asv == null) return none;
-  const homeRates = hg && hg.confirmed === false ? [hs, backupSave(hg, hs)] : [hs];
-  const awayRates = ag && ag.confirmed === false ? [asv, backupSave(ag, asv)] : [asv];
-  const scenarios = [];
-  for (const h of homeRates) {
-    for (const a of awayRates) {
-      const piece = goalieScenario(h, a, cfg);
-      if (piece) scenarios.push(piece);
-    }
-  }
-  if (!scenarios.length) return none;
-  scenarios.sort((a, b) => (
-    (Math.abs(a.marginAdj) + Math.abs(a.totalAdj)) - (Math.abs(b.marginAdj) + Math.abs(b.totalAdj))
-  ));
-  const chosen = scenarios[0];
-  const used = Math.abs(chosen.marginAdj) > 1e-9 || Math.abs(chosen.totalAdj) > 1e-9;
-  return { ...chosen, used, unconfirmed: true, scenarios: scenarios.length };
-}
-
-/**
- * GSAx as a per-game rate. A number larger than 1.5 is a season sum and is
- * divided by games, or by 40 when the sample size was not stored. One missing
- * side is not a rate.
- */
-function gsaxPerGame(g) {
-  if (!g || g.gsax == null || g.gsax === '') return null;
-  const n = Number(g.gsax);
-  if (!Number.isFinite(n)) return null;
-  if (Math.abs(n) > 1.5) {
-    const games = Number(g.games);
-    const gp = Number.isFinite(games) && games >= 1 ? games : 40;
-    return n / gp;
-  }
-  return n;
-}
-
-/**
- * Add GSAx only when both clubs already carry the number. The save-percentage
- * piece and this piece share the existing goalie cap. Otherwise the addition
- * is 0. Team xG and special teams are not priced here.
- */
-function applyGsax(piece, hg, ag, cfg) {
-  const base = piece || { marginAdj: 0, totalAdj: 0, used: false, capped: false };
-  const home = gsaxPerGame(hg);
-  const away = gsaxPerGame(ag);
-  if (home == null || away == null) return { ...base, gsax: 0 };
-  const { capM, capT } = goalieRates(cfg);
-  const rawM = base.marginAdj + (home - away);
-  const rawT = base.totalAdj - ((home + away) * 0.5);
-  const capped = capPiece(rawM, rawT, capM, capT);
-  const used = Math.abs(capped.marginAdj) > 1e-9 || Math.abs(capped.totalAdj) > 1e-9;
-  return {
-    ...capped,
-    used,
-    gsax: home - away,
-    unconfirmed: base.unconfirmed,
-    scenarios: base.scenarios,
-  };
-}
-
 function goalieResidual(espnGame, cfg) {
-  const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false, gsax: 0 };
+  const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
   const hg = goalieOf(espnGame, 'home');
   const ag = goalieOf(espnGame, 'away');
   if (!hg || !ag) return none;
-  let piece;
-  if (hg.confirmed === false || ag.confirmed === false) {
-    piece = priceUnconfirmedGoalies(hg, ag, cfg);
-  } else {
-    const scenario = goalieScenario(saveRateOf(hg), saveRateOf(ag), cfg);
-    if (!scenario) piece = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
-    else {
-      const used = Math.abs(scenario.marginAdj) > 1e-9 || Math.abs(scenario.totalAdj) > 1e-9;
-      piece = { ...scenario, used };
-    }
-  }
-  return applyGsax(piece, hg, ag, cfg);
+  if (hg.confirmed === false || ag.confirmed === false) return none;
+  const hs = asUnitRate(hg.savePct != null ? hg.savePct : hg.svPct, 'save');
+  const asv = asUnitRate(ag.savePct != null ? ag.savePct : ag.svPct, 'save');
+  if (hs == null || asv == null) return none;
+  if (hs < 0.85 || hs > 0.95 || asv < 0.85 || asv > 0.95) return none;
+  const perM = Number.isFinite(Number(cfg.goalieMarginPerSave)) ? Number(cfg.goalieMarginPerSave) : 8;
+  const perT = Number.isFinite(Number(cfg.goalieTotalPerSave)) ? Number(cfg.goalieTotalPerSave) : 6;
+  const capM = Number.isFinite(Number(cfg.goalieMaxAbsMarginAdj)) ? Number(cfg.goalieMaxAbsMarginAdj) : 0.12;
+  const capT = Number.isFinite(Number(cfg.goalieMaxAbsTotalAdj)) ? Number(cfg.goalieMaxAbsTotalAdj) : 0.10;
+  // Better home save → fewer away goals. Both above-average saves trim the total.
+  const rawM = (hs - asv) * perM;
+  const rawT = -((hs - LG_SAVE) + (asv - LG_SAVE)) * perT;
+  const piece = capPiece(rawM, rawT, capM, capT);
+  const used = Math.abs(piece.marginAdj) > 1e-9 || Math.abs(piece.totalAdj) > 1e-9;
+  return { ...piece, used };
 }
 
 function winPctResidual(homeSt, awaySt, cfg) {
@@ -808,31 +348,24 @@ function buildMethods({ enginesOn, usedGameday }) {
 }
 
 function findEspnGame(ev, espnGames) {
-  return bindEspnGameByTeamAndTime(SPORT, ev, espnGames);
+  if (!espnGames || !espnGames.length || !ev) return null;
+  const home = (ev.home_team || '').toLowerCase();
+  const away = (ev.away_team || '').toLowerCase();
+  return espnGames.find(g => {
+    const gh = (g.homeTeam || '').toLowerCase();
+    const ga = (g.awayTeam || '').toLowerCase();
+    return (gh.includes(home.split(' ').pop()) || home.includes((gh.split(' ').pop() || '')))
+      && (ga.includes(away.split(' ').pop()) || away.includes((ga.split(' ').pop() || '')));
+  }) || null;
 }
 
-function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline) {
+function projectGame(event, standings, espnGame, gameDay) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const unknownNames = [];
-  if (!resolveTeamId(SPORT, home)) unknownNames.push(home);
-  if (!resolveTeamId(SPORT, away)) unknownNames.push(away);
-  for (const name of unknownNames) logUnknownTeam(SPORT, name);
-  const homeSt = rowByIdentityOrFuzzy(SPORT, standings, home, { fallbackSeen });
-  const awaySt = rowByIdentityOrFuzzy(SPORT, standings, away, { fallbackSeen });
-  const stamp = (raw) => {
-    if (unknownNames.length) {
-      raw.unknownTeam = true;
-      raw.unknownNames = unknownNames.slice();
-    }
-    return raw;
-  };
+  const homeSt = fuzzyTeam(home, standings);
+  const awaySt = fuzzyTeam(away, standings);
   const env = nhlStandingsEnv(homeSt, awaySt);
-  if (baseline) {
-    if (env.homeBaseline) baseline.push(`${home || '?'} (${env.homeBaseline})`);
-    if (env.awayBaseline) baseline.push(`${away || '?'} (${env.awayBaseline})`);
-  }
   const soft = applyNhlEngineSoft({
     modelMargin: env.modelMargin,
     modelTotal: env.modelTotal,
@@ -857,7 +390,6 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     restByTeam: restTable,
     qbByTeam: {},
     hfaBase: HFA.NHL,
-    fallbackSeen,
   });
   const board = clampNhlBoard(gd.modelMargin, gd.modelTotal);
   const modelMargin = board.modelMargin;
@@ -880,36 +412,23 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     goalie: soft.goalie,
     winPct: soft.winPct,
   };
-  const nGames = ratingGamesN(nhlGames(homeSt), nhlGames(awaySt));
   const out = [];
 
   {
-    // Odds API h2h is 3-way and includes Draw. Drop it before any candidate
-    // or de-vig so a Draw side never reaches the gates.
-    const bundles = collectMarketOutcomes(event, 'h2h').filter((b) => {
-      return String(b && b.side || '').trim().toLowerCase() !== 'draw';
-    });
+    const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      const q = periodQuote({ modelMargin, modelTotal, market: 'ml', sideIsHome: isHome, nGames });
-      const pPure = q
-        ? q.coverProb
-        : (isHome
-          ? mlFromSpread(modelMargin, SPORT, undefined, nGames)
-          : 1 - mlFromSpread(modelMargin, SPORT, undefined, nGames));
-      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.ml);
-      const raw = stamp({
+      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
+      out.push(enrichCandidateWithEdge({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
-        modelRawP: p, modelPureP: pPure, projMethod: periodMethod(methods.ml, !!q), uncertainty,
-        ratingN: nGames,
+        modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      });
-      if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
-      out.push(enrichCandidateWithEdge(raw, b, bundles));
+      }, b, bundles));
     }
   }
 
@@ -919,24 +438,18 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const line = b.point;
       if (line == null) continue;
       const isHome = b.side === home;
-      const q = periodQuote({ modelMargin, modelTotal, market: 'spread', sideIsHome: isHome, line, nGames });
-      const pCoverPure = q
-        ? q.coverProb
-        : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT, undefined, nGames);
-      const pCover = blendWithMarket(pCoverPure, noVigPinnacleImplied(bundles, b), BLEND.spread);
+      let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
+      pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
-      const raw = stamp({
+      out.push(enrichCandidateWithEdge({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
-        modelRawP: pCover, modelPureP: pCoverPure, projMethod: periodMethod(methods.spread, !!q), uncertainty,
-        ratingN: nGames,
+        modelRawP: pCover, projMethod: methods.spread, uncertainty,
         consensusLine: line, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      });
-      if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
-      out.push(enrichCandidateWithEdge(raw, b, bundles));
+      }, b, bundles));
     }
   }
 
@@ -945,23 +458,17 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
-      const q = periodQuote({
-        modelMargin, modelTotal, market: 'total', line, side: b.side, nGames,
-      });
-      const pPure = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT, nGames);
-      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.total);
-      const raw = stamp({
+      let p = totalCoverProb(modelTotal, line, b.side, SPORT);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
+      out.push(enrichCandidateWithEdge({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${line}`, line,
-        modelRawP: p, modelPureP: pPure, projMethod: periodMethod(methods.total, !!q), uncertainty: uncertainty + 0.05,
-        ratingN: nGames,
+        modelRawP: p, projMethod: methods.total, uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      });
-      if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
-      out.push(enrichCandidateWithEdge(raw, b, bundles));
+      }, b, bundles));
     }
   }
 
@@ -970,45 +477,19 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
 
 function project({ oddsEvents, standings, gameDay, espnGames } = {}) {
   const games = (espnGames && espnGames.games) || espnGames || [];
-  const fallbackSeen = new Set();
-  const baseline = [];
-  const rows = mapGamesSoft(oddsEvents, (ev) => {
+  return mapGamesSoft(oddsEvents, (ev) => {
     const eg = findEspnGame(ev, games);
-    return projectGame(ev, standings || {}, eg, gameDay || {}, fallbackSeen, baseline);
+    return projectGame(ev, standings || {}, eg, gameDay || {});
   });
-  const seen = new Set();
-  const uniq = [];
-  for (const item of baseline) {
-    if (seen.has(item)) continue;
-    seen.add(item);
-    uniq.push(item);
-  }
-  const list = uniq.length ? uniq.join(', ') : '(none)';
-  console.log(`[omega-nhl] baseline teams: ${list}`);
-  return rows;
 }
 
 module.exports = {
   project,
-  periodQuote,
   SPORT,
-  BLEND,
   nhlStandingsEnv,
   applyNhlEngineSoft,
   teamGpg,
-  teamGpgDetail,
-  nhlGamesInfo,
-  pfLooksLikeStandingsPoints,
-  nhlRateMismatch,
-  NHL_MIN_GAMES,
-  NHL_GPG_PRIOR_GAMES,
-  NHL_GPG_IMPLAUSIBLE,
-  NHL_GPG_FLOOR,
-  NHL_GPG_CAP,
   NHL_MARGIN_CAP,
   NHL_TOTAL_MIN,
   NHL_TOTAL_MAX,
-  goalieResidual,
-  priceUnconfirmedGoalies,
-  UNCONFIRMED_BACKUP_SAVE_HAIRCUT,
 };

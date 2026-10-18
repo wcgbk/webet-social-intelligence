@@ -1,112 +1,36 @@
 'use strict';
 
 const {
-  SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES, GENERATOR_BOOKMAKERS,
-  ncaafGpFixEnabled, teamExactOnly, fbWeatherEnabled, nbaModuleEnabled,
+  SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
 } = require('./config');
-const { parseWinLossRecord } = require('./sports/_common');
-const { resolveTeamId, teamRecord } = require('./sports/team_identity');
-const { loadFootballWeather } = require('./sports/football_weather');
-const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
-const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
-const { parseFootballQbMap, parseFootballPersonnel, fillNcaafQbMap } = require('./late_news');
-const { inSlate } = require('./selection_pass');
-const { last5ByTeamFromSchedule } = require('./last5');
-const { prepareNflElo } = require('./sports/nfl_elo');
-const {
-  fetchDepthCharts, slateTeamIds, starterFeedStamp, freezeDepthFallback,
-} = require('./sports/depth_chart');
-const {
-  choosePitcher, chooseGoalie, applySummaryStarters, needsStarterSummary,
-} = require('./starters');
-const { opsAlert } = require('./ops_alert');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
 
-/**
- * Odds API odds URL. regions us,us2,eu and markets h2h,spreads,totals.
- * One bookmakers parameter. It names Hard Rock and the books the card
- * already reads. It does not add a second request. Credits stay
- * regions × markets.
- */
-function buildOddsUrl(sportKey, apiKey, historicalSnapshot) {
-  const base = historicalSnapshot
-    ? `https://api.the-odds-api.com/v4/historical/sports/${sportKey}/odds`
-    : `https://api.the-odds-api.com/v4/sports/${sportKey}/odds`;
-  const date = historicalSnapshot ? `&date=${encodeURIComponent(historicalSnapshot)}` : '';
-  const books = `&bookmakers=${encodeURIComponent(GENERATOR_BOOKMAKERS)}`;
-  return `${base}?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american${books}&apiKey=${apiKey}${date}`;
-}
-
-function enabledSportLabels(dateISO) {
-  if (!dateISO) {
-    const sports = Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
-    if (nbaModuleEnabled() && sports.indexOf('NBA') === -1) sports.push('NBA');
-    return sports;
-  }
-  return sportsForCard(dateISO);
+function enabledSportLabels() {
+  return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
 }
 
 async function fetchJson(url, timeoutMs = 12000) {
-  return memoFetchJson(url, timeoutMs);
+  const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url.split('?')[0]}`);
+  return resp.json();
 }
 
 /**
  * Odds API multi-sport snapshot. Timestamped. Does not burn extras beyond one pass/sport.
  */
 async function fetchOddsMultiSport(dateISO, opts = {}) {
-  if (opts.storedBoardOnly || opts.preferStoredSnapshot) {
-    let stored = null;
-    try {
-      const { loadStoredTenAmBoard } = require('./stored_board');
-      stored = await loadStoredTenAmBoard(dateISO, opts);
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] stored 10:00 read soft-fail: ${e && e.message}`);
-    }
-    if (stored && stored.bySport) {
-      const bySport = {};
-      let n = 0;
-      for (const [label, events] of Object.entries(stored.bySport)) {
-        const filtered = filterEventsSameEtDay(events, dateISO);
-        bySport[label] = filtered;
-        n += filtered.length;
-      }
-      if (n > 0) {
-        console.log(`[omega-vnext/ingest] odds source=stored-10:00 events=${n} paidPull=0`);
-        return {
-          ...stored,
-          bySport,
-          storedSnapshot: true,
-          snapshotNote: 'stored-10:00',
-          paidPull: 0,
-        };
-      }
-    }
-    if (opts.storedBoardOnly) {
-      console.log('[omega-vnext/ingest] odds source=stored-10:00-missing paidPull=0');
-      opsAlert('stored-10:00-missing', `date=${dateISO || ''}`);
-      return {
-        bySport: {},
-        fetchedAt: new Date().toISOString(),
-        snapshotNote: 'stored-10:00-missing',
-        storedSnapshot: false,
-        oddsErrors: [],
-        paidPull: 0,
-      };
-    }
-  }
   const apiKey = process.env.ODDS_API_KEY;
-  const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live', oddsErrors: [] };
+  const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live' };
   if (!apiKey) {
     console.log('[omega-vnext/ingest] No ODDS_API_KEY — skipping odds');
-    if (!out.oddsSnapshotTimestamp) out.oddsSnapshotTimestamp = out.fetchedAt;
     return out;
   }
 
-  const sports = enabledSportLabels(dateISO);
+  const sports = enabledSportLabels();
   for (const label of sports) {
     const key = ODDS_SPORT_KEYS[label];
     if (!key) continue;
@@ -114,22 +38,12 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
       let url;
       if (opts.historicalSnapshot) {
         out.snapshotNote = `historical:${opts.historicalSnapshot}`;
-        url = buildOddsUrl(key, apiKey, opts.historicalSnapshot);
+        url = `https://api.the-odds-api.com/v4/historical/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(opts.historicalSnapshot)}`;
       } else {
-        const gate = await slateOddsGate({ sportKey: key, apiKey, dateISO });
-        if (gate.skip) {
-          out.bySport[label] = [];
-          console.log(`[omega-vnext/ingest] ${label}: skip Odds API (${gate.reason}, events=${gate.events})`);
-          continue;
-        }
-        url = buildOddsUrl(key, apiKey, null);
+        url = `https://api.the-odds-api.com/v4/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
       }
       const data = await fetchJson(url, 15000);
-      // historical endpoint wraps in { timestamp, data: [...] }. timestamp is
-      // the snapshot the API actually served (at or before the requested 10:30).
-      if (data && !Array.isArray(data) && data.timestamp && !out.oddsSnapshotTimestamp) {
-        out.oddsSnapshotTimestamp = data.timestamp;
-      }
+      // historical endpoint wraps in { data: [...] }
       const rawEvents = Array.isArray(data) ? data : (data && data.data) || [];
       const events = filterEventsSameEtDay(rawEvents, dateISO);
       out.bySport[label] = events;
@@ -138,49 +52,27 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
     } catch (e) {
       console.error(`[omega-vnext/ingest] Odds ${label} failed: ${e.message}`);
       out.bySport[label] = [];
-      out.oddsErrors.push(oddsFailureRecord(label, e));
     }
   }
-  // Live board has no historical wrapper. The fetch time is the snapshot.
-  if (!out.oddsSnapshotTimestamp) out.oddsSnapshotTimestamp = out.fetchedAt;
   return out;
-}
-
-function oddsFailureRecord(sport, err) {
-  const status = err && err.status != null && err.status !== '' ? Number(err.status) : null;
-  let message = String((err && err.message) || 'odds fetch failed');
-  message = message.replace(/https?:\/\/\S+/gi, '');
-  message = message.replace(/apiKey=[^&\s]*/gi, '');
-  message = message.replace(/\bapi[_-]?key\b/gi, '');
-  message = message.replace(/\s+/g, ' ').trim();
-  const creditHint = (status === 401 || status === 429 || /quota|credit/i.test(message)) ? 'quota_or_auth' : null;
-  return {
-    sport,
-    status: Number.isFinite(status) ? status : null,
-    message,
-    creditHint,
-  };
 }
 
 function dateParamET(dateISO) {
   return String(dateISO || '').replace(/-/g, '');
 }
 
-/**
- * Keep events inside the selection slate for cardDateISO.
- * Name kept for callers. Window is 11:15 ET through 6:00 ET the next day.
- */
+/** Keep only events whose commence_time falls on cardDateISO (ET calendar day). */
 function filterEventsSameEtDay(events, dateISO) {
   if (!dateISO) return events || [];
   const kept = [];
   let dropped = 0;
   for (const ev of events || []) {
-    const t = ev && (ev.commence_time || ev.commenceTime || ev.date);
-    if (t && inSlate(ev, dateISO)) kept.push(ev);
+    const t = ev.commence_time || ev.commenceTime || ev.date;
+    if (t && isSameEtDay(t, dateISO)) kept.push(ev);
     else dropped += 1;
   }
   if (dropped) {
-    console.log(`[omega-vnext/ingest] slate drop ${dropped} event(s) outside ${dateISO} 11:15 ET–06:00 ET next day`);
+    console.log(`[omega-vnext/ingest] day-scope drop ${dropped} event(s) not on ${dateISO} ET`);
   }
   return kept;
 }
@@ -188,262 +80,64 @@ function filterEventsSameEtDay(events, dateISO) {
 
 
 function extractProbable(competitor) {
-  return choosePitcher(competitor);
-}
-
-/**
- * ESPN season.type is either a number (1 = preseason) or { type, name }.
- * slug/name "preseason" also counts. Other sports ignore these fields.
- */
-function scoreboardSeasonFields(ev) {
-  const season = (ev && ev.season) || {};
-  const typeObj = season.type && typeof season.type === 'object' ? season.type : null;
-  const raw = typeObj ? (typeObj.type != null ? typeObj.type : typeObj.id) : season.type;
-  const seasonTypeNum = Number(raw);
-  const seasonType = Number.isFinite(seasonTypeNum) ? seasonTypeNum : null;
-  const label = `${season.slug || ''} ${typeObj ? (typeObj.name || '') : ''} ${typeObj ? (typeObj.abbreviation || '') : ''}`;
-  return {
-    seasonType,
-    preseason: seasonType === 1 || /preseason/i.test(label),
-  };
-}
-
-/**
- * Scoreboard URLs for one card date.
- * NCAAF without a group collapses to the Top-25 board and hides the rest
- * of the slate (rest, neutral site, weather). groups=90 is D1 (FBS+FCS).
- * groups=80 is the FBS board. Merge both. Other leagues stay one URL.
- */
-function espnScoreboardUrls(label, dateISO) {
-  const cfg = ESPN_LEAGUES[label];
-  if (!cfg) return [];
-  const dates = dateParamET(dateISO);
-  const base = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`;
-  if (!dates) return [base];
-  if (label === 'NCAAF') {
-    return [
-      `${base}?dates=${dates}&groups=90&limit=400`,
-      `${base}?dates=${dates}&groups=80&limit=400`,
-    ];
+  if (!competitor) return null;
+  const probs = competitor.probables || competitor.probablePitchers || [];
+  if (Array.isArray(probs) && probs.length) {
+    const p = probs[0];
+    const name = (p.athlete && (p.athlete.displayName || p.athlete.fullName)) || p.displayName || p.name || null;
+    if (name) return { name, id: (p.athlete && p.athlete.id) || p.id || null };
   }
-  return [`${base}?dates=${dates}`];
-}
-
-function espnCompetitorId(side) {
-  const id = side && side.team && side.team.id;
-  if (id == null || id === '') return null;
-  return String(id);
-}
-
-/** ESPN competition venue. Id and name drive neutral-site stadium lookup. */
-function espnCompetitionVenue(comp) {
-  const venue = comp && comp.venue;
-  if (!venue || typeof venue !== 'object') return null;
-  const address = venue.address && typeof venue.address === 'object' ? venue.address : {};
-  const name = venue.fullName || venue.displayName || venue.name || null;
-  const id = venue.id != null && venue.id !== '' ? String(venue.id) : null;
-  if (!id && !name) return null;
-  return {
-    id,
-    name,
-    fullName: venue.fullName || null,
-    city: address.city || null,
-    state: address.state || null,
-    country: address.country || null,
-  };
-}
-
-/** FBS/FCS/D1 board ids are not conferences. */
-function conferenceToken(value) {
-  if (value == null || value === '') return null;
-  const s = String(value).trim();
-  if (!s) return null;
-  if (s === '80' || s === '81' || s === '90') return null;
-  if (/^(fbs|fcs|d1|division i|ncaa division i)$/i.test(s)) return null;
-  return s;
-}
-
-function competitorConference(side) {
-  if (!side || typeof side !== 'object') return null;
-  const team = side.team && typeof side.team === 'object' ? side.team : {};
-  const fromObj = (obj) => {
-    if (!obj || typeof obj !== 'object') return null;
-    return conferenceToken(obj.abbreviation || obj.shortName || obj.name || obj.id);
-  };
-  return conferenceToken(side.conferenceId != null ? side.conferenceId : team.conferenceId)
-    || fromObj(side.conference)
-    || fromObj(team.conference);
-}
-
-function eventConference(comp, ev, homeConf, awayConf) {
-  if (homeConf && awayConf && homeConf.toLowerCase() === awayConf.toLowerCase()) return homeConf;
-  const groups = (comp && comp.groups && !Array.isArray(comp.groups) && comp.groups)
-    || (ev && ev.groups && !Array.isArray(ev.groups) && ev.groups)
-    || null;
-  if (!groups || typeof groups !== 'object') return null;
-  return conferenceToken(groups.id)
-    || conferenceToken(groups.abbreviation || groups.shortName || groups.name);
-}
-
-function mapEspnEvent(ev, sportLabel) {
-  if (!ev || typeof ev !== 'object') return null;
-  const summary = ev.header && ev.header.competitions ? ev : null;
-  const event = summary
-    ? {
-      ...ev.header,
-      id: ev.header.id || ev.id,
-      competitions: ev.header.competitions,
-      season: ev.header.season || ev.season,
-    }
-    : ev;
-  const comp = (event.competitions && event.competitions[0]) || {};
-  const competitors = comp.competitors || [];
-  const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
-  const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
-  const label = String(sportLabel || '').toUpperCase();
-  const homeProb = extractProbable(home);
-  const awayProb = extractProbable(away);
-  const homeConference = competitorConference(home);
-  const awayConference = competitorConference(away);
-  const conference = eventConference(comp, event, homeConference, awayConference);
-  const game = {
-    id: event.id != null ? event.id : ev.id,
-    name: event.name || ev.name,
-    shortName: event.shortName || ev.shortName,
-    commenceTime: event.date || ev.date || comp.date,
-    status: (comp.status && comp.status.type && comp.status.type.state) || 'pre',
-    homeTeam: (home.team && (home.team.displayName || home.team.name)) || '',
-    awayTeam: (away.team && (away.team.displayName || away.team.name)) || '',
-    homeAbbr: (home.team && home.team.abbreviation) || '',
-    awayAbbr: (away.team && away.team.abbreviation) || '',
-    homeId: espnCompetitorId(home),
-    awayId: espnCompetitorId(away),
-    homeScore: home.score != null ? Number(home.score) : null,
-    awayScore: away.score != null ? Number(away.score) : null,
-    homeProbable: homeProb,
-    awayProbable: awayProb,
-    ...(label === 'NHL' ? {
-      homeGoalie: chooseGoalie(home),
-      awayGoalie: chooseGoalie(away),
-    } : {}),
-    weather: extractWeather(comp),
-    indoor: !!(comp.venue && comp.venue.indoor === true),
-    neutralSite: comp.neutralSite === true,
-    venue: espnCompetitionVenue(comp),
-    ...(homeConference ? { homeConference } : {}),
-    ...(awayConference ? { awayConference } : {}),
-    ...(conference ? { conference } : {}),
-    ...scoreboardSeasonFields(event),
-  };
-  if (summary) applySummaryStarters(label || 'MLB', game, ev);
-  return game;
-}
-
-/**
- * Playoff scoreboards often omit probables. The summary header and the
- * boxscore starter fill them. NHL summaries fill a missing goalie. A
- * regular-season board does not take this extra fetch.
- */
-async function fillStarterSummaries(label, games) {
-  const cfg = ESPN_LEAGUES[label];
-  if (!cfg || !Array.isArray(games)) return;
-  for (const game of games) {
-    if (!needsStarterSummary(label, game)) continue;
-    const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/summary?event=${encodeURIComponent(game.id)}`;
-    try {
-      const summary = await fetchJson(url, 10000);
-      applySummaryStarters(label, game, summary);
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] ESPN ${label} summary ${game.id}: ${e.message}`);
-    }
-  }
-}
-
-/**
- * Season year, week number, and league calendar from one scoreboard body.
- * Rest-days reads these off the daily board. A missing piece stays null.
- */
-function scoreboardScheduleFields(data) {
-  const seasonYear = data && data.season && data.season.year != null ? Number(data.season.year) : null;
-  const weekNumber = data && data.week && data.week.number != null ? Number(data.week.number) : null;
-  const calendar = (data && data.leagues && data.leagues[0] && data.leagues[0].calendar) || null;
-  return {
-    seasonYear: Number.isInteger(seasonYear) ? seasonYear : null,
-    weekNumber: Number.isInteger(weekNumber) ? weekNumber : null,
-    calendar: Array.isArray(calendar) ? calendar : null,
-  };
-}
-
-/** Fill only the holes. A later group can supply calendar when the first body has none. */
-function fillScheduleFields(into, data) {
-  const next = scoreboardScheduleFields(data);
-  if (into.seasonYear == null && next.seasonYear != null) into.seasonYear = next.seasonYear;
-  if (into.weekNumber == null && next.weekNumber != null) into.weekNumber = next.weekNumber;
-  const haveCalendar = Array.isArray(into.calendar) && into.calendar.length > 0;
-  if (!haveCalendar && next.calendar != null) into.calendar = next.calendar;
+  // Some scoreboards nest under competitor.athletes / roster hints — skip if absent
+  return null;
 }
 
 async function fetchEspnScoreboard(label, dateISO) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return { league: label, games: [] };
-  const urls = espnScoreboardUrls(label, dateISO);
-  const games = [];
-  const seen = new Set();
-  const schedule = { seasonYear: null, weekNumber: null, calendar: null };
-  let ok = 0;
-  for (const url of urls) {
-    try {
-      const data = await fetchJson(url, 10000);
-      ok += 1;
-      fillScheduleFields(schedule, data);
-      for (const ev of (data && data.events) || []) {
-        const id = ev && ev.id != null && ev.id !== '' ? String(ev.id) : null;
-        if (id && seen.has(id)) continue;
-        const game = mapEspnEvent(ev, label);
-        if (!game) continue;
-        if (id) seen.add(id);
-        games.push(game);
-      }
-    } catch (e) {
-      // One NCAAF group can fail. Keep events and schedule fields from the other.
-      console.error(`[omega-vnext/ingest] ESPN ${label}: ${e.message}`);
+  const dates = dateParamET(dateISO);
+  let url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`;
+  if (dates) url += `?dates=${dates}`;
+  // CFB often needs groups; keep simple for v1
+  try {
+    const data = await fetchJson(url, 10000);
+    const games = (data.events || []).map(ev => {
+      const comp = (ev.competitions && ev.competitions[0]) || {};
+      const competitors = comp.competitors || [];
+      const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
+      const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+      const homeProb = extractProbable(home);
+      const awayProb = extractProbable(away);
+      return {
+        id: ev.id,
+        name: ev.name,
+        shortName: ev.shortName,
+        commenceTime: ev.date || comp.date,
+        status: (comp.status && comp.status.type && comp.status.type.state) || 'pre',
+        homeTeam: (home.team && (home.team.displayName || home.team.name)) || '',
+        awayTeam: (away.team && (away.team.displayName || away.team.name)) || '',
+        homeAbbr: (home.team && home.team.abbreviation) || '',
+        awayAbbr: (away.team && away.team.abbreviation) || '',
+        homeScore: home.score != null ? Number(home.score) : null,
+        awayScore: away.score != null ? Number(away.score) : null,
+        homeProbable: homeProb,
+        awayProbable: awayProb,
+        weather: extractWeather(comp),
+      };
+    });
+    const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
+    if (sameDay.length !== games.length) {
+      console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
     }
+    return { league: label, games: sameDay };
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] ESPN ${label}: ${e.message}`);
+    return { league: label, games: [] };
   }
-  if (!ok) {
-    return { league: label, games: [], seasonYear: null, weekNumber: null, calendar: null };
-  }
-  const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
-  if (sameDay.length !== games.length) {
-    console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
-  }
-  await fillStarterSummaries(label, sameDay);
-  return {
-    league: label,
-    games: sameDay,
-    seasonYear: schedule.seasonYear,
-    weekNumber: schedule.weekNumber,
-    calendar: schedule.calendar,
-  };
-}
-
-/**
- * Home, away, road, division, and conference slices. The overall column
- * has type pointsfor / total, not one of these prefixes. A stat with no
- * type is kept (callers that pass a bare {name, value} stay on that row).
- */
-function isSplitStat(stat) {
-  const type = String((stat && stat.type) || '').toLowerCase().replace(/[\s._-]+/g, '');
-  if (!type || type === 'total' || type === 'overall') return false;
-  if (type.startsWith('home') || type.startsWith('away') || type.startsWith('road')) return true;
-  if (type.includes('homerecord') || type.includes('awayrecord') || type.includes('roadrecord')) return true;
-  if (type.startsWith('vs')) return true;
-  return false;
 }
 
 function espnStat(stats, names) {
   const want = new Set(names.map(n => String(n).toLowerCase()));
   for (const s of stats || []) {
-    if (isSplitStat(s)) continue;
     const name = String((s && s.name) || '').toLowerCase();
     if (!want.has(name)) continue;
     const v = Number(s.value);
@@ -452,118 +146,10 @@ function espnStat(stats, names) {
   return null;
 }
 
-/** Exact stat name, overall/total slice only. First hit. No substring. */
-function findExactStat(stats, name) {
-  const want = String(name);
-  for (const s of stats || []) {
-    if (!s || isSplitStat(s)) continue;
-    if (s.name === want) return s;
-  }
-  return null;
-}
-
-function statNumber(stat) {
-  return stat ? Number(stat.value) : null;
-}
-
 /**
- * Season pointsFor / pointsAgainst / winPercent by exact name.
- * avgPointsFor is not a stand-in for either column (it is a substring of
- * the old pointsFor regex and used to bind both pf and winPct).
- * runsFor / runsAgainst count only when the points column is absent.
- * A home-only slice is not a fallback.
- */
-function standingNumbers(stats) {
-  const winPct = findExactStat(stats, 'winPercent');
-  const pf = findExactStat(stats, 'pointsFor') || findExactStat(stats, 'runsFor');
-  const pa = findExactStat(stats, 'pointsAgainst') || findExactStat(stats, 'runsAgainst');
-  const wins = findExactStat(stats, 'wins');
-  const losses = findExactStat(stats, 'losses');
-  return {
-    winPct: statNumber(winPct),
-    pf: statNumber(pf),
-    pa: statNumber(pa),
-    wins: statNumber(wins),
-    losses: statNumber(losses),
-  };
-}
-
-function collectStandingsEntries(data) {
-  const entries = [];
-  function walk(node) {
-    if (!node) return;
-    if (Array.isArray(node.standings && node.standings.entries)) {
-      entries.push(...node.standings.entries);
-    }
-    if (Array.isArray(node.entries)) entries.push(...node.entries);
-    (node.children || []).forEach(walk);
-  }
-  if (data && data.standings && data.standings.entries) entries.push(...data.standings.entries);
-  walk(data);
-  return entries;
-}
-
-function ratingsFromStandingsEntries(entries, label) {
-  const ratings = {};
-  for (const e of entries || []) {
-    const team = (e.team && (e.team.displayName || e.team.name)) || '';
-    if (!team) continue;
-    const stats = e.stats || [];
-    ratings[team] = standingNumbers(stats);
-    if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
-    else if (label === 'NFL' || label === 'NCAAF') applyFootballStandingExtras(ratings[team], stats);
-    else if (label === 'NBA') applyNbaStandingExtras(ratings[team], stats);
-  }
-  return ratings;
-}
-
-function normStatLabel(value) {
-  return String(value || '').toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-/**
- * ESPN NHL Goals For/Against. The live table names the column pointsFor
- * with displayName "Goals For" and abbreviation GF (same for Against / GA).
- * An explicit goalsFor name wins. displayName "Goals For" is that same
- * column. Abbreviation GF/GA counts only on pointsFor/pointsAgainst.
- * Other sports do not call this.
- */
-function nhlGoalTotal(stats, side) {
-  const seasonNames = side === 'for' ? ['goalsfor'] : ['goalsagainst'];
-  const avgNames = side === 'for' ? ['avggoalsfor'] : ['avggoalsagainst'];
-  const displayNames = side === 'for'
-    ? ['goals for', 'avg goals for']
-    : ['goals against', 'avg goals against'];
-  const abbr = side === 'for' ? 'gf' : 'ga';
-  const pointsName = side === 'for' ? 'pointsfor' : 'pointsagainst';
-  let byDisplay = null;
-  let byAbbr = null;
-  for (const s of stats || []) {
-    if (!s || typeof s !== 'object') continue;
-    const v = Number(s.value);
-    if (!Number.isFinite(v)) continue;
-    const name = normStatLabel(s.name).replace(/ /g, '');
-    const display = normStatLabel(s.displayName);
-    const ab = normStatLabel(s.abbreviation);
-    // goalsFor is a season total. avgGoalsFor is already per game.
-    if (seasonNames.includes(name)) return { value: v, season: true };
-    if (avgNames.includes(name)) return { value: v, season: false };
-    if (byDisplay == null && displayNames.includes(display)) {
-      byDisplay = { value: v, season: display.indexOf('avg ') !== 0 };
-    }
-    if (byAbbr == null && ab === abbr && name === pointsName) byAbbr = { value: v, season: true };
-  }
-  if (byDisplay != null) return byDisplay;
-  return byAbbr;
-}
-
-/**
- * NHL standings extras. Prefer Goals For/Against (name or displayName).
- * A bare pointsFor is standings points (2*W+OTL) only when it sits on
- * `points` AND the per-game rate looks like standings points (≤ ~2.05).
- * A rate in the goal band (~1.8–6) is goals, even when GF ≈ Pts
- * (Florida 6/4, and the other early GF≈Pts clubs once labeled Goals For).
- * Otherwise clear pf/pa so the projector stays on the 6.2 / HFA baseline.
+ * NHL standings extras. Generic pointsFor is often the standings-point total
+ * (2*W+OTL), not goals. Prefer goalsFor / a goal-band average. Otherwise
+ * clear pf/pa so the projector stays on the 6.2 / HFA baseline.
  * Other sports do not call this.
  */
 function applyNhlStandingStats(row, stats) {
@@ -578,10 +164,8 @@ function applyNhlStandingStats(row, stats) {
     team.games = team.wins + team.losses + otl + (Number.isFinite(team.ties) ? team.ties : 0);
   }
 
-  const gfStat = nhlGoalTotal(stats, 'for');
-  const gaStat = nhlGoalTotal(stats, 'against');
-  const gf = gfStat ? gfStat.value : null;
-  const ga = gaStat ? gaStat.value : null;
+  const gf = espnStat(stats, ['goalsFor', 'avgGoalsFor']);
+  const ga = espnStat(stats, ['goalsAgainst', 'avgGoalsAgainst']);
   const pf = espnStat(stats, ['pointsFor']);
   const pa = espnStat(stats, ['pointsAgainst']);
   const avgF = espnStat(stats, ['avgPointsFor']);
@@ -596,33 +180,23 @@ function applyNhlStandingStats(row, stats) {
   } else if (avgF != null && avgA != null && avgF >= 1.8 && avgF <= 6 && avgA >= 1.8 && avgA <= 6) {
     scoring = { pf: avgF, pa: avgA };
   } else if (pf != null && pa != null && pf > 0 && pa > 0) {
-    const rate = games > 0 ? pf / games : pf;
-    const inGoalBand = rate >= 1.8 && rate <= 6;
-    const standingsPpg = rate <= 2.05;
-    const closeToPts = pts != null && Math.abs(pf - pts) <= Math.max(2, Math.abs(pts) * 0.08);
-    // Standings-points duplicate only. Never when the rate is already a goal rate.
-    const dupPoints = closeToPts && standingsPpg && !inGoalBand;
+    const dupPoints = pts != null && Math.abs(pf - pts) <= Math.max(2, Math.abs(pts) * 0.08);
     const guessPts = Number.isFinite(wins) && wins >= 0
       ? (2 * wins + (otl != null ? otl : 0))
       : null;
     const nearGuess = guessPts != null && guessPts >= 8
-      && Math.abs(pf - guessPts) <= Math.max(3, guessPts * 0.12)
-      && !inGoalBand;
+      && Math.abs(pf - guessPts) <= Math.max(3, guessPts * 0.12);
     const implied = games > 0 && pf > 6 ? pf / games : pf;
-    const impliedGoal = implied >= 1.8 && implied <= 6 && (games > 0 || pf <= 6);
+    const inGoalBand = implied >= 1.8 && implied <= 6 && (games > 0 || pf <= 6);
     const aheadOfPoints = pts == null || pf > pts * 1.5;
-    if (!dupPoints && !nearGuess && (inGoalBand || (impliedGoal && aheadOfPoints))) scoring = { pf, pa };
+    if (!dupPoints && !nearGuess && inGoalBand && aheadOfPoints) scoring = { pf, pa };
   }
   if (scoring) {
     team.pf = scoring.pf;
     team.pa = scoring.pa;
-    // ESPN "Goals For" is a season sum, even when week-1 totals still sit
-    // inside the per-game band. Avg columns stay rates (flag omitted).
-    if (gfStat && gaStat && gfStat.season && gaStat.season) team.nhlSeasonGoals = true;
   } else {
     team.pf = null;
     team.pa = null;
-    team.nhlSeasonGoals = false;
   }
 
   const wp = espnStat(stats, ['pointPercent', 'pointsPercentage', 'winPercent', 'winPct']);
@@ -641,97 +215,7 @@ function applyNhlStandingStats(row, stats) {
   return team;
 }
 
-/**
- * NFL/NCAAF only. Additive. ESPN pointsFor stays the season sum.
- * gamesPlayed/games is stored when that stat exists. avgPointsFor is stored
- * only under that per-game name, and only as a pair. Other sports do not call this.
- */
-/**
- * NBA only. Additive. avgPointsFor/Against stay per-game and are never
- * divided here. pointsFor/Against are copied as ESPN sent them. The
- * projector splits a season sum from a rate. Pace and ratings are copied
- * when the standings row has them. Other sports do not call this.
- */
-function applyNbaStandingExtras(row, stats) {
-  const team = row && typeof row === 'object' ? row : {};
-  const gp = espnStat(stats, ['gamesPlayed', 'games']);
-  if (gp != null && gp > 0) {
-    team.gamesPlayed = gp;
-    team.games = gp;
-  }
-  const avgF = espnStat(stats, ['avgPointsFor']);
-  const avgA = espnStat(stats, ['avgPointsAgainst']);
-  if (avgF != null) team.avgPointsFor = avgF;
-  if (avgA != null) team.avgPointsAgainst = avgA;
-  const pf = espnStat(stats, ['pointsFor']);
-  const pa = espnStat(stats, ['pointsAgainst']);
-  if (pf != null) team.pointsFor = pf;
-  if (pa != null) team.pointsAgainst = pa;
-  const pace = espnStat(stats, ['pace', 'paceFactor', 'avgPace']);
-  if (pace != null) team.pace = pace;
-  const off = espnStat(stats, ['offensiveRating', 'offRtg', 'avgOffensiveRating']);
-  const def = espnStat(stats, ['defensiveRating', 'defRtg', 'avgDefensiveRating']);
-  if (off != null) team.offRtg = off;
-  if (def != null) team.defRtg = def;
-  return team;
-}
-
-/**
- * ESPN `overall` is type "total" with value null and displayValue "W-L" or
- * "W-L-T". College rows omit losses and gamesPlayed. Fill those only when
- * the field is actually missing — never write losses 0 because the stat
- * was absent, and never overwrite an explicit NFL loss or game count.
- * OMEGA_NCAAF_GP_FIX=0 leaves the row untouched beyond the numeric extras.
- */
-function espnOverallRecord(stats) {
-  for (const s of stats || []) {
-    if (!s || typeof s !== 'object') continue;
-    const name = String(s.name || '').toLowerCase();
-    if (name !== 'overall' && name !== 'overallrecord') continue;
-    const parsed = parseWinLossRecord(s.displayValue || s.summary || s.value);
-    if (parsed) return parsed;
-  }
-  return null;
-}
-
-function fillFootballRecord(team, stats) {
-  if (!ncaafGpFixEnabled()) return team;
-  const parsed = espnOverallRecord(stats);
-  if (!parsed) return team;
-  const lossesMissing = team.losses == null;
-  const gamesMissing = !(Number(team.gamesPlayed) > 0) && !(Number(team.games) > 0);
-  if (team.record == null) team.record = parsed.text;
-  if (team.wins == null) team.wins = parsed.wins;
-  if (lossesMissing) team.losses = parsed.losses;
-  if (team.ties == null) team.ties = parsed.ties;
-  if (gamesMissing) {
-    team.gamesPlayed = parsed.games;
-    team.games = parsed.games;
-  }
-  return team;
-}
-
-function applyFootballStandingExtras(row, stats) {
-  const team = row && typeof row === 'object' ? row : {};
-  const gp = espnStat(stats, ['gamesPlayed', 'games']);
-  if (gp != null && gp > 0) {
-    team.gamesPlayed = gp;
-    team.games = gp;
-  }
-  const avgF = espnStat(stats, ['avgPointsFor']);
-  const avgA = espnStat(stats, ['avgPointsAgainst']);
-  if (avgF != null && avgA != null) {
-    team.avgPointsFor = avgF;
-    team.avgPointsAgainst = avgA;
-  }
-  return fillFootballRecord(team, stats);
-}
-
 async function fetchEspnStandings(label) {
-  return memoValue(`espn-standings:${label}`, () => loadEspnStandings(label));
-}
-
-async function loadEspnStandings(label) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return {};
   // NFL / CFB / MLB standings endpoints differ; best-effort
@@ -742,7 +226,37 @@ async function loadEspnStandings(label) {
   for (const url of urls) {
     try {
       const data = await fetchJson(url, 10000);
-      const ratings = ratingsFromStandingsEntries(collectStandingsEntries(data), label);
+      const ratings = {};
+      const children = data.children || data.children || [];
+      const entries = [];
+      function walk(node) {
+        if (!node) return;
+        if (Array.isArray(node.standings && node.standings.entries)) {
+          entries.push(...node.standings.entries);
+        }
+        if (Array.isArray(node.entries)) entries.push(...node.entries);
+        (node.children || []).forEach(walk);
+      }
+      if (data.standings && data.standings.entries) entries.push(...data.standings.entries);
+      walk(data);
+      for (const e of entries) {
+        const team = (e.team && (e.team.displayName || e.team.name)) || '';
+        if (!team) continue;
+        const stats = e.stats || [];
+        const winPct = stats.find(s => s.name === 'winPercent' || s.name === 'avgPointsFor');
+        const pf = stats.find(s => /pointsFor|avgPointsFor|runsFor/i.test(s.name || ''));
+        const pa = stats.find(s => /pointsAgainst|avgPointsAgainst|runsAgainst/i.test(s.name || ''));
+        const wins = stats.find(s => s.name === 'wins');
+        const losses = stats.find(s => s.name === 'losses');
+        ratings[team] = {
+          winPct: winPct ? Number(winPct.value) : null,
+          pf: pf ? Number(pf.value) : null,
+          pa: pa ? Number(pa.value) : null,
+          wins: wins ? Number(wins.value) : null,
+          losses: losses ? Number(losses.value) : null,
+        };
+        if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
+      }
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
   }
@@ -779,34 +293,17 @@ function talentSeedMeta() {
 
 /**
  * Attach optional talent/spPlus onto EPA rows without wiping EPA fields.
- * Exact team identity (same ESPN id) when OMEGA_TEAM_EXACT_ONLY is on.
- * A mascot match is never a merge: Kentucky does not take Arizona's talent.
- * The toggle off keeps the old exact display-name key. scale is 'centered'
- * or 'pct_0_100' from the seed meta.
+ * Exact team name only — mascot fuzzy match would cross LSU/Clemson/Auburn.
+ * scale is 'centered' or 'pct_0_100' from the seed meta.
  */
-function talentValueFor(team, talent) {
-  if (!teamExactOnly()) {
-    if (!Object.prototype.hasOwnProperty.call(talent, team)) return undefined;
-    return talent[team];
-  }
-  const id = resolveTeamId('NCAAF', team);
-  if (!id) return undefined;
-  if (Object.prototype.hasOwnProperty.call(talent, team)) return talent[team];
-  for (const [key, value] of Object.entries(talent)) {
-    if (!key || key.startsWith('_')) continue;
-    if (resolveTeamId('NCAAF', key) === id) return value;
-  }
-  return undefined;
-}
-
 function mergeTalentIntoEfficiency(epaTable, talentTable, scale) {
   const out = { ...(epaTable || {}) };
   const talent = talentTable || {};
   const talentScale = scale === 'pct_0_100' ? 'pct_0_100' : 'centered';
   for (const [team, row] of Object.entries(out)) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-    const t = talentValueFor(team, talent);
-    if (t === undefined) continue;
+    if (!Object.prototype.hasOwnProperty.call(talent, team)) continue;
+    const t = talent[team];
     let talentVal = null;
     let spPlus = null;
     if (t != null && typeof t === 'object') {
@@ -823,38 +320,20 @@ function mergeTalentIntoEfficiency(epaTable, talentTable, scale) {
   return out;
 }
 
-function stampSeedEspnId(sport, table) {
-  const out = {};
-  for (const [key, row] of Object.entries(table || {})) {
-    if (!row || typeof row !== 'object' || Array.isArray(row) || String(key).startsWith('_')) {
-      out[key] = row;
-      continue;
-    }
-    if (row.espnId != null && String(row.espnId) !== '') {
-      out[key] = row;
-      continue;
-    }
-    const espnId = resolveTeamId(sport, key);
-    out[key] = espnId ? { ...row, espnId } : row;
-  }
-  return out;
-}
-
 function loadEfficiencySeeds() {
   const nfl = require('./sports/data/nfl-epa-seed.json');
   const cfb = require('./sports/data/cfb-epa-seed.json');
   const talent = loadTalentSeed();
-  // centerSeed recomputes d from the raw file. _meta.centered is a note, not an input.
-  const { centerSeed, talentScaleMode } = require('./sports/epa');
   let scale = 'centered';
   try {
+    const { talentScaleMode } = require('./sports/epa');
     scale = talentScaleMode(talentSeedMeta());
   } catch (e) {
     console.error(`[omega-vnext/ingest] talent scale soft-fail: ${e.message}`);
   }
   return {
-    NFL: stampSeedEspnId('NFL', centerSeed(stripMeta(nfl))),
-    NCAAF: stampSeedEspnId('NCAAF', mergeTalentIntoEfficiency(centerSeed(stripMeta(cfb)), talent, scale)),
+    NFL: stripMeta(nfl),
+    NCAAF: mergeTalentIntoEfficiency(stripMeta(cfb), talent, scale),
   };
 }
 
@@ -899,108 +378,41 @@ async function fetchMlbPitcherStats(dateISO) {
  * deps is for tests — production calls the real loaders.
  */
 
-const fs = require('fs');
 const { prevEtDate, restMapFromScoreboard } = require('./sports/game_day');
-const {
-  loadFootballRestSchedules, scheduleDir, weekFilePath, weeklyScoreboardUrl,
-  seasonYearFromDate, calendarOf, weekNumberForDate,
-} = require('./sports/rest_schedule');
 
-/**
- * ESPN week boards with scores. The rest-day helper drops scores, so this
- * reads the raw week file or the same week URL. A schedule dir never
- * falls through to the network (replay stays offline). No dir fetches
- * weeks 0..card week. Failure returns [] and the EPA path stays in place.
- */
-async function loadNcaafScoreboards(dateISO) {
-  const dir = scheduleDir();
-  if (dir) {
-    const boards = [];
-    for (let w = 0; w <= 20; w += 1) {
-      const file = weekFilePath(dir, 'NCAAF', w);
-      if (!file || !fs.existsSync(file)) continue;
-      try {
-        boards.push(JSON.parse(fs.readFileSync(file, 'utf8')));
-      } catch (e) {
-        console.error(`[omega-vnext/ingest] NCAAF week ${w} unreadable: ${e.message}`);
-      }
-    }
-    return boards;
-  }
-  const year = seasonYearFromDate(dateISO, null);
-  if (year == null) return [];
-  const discovered = await fetchJson(weeklyScoreboardUrl('NCAAF', year, null), 12000);
-  const week = weekNumberForDate(calendarOf(discovered), dateISO);
-  const discoveredWeek = discovered && discovered.week && Number(discovered.week.number);
-  const last = Number.isInteger(week) ? week : (Number.isInteger(discoveredWeek) ? discoveredWeek : null);
-  if (last == null) return discovered ? [discovered] : [];
-  const weeks = [];
-  for (let w = 0; w <= last; w += 1) weeks.push(w);
-  const fetched = await Promise.all(weeks.map(async (w) => {
-    if (Number.isInteger(discoveredWeek) && w === discoveredWeek && discovered) return discovered;
-    try {
-      return await fetchJson(weeklyScoreboardUrl('NCAAF', year, w), 12000);
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] NCAAF scoreboard week ${w} failed: ${e.message}`);
-      return null;
-    }
-  }));
-  return fetched.filter(Boolean);
-}
-
-async function attachNcaafOa(efficiencyBySport, dateISO) {
-  const table = efficiencyBySport && efficiencyBySport.NCAAF;
-  if (!table || typeof table !== 'object') return;
-  try {
-    const { solveNcaafOpponentRatings, ncaafFbsLeagueTotal } = require('./sports/epa');
-    const boards = await loadNcaafScoreboards(dateISO);
-    const center = ncaafFbsLeagueTotal(boards, { asOf: dateISO });
-    if (center && Number.isFinite(center.leagueTotal)) table._leagueTotal = center.leagueTotal;
-    const pack = solveNcaafOpponentRatings(boards, { efficiency: table, asOf: dateISO });
-    if (!pack) {
-      const leagueNote = center && Number.isFinite(center.leagueTotal) ? center.leagueTotal.toFixed(2) : 'none';
-      const gamesNote = center ? center.games : 0;
-      console.log(`[omega-vnext/ingest] NCAAF OA withheld (schedule short or unreadable) date=${dateISO} league=${leagueNote} games=${gamesNote}`);
-      return;
-    }
-    table._oa = pack;
-    console.log(
-      `[omega-vnext/ingest] NCAAF OA games=${pack.games} close=${pack.closeGames} league=${pack.leagueTotal.toFixed(2)} fcs=${pack.fcsStrength.toFixed(1)} paceK=${pack.pacePriorGames}`
-    );
-  } catch (e) {
-    console.error(`[omega-vnext/ingest] NCAAF OA soft-fail: ${e.message}`);
-  }
-}
-
-/**
- * Soft QB out/doubtful/questionable map from ESPN injuries (football).
- * NFL stays on the 8000ms league feed with no date filter. NCAAF drops
- * injury rows older than ~400 days so a 2020 listing cannot tag a 2026 card.
- * The return is still the map. Callers that need ok/calls use the result helper.
- */
-async function fetchFootballQbStatusResult(leagueSlug, opts = {}) {
+/** Soft QB out/doubtful/questionable map from ESPN injuries (football). */
+async function fetchFootballQbStatusMap(leagueSlug) {
+  const out = {};
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/${leagueSlug}/injuries`;
     const data = await fetchJson(url, 8000);
-    const parsedOpts = {
-      maxAgeDays: leagueSlug === 'college-football' ? 400 : null,
-      cardDate: opts.dateISO || null,
+    const apply = (teamName, pos, status, athleteName) => {
+      if ((pos || '').toUpperCase() !== 'QB') return;
+      const st = String(status || '').toLowerCase();
+      if (!st) return;
+      if (!/(out|doubtful|questionable|injured reserve|\bir\b|ruled out)/i.test(st)) return;
+      const key = teamName;
+      // Prefer worse status if multiple
+      const rank = (s) => (/out|ruled out|ir|injured reserve/.test(s) ? 3 : /doubtful/.test(s) ? 2 : 1);
+      const prev = out[key];
+      if (prev && rank(String(prev.qbStatus)) >= rank(st)) return;
+      out[key] = { team: teamName, qbStatus: st, qbName: athleteName || null };
     };
-    const map = parseFootballQbMap(data, parsedOpts);
-    const personnel = parseFootballPersonnel(data, {
-      ...parsedOpts,
-      sport: leagueSlug === 'college-football' ? 'NCAAF' : 'NFL',
-    });
-    return { map, personnel, ok: true };
+    for (const team of (data.injuries || data.teams || [])) {
+      const teamName = team.displayName || (team.team && team.team.displayName) || '';
+      for (const inj of (team.injuries || team.athletes || [])) {
+        apply(
+          teamName,
+          (inj.athlete && inj.athlete.position && inj.athlete.position.abbreviation) || inj.position,
+          inj.status || inj.type,
+          (inj.athlete && inj.athlete.displayName) || inj.displayName
+        );
+      }
+    }
   } catch (e) {
     console.log(`[omega-vnext/ingest] QB status ${leagueSlug} soft-fail: ${e.message}`);
-    return { map: {}, personnel: {}, ok: false };
   }
-}
-
-async function fetchFootballQbStatusMap(leagueSlug, opts) {
-  const result = await fetchFootballQbStatusResult(leagueSlug, opts || {});
-  return result.map;
+  return out;
 }
 
 function extractWeather(comp) {
@@ -1017,44 +429,16 @@ function extractWeather(comp) {
   };
 }
 
-/**
- * MLB weather keys. A commence-qualified key is always stored.
- * The name-only key is kept for a single game and deleted when a second
- * row for the same clubs collides, so a doubleheader cannot share weather.
- */
-function indexMlbWeather(games) {
-  const weatherByGame = {};
-  const seenName = new Set();
-  for (const g of games || []) {
-    if (!g || !g.weather) continue;
-    const nameKey = `${g.awayTeam || ''}|${g.homeTeam || ''}`;
-    const iso = g.commenceTime || g.commence_time || '';
-    if (iso) weatherByGame[`${nameKey}|${iso}`] = g.weather;
-    if (seenName.has(nameKey)) {
-      delete weatherByGame[nameKey];
-    } else {
-      weatherByGame[nameKey] = g.weather;
-      seenName.add(nameKey);
-    }
-  }
-  return weatherByGame;
-}
-
-async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
+async function loadGameDayContext(dateISO, labels, espnBySport) {
   const gameDay = {
-    restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
+    restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {} },
     qbStatusBySport: { NFL: {}, NCAAF: {} },
-    personnelBySport: { NFL: {}, NCAAF: {} },
-    qbStatusMeta: {
-      NFL: { ok: true },
-      NCAAF: { ok: true, calls: 0, source: null },
-    },
     weatherByGame: {},
   };
   const prev = prevEtDate(dateISO);
   if (prev) {
     for (const label of labels) {
-      if (!['MLB', 'NFL', 'NCAAF', 'NHL'].includes(label) && label !== 'NBA') continue;
+      if (!['MLB', 'NFL', 'NCAAF', 'NHL'].includes(label)) continue;
       try {
         const board = await fetchEspnScoreboard(label, prev);
         const map = restMapFromScoreboard((board && board.games) || [], prev);
@@ -1067,162 +451,25 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
     }
   }
   try {
-    if (labels.includes('NFL')) {
-      const nflQb = await fetchFootballQbStatusResult('nfl', { dateISO });
-      gameDay.qbStatusBySport.NFL = nflQb.map;
-      gameDay.personnelBySport.NFL = nflQb.personnel || {};
-      gameDay.qbStatusMeta.NFL = { ok: nflQb.ok };
-    }
+    if (labels.includes('NFL')) gameDay.qbStatusBySport.NFL = await fetchFootballQbStatusMap('nfl');
   } catch (e) {
     console.error(`[omega-vnext/ingest] NFL QB soft-fail: ${e.message}`);
-    gameDay.qbStatusMeta.NFL = { ok: false };
   }
   try {
-    if (labels.includes('NCAAF')) {
-      const cfbQb = await fetchFootballQbStatusResult('college-football', { dateISO });
-      let map = cfbQb.map;
-      let meta = { ok: cfbQb.ok, calls: 0, source: 'league' };
-      const games = (espnBySport && espnBySport.NCAAF && espnBySport.NCAAF.games) || [];
-      try {
-        const filled = await fillNcaafQbMap({
-          map,
-          games,
-          dateISO,
-          fetchImpl: opts && opts.fetchImpl,
-          maxCalls: 30,
-          timeoutMs: 4000,
-        });
-        if (filled && filled.ok && filled.map) map = filled.map;
-        meta = {
-          ok: !!(cfbQb.ok || (filled && filled.sawOk)),
-          calls: filled ? filled.calls : 0,
-          source: 'espn-ncaaf',
-        };
-      } catch (e) {
-        console.error(`[omega-vnext/ingest] NCAAF QB supplemental soft-fail: ${e.message}`);
-        meta = { ok: cfbQb.ok, calls: 0, source: 'league', error: e.message };
-      }
-      gameDay.qbStatusBySport.NCAAF = map;
-      gameDay.personnelBySport.NCAAF = cfbQb.personnel || {};
-      gameDay.qbStatusMeta.NCAAF = meta;
-      console.log(`[omega-vnext/ingest] NCAAF QB teams=${Object.keys(map).length} calls=${meta.calls} ok=${meta.ok}`);
-    }
+    if (labels.includes('NCAAF')) gameDay.qbStatusBySport.NCAAF = await fetchFootballQbStatusMap('college-football');
   } catch (e) {
     console.error(`[omega-vnext/ingest] CFB QB soft-fail: ${e.message}`);
-    gameDay.qbStatusMeta.NCAAF = { ok: false, calls: 0, source: null };
-  }
-  const footballLabels = labels.filter((l) => l === 'NFL' || l === 'NCAAF');
-  if (footballLabels.length) {
-    try {
-      gameDay.restSchedule = await loadFootballRestSchedules(dateISO, {
-        labels: footballLabels,
-        boards: espnBySport || {},
-      });
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] rest-days soft-fail: ${e.message}`);
-      gameDay.restSchedule = {};
-      for (const sport of footballLabels) {
-        gameDay.restSchedule[sport] = {
-          sport,
-          loaded: false,
-          fetchFailed: true,
-          games: [],
-          weeks: [],
-          calls: 0,
-          source: null,
-          error: e.message,
-        };
-      }
-    }
-    try {
-      gameDay.last5ByTeam = last5ByTeamFromSchedule(gameDay.restSchedule);
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] last5 soft-fail: ${e.message}`);
-      gameDay.last5ByTeam = {};
-    }
   }
   // Weather from today's MLB ESPN board already fetched
   const mlbBoard = espnBySport && espnBySport.MLB;
-  Object.assign(gameDay.weatherByGame, indexMlbWeather((mlbBoard && mlbBoard.games) || []));
-  if (footballLabels.length && fbWeatherEnabled()) {
-    try {
-      const boards = {};
-      for (const sport of footballLabels) {
-        if (espnBySport && espnBySport[sport]) boards[sport] = espnBySport[sport];
-      }
-      const wxOpts = { espnBySport: boards };
-      if (opts && opts.fetchImpl) wxOpts.fetchImpl = opts.fetchImpl;
-      if (opts && opts.now != null) wxOpts.now = opts.now;
-      if (opts && opts.budgetMs != null) wxOpts.budgetMs = opts.budgetMs;
-      if (opts && opts.callTimeoutMs != null) wxOpts.callTimeoutMs = opts.callTimeoutMs;
-      if (opts && Object.prototype.hasOwnProperty.call(opts, 'fixtureDir')) wxOpts.fixtureDir = opts.fixtureDir;
-      const fb = await loadFootballWeather(wxOpts);
-      Object.assign(gameDay.weatherByGame, (fb && fb.weatherByGame) || {});
-      if (fb && fb.meta) gameDay.fbWeatherMeta = fb.meta;
-      const calls = (fb && fb.meta && fb.meta.calls) || {};
-      console.log(`[omega-vnext/ingest] football weather points=${calls.points || 0} hourly=${calls.hourly || 0}`);
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] football weather soft-fail: ${e.message}`);
+  for (const g of (mlbBoard && mlbBoard.games) || []) {
+    // weather may not be on our mapped games — leave empty unless present
+    if (g.weather) {
+      const key = `${g.awayTeam || ''}|${g.homeTeam || ''}`;
+      gameDay.weatherByGame[key] = g.weather;
     }
   }
-  await attachDepthCharts(gameDay, dateISO, labels, espnBySport, opts);
   return gameDay;
-}
-
-/**
- * Slate-only ESPN depth charts. A failure leaves an empty map and the
- * named-starter fallback. Never throws into the rest of game day.
- */
-async function attachDepthCharts(gameDay, dateISO, labels, espnBySport, opts) {
-  const packs = {};
-  try {
-    for (const sport of ['NFL', 'NCAAF']) {
-      if (!labels || !labels.includes(sport)) continue;
-      const games = espnBySport && espnBySport[sport] && espnBySport[sport].games;
-      const teamIds = slateTeamIds(sport, games);
-      packs[sport] = await fetchDepthCharts({
-        sport,
-        teamIds,
-        fetchImpl: opts && opts.fetchImpl,
-        date: dateISO,
-      });
-    }
-  } catch (e) {
-    console.error(`[omega-vnext/ingest] depth chart soft-fail: ${e && e.message}`);
-  }
-  gameDay.depthCharts = packs;
-  gameDay.starterFeed = starterFeedStamp(packs);
-}
-
-/**
- * Season label on the shipped EPA seeds vs the card date.
- * Warns when appliesToSeason is not the card date's calendar year.
- * The flag is diagnostic. It does not change efficiency rows or projections.
- */
-function buildEngineMeta(dateISO) {
-  const { seedSeasonStatus } = require('./sports/epa');
-  const out = { seedSeasonStale: false, NFL: null, NCAAF: null };
-  let nflMeta = {};
-  let cfbMeta = {};
-  try {
-    nflMeta = (require('./sports/data/nfl-epa-seed.json')._meta) || {};
-    cfbMeta = (require('./sports/data/cfb-epa-seed.json')._meta) || {};
-  } catch (e) {
-    console.error(`[omega-vnext/ingest] EPA seed meta unreadable: ${e.message}`);
-    return out;
-  }
-  out.NFL = seedSeasonStatus(nflMeta, dateISO);
-  out.NCAAF = seedSeasonStatus(cfbMeta, dateISO);
-  for (const sport of ['NFL', 'NCAAF']) {
-    const row = out[sport];
-    if (row && row.seedSeasonStale) {
-      console.warn(
-        `[omega-vnext/ingest] EPA seed season stale sport=${sport} season=${row.season} appliesToSeason=${row.appliesToSeason} cardSeason=${row.cardSeasonYear} date=${dateISO}`
-      );
-    }
-  }
-  out.seedSeasonStale = !!(out.NFL && out.NFL.seedSeasonStale) || !!(out.NCAAF && out.NCAAF.seedSeasonStale);
-  return out;
 }
 
 async function loadSportEngines(dateISO, deps) {
@@ -1268,79 +515,12 @@ async function loadSportEngines(dateISO, deps) {
   const nCfb = Object.keys(efficiencyBySport.NCAAF || {}).length;
   const nParks = Object.keys(parkFactors || {}).length;
   const nPit = Object.keys((mlbPitcherStats && mlbPitcherStats.byId) || {}).length;
-  const engineMeta = buildEngineMeta(dateISO);
-  console.log(`[omega-vnext/ingest] engines epa NFL=${nNfl} NCAAF=${nCfb} parks=${nParks} pitchers=${nPit} seedSeasonStale=${engineMeta.seedSeasonStale}`);
-  return { efficiencyBySport, parkFactors, mlbPitcherStats, engineMeta };
-}
-
-async function attachNflElo(gameDay, dateISO) {
-  if (!gameDay || typeof gameDay !== 'object') return;
-  try {
-    const pack = await prepareNflElo(dateISO);
-    gameDay.nflElo = {
-      source: pack.source,
-      cardDate: pack.cardDate,
-      applied: pack.applied,
-      ratings: pack.ratings,
-    };
-    console.log(`[omega-vnext/ingest] nfl-elo source=${pack.source} applied=${pack.applied}`);
-  } catch (e) {
-    console.error(`[omega-vnext/ingest] nfl elo soft-fail: ${e.message}`);
-  }
+  console.log(`[omega-vnext/ingest] engines epa NFL=${nNfl} NCAAF=${nCfb} parks=${nParks} pitchers=${nPit}`);
+  return { efficiencyBySport, parkFactors, mlbPitcherStats };
 }
 
 async function ingest(dateISO, opts = {}) {
-  if (process.env.OMEGA_FROZEN_SNAP) {
-    const frozen = require(process.env.OMEGA_FROZEN_SNAP);
-    const engines = await loadSportEngines(dateISO);
-    let gameDay = frozen.gameDay;
-    // Replay reads odds, ESPN, and injuries from the snap. Rest still
-    // comes from OMEGA_REST_SCHEDULE_DIR so the gate can price rest days
-    // without a sandbox patch and without a live scoreboard call.
-    if (scheduleDir()) {
-      const footballLabels = enabledSportLabels(dateISO).filter((l) => l === 'NFL' || l === 'NCAAF');
-      gameDay = Object.assign({}, frozen.gameDay || {});
-      try {
-        gameDay.restSchedule = await loadFootballRestSchedules(dateISO, {
-          labels: footballLabels,
-          boards: frozen.espnBySport || {},
-        });
-      } catch (e) {
-        console.error(`[omega-vnext/ingest] frozen rest-days soft-fail: ${e.message}`);
-        gameDay.restSchedule = {};
-        for (const sport of footballLabels) {
-          gameDay.restSchedule[sport] = {
-            sport,
-            loaded: false,
-            fetchFailed: true,
-            games: [],
-            weeks: [],
-            calls: 0,
-            source: null,
-            error: e.message,
-          };
-        }
-      }
-    }
-    await attachNcaafOa(engines.efficiencyBySport, dateISO);
-    gameDay = freezeDepthFallback(gameDay, frozen.gameDay);
-    await attachNflElo(gameDay, dateISO);
-    console.log('[omega-vnext/ingest] FROZEN SNAP replay (no live odds/standings/injuries)');
-    return {
-      dateISO,
-      oddsBySport: frozen.oddsBySport,
-      espnBySport: frozen.espnBySport || {},
-      standingsBySport: frozen.standingsBySport,
-      efficiencyBySport: engines.efficiencyBySport,
-      mlbPitcherStats: engines.mlbPitcherStats,
-      parkFactors: engines.parkFactors,
-      gameDay,
-      fetchedAt: frozen.fetchedAt || new Date().toISOString(),
-      snapshotNote: 'frozen-replay',
-    };
-  }
-
-  const labels = enabledSportLabels(dateISO);
+  const labels = enabledSportLabels();
   // Also fetch standings for disabled sports? No — only enabled.
   const [odds, espnParts, standingsList, engines] = await Promise.all([
     fetchOddsMultiSport(dateISO, opts),
@@ -1353,26 +533,12 @@ async function ingest(dateISO, opts = {}) {
   const standingsBySport = {};
   for (const row of standingsList) standingsBySport[row.label] = row.ratings;
 
-  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
+  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
   try {
     gameDay = await loadGameDayContext(dateISO, labels, espnBySport);
   } catch (e) {
     console.error(`[omega-vnext/ingest] gameDay soft-fail: ${e.message}`);
   }
-  await attachNcaafOa(engines.efficiencyBySport, dateISO);
-  if (labels.includes('NCAAF')) {
-    try {
-      const tempo = await loadNcaafTempo({
-        standings: standingsBySport.NCAAF || {},
-        espnGames: (espnBySport.NCAAF && espnBySport.NCAAF.games) || [],
-        oddsEvents: (odds.bySport && odds.bySport.NCAAF) || [],
-      });
-      if (tempo && tempo.byName && Object.keys(tempo.byName).length) gameDay.ncaafTempo = tempo;
-    } catch (e) {
-      console.error(`[omega-vnext/ingest] NCAAF tempo soft-fail: ${e.message}`);
-    }
-  }
-  await attachNflElo(gameDay, dateISO);
 
   return {
     dateISO,
@@ -1385,109 +551,7 @@ async function ingest(dateISO, opts = {}) {
     gameDay,
     fetchedAt: odds.fetchedAt,
     snapshotNote: odds.snapshotNote,
-    oddsSnapshotTimestamp: odds.oddsSnapshotTimestamp || null,
-    oddsErrors: odds.oddsErrors || [],
-    storedSnapshot: odds.storedSnapshot === true,
-    paidPull: odds.paidPull != null ? odds.paidPull : null,
   };
-}
-
-const NCAAF_TEMPO_STAT_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams';
-const NCAAF_TEMPO_FETCH_LIMIT = 6;
-
-function ncaafTempoSlateIds(espnGames, oddsEvents) {
-  const ids = [];
-  const seen = new Set();
-  const push = (id) => {
-    if (id == null || id === '') return;
-    const s = String(id).trim();
-    if (!/^\d+$/.test(s) || seen.has(s)) return;
-    seen.add(s);
-    ids.push(s);
-  };
-  for (const g of espnGames || []) {
-    if (!g || typeof g !== 'object') continue;
-    push(g.homeId || g.homeTeamId);
-    push(g.awayId || g.awayTeamId);
-  }
-  for (const ev of oddsEvents || []) {
-    if (!ev || typeof ev !== 'object') continue;
-    push(resolveTeamId('NCAAF', ev.home_team || ev.homeTeam));
-    push(resolveTeamId('NCAAF', ev.away_team || ev.awayTeam));
-  }
-  return ids;
-}
-
-async function mapPool(items, limit, fn) {
-  const out = new Array(items.length);
-  let cursor = 0;
-  const n = Math.max(1, Math.min(limit, items.length));
-  async function worker() {
-    while (cursor < items.length) {
-      const idx = cursor;
-      cursor += 1;
-      out[idx] = await fn(items[idx], idx);
-    }
-  }
-  await Promise.all(Array.from({ length: n }, () => worker()));
-  return out;
-}
-
-/**
- * Pregame tempo table for the live card. Weight 0 does nothing.
- * A frozen snap does not fetch: the caller keeps the table already on
- * the snap, or blends nothing (the existing total).
- * Standings fill a points-per-game proxy for every school. ESPN team
- * statistics overlay plays and points per play for slate ids when the
- * body has totalOffensivePlays. A failed call leaves that school on the proxy.
- */
-async function loadNcaafTempo(opts = {}) {
-  const { ncaafTempoMayFetch, tempoTableFromStandings, parseEspnNcaafTeamStatistics } = require('./sports/epa');
-  if (!ncaafTempoMayFetch()) return null;
-  const table = tempoTableFromStandings(opts.standings || {});
-  const ids = Array.isArray(opts.teamIds) && opts.teamIds.length
-    ? opts.teamIds.map((id) => String(id))
-    : ncaafTempoSlateIds(opts.espnGames, opts.oddsEvents);
-  const fetchImpl = opts.fetchImpl;
-  let overlaid = 0;
-  if (ids.length) {
-    const { memoFetchJson } = require('./fetch_memo');
-    const rows = await mapPool(ids, NCAAF_TEMPO_FETCH_LIMIT, async (id) => {
-      const url = `${NCAAF_TEMPO_STAT_URL}/${encodeURIComponent(id)}/statistics`;
-      try {
-        const body = fetchImpl ? await fetchImpl(url) : await memoFetchJson(url, 8000);
-        return parseEspnNcaafTeamStatistics(body, id);
-      } catch (e) {
-        return null;
-      }
-    });
-    for (const parsed of rows) {
-      if (!parsed) continue;
-      const rec = parsed.espnId ? teamRecord('NCAAF', parsed.espnId) : null;
-      const key = (rec && rec.displayName) || parsed.name;
-      if (!key) continue;
-      const prev = table.byName[key] || {};
-      table.byName[key] = {
-        games: parsed.games || prev.games || null,
-        offPpg: Number.isFinite(parsed.offPpg) ? parsed.offPpg : (prev.offPpg != null ? prev.offPpg : null),
-        defPpg: Number.isFinite(parsed.defPpg) ? parsed.defPpg : (prev.defPpg != null ? prev.defPpg : null),
-        plays: parsed.plays,
-        playsFaced: parsed.playsFaced,
-        offPpp: parsed.offPpp,
-        defPpp: parsed.defPpp,
-        espnId: parsed.espnId,
-      };
-      overlaid += 1;
-    }
-  }
-  table.teams = Object.keys(table.byName).length;
-  if (!table.teams) return null;
-  if (overlaid) {
-    table.source = 'espn-team-statistics';
-    table.proxy = overlaid === table.teams ? null : 'mixed';
-    table.espnTeams = overlaid;
-  }
-  return table;
 }
 
 module.exports = {
@@ -1496,34 +560,17 @@ module.exports = {
   mergeTalentIntoEfficiency,
   ingest,
   fetchOddsMultiSport,
-  buildOddsUrl,
-  ODDS_REGIONS,
-  ODDS_MARKETS,
   fetchEspnScoreboard,
-  espnScoreboardUrls,
-  mapEspnEvent,
   fetchEspnStandings,
   fetchMlbPitcherStats,
   loadEfficiencySeeds,
   loadParkFactors,
   loadSportEngines,
   loadGameDayContext,
-  indexMlbWeather,
   applyNhlStandingStats,
-  oddsFailureRecord,
-  applyFootballStandingExtras,
-  applyNbaStandingExtras,
-  isSplitStat,
-  findExactStat,
-  standingNumbers,
-  collectStandingsEntries,
-  ratingsFromStandingsEntries,
-  scoreboardSeasonFields,
   fetchFootballQbStatusMap,
-  loadFootballRestSchedules,
   enabledSportLabels,
   filterEventsSameEtDay,
   etCalendarDate,
   isSameEtDay,
-  loadNcaafTempo,
 };

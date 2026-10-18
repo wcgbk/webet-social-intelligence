@@ -3,28 +3,21 @@
  * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
  * v12.3.8: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
  * ML / spread / total blend weights unchanged. Every anchor is no-vig
- * Pinnacle (else the sharp no-vig pair).
+ * Pinnacle/Circa (one book alone if the other is missing; else sharp no-vig).
  * Base margin and total come from per-game runs, not season run differential.
- * Season rates are neutralized by each club's home park, then the venue factor is applied once.
- * The finished total then loses the 2026 environment gap (OMEGA_MLB_ROOTFIX)
- * and, when the slate has a sharp total on at least 3 games, the slate mean
- * of (model − posted sharp total) instead (OMEGA_MLB_TOTAL_RECENTER).
- * Both off leaves this total on the pre-correction number. Margin is not shifted.
  * assumedStarter stays tagged for QA hard-fail.
  */
-const { HFA, ENGINE_SOFT, ratingGamesN } = require('../config');
+const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, bindEspnGameByTeamAndTime, gamesPlayed,
+  formatMatchup, fuzzyTeam, mapGamesSoft,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
-const { rowByIdentityOrFuzzy } = require('./team_identity');
 const {
   resolvePark, resolveSpQuality, applySpPark,
   resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd, mlbStandingsEnv,
-  sharpPostedTotal, mlbTotalLevelShift, mlbTotalFlags, applyMlbTotalShift,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'MLB';
 
@@ -58,32 +51,25 @@ function buildMethods({ usedSp, usedPark, enginesOn, usedGameday }) {
   return base;
 }
 
-function deriveGame(event, standings, espnGame, ctx) {
+function projectGame(event, standings, espnGame, ctx) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const seen = ctx && ctx.fallbackSeen;
-  const bag = ctx || {};
-  const homeSt = rowByIdentityOrFuzzy('MLB', standings, home, { fallbackSeen: seen });
-  const awaySt = rowByIdentityOrFuzzy('MLB', standings, away, { fallbackSeen: seen });
-  const env0 = mlbStandingsEnv(homeSt, awaySt, {
-    parkFactors: bag.parkFactors,
-    homeTeam: home,
-    awayTeam: away,
-    fallbackSeen: seen,
-  });
+  const env0 = mlbStandingsEnv(fuzzyTeam(home, standings), fuzzyTeam(away, standings));
   const baseMargin = env0.modelMargin;
   const baseTotal = env0.modelTotal;
 
-  let uncertainty = (homeSt && awaySt) ? 0.18 : 0.28;
+  const out = [];
+  let uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.18 : 0.28;
   const homeSp = espnGame && espnGame.homeProbable;
   const awaySp = espnGame && espnGame.awayProbable;
   if (homeSp && awaySp) uncertainty = Math.max(0.12, uncertainty - 0.04);
   else if (homeSp || awaySp) uncertainty = Math.max(0.14, uncertainty - 0.02);
 
-  const park = resolvePark(home, bag.parkFactors, espnGame, seen);
-  const homeQ = resolveSpQuality(homeSp, bag.mlbPitcherStats, home, seen);
-  const awayQ = resolveSpQuality(awaySp, bag.mlbPitcherStats, away, seen);
+  const bag = ctx || {};
+  const park = resolvePark(home, bag.parkFactors, espnGame);
+  const homeQ = resolveSpQuality(homeSp, bag.mlbPitcherStats, home);
+  const awayQ = resolveSpQuality(awaySp, bag.mlbPitcherStats, away);
   const adj = applySpPark({
     modelMargin: baseMargin,
     modelTotal: baseTotal,
@@ -94,8 +80,8 @@ function deriveGame(event, standings, espnGame, ctx) {
   let modelMargin = adj.modelMargin;
   let modelTotal = adj.modelTotal;
 
-  const homeBp = resolveBullpenQuality(homeQ, home, bag.mlbPitcherStats, seen);
-  const awayBp = resolveBullpenQuality(awayQ, away, bag.mlbPitcherStats, seen);
+  const homeBp = resolveBullpenQuality(homeQ, home, bag.mlbPitcherStats);
+  const awayBp = resolveBullpenQuality(awayQ, away, bag.mlbPitcherStats);
   const bp = applyBullpenAdj({
     modelMargin,
     modelTotal,
@@ -118,21 +104,13 @@ function deriveGame(event, standings, espnGame, ctx) {
     restByTeam: restTable,
     qbByTeam: {},
     hfaBase: HFA.MLB,
-    fallbackSeen: seen,
   });
   modelMargin = gd.modelMargin;
   modelTotal = gd.modelTotal;
   uncertainty = gd.uncertainty;
-  const nameKey = `${away}|${home}`;
-  const timedKey = commenceTime ? `${nameKey}|${commenceTime}` : null;
-  const wxMap = (ctx && ctx.weatherByGame) || {};
-  // Timed key, then the row this game bound, then a legacy name key.
-  // A doubleheader name key is dropped on collision so the second game
-  // cannot paint the first.
-  const weather = (timedKey && wxMap[timedKey])
+  const weatherKey = `${away}|${home}`;
+  const weather = (ctx && ctx.weatherByGame && (ctx.weatherByGame[weatherKey] || ctx.weatherByGame[home]))
     || (espnGame && espnGame.weather)
-    || wxMap[nameKey]
-    || wxMap[home]
     || null;
   const wx = applyWeatherTotalAdj(modelTotal, weather);
   modelTotal = wx.modelTotal;
@@ -148,8 +126,6 @@ function deriveGame(event, standings, espnGame, ctx) {
     spKnownStd: effStd,
     enginesApplied: enginesOn,
   };
-  if (Number.isFinite(env0.homeParkAdj)) gameDayMeta.homeParkAdj = env0.homeParkAdj;
-  if (Number.isFinite(env0.awayParkAdj)) gameDayMeta.awayParkAdj = env0.awayParkAdj;
   const methods = buildMethods({
     usedSp: adj.usedSp,
     usedPark: adj.usedPark,
@@ -157,36 +133,18 @@ function deriveGame(event, standings, espnGame, ctx) {
     usedGameday,
   });
   const stdOpt = effStd != null ? effStd : undefined;
-  const ratingN = ratingGamesN(gamesPlayed(homeSt), gamesPlayed(awaySt));
-  return {
-    event, home, away, commenceTime, modelMargin, modelTotal, uncertainty,
-    methods, gameDayMeta, stdOpt, ratingN,
-  };
-}
-
-function priceGame(derived, totalShift) {
-  const {
-    home, away, commenceTime, modelMargin, uncertainty,
-    methods, gameDayMeta, stdOpt, ratingN,
-  } = derived;
-  const modelTotal = applyMlbTotalShift(derived.modelTotal, totalShift);
-  const out = [];
-  const event = derived.event;
 
   {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      const pPure = isHome
-        ? mlFromSpread(modelMargin, SPORT, stdOpt, ratingN)
-        : 1 - mlFromSpread(modelMargin, SPORT, stdOpt, ratingN);
-      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), 0.5);
+      let p = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
-        modelRawP: p, modelPureP: pPure, projMethod: methods.ml, uncertainty,
-        ratingN: ratingN,
+        modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +(modelMargin).toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -201,22 +159,20 @@ function priceGame(derived, totalShift) {
       const isHome = b.side === home;
       const line = b.point;
       if (line == null) continue;
-      const pCoverPure = spreadCoverProb(
+      let pCover = spreadCoverProb(
         isHome ? modelMargin : -modelMargin,
         line,
         SPORT,
-        stdOpt,
-        ratingN
+        stdOpt
       );
-      const mktImp = noVigPinnacleImplied(bundles, b);
-      const pCover = blendWithMarket(pCoverPure, mktImp, 0.5);
+      const mktImp = noVigPinnacleCircaImplied(bundles, b);
+      pCover = blendWithMarket(pCover, mktImp, 0.5);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
-        modelRawP: pCover, modelPureP: pCoverPure, projMethod: methods.spread, uncertainty,
-        ratingN: ratingN,
+        modelRawP: pCover, projMethod: methods.spread, uncertainty,
         consensusLine: line, modelProjection: +(modelMargin).toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -230,16 +186,15 @@ function priceGame(derived, totalShift) {
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
-      const pPure = totalCoverProb(modelTotal, line, b.side, SPORT, ratingN);
-      const mktImp = noVigPinnacleImplied(bundles, b);
-      const p = blendWithMarket(pPure, mktImp, 0.45);
+      let p = totalCoverProb(modelTotal, line, b.side, SPORT);
+      const mktImp = noVigPinnacleCircaImplied(bundles, b);
+      p = blendWithMarket(p, mktImp, 0.45);
       const sideLabel = `${b.side} ${line}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: sideLabel, line,
-        modelRawP: p, modelPureP: pPure, projMethod: methods.total, uncertainty: uncertainty + 0.05,
-        ratingN: ratingN,
+        modelRawP: p, projMethod: methods.total, uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -252,39 +207,15 @@ function priceGame(derived, totalShift) {
 }
 
 function findEspnGame(ev, espnGames) {
-  return bindEspnGameByTeamAndTime(SPORT, ev, espnGames);
-}
-
-function softFail(ev, err) {
-  const home = ev && ev.home_team;
-  const away = ev && ev.away_team;
-  console.error(`[omega-vnext] project soft-fail ${away || '?'} @ ${home || '?'}: ${err && err.message}`);
-}
-
-function starterSide(p) {
-  if (!p || !p.name) return null;
-  return {
-    name: p.name,
-    id: p.id != null ? p.id : null,
-    spConfirmed: p.spConfirmed === true || p.confirmed === true,
-  };
-}
-
-function tagStarters(cands, eg) {
-  if (!eg || !(eg.homeProbable || eg.awayProbable)) return;
-  const home = starterSide(eg.homeProbable);
-  const away = starterSide(eg.awayProbable);
-  const bothConfirmed = !!(home && home.spConfirmed) && !!(away && away.spConfirmed);
-  for (const c of cands) {
-    c.spConfirmed = bothConfirmed;
-    if (/moneyline|spread/i.test(c.market || '')) {
-      c.assumedStarter = home
-        ? { name: home.name, teamSide: 'home', id: home.id, spConfirmed: home.spConfirmed }
-        : (away ? { name: away.name, teamSide: 'away', id: away.id, spConfirmed: away.spConfirmed } : null);
-      c.probablePitcher = c.assumedStarter;
-      c.startersKnown = !!(home && away);
-    }
-  }
+  if (!espnGames || !espnGames.length) return null;
+  const home = (ev.home_team || '').toLowerCase();
+  const away = (ev.away_team || '').toLowerCase();
+  return espnGames.find(g => {
+    const gh = (g.homeTeam || '').toLowerCase();
+    const ga = (g.awayTeam || '').toLowerCase();
+    return (gh.includes(home.split(' ').pop()) || home.includes(gh.split(' ').pop()))
+      && (ga.includes(away.split(' ').pop()) || away.includes(ga.split(' ').pop()));
+  }) || null;
 }
 
 function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactors, gameDay, weatherByGame } = {}) {
@@ -294,36 +225,23 @@ function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactor
     parkFactors: parkFactors || {},
     gameDay: gameDay || {},
     weatherByGame: weatherByGame || (gameDay && gameDay.weatherByGame) || {},
-    fallbackSeen: new Set(),
   };
-  const prepared = [];
-  for (const ev of oddsEvents || []) {
-    try {
-      const eg = findEspnGame(ev, games);
-      prepared.push({ ev, eg, derived: deriveGame(ev, standings || {}, eg, ctx) });
-    } catch (err) {
-      softFail(ev, err);
+  return mapGamesSoft(oddsEvents, (ev) => {
+    const eg = findEspnGame(ev, games);
+    const cands = projectGame(ev, standings || {}, eg, ctx);
+    if (eg && (eg.homeProbable || eg.awayProbable)) {
+      for (const c of cands) {
+        if (/moneyline|spread/i.test(c.market || '')) {
+          c.assumedStarter = eg.homeProbable
+            ? { name: eg.homeProbable.name, teamSide: 'home', id: eg.homeProbable.id }
+            : (eg.awayProbable ? { name: eg.awayProbable.name, teamSide: 'away', id: eg.awayProbable.id } : null);
+          c.probablePitcher = c.assumedStarter;
+          c.startersKnown = !!(eg.homeProbable && eg.awayProbable);
+        }
+      }
     }
-  }
-  const flags = mlbTotalFlags();
-  let shift = 0;
-  if (flags.rootfix || flags.recenter) {
-    shift = mlbTotalLevelShift(prepared.map(p => ({
-      total: p.derived.modelTotal,
-      sharp: sharpPostedTotal(p.ev),
-    })), flags);
-  }
-  const all = [];
-  for (const p of prepared) {
-    try {
-      const cands = priceGame(p.derived, shift);
-      tagStarters(cands, p.eg);
-      if (cands.length) all.push(...cands);
-    } catch (err) {
-      softFail(p.ev, err);
-    }
-  }
-  return all;
+    return cands;
+  });
 }
 
 module.exports = { project, SPORT };

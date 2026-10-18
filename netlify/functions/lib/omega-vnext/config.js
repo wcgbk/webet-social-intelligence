@@ -960,6 +960,22 @@ const NCAAF_MODEL_WEIGHT = { ml: 1, spread: 1, total: 1 };
  * w0.8 0.6843/0.0085; w1.0 0.6709/0.0090. 0.8 chosen for lowest KL.
  */
 const NFL_ELO_WEIGHT = 0.8;
+/**
+ * INTERIM (2026-10-18, Ben-ordered rerun): measured NFL margin bias.
+ * Source: live get-omega-health 2026-10-18, biasFor() in health.js —
+ * mean (modelProjection + line) for the home spread side = model margin
+ * minus market margin = +1.484 pts, n=11 games, alert bias_margin.
+ * The correction subtracts that measured residual from the home model
+ * margin before the probability conversion. It is NOT a refit; the
+ * value must be re-measured from health.js biasFor() on each card date
+ * and retired once the ratings refit brings the residual to ~0.
+ * OMEGA_NFL_MARGIN_BIAS_PTS overrides; 0 disables.
+ */
+const NFL_MARGIN_BIAS_CORRECTION_PTS = 1.484;
+function nflMarginBiasCorrectionPts() {
+  const w = envNumber('OMEGA_NFL_MARGIN_BIAS_PTS', NFL_MARGIN_BIAS_CORRECTION_PTS);
+  return Number.isFinite(w) ? w : NFL_MARGIN_BIAS_CORRECTION_PTS;
+}
 
 function nflEloWeight() {
   const w = envNumber('OMEGA_NFL_ELO_WEIGHT', NFL_ELO_WEIGHT);
@@ -1304,6 +1320,8 @@ module.exports = {
   NCAAF_MODEL_WEIGHT,
   NFL_ELO_WEIGHT,
   nflEloWeight,
+  NFL_MARGIN_BIAS_CORRECTION_PTS,
+  nflMarginBiasCorrectionPts,
   priorW,
   readPriorEnv,
   NFL_PRIOR_K,

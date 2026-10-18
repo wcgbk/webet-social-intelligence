@@ -127,7 +127,7 @@ function totalRow(side, line, ev, source, matchup) {
     sport: 'NHL', market: 'Total', side, line, ev, edgePct: 0.04,
     anchorFairSource: source,
     matchup, awayTeam: parts[0], homeTeam: parts[1],
-    odds: 105, coverProb: 0.55, liquid: true, book: 'hardrockbet',
+    odds: -110, coverProb: 0.55, liquid: true, book: 'hardrockbet', // -110: sheet-consistent (2.6pt edge, 5% EV); +105 at 55% was 12.8% EV = audit-flagged
     commenceTime: '2026-10-17T23:00:00Z',
   };
 }
@@ -146,9 +146,12 @@ assert.strictEqual(orderedByScore([main, bothPin])[0].side, 'Under 6.5');
 
 const other = totalRow('Over 5.5', 5.5, 0.09, 'none', 'Boston Bruins @ Toronto Maple Leafs');
 assert.strictEqual(orderedByScore([main, other])[0].side, 'Over 5.5');
+// True-probability ranking (2026-10-18): equal coverProb, so the sourced
+// Pinnacle row wins the tiebreak ahead of the higher-EV unsourced row.
+// Old order ranked by stake EV and put Over 5.5 first.
 assert.deepStrictEqual(
   selectStraights([main, other], 2).map((c) => c.side),
-  ['Over 5.5', 'Over 6.5'],
+  ['Over 6.5', 'Over 5.5'],
 );
 
 const spreadHi = {

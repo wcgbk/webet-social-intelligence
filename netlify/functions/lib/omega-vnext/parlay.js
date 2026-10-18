@@ -2,6 +2,7 @@
 
 const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_MIN_EDGE, LEAN_PARLAY_UNITS, GATES, EV_CAP_ALL, CORR_HAIRCUT_PER_LEG } = require('./config');
 const { fairPickFields } = require('./prob_anchor');
+const { passesSheetMinimums } = require('./bet_check_gate');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
@@ -1165,6 +1166,8 @@ function priceCardLeg(row) {
  */
 function parlayLegQualifies(leg) {
   if (!leg || leg.marginBiasExtreme) return false;
+  // Sheet gate (2026-10-18): a parlay leg must be a GOOD BET on core metrics.
+  if (!passesSheetMinimums(leg)) return false;
   const cover = Number(leg.coverProb);
   if (!(Number.isFinite(cover) && cover + 1e-12 >= PARLAY_MIN_COVER)) return false;
   const ev = Number(leg.ev);

@@ -249,11 +249,10 @@ const fairPositiveModelNegative = parlayFromStraights([
   cardLeg('C @ D', { market: 'Total', side: 'Over 45.5', coverProb: 0.53, edgePct: 0.02, p_fair: 0.56, rating: 'aminus' }),
   cardLeg('E @ F', { market: 'Total', side: 'Over 46.5', coverProb: 0.53, edgePct: 0.02, p_fair: 0.56, rating: 'aminus' }),
 ])[0];
-assert.ok(!(fairPositiveModelNegative.evRaw > 0));
-assert.strictEqual(fairPositiveModelNegative.isLean, false);
-assert.strictEqual(fairPositiveModelNegative.units, '0.5u');
-assert.strictEqual(fairPositiveModelNegative.type, '3-leg-parlay');
-assert.ok(fairPositiveModelNegative.label == null);
-assert.ok(!fairPositiveModelNegative.leanDay);
+// Sheet gates (2026-10-18): these legs (cover 53% at -110 = 0.6pt edge,
+// 1.2% EV) fail the bet-check minimums, so they can no longer form a
+// published parlay at all. Old behavior published the ticket non-lean.
+assert.strictEqual(fairPositiveModelNegative.qualifying, false);
+assert.strictEqual(fairPositiveModelNegative.type, 'no-qualifying-parlay');
 
 console.log('test-omega-floor-kelly-1018b item5 ok');

@@ -157,11 +157,17 @@ function fairPickFields(c) {
   const weight = c && c.anchorWeight != null ? Number(c.anchorWeight) : null;
   return {
     fairP: pctString(fair),
-    fairSource: (c && c.anchorFairSource) || 'none',
+    // Published picks rename these fields (fairSource/modelWeight). Accept
+    // either spelling so parlay legs rebuilt from a published pick do not
+    // lose their fair source/weight (2026-10-18 card: legs printed
+    // fairSource 'none', modelWeight null, evAtFair -4.7% vs straight -4.6%).
+    fairSource: (c && (c.anchorFairSource || c.fairSource)) || 'none',
     evAtFair: evFair == null || !Number.isFinite(evFair) ? null : formatEdgePct(evFair),
     p_model: raw != null && Number.isFinite(raw) ? +raw.toFixed(4) : null,
     p_fair: fair != null ? +Number(fair).toFixed(6) : null,
-    modelWeight: weight != null && Number.isFinite(weight) ? weight : null,
+    modelWeight: (weight != null && Number.isFinite(weight))
+      ? weight
+      : (c && c.modelWeight != null && Number.isFinite(Number(c.modelWeight)) ? Number(c.modelWeight) : null),
   };
 }
 

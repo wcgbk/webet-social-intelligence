@@ -367,6 +367,8 @@ function injuryChecks() {
     depthCharts: { NFL: chart },
   };
   try {
+    // Isolate the Elo blend formula from the interim bias correction.
+    process.env.OMEGA_NFL_MARGIN_BIAS_PTS = '0';
     process.env.OMEGA_NFL_ELO_WEIGHT = '0';
     const statRow = spreadRow(nfl.project({
       oddsEvents: [ev], standings: {}, efficiency: {}, gameDay,
@@ -396,6 +398,7 @@ function injuryChecks() {
     }), /Eagles/);
     assert.strictEqual(again.modelProjection, statRow.modelProjection);
   } finally {
+    delete process.env.OMEGA_NFL_MARGIN_BIAS_PTS;
     if (prevW == null) delete process.env.OMEGA_NFL_ELO_WEIGHT;
     else process.env.OMEGA_NFL_ELO_WEIGHT = prevW;
     elo.resetNflEloState();

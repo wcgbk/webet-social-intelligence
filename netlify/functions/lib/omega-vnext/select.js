@@ -20,6 +20,7 @@ const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 const { reviewFlag } = require('./pinnacle_flag');
+const { passesSheetMinimums, rankByTrueProbability } = require('./bet_check_gate');
 
 function cleanTeam(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -339,6 +340,9 @@ function eligibleForLeanPool(c) {
  * slot empty until the last-resort pass inside selectStraights.
  */
 function qualifiesAsLean(c) {
+  // Sheet gate (2026-10-18): a lean must clear the same bet-check minimums
+  // as a floor pick. Positive EV alone no longer publishes a lean.
+  if (!passesSheetMinimums(c)) return false;
   const ev = Number(c && c.ev);
   if (!(ev > 0)) return false;
   const cap = Number(config.EV_CAP_ALL);
@@ -404,9 +408,12 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   const usedGames = new Set();
   const usedSides = new Set();
   const out = [];
-  for (const c of [...(yesPool || [])].sort(compareByEv)) {
+  // Admission gate, then rank BY TRUE PROBABILITY (anchored final p).
+  // Edge/EV gate admission and size stakes; they are not the rank key.
+  for (const c of rankByTrueProbability(yesPool || [])) {
     if (out.length >= maxN) break;
     if (!passesPublishFloor(c)) continue;
+    if (!passesSheetMinimums(c)) continue;
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({ ...c, tier: 'floor', _score: finiteEv(c) });
   }

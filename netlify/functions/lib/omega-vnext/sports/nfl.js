@@ -33,7 +33,7 @@ const { eloMargin } = require('./nfl_elo');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT, NFL_MODEL_WEIGHT } = require('../config');
+const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT, NFL_MODEL_WEIGHT, nflMarginBiasCorrectionPts } = require('../config');
 const { homeFieldPoints } = require('./altitude');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 const SPORT = 'NFL';
@@ -146,6 +146,14 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
       if (Number.isFinite(blended)) modelMargin = blended;
     }
   }
+  // Interim measured-bias correction (see config NFL_MARGIN_BIAS_CORRECTION_PTS):
+  // health.js biasFor() measured the home model margin +1.484 pts vs market
+  // on 2026-10-18 (n=11). Subtract it before any probability is priced.
+  const biasCorrPts = nflMarginBiasCorrectionPts();
+  // Interim correction is measured on the 2026-10-18 slate. It must not
+  // rewrite historical replays of earlier slates.
+  const biasDateOk = !commenceTime || String(commenceTime) >= '2026-10-18';
+  if (Number.isFinite(modelMargin) && biasCorrPts && biasDateOk) modelMargin -= biasCorrPts;
   const modelTotal = wx.modelTotal;
   const uncertainty = gd.uncertainty;
   let gameDayApplied = !!(stacked.gameDay && stacked.gameDay.applied);

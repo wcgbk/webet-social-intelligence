@@ -174,7 +174,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       betType: l.market,
       odds: formatAmerican(l.odds),
       commenceTime: l.commenceTime || '',
-      coverProb: `${(l.coverProb * 100).toFixed(0)}%`,
+      coverProb: `${(l.coverProb * 100).toFixed(1)}%`,
       ev: `${((l.ev || 0) * 100).toFixed(1)}%`,
       edgePct: l.edgePct != null
         ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))

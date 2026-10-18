@@ -20,7 +20,8 @@ assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
   NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
   MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
 });
-assert.strictEqual(config.RATING_ERROR_SD.NFL.margin, 8);
+// 2026-10-18: NFL margin rating SD is {base:4, k:NFL_PRIOR_K}, not a flat 8.
+assert.deepStrictEqual(config.RATING_ERROR_SD.NFL.margin, { base: 4, k: config.NFL_PRIOR_K });
 assert.strictEqual(config.RATING_ERROR_SD.NFL.total, 6);
 assert.strictEqual(config.RATING_ERROR_SD.NCAAF.margin, 8);
 assert.strictEqual(config.RATING_ERROR_SD.NCAAF.total, 6);
@@ -28,7 +29,8 @@ assert.strictEqual(config.RATING_ERROR_SD.NHL.margin, 0.5 * config.SPORT_SPREAD_
 assert.strictEqual(config.RATING_ERROR_SD.NHL.total, 0.5 * config.SPORT_TOTAL_STD.NHL);
 assert.strictEqual(config.RATING_ERROR_SD.MLB.margin, 0.5 * config.SPORT_SPREAD_STD.MLB);
 assert.strictEqual(config.RATING_ERROR_SD.MLB.total, 0.5 * config.SPORT_TOTAL_STD.MLB);
-assert.deepStrictEqual(config.SPORT_SPREAD_STD, { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 });
+// 2026-10-18: NFL margin game SD is the Elo RMSE 13.2, not 13.5.
+assert.deepStrictEqual(config.SPORT_SPREAD_STD, { NFL: 13.2, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 });
 assert.deepStrictEqual(config.SPORT_TOTAL_STD, { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 });
 
 for (const sport of ['NCAAF', 'NHL', 'MLB']) {
@@ -46,12 +48,15 @@ for (const sport of ['NCAAF', 'NHL', 'MLB']) {
     assert.ok(Math.abs(full - Math.sqrt(game * game + base * base)) < 1e-12);
   }
 }
-assert.ok(Math.abs(config.effectiveSd('NFL', 'margin', 6) - Math.sqrt(13.5 * 13.5 + 8 * 8)) < 1e-12);
+// 2026-10-18: NFL margin is sqrt(13.2^2 + (4*sqrt(K/(K+n)))^2), not 13.5 with base 8.
+const nflK = config.NFL_PRIOR_K;
+const nflRating = (n) => 4 * Math.sqrt(nflK / (nflK + n));
+assert.ok(Math.abs(config.effectiveSd('NFL', 'margin', 6) - Math.sqrt(13.2 * 13.2 + nflRating(6) ** 2)) < 1e-12);
 assert.ok(config.effectiveSd('NFL', 'total', 17) < config.effectiveSd('NFL', 'total', 6));
 assert.strictEqual(config.effectiveSd('NBA', 'margin'), config.SPORT_SPREAD_STD.NBA);
 assert.strictEqual(config.effectiveSd('NBA', 'total', 40), config.SPORT_TOTAL_STD.NBA);
-assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 3) - 8) < 1e-12);
-assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 17) - 8 * Math.sqrt(6 / 17)) < 1e-12);
+assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 3) - nflRating(3)) < 1e-12);
+assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 17) - nflRating(17)) < 1e-12);
 assert.strictEqual(config.ratingErrorSd('NBA', 'total'), 0);
 
 assert.strictEqual(anchorProbability(0.60, 0.40, 0), 0.40);

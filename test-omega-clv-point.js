@@ -20,7 +20,7 @@ assert.strictEqual(rules.clvPointAware('2026-10-08'), false);
 assert.strictEqual(rules.clvPointAware('2026-10-09'), true);
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.SPORT_TOTAL_STD.NFL, 10.5);
-assert.strictEqual(config.SPORT_SPREAD_STD.NFL, 13.5);
+assert.strictEqual(config.SPORT_SPREAD_STD.NFL, 13.2); // 2026-10-18: Elo margin RMSE 13.22, was 13.5.
 
 const CUT = '2026-10-09';
 const BEFORE = '2026-10-08';

@@ -565,33 +565,62 @@ const SELECT_WEIGHTS = {
   softSportMixBonus: 0.02,
 };
 
-const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 };
+/**
+ * Margin residual SD (points, goals, or runs).
+ * NFL 13.2 is FITTED: walk-forward Elo, K=16 (= NFL_PRIOR_K), margin RMSE
+ * 13.22 on 855 games, 2023-2025 finals in nfl-hist (elo_indep.py, rerun
+ * 2026-10-18). One decimal, same precision as the old 13.5.
+ * NCAAF 16, NBA 12, NHL 2.5, MLB 4.2 stay. A closing residual does not
+ * identify their rating-error base, and NHL/MLB spreads are fixed ±1.5.
+ */
+const SPORT_SPREAD_STD = { NFL: 13.2, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 };
 /**
  * Total residual SD. NBA is 18: spread SD (12) is the home-margin residual.
  * Total = H+A and pace shocks move both scores the same way, so SD(total)
  * is wider than SD(margin). A pace-aware model still leaves about 16–19
  * (legacy omega used 18.5). 18 pulls total probabilities toward 0.5.
  * It does not change a gate. NBA stays off the daily card.
+ *
+ * NFL 10.5 stays ASSUMED. Fit check 2026-10-18, not a change: actual total
+ * minus the Pinnacle closing total. backtest-1014 closes joined to ESPN
+ * finals (nfl-hist has scores but no closing totals in that window).
+ * n=44 games, 2026-09-25..2026-10-13. Sample SD 11.44. Game bootstrap
+ * B=4000 seed 1, 95% CI [9.91, 12.70], which includes 10.5.
  */
 const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 };
 
 /**
  * Rating-error SD on the margin/total → cover conversion.
- * SD_rating = base * sqrt(6 / max(n, 6)).
- * n is the average games played of the two teams. Unknown n uses 6,
- * which is the full base. Effective SD = sqrt(game_SD^2 + SD_rating^2).
- * Game SD stays SPORT_SPREAD_STD / SPORT_TOTAL_STD (margin uses the spread SD).
- * NHL and MLB bases are ASSUMED, not fitted: half that sport's game SD.
- * NCAAF bases are the stated point values, also not a fitted residual.
- * NFL-CHANGE: margin 8 and total 6, same n-scaling sqrt(6/max(n,6)). Not fitted.
- * NBA base stays 0, so that path has no rating-error term.
+ * n is the average games played of the two teams. Unknown or non-positive
+ * n uses RATING_ERROR_N0 (6).
+ * Effective SD = sqrt(game_SD^2 + SD_rating^2). Game SD is
+ * SPORT_SPREAD_STD / SPORT_TOTAL_STD (margin uses the spread SD).
+ *
+ * A number base uses SD_rating = base * sqrt(N0 / max(n, N0)). At n <= 6
+ * that is the full base. NCAAF 8/6, NHL 1.25/0.9, MLB 2.1/1.75, NFL total
+ * 6, and NBA 0 are ASSUMED. NHL and MLB are half that sport's game SD.
+ * NCAAF bases are stated points, not a fitted residual. NBA 0 has no
+ * rating-error term. Not refit: no stored series identifies a base whose
+ * bootstrap CI excludes the current number. A game residual is not this term.
+ *
+ * An object {base, k} uses SD_rating = base * sqrt(k / (k + n)). That is
+ * the SD of a prior whose weight is priorW = k/(k+n): variance scales with
+ * the weight. NFL margin uses this law. FITTED k = 16 = NFL_PRIOR_K
+ * (walk-forward Elo margin MSE, 95% CI 6..inf). ASSUMED base 4, the n=0
+ * margin rating-error SD. Regressed-Elo prior margin SD on 2023-25 games
+ * is 3.56 / 3.70 / 4.55, so 4 is the round scale in that band, not an
+ * outcome RMSE. At n=6, NFL margin effective SD is
+ * sqrt(13.2^2 + (4*sqrt(16/22))^2) ≈ 13.63.
  */
 const RATING_ERROR_N0 = 6;
 const RATING_ERROR_SD = {
   NCAAF: { margin: 8, total: 6 },
   NHL: { margin: 1.25, total: 0.9 },
   MLB: { margin: 2.1, total: 1.75 },
-  NFL: { margin: 8, total: 6 }, // NFL-CHANGE
+  NFL: {
+    margin: { base: 4, k: 16 }, // k equals NFL_PRIOR_K. ASSUMED base, FITTED k.
+    total: 6, // ASSUMED. Number base keeps sqrt(N0/max(n,N0)). Not refit.
+  },
   NBA: { margin: 0, total: 0 },
 };
 
@@ -609,10 +638,18 @@ function ratingGamesN(gpHome, gpAway) {
 
 function ratingErrorSd(sport, kind, n) {
   const table = RATING_ERROR_SD[String(sport || '').toUpperCase()];
-  const base = table ? Number(table[ratingKind(kind)]) : 0;
-  if (!(base > 0)) return 0;
+  const entry = table ? table[ratingKind(kind)] : 0;
   const games = Number(n);
   const used = Number.isFinite(games) && games > 0 ? games : RATING_ERROR_N0;
+  // {base, k}: SD = base * sqrt(k / (k + n)). A number keeps the N0 law.
+  if (entry != null && typeof entry === 'object') {
+    const base = Number(entry.base);
+    const k = Number(entry.k);
+    if (!(base > 0) || !(k > 0) || !Number.isFinite(k)) return 0;
+    return base * Math.sqrt(k / (k + used));
+  }
+  const base = Number(entry);
+  if (!(base > 0)) return 0;
   return base * Math.sqrt(RATING_ERROR_N0 / Math.max(used, RATING_ERROR_N0));
 }
 

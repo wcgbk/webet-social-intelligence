@@ -105,11 +105,60 @@ function dkQuoteOf(c) {
   return quoteFromPrices(c.bookPrices, DK_BOOK);
 }
 
-/** Reprice at DraftKings. Null when this side has no DK quote. */
+/** Trailing spread/total number on the side label. Moneyline has none. */
+function betLabelPoint(c) {
+  const market = String((c && (c.market || c.betType)) || '');
+  if (/moneyline|^ml$/i.test(market)) return null;
+  const src = String((c && (c.side || c.pick)) || '').trim();
+  const m = src.match(/(?:^|\s)([+-]?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function finitePoint(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A stated quote point against a stated line or side label.
+ * strictLine: Hard Rock may not move the bet onto another number.
+ * DraftKings may move an unlabeled line onto its own number (the 1011
+ * execution contract). A side label that already names a number may not.
+ */
+function quoteMatchesBet(point, c, strictLine) {
+  const pt = finitePoint(point);
+  const line = finitePoint(c && c.line);
+  const label = betLabelPoint(c);
+  if (sharpFairEnabled()) {
+    if (line == null) return pt == null;
+    return pt != null && Math.abs(pt - line) < 1e-6;
+  }
+  if (pt != null && label != null && Math.abs(pt - label) > 1e-6) return false;
+  if (strictLine && pt != null && line != null && Math.abs(pt - line) > 1e-6) return false;
+  if (strictLine && line != null && label != null && Math.abs(line - label) > 1e-6) return false;
+  return true;
+}
+
+/** Point on the book whose American is the bet price. Null when that book did not name one. */
+function pricedBookPoint(c) {
+  const book = canonicalizeBook(c && (c.book || c.priceBook));
+  if (book === DK_BOOK && c && c.dkQuote) return c.dkQuote.point;
+  if (book === HR_BOOK && c && c.hardRock && typeof c.hardRock === 'object') return c.hardRock.point;
+  const prices = Array.isArray(c && c.bookPrices) ? c.bookPrices : [];
+  const hit = prices.find((p) => p && canonicalizeBook(p.book || p.key) === book);
+  return hit ? hit.point : null;
+}
+
+/** Reprice at DraftKings. Null when this side has no DK quote at this point. */
 function priceAtDraftKings(c) {
   const q = dkQuoteOf(c);
   if (!q) return null;
-  const line = q.point != null && Number.isFinite(q.point) ? q.point : (c.line != null ? c.line : null);
+  if (!quoteMatchesBet(q.point, c, false)) return null;
+  const quoted = finitePoint(q.point);
+  const line = quoted != null ? quoted : (c.line != null ? c.line : null);
   return attachEv({
     ...c,
     odds: q.american,
@@ -122,14 +171,16 @@ function priceAtDraftKings(c) {
 }
 
 /**
- * Best Hard Rock price on this side. Used when DraftKings has no quote.
- * The line is the Hard Rock point. Stake EV uses that American price.
+ * Best Hard Rock price on this side at this point. Used when DraftKings
+ * has no quote here. A Hard Rock number at another point is not this bet.
+ * Stake EV uses that American price.
  */
 function priceAtHardRock(c) {
   const rows = [];
   const push = (american, point) => {
     const price = Number(american);
     if (!Number.isFinite(price)) return;
+    if (!quoteMatchesBet(point, c, true)) return;
     const pt = point != null && point !== '' ? Number(point) : null;
     rows.push({ book: HR_BOOK, american: price, point: Number.isFinite(pt) ? pt : null });
   };
@@ -142,15 +193,6 @@ function priceAtHardRock(c) {
   if (c && c.hardRock && typeof c.hardRock === 'object') {
     push(c.hardRock.american != null ? c.hardRock.american : c.hardRock.price, c.hardRock.point);
   }
-  if (sharpFairEnabled() && rows.length) {
-    const want = c.line != null && c.line !== '' ? Number(c.line) : null;
-    const same = rows.filter((row) => {
-      if (want == null || !Number.isFinite(want)) return row.point == null;
-      return row.point != null && Math.abs(row.point - want) < 1e-6;
-    });
-    rows.length = 0;
-    for (const row of same) rows.push(row);
-  }
   if (!rows.length) return null;
   let best = rows[0];
   let bestDec = americanToDecimal(best.american);
@@ -161,8 +203,9 @@ function priceAtHardRock(c) {
       bestDec = dec;
     }
   }
-  const line = best.point != null ? best.point : (c.line != null ? c.line : null);
-  return attachEv({
+  const quoted = finitePoint(best.point);
+  const line = quoted != null ? quoted : (c.line != null ? c.line : null);
+  const priced = attachEv({
     ...c,
     odds: best.american,
     oddsStr: formatAmerican(best.american),
@@ -174,14 +217,17 @@ function priceAtHardRock(c) {
     executionBook: HR_BOOK,
     evBasis: 'stake-ev-at-best-us-price',
   });
+  if (!quoteMatchesBet(priced.line, priced, true) || !quoteMatchesBet(pricedBookPoint(priced), priced, true)) return null;
+  return priced;
 }
 
 /**
- * Keep a candidate when DraftKings or Hard Rock posts that side.
+ * Keep a candidate when DraftKings or Hard Rock posts that side at this point.
  * DraftKings is priced first, then the better of DraftKings and Hard Rock
- * on the DraftKings line. Hard Rock alone is kept. A candidate with no
- * bookPrices array is a synthetic fixture and stays on its existing price.
- * The dropped row is no-draftkings-line only when both books are missing.
+ * on the DraftKings line. Hard Rock alone is kept when its point is this line.
+ * A candidate with no bookPrices array is a synthetic fixture and stays on its existing price.
+ * The dropped row is no-draftkings-line when neither book posts this point.
+ * A priced row whose label, line, and book point disagree is phantom-line.
  */
 function applyExecutionBook(candidates) {
   const kept = [];
@@ -194,12 +240,22 @@ function applyExecutionBook(candidates) {
     }
     const priced = priceAtDraftKings(c);
     if (priced) {
-      kept.push(stampHr(applyBestUsDisplay(priced)));
+      const shown = stampHr(applyBestUsDisplay(priced));
+      if (!quoteMatchesBet(shown.line, shown, true) || !quoteMatchesBet(pricedBookPoint(shown), shown, true)) {
+        excluded.push({ ...c, excludeReason: 'phantom-line' });
+        continue;
+      }
+      kept.push(shown);
       continue;
     }
     const hr = priceAtHardRock(c);
     if (hr) {
-      kept.push(stampHr(hr));
+      const shown = stampHr(hr);
+      if (!quoteMatchesBet(shown.line, shown, true) || !quoteMatchesBet(pricedBookPoint(shown), shown, true)) {
+        excluded.push({ ...c, excludeReason: 'phantom-line' });
+        continue;
+      }
+      kept.push(shown);
       continue;
     }
     excluded.push({ ...c, excludeReason: 'no-draftkings-line' });

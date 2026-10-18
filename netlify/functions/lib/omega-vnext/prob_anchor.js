@@ -266,11 +266,18 @@ function oneLine(a, b) {
   return Math.abs(x - y) < 1e-6 || Math.abs(x + y) < 1e-6;
 }
 
-/** Pinnacle power no-vig for this side. Null when the row has no same-line pair. */
+/**
+ * Pinnacle power no-vig for this side. Null when the row has no same-line pair.
+ * A stated Pinnacle point prices only a bet at that point. |13.5| is not
+ * |12.5|, and +13.5 is not −13.5. Missing points stay (synthetic fixtures).
+ */
 function pinnacleFair(c) {
   const ps = c && c.pinnacleSide;
   if (!ps || !Number.isFinite(Number(ps.american)) || !Number.isFinite(Number(ps.oppAmerican))) return null;
   if (!oneLine(ps.point, ps.oppPoint)) return null;
+  const line = lineOf(c);
+  const pinPoint = ps.point != null && ps.point !== '' ? Number(ps.point) : null;
+  if (line != null && pinPoint != null && Number.isFinite(pinPoint) && Math.abs(line - pinPoint) > 1e-6) return null;
   const powered = powerFair(c);
   if (powered != null) return powered;
   return finiteProb(c.pinnacleNoVigP);

@@ -1,5 +1,6 @@
 'use strict';
-// NHL period prices include the rating-error SD the normal path already uses.
+// NHL period prices include rating-error SD. MLB/NHL fixed ±1.5 handicaps
+// are not a margin residual.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -7,6 +8,9 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const nhl = require(path.join(root, 'sports/nhl'));
 const nhlPeriod = require(path.join(root, 'nhl_period'));
+const {
+  gameMarginResidual, marginGamesOffCard, extremeMarginSports, buildHealthRecord,
+} = require(path.join(root, 'health'));
 
 function withEnv(extra, fn) {
   const prev = {};
@@ -80,5 +84,82 @@ const nhlSrc = fs.readFileSync(path.join(root, 'sports/nhl.js'), 'utf8');
 const calls = nhlSrc.match(/periodQuote\(\{[\s\S]*?\}\)/g) || [];
 assert.strictEqual(calls.length, 3, calls.join('\n'));
 for (const call of calls) assert.ok(/\bnGames\b/.test(call), call);
+
+function spreadRow(sport, extra) {
+  return {
+    sport,
+    matchup: 'TB @ CLE',
+    homeTeam: 'CLE',
+    awayTeam: 'TB',
+    market: 'Spread',
+    side: 'CLE +1.5',
+    modelProjection: -0.11,
+    line: 1.5,
+    ...extra,
+  };
+}
+
+const mlb = [spreadRow('MLB')];
+assert.strictEqual(gameMarginResidual(mlb), null);
+assert.deepStrictEqual(marginGamesOffCard(mlb), []);
+
+const nhlRows = [spreadRow('NHL', { matchup: 'BOS @ TOR', homeTeam: 'TOR', awayTeam: 'BOS', side: 'TOR +1.5' })];
+assert.strictEqual(gameMarginResidual(nhlRows), null);
+assert.deepStrictEqual(marginGamesOffCard(nhlRows), []);
+
+const nfl = [{
+  sport: 'NFL',
+  matchup: 'Away @ Home',
+  homeTeam: 'Home',
+  awayTeam: 'Away',
+  market: 'Spread',
+  side: 'Home -3.5',
+  modelProjection: 10,
+  line: -3.5,
+}];
+assert.strictEqual(gameMarginResidual(nfl), 6.5);
+
+const cfb = [{
+  sport: 'NCAAF',
+  matchup: 'Away @ Home',
+  homeTeam: 'Home',
+  awayTeam: 'Away',
+  market: 'Spread',
+  side: 'Home -3.5',
+  modelProjection: 10,
+  line: -3.5,
+}];
+assert.deepStrictEqual(extremeMarginSports(cfb), ['NCAAF']);
+assert.deepStrictEqual(marginGamesOffCard(cfb).map((g) => g.sport), ['NCAAF']);
+
+const health = buildHealthRecord({
+  dateISO: '2026-10-18',
+  snap: {
+    espnBySport: {},
+    oddsBySport: {},
+    standingsBySport: {},
+    mlbPitcherStats: { byId: { a: 1 }, byTeam: { a: 1 } },
+  },
+  candidates: [
+    spreadRow('MLB'),
+    {
+      sport: 'MLB',
+      matchup: 'TB @ CLE',
+      homeTeam: 'CLE',
+      awayTeam: 'TB',
+      market: 'Total',
+      side: 'Over 8.5',
+      modelProjection: 9.2,
+      line: 8.5,
+      consensusLine: 8.5,
+    },
+  ],
+  yesPool: [],
+  oddsErrors: [],
+});
+assert.strictEqual(health.bySport.MLB.bias.marginN, 0);
+assert.strictEqual(health.bySport.MLB.bias.marginMean, null);
+assert.strictEqual(health.bySport.MLB.bias.totalN, 1);
+assert.strictEqual(health.bySport.MLB.bias.totalMean, 0.7);
 
 console.log('test-omega-allsports-1018 ok');

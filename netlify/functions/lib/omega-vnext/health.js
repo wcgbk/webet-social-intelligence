@@ -700,11 +700,23 @@ function buildHealthRecord(input) {
 }
 
 /**
+ * MLB run line and NHL puck line are a fixed ±1.5 handicap, not the
+ * market's expected margin. modelProjection plus that line is about
+ * ±1.5 on a normal game and clears 3× BIAS_LIMIT, which takes the
+ * whole game off the card. Margin bias skips these sports. Totals stay.
+ * NFL, NCAAF, and NBA still use the posted spread as the market margin.
+ */
+const FIXED_HANDICAP_SPORTS = new Set(['MLB', 'NHL']);
+
+/**
  * Signed home margin residual for one game: modelProjection + home line,
  * or modelProjection − away line when the home spread is missing.
  * Same number biasFor averages. Null when the game has no priced spread.
+ * Null for a fixed ±1.5 handicap (see FIXED_HANDICAP_SPORTS).
  */
 function gameMarginResidual(rows) {
+  const sport = rows && rows[0] && rows[0].sport;
+  if (FIXED_HANDICAP_SPORTS.has(sport)) return null;
   let margin = null;
   for (const c of rows || []) {
     if (!isSpreadMarket(c) || c.line == null || c.modelProjection == null) continue;
@@ -813,6 +825,7 @@ module.exports = {
   BANDS,
   BIAS_LIMIT,
   BIAS_MARGIN_EXTREME_MULT,
+  FIXED_HANDICAP_SPORTS,
   extremeMarginSports,
   extremeMarginGames,
   marginGamesOffCard,

@@ -39,6 +39,7 @@ const candidates = [
   cand({ matchup: 'A @ H', homeTeam: 'H', awayTeam: 'A', market: 'Total', side: 'Over 8', modelProjection: 9, consensusLine: 8, line: 8 }),
   cand({ matchup: 'A @ H', homeTeam: 'H', awayTeam: 'A', market: 'Total', side: 'Under 8', modelProjection: 9, consensusLine: 8, line: 8 }),
   cand({ matchup: 'A @ H', homeTeam: 'H', awayTeam: 'A', market: 'Spread', side: 'H -1.5', modelProjection: 1, consensusLine: -1.5, line: -1.5 }),
+  cand({ sport: 'NFL', matchup: 'A @ H', homeTeam: 'H', awayTeam: 'A', market: 'Spread', side: 'H -3.5', modelProjection: 2, consensusLine: -3.5, line: -3.5 }),
   cand({ sport: 'NHL', matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C', market: 'Total', side: 'Over 6.2', modelProjection: 6.2, line: 6.2 }),
   cand({ sport: 'NHL', matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E', market: 'Total', side: 'Under 6.2', modelProjection: 6.2, line: 6.2 }),
 ];
@@ -78,14 +79,17 @@ assert.ok(codes.includes('NFL:record_mismatch'), codes.join(','));
 assert.ok(codes.includes('MLB:mlb_pitchers_empty'), codes.join(','));
 assert.ok(codes.includes('MLB:odds_error'), codes.join(','));
 assert.ok(codes.includes('MLB:bias_total'), codes.join(','));
-assert.ok(codes.includes('MLB:bias_margin'), codes.join(','));
+assert.ok(!codes.includes('MLB:bias_margin'), codes.join(','));
+assert.ok(codes.includes('NFL:bias_margin'), codes.join(','));
 assert.ok(codes.includes('NHL:constant_total'), codes.join(','));
 assert.ok(codes.includes('MLB:zero_candidates'), codes.join(','));
 assert.ok(codes.includes('MLB:unresolved_names'), codes.join(','));
 assert.strictEqual(record.mlbPitchersEmpty, true);
 assert.strictEqual(record.oddsErrors[0].status, 422);
 assert.ok(record.bySport.MLB.bias.totalMean > 0.4);
-assert.ok(Math.abs(record.bySport.MLB.bias.marginMean) > 0.4);
+assert.strictEqual(record.bySport.MLB.bias.marginN, 0);
+assert.strictEqual(record.bySport.MLB.bias.marginMean, null);
+assert.ok(Math.abs(record.bySport.NFL.bias.marginMean) > 1);
 assert.strictEqual(record.splits.candidates.over >= 1, true);
 assert.strictEqual(record.splits.yesPool.over, 1);
 assert.strictEqual(record.splits.yesPool.under, 1);

@@ -27,10 +27,11 @@ function spread(sport, proj, line) {
   };
 }
 
-// NHL limit is 0.3. 3× is 0.9. Home residual is projection + line.
+// NHL puck line is a fixed ±1.5, so the margin residual is null and the
+// game stays on the card. The gate still drops a row once the flag is set.
 const nhl = spread('NHL', -2.5, -1.5);
-assert.ok(Math.abs((-2.5) + (-1.5)) > 0.9);
-assert.deepStrictEqual(extremeMarginSports([nhl]), ['NHL']);
+assert.deepStrictEqual(extremeMarginSports([nhl]), []);
+assert.deepStrictEqual(marginGamesOffCard([nhl]), []);
 assert.strictEqual(gateReason({ ...nhl, marginBiasExtreme: true }), 'bias-margin-extreme');
 
 const gated = applyGates([
@@ -65,8 +66,8 @@ assert.ok(Math.abs(held[0].margin - 10) < 1e-9);
 assert.deepStrictEqual(extremeMarginSports([outlier, calm]), ['NCAAF']);
 assert.deepStrictEqual(marginGamesOffCard([outlier, calm]).map((g) => g.matchup), ['Away @ Home']);
 
-// Opposite puck-line residuals can each exceed 0.9 while the sport mean
-// stays inside the cut. That sport stays on the card.
+// Fixed ±1.5 puck lines are not margin residuals, so these NHL games
+// do not form a sport-level margin bias and stay on the card.
 const pit = {
   sport: 'NHL', matchup: 'Pittsburgh Penguins @ Colorado Avalanche',
   homeTeam: 'Colorado Avalanche', awayTeam: 'Pittsburgh Penguins',
@@ -79,7 +80,7 @@ const ana = {
 };
 assert.deepStrictEqual(extremeMarginSports([pit, ana]), []);
 assert.deepStrictEqual(marginGamesOffCard([pit, ana]), []);
-assert.deepStrictEqual(marginGamesOffCard([nhl]).map((g) => g.sport), ['NHL']);
+assert.deepStrictEqual(marginGamesOffCard([nhl]), []);
 
 const zeroEvOver = {
   sport: 'NHL',

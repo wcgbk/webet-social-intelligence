@@ -180,6 +180,35 @@ function priceAtHardRock(c) {
  * bookPrices array is a synthetic fixture and stays on its existing price.
  * The dropped row is no-draftkings-line only when both books are missing.
  */
+function priceAtAnyUsBook(c) {
+  if (!Array.isArray(c && c.bookPrices)) return null;
+  const want = c.line != null && c.line !== '' ? Number(c.line) : null;
+  let best = null; let bestDec = -Infinity;
+  for (const p of c.bookPrices) {
+    if (!p) continue;
+    const book = canonicalizeBook(p.book || p.key);
+    if (!US_BET_BOOKS.includes(book)) continue;
+    const american = Number(p.american != null ? p.american : p.price);
+    if (!Number.isFinite(american)) continue;
+    const pt = p.point != null && p.point !== '' ? Number(p.point) : null;
+    if (want != null && Number.isFinite(want) && pt != null && Number.isFinite(pt) && Math.abs(pt - want) > 1e-6) continue;
+    const dec = americanToDecimal(american);
+    if (Number.isFinite(dec) && dec > bestDec + 1e-12) { bestDec = dec; best = { book, american, point: pt }; }
+  }
+  if (!best) return null;
+  return attachEv({
+    ...c,
+    odds: best.american,
+    oddsStr: formatAmerican(best.american),
+    book: best.book,
+    priceBook: best.book,
+    displayBook: best.book,
+    executionBook: best.book,
+    line: best.point != null ? best.point : c.line,
+    evBasis: 'stake-ev-at-best-us-price',
+  });
+}
+
 function applyExecutionBook(candidates) {
   const kept = [];
   const excluded = [];
@@ -192,6 +221,13 @@ function applyExecutionBook(candidates) {
     const priced = priceAtDraftKings(c);
     if (priced) {
       kept.push(stampHr(applyBestUsDisplay(priced)));
+      continue;
+    }
+    // Best-of-books (2026-10-18): any captured US book at this line keeps
+    // the candidate, priced at the best US price, book named.
+    const anyUs = priceAtAnyUsBook(c);
+    if (anyUs) {
+      kept.push(stampHr(anyUs));
       continue;
     }
     const hr = priceAtHardRock(c);
@@ -253,23 +289,37 @@ function samePoint(a, b) {
 }
 
 /**
- * Displayed price is the better American decimal of Hard Rock and DraftKings
- * on the DraftKings line. A tie stays on DraftKings. Pinnacle is never the
- * displayed price. DraftKings remains executionBook. Stake EV uses this price.
+ * Displayed price is the BEST American decimal across all captured US books
+ * (DraftKings, Hard Rock, FanDuel, BetMGM, Caesars, WilliamHill US, ESPN BET,
+ * BetRivers, Fanatics, Bovada) at the DraftKings line (2026-10-18 best-of-books).
+ * The pick names the book that holds the price. Pinnacle is never the bet price.
+ * DraftKings remains executionBook when it holds or ties the best price.
  */
+const US_BET_BOOKS = ['draftkings', 'hardrockbet', 'fanduel', 'betmgm', 'caesars', 'williamhill_us', 'espnbet', 'betrivers', 'fanatics', 'bovada'];
 function applyBestUsDisplay(priced) {
   const dkAmerican = Number(priced && priced.odds);
   const dkLine = priced && priced.line != null && priced.line !== '' ? Number(priced.line) : null;
   const line = Number.isFinite(dkLine) ? dkLine : null;
   let chosen = { book: DK_BOOK, american: dkAmerican };
   let bestDec = americanToDecimal(dkAmerican);
-  for (const hr of matchingHrQuotes(priced, line)) {
-    const dec = americanToDecimal(hr.american);
+  const consider = (book, american, point) => {
+    const pt = point != null && point !== '' ? Number(point) : null;
+    if (line != null && pt != null && Number.isFinite(pt) && Math.abs(pt - line) > 1e-6) return;
+    const dec = americanToDecimal(Number(american));
     if (Number.isFinite(dec) && Number.isFinite(bestDec) && dec > bestDec + 1e-12) {
       bestDec = dec;
-      chosen = hr;
+      chosen = { book, american: Number(american) };
+    }
+  };
+  if (Array.isArray(priced && priced.bookPrices)) {
+    for (const p of priced.bookPrices) {
+      if (!p) continue;
+      const book = canonicalizeBook(p.book || p.key);
+      if (!US_BET_BOOKS.includes(book)) continue;
+      consider(book, p.american != null ? p.american : p.price, p.point);
     }
   }
+  for (const hr of matchingHrQuotes(priced, line)) consider(hr.book, hr.american, hr.point);
   return attachEv({
     ...priced,
     odds: chosen.american,
@@ -277,7 +327,7 @@ function applyBestUsDisplay(priced) {
     book: chosen.book,
     priceBook: chosen.book,
     displayBook: chosen.book,
-    executionBook: DK_BOOK,
+    executionBook: chosen.book,
     evBasis: 'stake-ev-at-best-us-price',
   });
 }

@@ -16,10 +16,10 @@ assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
 assert.strictEqual(config.marketAnchorOn(), false);
 // 2026-10-18: NFL totals anchor weight is 0 (backtest median), was 0.10.
 assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
-  NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
-  NFL: { spread: 0.25, ml: 0.25, total: 0 },
-  NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
-  MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
+  NCAAF: { spread: 0.10, ml: 0.10, total: 0.10 },
+  NFL: { spread: 0.10, ml: 0.10, total: 0 },
+  NHL: { spread: 0.10, ml: 0.10, total: 0.10 },
+  MLB: { spread: 0.70, ml: 0.70, total: 0.10 }, // FITTED walkforward-cal4 (2026-10-18)
 });
 // 2026-10-18: NFL margin rating SD is {base:4, k:NFL_PRIOR_K}, not a flat 8.
 assert.deepStrictEqual(config.RATING_ERROR_SD.NFL.margin, { base: 4, k: config.NFL_PRIOR_K });
@@ -88,10 +88,10 @@ const pinFair = powerFair(pin);
 assert.ok(Math.abs(pinFair - 0.5) < 1e-12, pinFair);
 const [anchoredNhl] = applyMarketAnchor([pin]);
 assert.strictEqual(anchoredNhl.anchorFairSource, 'pinnacle');
-assert.strictEqual(anchoredNhl.anchorWeight, 0.25);
+assert.strictEqual(anchoredNhl.anchorWeight, 0.10); // fitted w (2026-10-18)
 assert.strictEqual(anchoredNhl.p_model, 0.71);
 assert.strictEqual(anchoredNhl.p_fair, 0.5);
-assert.ok(Math.abs(anchoredNhl.coverProb - (0.25 * 0.71 + 0.75 * 0.5)) < 1e-12, anchoredNhl.coverProb);
+assert.ok(Math.abs(anchoredNhl.coverProb - (0.10 * 0.71 + 0.90 * 0.5)) < 1e-12, anchoredNhl.coverProb); // fitted NHL w=0.10 (2026-10-18)
 assert.strictEqual(anchoredNhl.p_calibrated, 0.6);
 assert.notStrictEqual(anchoredNhl.coverProb, anchoredNhl.modelPureP);
 assert.ok(Math.abs(anchoredNhl.p_fair - 0.99) > 0.2);
@@ -104,7 +104,7 @@ assert.ok(lopFair != null && Math.abs(lopFair - 0.99) > 0.2);
 const [lop] = applyMarketAnchor([lopsided]);
 assert.strictEqual(lop.anchorFairSource, 'pinnacle');
 assert.strictEqual(lop.p_fair, +Number(lopFair).toFixed(6));
-assert.ok(Math.abs(lop.coverProb - anchorProbability(0.71, lopFair, 0.25)) < 1e-12);
+assert.ok(Math.abs(lop.coverProb - anchorProbability(0.71, lopFair, 0.10)) < 1e-12);
 
 function dkSide(sport, side, line, p) {
   return {
@@ -126,20 +126,20 @@ const [mlbHome] = applyMarketAnchor([
   dkSide('MLB', 'Away', 1.5, 0.40),
 ]);
 assert.strictEqual(mlbHome.anchorFairSource, 'draftkings');
-assert.strictEqual(mlbHome.anchorWeight, 0.25);
+assert.strictEqual(mlbHome.anchorWeight, 0.70);
 assert.strictEqual(mlbHome.p_model, 0.60);
 assert.ok(Math.abs(mlbHome.p_fair - 0.5) < 1e-9);
-assert.ok(Math.abs(mlbHome.coverProb - 0.525) < 1e-12, mlbHome.coverProb);
+assert.ok(Math.abs(mlbHome.coverProb - (0.70 * 0.60 + 0.30 * 0.5)) < 1e-12, mlbHome.coverProb); // fitted MLB w=0.70 (2026-10-18)
 
 const ncaaf = { sport: 'NCAAF', market: 'Spread', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
 const nfl = { sport: 'NFL', market: 'Total', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
 const nba = { sport: 'NBA', market: 'Spread', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
 const [ncaafOut, nflOut, nbaOut] = applyMarketAnchor([ncaaf, nfl, nba]);
 assert.strictEqual(ncaafOut.anchorFairSource, 'pinnacle');
-assert.strictEqual(ncaafOut.anchorWeight, 0.25);
+assert.strictEqual(ncaafOut.anchorWeight, 0.10);
 assert.strictEqual(nflOut.anchorFairSource, 'pinnacle');
 assert.strictEqual(nflOut.anchorWeight, 0); // 2026-10-18: NFL totals w=0, so p_final is the fair.
-assert.ok(Math.abs(ncaafOut.coverProb - (0.25 * 0.70 + 0.75 * 0.5)) < 1e-12);
+assert.ok(Math.abs(ncaafOut.coverProb - (0.10 * 0.70 + 0.90 * 0.5)) < 1e-12); // fitted NCAAF w=0.10 (2026-10-18)
 assert.ok(Math.abs(nflOut.coverProb - 0.5) < 1e-12);
 assert.strictEqual(nbaOut, nba);
 assert.strictEqual(nbaOut.anchorFairSource, undefined);
@@ -149,7 +149,7 @@ assert.strictEqual(none.anchorFairSource, 'none');
 assert.strictEqual(none.coverProb, 0.60);
 assert.strictEqual(none.p_fair, null);
 assert.strictEqual(none.p_model, 0.71);
-assert.strictEqual(none.anchorWeight, 0.25);
+assert.strictEqual(none.anchorWeight, 0.10); // fitted NHL w (unanchored row reports weight, 2026-10-18)
 
 const p = 0.55;
 const implied = americanToImplied(-110);

@@ -11,9 +11,15 @@
  * (WEATHER_NFL) still runs. A dome, or a game with no weather, stays put.
  * The margin is not moved.
  * After rest, QB, and the engine stack, the home margin is blended with
- * Elo: (1 - w) * existing + w * eloMargin. w is NFL_ELO_WEIGHT
- * (OMEGA_NFL_ELO_WEIGHT). w = 0 leaves the margin unchanged. The total
- * is not blended. Point shrink toward the market is unchanged.
+ * Elo. Injury points sit on gameDay.injuryMarginAdj (positive toward
+ * home). They are removed from the stat margin, the rest is blended, and
+ * the same injury points are added back once at full weight:
+ *   statCore = stacked - injuryMarginAdj
+ *   margin = (1 - w) * statCore + w * eloMargin + injuryMarginAdj
+ * w is NFL_ELO_WEIGHT (OMEGA_NFL_ELO_WEIGHT). w = 0, or a missing Elo
+ * margin, leaves the stacked margin unchanged. A non-finite injury
+ * adjustment is treated as 0. The total is not blended. Point shrink
+ * toward the market is unchanged.
  */
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity, bindEspnGameByTeamAndTime,
@@ -130,9 +136,15 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
   const eloW = nflEloWeight();
   let eloPts = null;
   let modelMargin = stacked.modelMargin;
+  const rawInj = stacked.gameDay ? stacked.gameDay.injuryMarginAdj : null;
+  const injuryMarginAdj = Number.isFinite(Number(rawInj)) ? Number(rawInj) : 0;
   if (eloW > 0 && Number.isFinite(modelMargin)) {
     eloPts = eloMargin(home, away, neutral, eloPack && eloPack.ratings);
-    if (Number.isFinite(eloPts)) modelMargin = (1 - eloW) * modelMargin + eloW * eloPts;
+    if (Number.isFinite(eloPts)) {
+      const statCore = modelMargin - injuryMarginAdj;
+      const blended = (1 - eloW) * statCore + eloW * eloPts + injuryMarginAdj;
+      if (Number.isFinite(blended)) modelMargin = blended;
+    }
   }
   const modelTotal = wx.modelTotal;
   const uncertainty = gd.uncertainty;

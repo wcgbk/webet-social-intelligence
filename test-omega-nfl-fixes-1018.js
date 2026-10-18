@@ -1,11 +1,14 @@
 'use strict';
 // NFL 1018: Elo prior is shrunk once, before the walk.
+// NFL injury points are added back at full weight after the Elo blend.
 const assert = require('assert');
 const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const elo = require(path.join(root, 'sports/nfl_elo'));
+const gd = require(path.join(root, 'sports/game_day'));
+const nfl = require(path.join(root, 'sports/nfl'));
 
 function close(actual, expected, eps = 1e-9) {
   assert.ok(Number.isFinite(actual), `not finite: ${actual}`);
@@ -138,8 +141,263 @@ withEnv({ OMEGA_NFL_ELO_LEGACY_DECAY: null }, () => {
     ));
   });
 }).then(() => {
+  injuryChecks();
   console.log('PASS test-omega-nfl-fixes-1018');
 }).catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+function phiChart() {
+  return {
+    map: {
+      '21': {
+        teamId: '21',
+        abbr: 'PHI',
+        displayName: 'Philadelphia Eagles',
+        qb1: { name: 'Tanner McKee', athleteId: '9001' },
+        qb2: { name: 'Jalen Hurts', athleteId: '4040715' },
+      },
+    },
+  };
+}
+
+function event(home, away) {
+  return {
+    home_team: home,
+    away_team: away,
+    commence_time: '2026-10-11T17:00:00Z',
+    bookmakers: ['pinnacle', 'draftkings'].map((key) => ({
+      key,
+      markets: [
+        { key: 'h2h', outcomes: [{ name: home, price: -125 }, { name: away, price: 105 }] },
+        { key: 'spreads', outcomes: [
+          { name: home, price: -110, point: -3 },
+          { name: away, price: -110, point: 3 },
+        ] },
+        { key: 'totals', outcomes: [
+          { name: 'Over', price: -110, point: 45.5 },
+          { name: 'Under', price: -110, point: 45.5 },
+        ] },
+      ],
+    })),
+  };
+}
+
+function spreadRow(cands, re) {
+  const row = cands.find((c) => c.market === 'Spread' && re.test(c.side));
+  assert.ok(row, 'spread row missing');
+  return row;
+}
+
+function injuryChecks() {
+  const chart = phiChart();
+  const hurtsQb = { qbStatus: 'injured reserve', qbName: 'Jalen Hurts' };
+  assert.strictEqual(gd.isStartingQb(hurtsQb, chart.map['21'], {
+    sport: 'NFL', team: 'Philadelphia Eagles',
+  }), true);
+  assert.strictEqual(gd.isStartingQb(hurtsQb, chart.map['21'], {
+    sport: 'NFL', team: 'Dallas Cowboys',
+  }), false);
+  assert.strictEqual(gd.isStartingQb(
+    { qbStatus: 'out', qbName: 'Jalen Hurts' },
+    { qb1: { name: 'Payton Thorne', athleteId: '100' } },
+    { sport: 'NCAAF', team: 'Auburn Tigers' },
+  ), false);
+
+  const hurts = gd.applyGameDayAdjustments({
+    sport: 'NFL',
+    modelMargin: 2,
+    modelTotal: 45,
+    uncertainty: 0.16,
+    home: 'Philadelphia Eagles',
+    away: 'Dallas Cowboys',
+    restByTeam: {},
+    qbByTeam: { 'Philadelphia Eagles': hurtsQb },
+    depthByTeam: chart,
+  });
+  assert.ok(Math.abs(hurts.gameDay.injuryMarginAdj - (-3)) < 1e-9, hurts.gameDay.injuryMarginAdj);
+  assert.ok(Math.abs(hurts.gameDay.qbMarginAdj - (-3)) < 1e-9, hurts.gameDay.qbMarginAdj);
+  assert.ok(Math.abs(hurts.modelMargin - (2 - 3)) < 1e-9, hurts.modelMargin);
+  assert.strictEqual(hurts.startingQbOut, false);
+  assert.strictEqual(hurts.gameDay.qbContinuity, null);
+  assert.strictEqual(hurts.gameDay.qbBackupDelta[0].source, 'table');
+  assert.ok(Math.abs(hurts.gameDay.qbTotalAdj - (-1.5)) < 1e-9, hurts.gameDay.qbTotalAdj);
+  assert.strictEqual(
+    hurts.gameDay.injuryMarginAdj,
+    (hurts.gameDay.qbMarginAdj || 0) + 0,
+  );
+
+  const doubtful = gd.applyGameDayAdjustments({
+    sport: 'NFL',
+    modelMargin: 2,
+    modelTotal: 45,
+    uncertainty: 0.16,
+    home: 'Philadelphia Eagles',
+    away: 'Dallas Cowboys',
+    restByTeam: {},
+    qbByTeam: { 'Philadelphia Eagles': { qbStatus: 'doubtful', qbName: 'Jalen Hurts' } },
+    depthByTeam: chart,
+  });
+  assert.ok(Math.abs(doubtful.gameDay.qbMarginAdj - (-2.25)) < 1e-9, doubtful.gameDay.qbMarginAdj);
+  assert.ok(Math.abs(doubtful.gameDay.injuryMarginAdj - (-2.25)) < 1e-9);
+  assert.strictEqual(doubtful.startingQbOut, false);
+  assert.strictEqual(doubtful.gameDay.qbBackupDelta, null);
+
+  const questionable = gd.applyGameDayAdjustments({
+    sport: 'NFL',
+    modelMargin: 2,
+    modelTotal: 45,
+    uncertainty: 0.16,
+    home: 'Philadelphia Eagles',
+    away: 'Dallas Cowboys',
+    restByTeam: {},
+    qbByTeam: { 'Philadelphia Eagles': { qbStatus: 'questionable', qbName: 'Jalen Hurts' } },
+    depthByTeam: chart,
+  });
+  assert.strictEqual(questionable.gameDay.qbMarginAdj, 0);
+  assert.ok(questionable.uncertainty > 0.16);
+
+  const quiet = gd.applyGameDayAdjustments({
+    sport: 'NFL',
+    modelMargin: 2,
+    modelTotal: 45,
+    uncertainty: 0.16,
+    home: 'New England Patriots',
+    away: 'New York Jets',
+    restByTeam: {},
+    qbByTeam: {},
+  });
+  assert.strictEqual(quiet.gameDay.injuryMarginAdj, 0);
+  assert.strictEqual(quiet.modelMargin, 2);
+
+  const backup = gd.applyGameDayAdjustments({
+    sport: 'NFL',
+    modelMargin: 2,
+    modelTotal: 45,
+    uncertainty: 0.16,
+    home: 'Philadelphia Eagles',
+    away: 'Dallas Cowboys',
+    restByTeam: {},
+    qbByTeam: {
+      'Philadelphia Eagles': { qbStatus: 'injured reserve', qbName: 'Kenny Pickett', depthChartRank: 1 },
+    },
+    depthByTeam: chart,
+  });
+  assert.strictEqual(backup.gameDay.injuryMarginAdj, 0);
+  assert.strictEqual(backup.gameDay.qbMarginAdj, 0);
+  assert.strictEqual(backup.modelMargin, 2);
+
+  const lamarIr = gd.applyGameDayAdjustments({
+    sport: 'NFL',
+    modelMargin: 0,
+    modelTotal: 45,
+    uncertainty: 0.13,
+    home: 'Atlanta Falcons',
+    away: 'Baltimore Ravens',
+    restByTeam: {},
+    qbByTeam: { 'Baltimore Ravens': { qbStatus: 'ir', qbName: 'Lamar Jackson' } },
+    depthByTeam: {
+      map: {
+        '33': {
+          teamId: '33',
+          abbr: 'BAL',
+          displayName: 'Baltimore Ravens',
+          qb1: { name: 'Cooper Rush', athleteId: '1' },
+          qb2: { name: 'Lamar Jackson', athleteId: '3916387' },
+        },
+      },
+    },
+  });
+  assert.strictEqual(lamarIr.startingQbOut, false);
+  assert.ok(Math.abs(lamarIr.gameDay.qbMarginAdj - 4.5) < 1e-9, lamarIr.gameDay.qbMarginAdj);
+  assert.ok(Math.abs(lamarIr.gameDay.injuryMarginAdj - 4.5) < 1e-9);
+  assert.strictEqual(lamarIr.gameDay.qbContinuity, null);
+  assert.strictEqual(lamarIr.gameDay.qbBackupDelta[0].source, 'named');
+
+  const cfbChart = {
+    map: {
+      '2': {
+        teamId: '2',
+        abbr: 'AUB',
+        displayName: 'Auburn Tigers',
+        qb1: { name: 'Payton Thorne', athleteId: '100' },
+        qb2: { name: 'Jalen Hurts', athleteId: '101' },
+      },
+    },
+  };
+  const cfbBase = {
+    sport: 'NCAAF',
+    modelMargin: 6,
+    modelTotal: 52,
+    uncertainty: 0.2,
+    home: 'Auburn Tigers',
+    away: 'Alabama Crimson Tide',
+    restByTeam: {},
+    depthByTeam: cfbChart,
+  };
+  const cfbDemoted = gd.applyGameDayAdjustments({
+    ...cfbBase,
+    qbByTeam: { 'Auburn Tigers': { qbStatus: 'out', qbName: 'Jalen Hurts' } },
+  });
+  assert.strictEqual(cfbDemoted.gameDay.qbMarginAdj, 0);
+  assert.strictEqual(cfbDemoted.modelMargin, 6);
+  assert.strictEqual(cfbDemoted.startingQbOut, false);
+  const cfbOut = gd.applyGameDayAdjustments({
+    ...cfbBase,
+    qbByTeam: { 'Auburn Tigers': { qbStatus: 'out', qbName: 'Payton Thorne' } },
+  });
+  assert.strictEqual(cfbOut.startingQbOut, true);
+  assert.ok(Math.abs(cfbOut.gameDay.qbMarginAdj + config.QB_INJURY.NCAAF.outMarginPts) < 1e-9);
+  const cfbIr = gd.applyGameDayAdjustments({
+    ...cfbBase,
+    qbByTeam: { 'Auburn Tigers': { qbStatus: 'injured reserve', qbName: 'Payton Thorne' } },
+  });
+  assert.strictEqual(cfbIr.startingQbOut, false);
+  assert.ok(Math.abs(cfbIr.gameDay.qbMarginAdj + config.QB_INJURY.NCAAF.outMarginPts) < 1e-9);
+  assert.ok(Math.abs(cfbIr.modelMargin - (6 - config.QB_INJURY.NCAAF.outMarginPts)) < 1e-9);
+
+  elo.resetNflEloState();
+  const prevW = process.env.OMEGA_NFL_ELO_WEIGHT;
+  const home = 'Philadelphia Eagles';
+  const away = 'Dallas Cowboys';
+  const ev = event(home, away);
+  const gameDay = {
+    qbStatusBySport: { NFL: { 'Philadelphia Eagles': hurtsQb } },
+    depthCharts: { NFL: chart },
+  };
+  try {
+    process.env.OMEGA_NFL_ELO_WEIGHT = '0';
+    const statRow = spreadRow(nfl.project({
+      oddsEvents: [ev], standings: {}, efficiency: {}, gameDay,
+    }), /Eagles/);
+    const quietEv = event('New England Patriots', 'New York Jets');
+    const quietRow = spreadRow(nfl.project({
+      oddsEvents: [quietEv], standings: {}, efficiency: {}, gameDay: {},
+    }), /Patriots/);
+    assert.strictEqual(quietRow.gameDay.injuryMarginAdj, 0);
+
+    process.env.OMEGA_NFL_ELO_WEIGHT = '0.8';
+    const blended = spreadRow(nfl.project({
+      oddsEvents: [ev], standings: {}, efficiency: {}, gameDay,
+    }), /Eagles/);
+    const inj = blended.gameDay.injuryMarginAdj;
+    assert.ok(Math.abs(inj - (-3)) < 1e-9, inj);
+    const stat = statRow.modelProjection;
+    const eloPts = elo.eloMargin(home, away, false);
+    const eloW = 0.8;
+    const expected = (1 - eloW) * (stat - inj) + eloW * eloPts + inj;
+    assert.strictEqual(blended.modelProjection, +expected.toFixed(2));
+    assert.ok(Math.abs(blended.modelProjection - ((1 - eloW) * stat + eloW * eloPts)) > 0.5);
+
+    process.env.OMEGA_NFL_ELO_WEIGHT = '0';
+    const again = spreadRow(nfl.project({
+      oddsEvents: [ev], standings: {}, efficiency: {}, gameDay,
+    }), /Eagles/);
+    assert.strictEqual(again.modelProjection, statRow.modelProjection);
+  } finally {
+    if (prevW == null) delete process.env.OMEGA_NFL_ELO_WEIGHT;
+    else process.env.OMEGA_NFL_ELO_WEIGHT = prevW;
+    elo.resetNflEloState();
+  }
+}

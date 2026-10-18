@@ -1333,10 +1333,13 @@ function blendedNflMargin(base, home, away) {
   const deepRow = byMarket(deep, 'Moneyline');
   const deepM = deepRow.modelProjection;
   assert.ok(Math.abs(deepRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-9);
-  // QB out is priced once (qbSoftAdjust); continuity adds nothing for an out QB.
-  // Elo blends that whole margin, so the printed move scales by (1 - w).
-  const stackMove = config.QB_INJURY.NFL.outMarginPts + deepRow.engineSoft.stacked.sum;
-  assert.ok(Math.abs((deepM - plainM) - (1 - config.nflEloWeight()) * stackMove) < 0.02);
+  // QB out is priced once. Continuity does not add. The Elo blend dilutes the
+  // success stack only. The injury points are added back at full weight.
+  const eloW = config.nflEloWeight();
+  const inj = deepRow.gameDay.injuryMarginAdj;
+  assert.ok(Math.abs(inj - config.QB_INJURY.NFL.outMarginPts) < 1e-9, inj);
+  const expectedMove = (1 - eloW) * deepRow.engineSoft.stacked.sum + inj;
+  assert.ok(Math.abs((deepM - plainM) - expectedMove) < 0.02, `${deepM - plainM} != ${expectedMove}`);
 
   const cfbDeep = cfb.project({
     oddsEvents: [synthEvent('Ohio State Buckeyes', 'Iowa Hawkeyes', { total: 51.5, spread: -6.5 })],

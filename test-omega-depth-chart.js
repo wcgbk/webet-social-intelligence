@@ -264,8 +264,8 @@ function adjust(extra) {
       fetchedAt: '2026-10-11T18:42:38Z',
     }]),
   });
-  assert.strictEqual(ravensQb2.startingQbOut, false, 'named list does not override a chart that lists him QB2');
-  assert.strictEqual(ravensQb2.gameDay.qbMarginAdj, 0);
+  assert.strictEqual(ravensQb2.startingQbOut, true, 'preseason QB1 counts when the chart lists him QB2');
+  assert.ok(Math.abs(ravensQb2.gameDay.qbMarginAdj - 4.5) < 1e-9, ravensQb2.gameDay.qbMarginAdj);
 
   const named = gd.applyGameDayAdjustments({
     sport: 'NFL',

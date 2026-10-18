@@ -13,7 +13,7 @@
  */
 
 const { clamp, etCalendarDate } = require('../odds_math');
-const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId, isFbsTeamId } = require('./team_identity');
+const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId, isFbsTeamId, teamRecord } = require('./team_identity');
 const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
 const { shrinkLast5IntoRating, lookupLast5 } = require('../last5');
 const { conservativeNonQbAdj, rowsForTeam } = require('../personnel');
@@ -305,17 +305,44 @@ function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
 
 /**
  * New game-status Out. Doubtful and questionable stay on the point table.
- * IR / PUP / season-ending is already in the market and is not a fresh out.
+ * IR / PUP / season-ending is not a fresh out. An NFL preseason QB1 on
+ * injured reserve is priced in qbSoftAdjust and does not flip this flag.
  */
 // Starting QB only. The daily ESPN depth chart wins when that team has a
 // row: the injured player must be QB1 (athlete id, else normalized name).
 // A backup listed QB2 does not move the number, even if the injury row
-// claims depth 1. With no chart for the team, an injury-row depth of 1
+// claims depth 1. NFL exception: PRESEASON_QB1 counts as the rated starter
+// when the normalized name and the team match, even if the chart QB1 is
+// someone else. With no chart for the team, an injury-row depth of 1
 // (or an explicit starter bit) still counts, and NAMED_STARTING_QB is the
 // last fallback. Injured backups have no effect.
 const NAMED_STARTING_QB = Object.freeze({
   'lamar jackson': 'BAL',
 });
+
+// ASSUMED week-1 QB1. Replace with a stored week-1 depth chart.
+const PRESEASON_QB1 = Object.freeze({
+  'jalen hurts': 'PHI',
+  'lamar jackson': 'BAL',
+  'baker mayfield': 'TB',
+  'caleb williams': 'CHI',
+});
+
+function nflAbbr(teamName) {
+  if (teamName == null || teamName === '') return null;
+  const id = resolveTeamId('NFL', teamName);
+  const rec = id ? teamRecord('NFL', id) : null;
+  if (rec && rec.abbreviation) return String(rec.abbreviation).toUpperCase();
+  const raw = String(teamName).trim().toUpperCase();
+  return /^[A-Z]{2,3}$/.test(raw) ? raw : null;
+}
+
+function preseasonRatedStarter(qb, teamName) {
+  if (!qb) return false;
+  const want = PRESEASON_QB1[normQbName(qb.qbName || qb.name)];
+  if (!want) return false;
+  return nflAbbr(teamName) === want;
+}
 
 function depthFeedEntry(sport, teamName, depthByTeam) {
   if (!depthByTeam || typeof depthByTeam !== 'object' || Array.isArray(depthByTeam)) return null;
@@ -349,8 +376,9 @@ function playerIsFeedQb1(qb, entry) {
   return !!(name && want && name === want);
 }
 
-function isStartingQb(qb, feedEntry) {
+function isStartingQb(qb, feedEntry, ctx) {
   if (!qb) return false;
+  if (ctx && ctx.sport === 'NFL' && preseasonRatedStarter(qb, ctx.team)) return true;
   if (feedEntry && feedEntry.qb1) return playerIsFeedQb1(qb, feedEntry);
   const depth = qb.depthChartRank != null ? qb.depthChartRank : (qb.depthRank != null ? qb.depthRank : qb.depth);
   if (depth != null && Number.isFinite(Number(depth))) return Number(depth) === 1;
@@ -358,9 +386,9 @@ function isStartingQb(qb, feedEntry) {
   return Object.prototype.hasOwnProperty.call(NAMED_STARTING_QB, normQbName(qb.qbName || qb.name));
 }
 
-function isFreshQbOut(qb, feedEntry) {
+function isFreshQbOut(qb, feedEntry, ctx) {
   if (!qb) return false;
-  if (!isStartingQb(qb, feedEntry)) return false;
+  if (!isStartingQb(qb, feedEntry, ctx)) return false;
   const st = String(qb.qbStatus || qb.status || '').toLowerCase();
   if (!st) return false;
   if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
@@ -389,8 +417,10 @@ const NAMED_BACKUP_QB = Object.freeze({
  * Explicit starterValue and backupValue win. A gap above 20 is Elo
  * (25 Elo ≈ 1 point). Otherwise the numbers are already points.
  */
-function backupQbDelta(qb, sport, feedEntry) {
-  if (!isFreshQbOut(qb, feedEntry)) return null;
+function backupQbDelta(qb, sport, feedEntry, ctx) {
+  if (!qb) return null;
+  // force prices an NFL preseason QB1 on IR without treating IR as a fresh out.
+  if (!(ctx && ctx.force) && !isFreshQbOut(qb, feedEntry, ctx)) return null;
   const cfg = (QB_INJURY && QB_INJURY[sport]) || {
     outMarginPts: 3.0, outTotalPts: -1.5, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0,
   };
@@ -427,7 +457,7 @@ function backupQbDelta(qb, sport, feedEntry) {
   };
 }
 
-function qbSoftAdjust(sport, homeQb, awayQb, feed) {
+function qbSoftAdjust(sport, homeQb, awayQb, feed, teams) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
   }
@@ -440,16 +470,30 @@ function qbSoftAdjust(sport, homeQb, awayQb, feed) {
   const deltas = [];
   const homeEntry = feed && (feed.home || feed.homeEntry) || null;
   const awayEntry = feed && (feed.away || feed.awayEntry) || null;
-  const apply = (qb, side, entry) => {
+  const apply = (qb, side, entry, teamName) => {
     if (!qb) return;
-    if (!isStartingQb(qb, entry)) return;
+    const ctx = { sport, team: teamName };
+    if (!isStartingQb(qb, entry, ctx)) return;
     const st = String(qb.qbStatus || qb.status || '').toLowerCase();
     if (!st) return;
-    const fresh = isFreshQbOut(qb, entry);
+    // NFL rated starter: IR / ir / out once, via backupQbDelta (named gap
+    // or the generic 3.0 / -1.5 table). Doubtful stays on the 0.75 table.
+    // Questionable stays uncertainty-only. Not both paths, and not a backup.
+    const ratedIr = sport === 'NFL'
+      && preseasonRatedStarter(qb, teamName)
+      && /injured reserve|\bir\b/.test(st)
+      && !/doubtful|questionable/.test(st);
+    const fresh = isFreshQbOut(qb, entry, ctx);
     const isOut = outStatuses.some(k => st.includes(k));
     const isQ = /questionable|q\b/.test(st);
-    if (fresh) {
-      const delta = backupQbDelta(qb, sport, entry);
+    if (fresh || ratedIr) {
+      const delta = backupQbDelta(
+        qb,
+        sport,
+        entry,
+        ratedIr && !fresh ? { ...ctx, force: true } : ctx,
+      );
+      if (!delta) return;
       marginAdj += (side === 'home' ? -1 : 1) * delta.marginPts;
       totalAdj += delta.totalPts;
       uncBump += 0.04;
@@ -468,8 +512,8 @@ function qbSoftAdjust(sport, homeQb, awayQb, feed) {
       notes.push(`${side} QB questionable${qb.qbName ? ` (${qb.qbName})` : ''}`);
     }
   };
-  apply(homeQb, 'home', homeEntry);
-  apply(awayQb, 'away', awayEntry);
+  apply(homeQb, 'home', homeEntry, teams && teams.home);
+  apply(awayQb, 'away', awayEntry, teams && teams.away);
   return {
     marginAdj: clamp(marginAdj, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
     totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
@@ -589,11 +633,12 @@ function applyGameDayAdjustments({
   const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
   const homeEntry = depthFeedEntry(sport, home, depthByTeam);
   const awayEntry = depthFeedEntry(sport, away, depthByTeam);
-  const qb = qbSoftAdjust(sport, homeQb, awayQb, { home: homeEntry, away: awayEntry });
+  const qb = qbSoftAdjust(sport, homeQb, awayQb, { home: homeEntry, away: awayEntry }, { home, away });
   // Fresh Out moves margin and total by the backup-QB delta. The total
   // stays on the card. Edge and EV are recomputed downstream against the
   // DraftKings price, and the floors are the only drop.
-  const startingQbOut = isFreshQbOut(homeQb, homeEntry) || isFreshQbOut(awayQb, awayEntry);
+  const startingQbOut = isFreshQbOut(homeQb, homeEntry, { sport, team: home })
+    || isFreshQbOut(awayQb, awayEntry, { sport, team: away });
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);
@@ -626,13 +671,17 @@ function applyGameDayAdjustments({
   let personnelHomeCluster = 0;
   let personnelAwayCluster = 0;
   let personnelLogs = [];
+  let personnelMarginAdj = 0;
   if ((sport === 'NFL' || sport === 'NCAAF') && personnelByTeam) {
     const game = { home, away };
     const homeRows = rowsForTeam(personnelByTeam, sport, home, game);
     const awayRows = rowsForTeam(personnelByTeam, sport, away, game);
     if (homeRows.length || awayRows.length) {
       const adj = conservativeNonQbAdj(homeRows, awayRows);
-      if (Number.isFinite(adj.marginAdj) && Math.abs(adj.marginAdj) > 1e-9) margin += adj.marginAdj;
+      if (Number.isFinite(adj.marginAdj) && Math.abs(adj.marginAdj) > 1e-9) {
+        margin += adj.marginAdj;
+        personnelMarginAdj = adj.marginAdj;
+      }
       if (Number.isFinite(adj.totalAdj) && Math.abs(adj.totalAdj) > 1e-9) total += adj.totalAdj;
       personnelHomeExclude = false;
       personnelAwayExclude = false;
@@ -661,6 +710,7 @@ function applyGameDayAdjustments({
     qbNote: qb.note,
     qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
+    injuryMarginAdj: (qb.marginAdj || 0) + (cont.marginAdj || 0) + personnelMarginAdj,
     qbBackupDelta: (qb.backupDeltas && qb.backupDeltas.length) ? qb.backupDeltas : null,
     startingQbOut,
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
@@ -856,6 +906,7 @@ module.exports = {
   qbSoftAdjust,
   backupQbDelta,
   NAMED_BACKUP_QB,
+  PRESEASON_QB1,
   qbContinuityAdjust,
   lookupQb,
   applyGameDayAdjustments,

@@ -7,9 +7,18 @@
  * w = 1 is the model. w = 0 is the market. NBA is absent and is not touched.
  * modelPureP already carries the rating-error SD. coverProb is the fallback
  * only when modelPureP is missing, so calibration is not mixed in again.
- * p_fair is the Pinnacle power no-vig on this side at this line, else the
- * DraftKings two-way no-vig. No fair: the row is not dropped. coverProb
- * stays, and anchorFairSource is 'none'.
+ * p_fair is the Pinnacle power no-vig on this side at this line. Circa is
+ * not used: the Odds API has no Circa book, and these rows have no stored
+ * per-game Circa line (no circaSide or circasports quote). Contest PDF
+ * lines are a separate NFL product. When Pinnacle has no same-line pair,
+ * p_fair is the simple mean of the other SHARP_BOOKS that each post both
+ * sides (source 'sharp-books'), else the simple mean of every stored book
+ * that posts both sides (source 'consensus' when at least two books do,
+ * otherwise that book's own key, 'draftkings' when only DraftKings does).
+ * Each book is power-devigged on its own pair. One book's side is never
+ * mixed with another book's opposite side. The mean is unweighted
+ * (ASSUMED, 2026-10-18 audit item 4; not fit on this box). No fair: the
+ * row is not dropped. coverProb stays, and anchorFairSource is 'none'.
  *
  * Published edge = p - vigged implied(odds). Edge is not push-adjusted.
  * Published EV = (1 - pPush) * (p * decimal(odds) - 1).
@@ -18,10 +27,11 @@
  */
 
 const {
-  MARKET_ANCHOR_MODEL_WEIGHT, ratingErrorSd, effectiveSd,
+  MARKET_ANCHOR_MODEL_WEIGHT, ratingErrorSd, effectiveSd, SHARP_BOOKS,
 } = require('./config');
-const { americanToImplied, americanToDecimal, formatEdgePct, noVigTwoWay } = require('./odds_math');
+const { americanToImplied, americanToDecimal, formatEdgePct } = require('./odds_math');
 const { powerFair } = require('./pure_model');
+const { powerTwoWay } = require('./sharp_fair');
 const { pushAwareEv } = require('./push_ev');
 
 function finiteProb(v) {
@@ -127,7 +137,11 @@ function fairNumber(c) {
   return finiteProb(p);
 }
 
-/** Printed fair p, source, EV-at-fair, raw model p, and the anchor weight. */
+/**
+ * Printed fair p, source, EV-at-fair, raw model p, and the anchor weight.
+ * evAtFair is this row's p_fair at the bet price (c.odds). It is not a
+ * second DraftKings number. fairSource is anchorFairSource.
+ */
 function fairPickFields(c) {
   const fair = fairNumber(c);
   const dec = americanToDecimal(c && (c.odds != null ? c.odds : c.oddsStr));
@@ -209,34 +223,121 @@ function isOpposite(a, b) {
   return String(a.side || '') !== String(b.side || '');
 }
 
-function dkAmerican(c) {
-  if (!c) return null;
-  const quote = c.dkQuote;
-  if (quote && Number.isFinite(Number(quote.american))) {
-    const pt = quote.point != null ? Number(quote.point) : null;
-    const line = c.line != null && c.line !== '' ? Number(c.line) : null;
-    if (pt == null || line == null || Math.abs(pt - line) < 1e-6) return Number(quote.american);
+function lineOf(c) {
+  if (!c || c.line == null || c.line === '') return null;
+  const n = Number(c.line);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Null point means "this candidate's line". A different point is another bet. */
+function pointMatches(point, line) {
+  if (point == null || point === '') return true;
+  const pt = Number(point);
+  if (!Number.isFinite(pt)) return false;
+  if (line == null) return true;
+  return Math.abs(pt - line) < 1e-6;
+}
+
+function canonBook(key) {
+  const k = String(key || '').toLowerCase();
+  if (k === 'hardrockbet_oh' || k === 'hardrock') return 'hardrockbet';
+  return k;
+}
+
+/**
+ * This side's American price at this line, one number per book.
+ * dkQuote, hardRock, and bookPrices are the stored board. The execution
+ * odds count only for the book that posted them. A price at another point
+ * is skipped, so an alt line cannot fill this line.
+ */
+function pricesByBook(c) {
+  const out = new Map();
+  if (!c) return out;
+  const line = lineOf(c);
+  const put = (book, american, point) => {
+    const name = canonBook(book);
+    if (!name || out.has(name)) return;
+    if (!pointMatches(point, line)) return;
+    const am = Number(american);
+    if (!Number.isFinite(am) || am === 0) return;
+    out.set(name, am);
+  };
+  if (c.dkQuote) put('draftkings', c.dkQuote.american, c.dkQuote.point);
+  const hr = c.hardRock;
+  if (hr && typeof hr === 'object') {
+    put('hardrockbet', hr.american != null ? hr.american : hr.price, hr.point);
   }
   const prices = Array.isArray(c.bookPrices) ? c.bookPrices : [];
   for (const p of prices) {
-    if (String(p && p.book || '').toLowerCase() !== 'draftkings') continue;
-    if (!Number.isFinite(Number(p.american))) continue;
-    const pt = p.point != null ? Number(p.point) : null;
-    const line = c.line != null && c.line !== '' ? Number(c.line) : null;
-    if (pt != null && line != null && Math.abs(pt - line) > 1e-6) continue;
-    return Number(p.american);
+    if (!p) continue;
+    put(p.book || p.key, p.american != null ? p.american : p.price, p.point);
   }
-  const book = String(c.book || c.executionBook || c.priceBook || '').toLowerCase();
-  if (book === 'draftkings' && Number.isFinite(Number(c.odds))) return Number(c.odds);
-  return null;
+  const exec = canonBook(c.book || c.executionBook || c.priceBook);
+  if (exec) put(exec, c.odds, line);
+  return out;
 }
 
-function draftkingsFair(c, opp) {
-  const a1 = dkAmerican(c);
-  const a2 = dkAmerican(opp);
-  if (a1 == null || a2 == null) return null;
-  const nv = noVigTwoWay(a1, a2);
-  return nv ? finiteProb(nv.p1) : null;
+/**
+ * Power de-vig of one book's two prices. Same function Pinnacle uses
+ * (sharp_fair.powerTwoWay via pure_model.powerFair). Not the proportional
+ * split noVigTwoWay uses inside the juice band.
+ */
+function powerFairPair(a1, a2) {
+  const i1 = americanToImplied(a1);
+  const i2 = americanToImplied(a2);
+  if (i1 == null || i2 == null) return null;
+  const powered = powerTwoWay(i1, i2);
+  return powered ? finiteProb(powered.p1) : null;
+}
+
+/**
+ * Books that post BOTH sides of this line. Each fair is that book's own
+ * pair. A DraftKings side is never de-vigged against a Hard Rock opposite.
+ */
+function pairedBookFairs(c, opp) {
+  if (!c || !opp) return [];
+  const left = pricesByBook(c);
+  const right = pricesByBook(opp);
+  const rows = [];
+  for (const [book, am1] of left) {
+    if (!right.has(book)) continue;
+    const p = powerFairPair(am1, right.get(book));
+    if (p == null) continue;
+    rows.push({ book, p });
+  }
+  return rows;
+}
+
+function meanProb(rows) {
+  if (!rows || !rows.length) return null;
+  let sum = 0;
+  for (const row of rows) sum += row.p;
+  return finiteProb(sum / rows.length);
+}
+
+const OTHER_SHARP = new Set((SHARP_BOOKS || []).filter((b) => b !== 'pinnacle'));
+
+/**
+ * Pinnacle power no-vig, else other sharp books, else the stored board.
+ * Does not read or write the bet price.
+ */
+function resolveFair(c, opp) {
+  const pin = pinnacleFair(c);
+  if (pin != null) return { pFair: pin, source: 'pinnacle' };
+  const pairs = pairedBookFairs(c, opp);
+  const fromBoard = pairs.find((row) => row.book === 'pinnacle');
+  if (fromBoard) return { pFair: fromBoard.p, source: 'pinnacle' };
+  const sharps = pairs.filter((row) => OTHER_SHARP.has(row.book));
+  if (sharps.length) {
+    const p = meanProb(sharps);
+    if (p != null) return { pFair: p, source: 'sharp-books' };
+  }
+  if (pairs.length >= 2) {
+    const p = meanProb(pairs);
+    if (p != null) return { pFair: p, source: 'consensus' };
+  }
+  if (pairs.length === 1) return { pFair: pairs[0].p, source: pairs[0].book };
+  return { pFair: null, source: 'none' };
 }
 
 /**
@@ -261,16 +362,10 @@ function applyMarketAnchor(candidates) {
     if (w == null) return c;
     const fromPure = finiteProb(c.modelPureP);
     const pModel = fromPure != null ? fromPure : finiteProb(c.coverProb);
-    let pFair = pinnacleFair(c);
-    let source = pFair != null ? 'pinnacle' : 'none';
-    if (pFair == null) {
-      const opp = (groups.get(pairKey(c)) || []).find((row) => isOpposite(c, row));
-      const dk = opp ? draftkingsFair(c, opp) : null;
-      if (dk != null) {
-        pFair = dk;
-        source = 'draftkings';
-      }
-    }
+    const opp = (groups.get(pairKey(c)) || []).find((row) => isOpposite(c, row));
+    const resolved = resolveFair(c, opp);
+    const pFair = resolved.pFair;
+    const source = resolved.source;
     const se = ratingSeOf({
       ...c,
       modelPureP: pModel != null ? pModel : c.modelPureP,

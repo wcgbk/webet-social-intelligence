@@ -1189,6 +1189,7 @@ function twoTeamFromPublished(rows) {
   const maxEV = Number(EV_CAP_ALL);
   for (const row of rows) {
     if (row && row.marginBiasExtreme) return null;
+    if (!passesSheetMinimums(row)) return null; // sheet gate: mirror legs too
     const leg = priceCardLeg(row);
     if (!leg || leg.marginBiasExtreme) return null;
     const ev = Number(leg.ev);

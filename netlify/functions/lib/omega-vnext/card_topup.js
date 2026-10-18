@@ -29,6 +29,7 @@ const {
   applyDailyUnitCap,
 } = require('./select');
 const { parlayFromStraights } = require('./parlay');
+const { passesSheetMinimums } = require('./bet_check_gate');
 const { verifyPlaceabilityDecision } = require('./edge');
 
 const RESERVE_CAP = 12;
@@ -321,14 +322,14 @@ function topUpStraights(opts = {}) {
 }
 
 function stampReservePick(row, kind, modelVersion) {
-  const lean = kind !== 'floor';
+  const lean = false; // NO LEANS on the 2026-10-18 rerun card: all straights.
   const src = {
     ...row,
     tier: lean ? 'lean' : 'floor',
   };
   if (kind === 'paired') {
     src.pairedFill = true;
-    src.label = 'lean';
+    src.label = 'floor';
     src.leanReason = row.leanReason || 'paired-ev';
   }
   const pick = toPickObject(src, { modelVersion: modelVersion || row.modelVersion });
@@ -356,6 +357,9 @@ function buildReserve(opts = {}) {
   const ranked = [];
   const push = (row, kind) => {
     if (!row) return;
+    // Sheet gate (2026-10-18 rerun): reserve top-ups are published picks.
+    // No sub-sheet candidate fills a short card from any reserve kind.
+    if (!passesSheetMinimums(row)) return;
     if (isBlocked(row, index)) return;
     if (onCard.some((pick) => sameSideRow(pick, row))) return;
     if (seen.some((prev) => sameSideRow(prev, row))) return;

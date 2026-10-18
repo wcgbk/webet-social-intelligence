@@ -1,12 +1,12 @@
-functionsDirectory = "/workspace/wsi/netlify/functions"
+functionsDirectory = "/tmp/wsi-clean/netlify/functions"
 functionsDirectoryOrigin = "config-v1"
 redirectsOrigin = "config"
 plugins = []
 
 [build]
-publish = "/workspace/wsi"
+publish = "/tmp/wsi-clean"
 publishOrigin = "default"
-functions = "/workspace/wsi/netlify/functions"
+functions = "/tmp/wsi-clean/netlify/functions"
 
 [build.environment]
 

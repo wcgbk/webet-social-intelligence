@@ -340,6 +340,9 @@ function eligibleForLeanPool(c) {
  * slot empty until the last-resort pass inside selectStraights.
  */
 function qualifiesAsLean(c) {
+  // NO LEANS on the 2026-10-18 rerun card (Ben): lean fill disabled.
+  // All published picks are straights clearing the sheet bar.
+  return false;
   // Sheet gate (2026-10-18): a lean must clear the same bet-check minimums
   // as a floor pick. Positive EV alone no longer publishes a lean.
   if (!passesSheetMinimums(c)) return false;
@@ -416,6 +419,20 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
     if (!passesSheetMinimums(c)) continue;
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({ ...c, tier: 'floor', _score: finiteEv(c) });
+  }
+  // Card shape (Ben 2026-10-18): after the top-3 straights, the NEXT
+  // sheet-clearing candidates publish as leans (max 3 more, flat lean
+  // stake via toPickObject). All must clear the same sheet gates; a
+  // shortfall ships short — no sub-threshold fill.
+  if (out.length >= maxN) {
+    const extra = rankByTrueProbability((yesPool || []).filter((c) => passesSheetMinimums(c) && passesPublishFloor(c)));
+    for (const c of extra) {
+      if (out.length >= maxN + 3) break;
+      if (out.some((o) => (o.side || o.pick) === (c.side || c.pick) && o.matchup === c.matchup)) continue;
+      if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+      out.push({ ...c, tier: 'floor', label: 'floor', _score: finiteEv(c) });
+    }
+    return out;
   }
   if (config.LEAN_PAD !== true || out.length >= maxN) return out;
   const leans = [...(leanPool || [])].sort(compareByEv);

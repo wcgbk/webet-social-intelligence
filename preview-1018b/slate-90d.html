@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>90-day slate</title><style>body{font:15px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:1100px;margin:24px auto;padding:0 16px;color:#111}table{border-collapse:collapse;margin:12px 0;font-size:13px;display:block;overflow-x:auto}th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;white-space:nowrap}th{background:#f2f2f2}code{background:#f4f4f4;padding:1px 4px}h1{font-size:22px}h2{font-size:18px;margin-top:28px}.banner{background:#fff3cd;border:1px solid #e0c36a;padding:8px 12px;margin-bottom:16px}nav a{margin-right:12px}</style></head><body><div class="banner"><b>PREVIEW ONLY</b> branch preview/1018b. Research documents, not a published card or a bet. Nothing here is deployed to production.</div><nav><a href="index.html">Index</a><a href="spec.html">Spec</a><a href="card-preview.html">Projected card (preview)</a><a href="card-1-post-code.html">Card #1</a><a href="card-2-post-3am.html">Card #2 (live code, 3AM)</a><a href="slate-90d.html">90-day slate</a></nav>
+<h1>90-day slate: games per sport (ESPN public scoreboards, 2026-10-18 .. 2027-01-15)</h1>
+<p>Source: ESPN scoreboard JSON for each date (fetch_sched.py, 450 date-sport files). Counts are games ESPN lists for that US date, regular + postseason as scheduled today. NBA first game 2026-10-20 (per ESPN).</p>
+<h2>Weekly table (weeks start Sunday 10/18; last row is 6 days)</h2>
+<table><tr><th>Week (Sun start)</th><th>NFL</th><th>NCAAF</th><th>NBA</th><th>NHL</th><th>MLB</th><th>Total</th></tr>
+<tr><td>10/18–10/24 (7d)</td><td>14</td><td>56</td><td>36</td><td>45</td><td>5</td><td>156</td></tr>
+<tr><td>10/25–10/31 (7d)</td><td>14</td><td>56</td><td>52</td><td>47</td><td>5</td><td>174</td></tr>
+<tr><td>11/01–11/07 (7d)</td><td>14</td><td>63</td><td>51</td><td>50</td><td>0</td><td>178</td></tr>
+<tr><td>11/08–11/14 (7d)</td><td>15</td><td>67</td><td>49</td><td>49</td><td>0</td><td>180</td></tr>
+<tr><td>11/15–11/21 (7d)</td><td>14</td><td>70</td><td>53</td><td>47</td><td>0</td><td>184</td></tr>
+<tr><td>11/22–11/28 (7d)</td><td>17</td><td>69</td><td>45</td><td>55</td><td>0</td><td>186</td></tr>
+<tr><td>11/29–12/05 (7d)</td><td>12</td><td>10</td><td>43</td><td>48</td><td>0</td><td>113</td></tr>
+<tr><td>12/06–12/12 (7d)</td><td>14</td><td>2</td><td>10</td><td>51</td><td>0</td><td>77</td></tr>
+<tr><td>12/13–12/19 (7d)</td><td>17</td><td>8</td><td>51</td><td>49</td><td>0</td><td>125</td></tr>
+<tr><td>12/20–12/26 (7d)</td><td>17</td><td>16</td><td>51</td><td>36</td><td>0</td><td>120</td></tr>
+<tr><td>12/27–01/02 (7d)</td><td>13</td><td>19</td><td>56</td><td>57</td><td>0</td><td>145</td></tr>
+<tr><td>01/03–01/09 (7d)</td><td>15</td><td>0</td><td>54</td><td>53</td><td>0</td><td>122</td></tr>
+<tr><td>01/10–01/15 (6d)</td><td>16</td><td>2</td><td>46</td><td>36</td><td>0</td><td>100</td></tr>
+<tr><td><b>90-day total</b></td><td><b>192</b></td><td><b>438</b></td><td><b>597</b></td><td><b>623</b></td><td><b>10</b></td><td><b>1860</b></td></tr>
+</table>
+<h2>Daily games per sport and all sports (90 days): min / median / max (days with zero included)</h2>
+<table><tr><th>Sport</th><th>min</th><th>median</th><th>max</th><th>days with ≥1 game</th><th>days with ≥3 games</th></tr>
+<tr><td>NFL</td><td>0</td><td>0.0</td><td>16</td><td>40</td><td>15</td></tr>
+<tr><td>NCAAF</td><td>0</td><td>1.0</td><td>59</td><td>48</td><td>30</td></tr>
+<tr><td>NBA</td><td>0</td><td>7.0</td><td>15</td><td>81</td><td>74</td></tr>
+<tr><td>NHL</td><td>0</td><td>6.0</td><td>15</td><td>85</td><td>78</td></tr>
+<tr><td>MLB</td><td>0</td><td>0.0</td><td>1</td><td>10</td><td>0</td></tr>
+<tr><td>ALL</td><td>3</td><td>18.0</td><td>79</td><td>90</td><td>90</td></tr>
+</table>
+<p>All-sports daily slate size distribution (days): 0: 0, 1-3: 2, 4-7: 5, 8-11: 6, 12+: 77</p>
+<h2>How often is &quot;3 straights + a parlay&quot; realistically supported?</h2>
+<p>Games available is not the binding constraint: 77 of 90 days have 12+ games (all sports), 83 have 8+ and only 2 have fewer than 4. The binding constraint is how many sides clear the push-aware EV ≥2% gate at the bet price. Evidence from the 58 priced backtest days (2025-10-07 onward, per-day best side per game, live 6d22a14 vs the preview branch):</p>
+<table><tr><th>Backtest, 58 priced days</th><th>Live 6d22a14</th><th>Preview 1018b</th></tr>
+<tr><td>Days with ≥3 straights clearing the EV gate (&quot;main&quot;)</td><td>9 (16%)</td><td>14 (24%)</td></tr>
+<tr><td>Days with ≥2 clearing the gate</td><td>16 (28%)</td><td>26 (45%)</td></tr>
+<tr><td>Days with 0 clearing the gate</td><td>27 (47%)</td><td>20 (34%)</td></tr>
+<tr><td>Days that publish 3 straights (incl. 0.25u top-up leans)</td><td>30 (52%)</td><td>52 (90%)</td></tr>
+<tr><td>Mean straights per day</td><td>1.98</td><td>2.79</td></tr>
+</table>
+<p>By slate size (live code, gate-clearing straights ≥3): ≤3 games 0 of 11 days, 4-7 games 0 of 15, 8-11 games 2 of 15 (13%), 12+ games 6 of 17 (35%). With the fill rule, ≥3 straights incl. leans was reached on 88% of 12+ game days and 73% of 8-11 game days.</p>
+<p>Reading for the next 90 days: with 12+ games on 77 of 90 days (NHL + NBA + NCAAF Saturdays + NFL Sundays), a real 3-straights + both-EV-positive parlay is supported on roughly 25-35% of days; a 3-straight card with leans on ~85-90%; a 2-leg lean parlay as the fallback on nearly every day that has ≥2 straights. Lean fills are 0.25u and carry EV near 0, so they add pick count, not profit.</p>
+<p>Caveats: (1) ESPN lists only games it has scheduled; NFL playoffs (start ~1/16) are outside the 90 days, CFP semifinals and some bowl games and all remaining MLB postseason games are not yet on ESPN, so December/January NCAAF is slightly undercounted (est. +3 to +6 games) and MLB is 10 games (WS only). (2) The backtest window is Oct 2025-Oct 2026 snapshots; weights and floors were fit on the same rows, so the preview figures are in-sample. (3) Many Dec/Jan days are NBA/NHL-only and those sports have the weakest edge support (NHL main-pool ROI -15% in backtest, n=52).</p></body></html>

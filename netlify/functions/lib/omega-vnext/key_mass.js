@@ -42,9 +42,20 @@
  *   plain normal Φ(μ/σ)          0.633890
  * The rail does not move these moneyline prices (max |Δ| = 0 on the 854
  * rows). The PMF is worse by 0.000161, so spreadQuote / mlQuote / totalQuote
- * default to the plain normal plus an explicit integer push. Set
- * OMEGA_KEY_MASS=1 to price with the moment-matched PMF. Offset table:
- * /workspace/fix-1017/audit2/keymass-eval.txt.
+ * default to the plain normal conditional cover plus an explicit integer
+ * push. Set OMEGA_KEY_MASS=1 to price with the moment-matched PMF.
+ * Offset table: /workspace/fix-1017/audit2/keymass-eval.txt.
+ *
+ * The plain push is not the normal density (2026-10-18). A normal atom
+ * at 0 is about 3% of an NFL game. Scored finals tie about 0.3% of the
+ * time, and margins of 3 and 7 are much fatter than that atom. NFL
+ * moneyline pPush is the raw tie rate. NFL spread and total integer
+ * pPush is the empirical frequency of that exact margin, shrunk toward
+ * the normal bin and placed on the model mean. pWin = (1 − pPush) times
+ * the conditional normal cover, so the mean and SD still set the price.
+ * Half-points do not push. NCAAF keeps the overtime split (pPush 0).
+ * Counts, the Wilson interval, and the pseudo-count sit with
+ * NFL_ABS_MARGIN_COUNTS. Table: /workspace/fix-1017/prev/nfl-margin-freq.txt.
  *
  * ASSUMED safeguard, not a fit: when the PMF is on, |cover − plain normal
  * with explicit push| ≤ 0.03, and ≤ 0.009 once the line is at least 10
@@ -172,6 +183,123 @@ function keyMassPmfOn() {
 
 function integerLine(line) {
   return Math.abs(line - Math.round(line)) < 1e-6;
+}
+
+/**
+ * FITTED NFL finals, 2022–2025, nfl-hist/{2022,2023,2024,2025}.json.
+ * Every row with numeric homeScore and awayScore. seasonType 2 (regular,
+ * 1087) and 3 (playoffs, 52). n = 1139. No preseason. 0 missing scores.
+ * |margin| counts are k = 0..21. The k = 0 count is the ties.
+ * The moneyline uses the raw tie rate. It is not shrunk, and it does not
+ * move with the model mean: a blowout still carries this unconditional
+ * frequency. Wilson 95% uses z = 1.959963984540054 (MATH).
+ */
+const NFL_FINALS_N = 1139;
+const NFL_TIE_COUNT = 3;
+const NFL_ABS_MARGIN_COUNTS = Object.freeze([
+  3, 61, 57, 175, 61, 53, 76, 92, 49, 18, 49,
+  14, 22, 26, 52, 15, 23, 49, 26, 14, 19, 23,
+]);
+/** FITTED sum of (home + away) on the same 1139 games. Mean = sum / n. */
+const NFL_TOTAL_SUM = 51201;
+/**
+ * FITTED exact-total counts on those games. A missing key was not observed.
+ * Far keys stay here so the frequency file can list them. The push
+ * multiplier ignores a key whose reference bin expects under one game.
+ */
+const NFL_TOTAL_COUNTS = Object.freeze({
+  3: 1, 6: 1, 9: 2, 13: 2, 16: 6, 17: 6, 18: 1, 19: 10,
+  20: 2, 21: 4, 22: 7, 23: 9, 24: 9, 25: 9, 26: 17, 27: 18, 28: 8, 29: 19,
+  30: 28, 31: 15, 32: 17, 33: 34, 34: 28, 35: 24, 36: 32, 37: 47, 38: 23, 39: 26,
+  40: 35, 41: 43, 42: 24, 43: 46, 44: 42, 45: 29, 46: 28, 47: 38, 48: 35, 49: 28,
+  50: 21, 51: 46, 52: 23, 53: 15, 54: 26, 55: 16, 56: 9, 57: 27, 58: 26, 59: 18,
+  60: 16, 61: 16, 62: 8, 63: 13, 64: 5, 65: 15, 66: 12, 67: 3, 68: 10, 69: 3,
+  70: 2, 71: 8, 72: 2, 73: 8, 74: 6, 75: 5, 76: 5, 77: 3, 78: 4, 79: 2,
+  80: 4, 81: 1, 82: 2, 84: 1, 86: 1, 89: 1, 90: 2, 93: 1,
+});
+/**
+ * ASSUMED pseudo-count. Same prior-games scale as the NFL margin rating
+ * k (NFL_PRIOR_K = 16). Not a log-loss fit, and not tuned to a conditional
+ * push study. At n = 1139 the shrink weight is 16/1155.
+ */
+const NFL_PUSH_PSEUDO = 16;
+/** MATH. Standard normal 97.5% quantile for a Wilson 95% interval. */
+const WILSON_Z95 = 1.959963984540054;
+
+function wilsonInterval(count, n, z = WILSON_Z95) {
+  const nn = Number(n);
+  const c = Number(count);
+  if (!(nn > 0) || !Number.isFinite(c) || c < 0) return null;
+  const phat = c / nn;
+  const z2 = z * z;
+  const den = 1 + z2 / nn;
+  const center = (phat + z2 / (2 * nn)) / den;
+  const half = z * Math.sqrt((phat * (1 - phat)) / nn + z2 / (4 * nn * nn)) / den;
+  return { p: phat, lo: center - half, hi: center + half, center };
+}
+
+const NFL_TIE_WILSON = wilsonInterval(NFL_TIE_COUNT, NFL_FINALS_N);
+
+/**
+ * ASSUMED tail guard. A reference bin that expects under one game
+ * (pi * n < 1) stays on the normal atom. An unseen integer (no count)
+ * also stays on the normal atom: the empty-bin shrink alpha/(n+alpha)
+ * would crush a conditional push when the model mean sits there.
+ */
+function shrunkPushMult(count, pi, n) {
+  if (count == null || !Number.isFinite(count)) return 1;
+  if (!(pi > 0) || !(n > 0) || pi * n < 1) return 1;
+  const fHat = (count + NFL_PUSH_PSEUDO * pi) / (n + NFL_PUSH_PSEUDO);
+  return fHat / pi;
+}
+
+function capPush(p) {
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  // ASSUMED. Keeps pWin and pLoss positive. Fitted multipliers near the
+  // game SD peak near 2.6, so an at-the-number push is about 0.08.
+  if (p > 0.5) return 0.5;
+  return p;
+}
+
+/**
+ * Two-sided normal bin of |margin| = k at mean 0. Signs are pooled, so
+ * the reference mean is 0, not the sample home-margin mean.
+ * Sigma is the game SD, frozen so a rating-error SD does not rewrite it.
+ */
+function nflAbsMarginPi(k) {
+  const sd = SPORT_SPREAD_STD.NFL;
+  const ak = Math.abs(k);
+  const pos = normalBin(0, sd, ak);
+  if (ak === 0) return pos;
+  return pos + normalBin(0, sd, -ak);
+}
+
+function nflMarginPushMult(absK) {
+  const k = Math.abs(Math.round(absK));
+  if (k > 21 || k >= NFL_ABS_MARGIN_COUNTS.length) return 1;
+  return shrunkPushMult(NFL_ABS_MARGIN_COUNTS[k], nflAbsMarginPi(k), NFL_FINALS_N);
+}
+
+/**
+ * P(margin exactly = signedK) around `mean`. Multiplier is frozen at the
+ * game SD. `std` only shapes the normal atom under the model mean.
+ */
+function nflSpreadPush(mean, signedK, std) {
+  return capPush(normalBin(mean, std, signedK) * nflMarginPushMult(signedK));
+}
+
+function nflTotalPi(k) {
+  return normalBin(NFL_TOTAL_SUM / NFL_FINALS_N, SPORT_TOTAL_STD.NFL, k);
+}
+
+function nflTotalPushMult(totalK) {
+  const k = Math.round(totalK);
+  if (!Object.prototype.hasOwnProperty.call(NFL_TOTAL_COUNTS, k)) return 1;
+  return shrunkPushMult(NFL_TOTAL_COUNTS[k], nflTotalPi(k), NFL_FINALS_N);
+}
+
+function nflTotalPush(mean, totalK, std) {
+  return capPush(normalBin(mean, std, totalK) * nflTotalPushMult(totalK));
 }
 
 /** MATH. exp(λk + βk²) tilt so the integer PMF has the input mean and SD. */
@@ -504,7 +632,11 @@ function probEq(masses, k) {
   return binProb(masses, k);
 }
 
-/** Plain normal with an explicit push on an integer margin. NCAAF 0 splits. */
+/**
+ * Plain normal conditional cover, plus an explicit integer push.
+ * NCAAF line 0 splits in overtime (no push). NFL integer push is the
+ * empirical margin mass. Other sports keep the normal atom.
+ */
 function plainSpreadParts(mean, line, sport, std) {
   const thresh = -line;
   const integer = integerLine(line);
@@ -518,12 +650,18 @@ function plainSpreadParts(mean, line, sport, std) {
     return { pWin, pPush: 0, cover: pWin };
   }
   const k = Math.round(thresh);
-  const pPush = normalBin(mean, std, k);
-  const pWin = 1 - normCdfOpen((k + 0.5 - mean) / std);
-  return { pWin, pPush, cover: unclampedCover(pWin, pPush) };
+  const atom = normalBin(mean, std, k);
+  const tail = 1 - normCdfOpen((k + 0.5 - mean) / std);
+  const cover = unclampedCover(tail, atom);
+  if (sport !== 'NFL') return { pWin: tail, pPush: atom, cover };
+  const pPush = nflSpreadPush(mean, k, std);
+  return { pWin: cover * (1 - pPush), pPush, cover };
 }
 
-/** NFL ties push. NCAAF overtime splits the tie, so the push is not a push. */
+/**
+ * NFL ties push at the raw empirical rate. NCAAF overtime splits the tie.
+ * The conditional cover stays the normal cover given no tie.
+ */
 function plainMlParts(mean, sport, std) {
   const p0 = normalBin(mean, std, 0);
   const pPos = 1 - normCdfOpen((0.5 - mean) / std);
@@ -531,7 +669,10 @@ function plainMlParts(mean, sport, std) {
     const pWin = pPos + 0.5 * p0;
     return { pWin, pPush: 0, cover: pWin };
   }
-  return { pWin: pPos, pPush: p0, cover: unclampedCover(pPos, p0) };
+  if (sport !== 'NFL') return { pWin: pPos, pPush: p0, cover: unclampedCover(pPos, p0) };
+  const cover = unclampedCover(pPos, p0);
+  const pPush = NFL_TIE_COUNT / NFL_FINALS_N;
+  return { pWin: cover * (1 - pPush), pPush, cover };
 }
 
 function plainTotalParts(mean, line, side, std) {
@@ -543,18 +684,21 @@ function plainTotalParts(mean, line, side, std) {
     return { pWin, pPush: 0, cover: pWin };
   }
   const k = Math.round(line);
-  const pPush = normalBin(mean, std, k);
+  const atom = normalBin(mean, std, k);
   const pOver = 1 - normCdfOpen((k + 0.5 - mean) / std);
   const pUnder = normCdfOpen((k - 0.5 - mean) / std);
-  const pWin = over ? pOver : pUnder;
-  return { pWin, pPush, cover: unclampedCover(pWin, pPush) };
+  const tail = over ? pOver : pUnder;
+  const cover = unclampedCover(tail, atom);
+  const pPush = nflTotalPush(mean, k, std);
+  return { pWin: cover * (1 - pPush), pPush, cover };
 }
 
 /**
  * Side margin and the side's points. Cover when margin + line > 0.
  * Integer line pushes at margin = −line. Half points do not push.
  * NCAAF pick'em (line 0) does not push: overtime produces a winner.
- * Default is the plain normal. OMEGA_KEY_MASS=1 uses the matched PMF.
+ * Default cover is the plain normal conditional. NFL integer push is
+ * nflSpreadPush. OMEGA_KEY_MASS=1 uses the matched PMF.
  */
 function spreadQuote(modelMargin, line, sport, std) {
   if (sport !== 'NFL' && sport !== 'NCAAF') return null;
@@ -579,9 +723,9 @@ function spreadQuote(modelMargin, line, sport, std) {
 }
 
 /**
- * NFL moneyline pushes on a tie. NCAAF splits the tie (overtime).
- * coverProb is the conditional win for NFL and the full win for NCAAF.
- * Default is the plain normal. OMEGA_KEY_MASS=1 uses the matched PMF.
+ * NFL moneyline pushes on a tie at the raw empirical rate. NCAAF splits
+ * the tie (overtime). coverProb is the conditional win for NFL and the
+ * full win for NCAAF. OMEGA_KEY_MASS=1 uses the matched PMF.
  */
 function mlQuote(modelMargin, sport, std) {
   if (!Number.isFinite(modelMargin)) return null;
@@ -605,7 +749,7 @@ function totalMasses(mean, std) {
   return matchedMasses('t', mean, std, NFL_TOTAL_MULT, TOTAL_LO, TOTAL_HI);
 }
 
-/** NFL total only. Over wins when total > line. Integer line pushes on total = line. */
+/** NFL total only. Over wins when total > line. Integer push is nflTotalPush. */
 function totalQuote(modelTotal, line, side, sport, std) {
   if (sport !== 'NFL') return null;
   if (!Number.isFinite(modelTotal) || !Number.isFinite(line)) return null;
@@ -656,6 +800,17 @@ module.exports = {
   NCAAF_MARGIN_TARGETS,
   NFL_TOTAL_MULT,
   NFL_TOTAL_PERCENT,
+  NFL_FINALS_N,
+  NFL_TIE_COUNT,
+  NFL_ABS_MARGIN_COUNTS,
+  NFL_TOTAL_SUM,
+  NFL_TOTAL_COUNTS,
+  NFL_PUSH_PSEUDO,
+  NFL_TIE_WILSON,
+  nflSpreadPush,
+  nflTotalPush,
+  nflMarginPushMult,
+  nflTotalPushMult,
   keyMassReady,
   spreadQuote,
   totalQuote,

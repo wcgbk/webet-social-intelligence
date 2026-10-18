@@ -880,7 +880,13 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     goalie: soft.goalie,
     winPct: soft.winPct,
   };
-  const nGames = ratingGamesN(nhlGames(homeSt), nhlGames(awaySt));
+  // nhlGames() is 0 for unknown and for a real 0-0. known keeps them apart.
+  const homeGpInfo = nhlGamesInfo(homeSt);
+  const awayGpInfo = nhlGamesInfo(awaySt);
+  const nGames = ratingGamesN(
+    homeGpInfo.known ? homeGpInfo.gp : undefined,
+    awayGpInfo.known ? awayGpInfo.gp : undefined,
+  );
   const out = [];
 
   {

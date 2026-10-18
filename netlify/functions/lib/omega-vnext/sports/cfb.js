@@ -17,7 +17,7 @@
  */
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
-  spreadDetail, totalDetail, mlDetail, gamesPlayed,
+  spreadDetail, totalDetail, mlDetail, gamesPlayedInfo,
   sharpMarketLine, footballPointState, footballAudit, pricedFootball, pureFootballCover, pureForecastPoint,
 } = require('./_common');
 const { footballProjection, applyEngineStack, blendNcaafTempo } = require('./epa');
@@ -153,10 +153,13 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const fcs = isFcsGame(home, away);
   const spreadStd = fcs ? SPORT_SPREAD_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
   const totalStd = fcs ? SPORT_TOTAL_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
-  // Name key only. A miss stays unknown (n = 6, full rating-error base).
+  // Name key only. A miss stays undefined so rating SD uses N0, not n = 0.
+  // A known 0-0 is n = 0 (full base). gamesPlayed() returns 0 for unknown too.
   // Do not call rowByIdentity here: that logs a second miss for the same club.
-  const homeGp = standings && standings[home] ? gamesPlayed(standings[home]) : 0;
-  const awayGp = standings && standings[away] ? gamesPlayed(standings[away]) : 0;
+  const homeInfo = standings && standings[home] ? gamesPlayedInfo(standings[home]) : null;
+  const awayInfo = standings && standings[away] ? gamesPlayedInfo(standings[away]) : null;
+  const homeGp = homeInfo && homeInfo.known ? homeInfo.gp : undefined;
+  const awayGp = awayInfo && awayInfo.known ? awayInfo.gp : undefined;
   const nGames = ratingGamesN(homeGp, awayGp);
   const nOpt = nGames != null ? { n: nGames } : {};
   const pts = footballPointState(

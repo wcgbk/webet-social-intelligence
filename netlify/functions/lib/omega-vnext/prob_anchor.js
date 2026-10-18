@@ -133,15 +133,20 @@ function normalQuantile(p) {
 /**
  * SE of the anchored p. w * phi(z) * SD_rating / SD_eff.
  * z is the standard normal quantile of the model probability.
- * Missing n uses 6. A zero rating SD (NBA) returns 0.
+ * A finite ratingN or nGames >= 0 is passed through. n = 0 is zero games.
+ * Missing, blank, NaN, or negative n stays undefined so ratingErrorSd
+ * applies RATING_ERROR_N0. A zero rating SD (NBA) returns 0.
  */
 function ratingSeOf(row) {
   if (!row) return 0;
   const market = row.market || row.betType;
   const kind = /total/i.test(String(market || '')) ? 'total' : 'margin';
   const nRaw = row.ratingN != null ? row.ratingN : row.nGames;
-  const n = Number(nRaw);
-  const usedN = Number.isFinite(n) && n > 0 ? n : 6;
+  let usedN;
+  if (nRaw != null && nRaw !== '') {
+    const n = Number(nRaw);
+    if (Number.isFinite(n) && n >= 0) usedN = n;
+  }
   const sdR = ratingErrorSd(row.sport, kind, usedN);
   const sdE = effectiveSd(row.sport, kind, usedN);
   if (!(sdR > 0) || !(sdE > 0)) return 0;

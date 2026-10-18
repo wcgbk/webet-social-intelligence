@@ -21,7 +21,7 @@ function withEnv(value, fn) {
   }
 }
 
-/** Plain normal with an explicit integer push. Same atoms as key_mass. */
+/** Conditional normal cover. This pPush is the normal atom; the default quote push is empirical. */
 function plainSpread(mean, line, std) {
   const thresh = -line;
   const integer = Math.abs(line - Math.round(line)) < 1e-6;
@@ -62,7 +62,8 @@ withEnv(null, () => {
   near(ari.coverProb, plain, 1e-12, 'default ARI +12.5 is the plain normal');
   assert.strictEqual(ari.pPush, 0, 'half-point default has no push');
   const integer = km.spreadQuote(-3.62, 3, 'NFL', 13.9);
-  near(integer.pPush, km.normalBin(-3.62, 13.9, -3), 1e-12, 'default integer push is the normal atom');
+  // 2026-10-18: default integer push is the empirical margin mass around the mean.
+  near(integer.pPush, km.nflSpreadPush(-3.62, -3, 13.9), 1e-12, 'default integer push is the empirical key mass');
   assert.strictEqual(km.spreadQuote(-3.62, 3.5, 'NFL', 13.9).pPush, 0);
 });
 

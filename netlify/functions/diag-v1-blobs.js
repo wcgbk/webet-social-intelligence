@@ -5,7 +5,7 @@ exports.handler = async () => {
   const H={Authorization:`Bearer ${token}`};
   for (const store of ['edge-picks-omega','edge-picks-v1lock']) {
     out[store]={};
-    for (const prefix of ['omega-line','omega-ops/capture','picks-2026-10','picks-v1','latest']) {
+    for (const prefix of ['omega-line-path/2026-10','omega-line-snap-2026-10-18','omega-line-path/2026-10-18','picks-2026-10-18']) {
       try { const r=await fetch(`https://api.netlify.com/api/v1/blobs/${site}/${store}?prefix=${encodeURIComponent(prefix)}`, {headers:H}); const t=await r.text(); out[store][prefix]=r.status+':'+t.slice(0,1200); } catch(e){ out[store][prefix]='ERR:'+e.message; }
     }
     // directories form

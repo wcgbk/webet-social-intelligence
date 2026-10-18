@@ -769,11 +769,11 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   }, { modelVersion: MODEL_VERSION });
   assert.strictEqual(highEdgeLowUnits.rating, 'aplus');
   assert.strictEqual(highEdgeLowUnits.qualityGrade, 'aplus');
-  // 2026-10-18: quarter Kelly at p=0.53 is 0.25u, so the row is a labelled lean at 0.5u. The letter stays the edge.
+  // 2026-10-18: quarter Kelly at p=0.53 is 0.25u, so the row is a labelled lean at 0.25u. The letter stays the edge.
   assert.strictEqual(select.quarterKellyUnits(0.53, -110), 0.25);
   assert.strictEqual(highEdgeLowUnits.tier, 'lean');
   assert.strictEqual(highEdgeLowUnits.label, 'lean');
-  assert.strictEqual(highEdgeLowUnits.units, '0.5u');
+  assert.strictEqual(highEdgeLowUnits.units, '0.25u');
   assert.notStrictEqual(highEdgeLowUnits.units, '1.5u');
   assert.notStrictEqual(highEdgeLowUnits.units, '5u');
   assert.strictEqual(typeof highEdgeLowUnits.confidence, 'number');

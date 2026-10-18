@@ -333,6 +333,96 @@ function passesLeanFill(c) {
   return qualifiesAsLean(c);
 }
 
+/** True when the row is the 0u listing, not a bet. */
+function isNoStakeRow(row) {
+  if (!row) return false;
+  if (row.noStake === true) return true;
+  const label = String(row.label == null ? '' : row.label).trim().toLowerCase();
+  const tier = String(row.tier == null ? '' : row.tier).trim().toLowerCase();
+  return label === 'no stake' || tier === 'no stake';
+}
+
+/**
+ * Lean stake on the 0.25u grid inside [0.25, LEAN_MAX_UNITS].
+ * ASSUMED publish rule, not a fitted stake. The 0.25 step is the existing
+ * quarter-Kelly grid. The ceiling is LEAN_MAX_UNITS (0.5). A raw Kelly of
+ * 0.3u clamps into the band and rounds to 0.25u. Caller passes 0 only for
+ * a positive-EV lean whose quarter Kelly itself rounded to 0; that still
+ * prints 0.25u. EV <= 0 does not call this.
+ */
+function leanStakeUnits(kellyUnits) {
+  const k = Number(kellyUnits);
+  const base = Number.isFinite(k) && k > 0 ? k : 0;
+  const cap = Number(LEAN_MAX_UNITS);
+  const maxU = Number.isFinite(cap) && cap > 0 ? cap : 0.5;
+  const clamped = Math.min(maxU, Math.max(0.25, base));
+  return Math.round(clamped * 4) / 4;
+}
+
+function americanOdds(c) {
+  const o = Number(String(c && c.odds == null ? '' : c.odds).replace(/[^0-9.+-]/g, ''));
+  return Number.isFinite(o) && o !== 0 ? o : null;
+}
+
+/** Started, live, or already in progress. A missing clock is not a start. */
+function gameHasStarted(c) {
+  if (!c || !isPregameRow(c)) return true;
+  if (c.started === true || c.gameStarted === true) return true;
+  const st = String(c.status || c.gameStatus || '').trim().toLowerCase();
+  if (st === 'started' || st === 'in-progress' || st === 'inprogress' || st === 'final' || st === 'live') return true;
+  const reason = String(c.rejectReason || c.reason || '').trim().toLowerCase();
+  return reason === 'in-progress-or-started' || reason === 'live-in-play';
+}
+
+/**
+ * Short-card structure. Pregame, inside the -250/+250 band, at or under
+ * EV_CAP_ALL, and a retail line (or a synthetic with no ladder).
+ * A bias-margin-extreme game stays off. A reject reason other than a
+ * floor or edge miss stays off, so a started game, a bad team, or a
+ * stale quote cannot fill. Rows with no reject reason are fixtures.
+ */
+function passesShortCardStructure(c) {
+  if (!c || c.marginBiasExtreme) return false;
+  if (gameHasStarted(c)) return false;
+  const reason = c.rejectReason || c.reason;
+  if (reason) {
+    const name = String(reason);
+    if (name !== 'ev-floor' && name !== 'edge-floor' && name !== 'edge-floor-se' && name !== 'nonpositive-edge') {
+      return false;
+    }
+  }
+  const price = americanOdds(c);
+  if (price == null) return false;
+  const min = Number(config.GATES.minAmericanOdds);
+  const max = Number(config.GATES.maxAmericanOdds);
+  if (Number.isFinite(min) && price < min) return false;
+  if (Number.isFinite(max) && price > max) return false;
+  const ev = Number(c.ev);
+  if (!Number.isFinite(ev)) return false;
+  const cap = Number(config.EV_CAP_ALL);
+  if (Number.isFinite(cap) && ev > cap + 1e-12) return false;
+  if (!hasRetailLine(c)) return false;
+  return true;
+}
+
+/**
+ * Positive anchored EV that may fill a short card.
+ * ASSUMED 2026-10-18: thin positive anchored EV is still a lean at the
+ * 0.25u grid floor. The noise rule (edge under 1% and EV under 1% is
+ * not a lean) does not apply on this path. Stake is leanStakeUnits.
+ */
+function eligibleShortCardPositive(c) {
+  if (!passesShortCardStructure(c)) return false;
+  return Number(c.ev) > 0;
+}
+
+/** EV <= 0 listing. Off when SHORT_CARD_NOSTAKE_FILL is false. */
+function eligibleShortCardNoStake(c) {
+  if (config.SHORT_CARD_NOSTAKE_FILL === false) return false;
+  if (!passesShortCardStructure(c)) return false;
+  return Number(c.ev) <= 0;
+}
+
 /** Empty card may say No Qualifying Plays only when no pregame lean remains. */
 function shouldPublishNoPlays(picks, leanPool) {
   if (Array.isArray(picks) && picks.length > 0) return false;
@@ -375,13 +465,15 @@ function eligiblePairedFill(c) {
  * Top probability-edge rows, up to MAX_STRAIGHTS. Stake EV breaks a tie.
  * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
  * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
- * slots fill from positive-EV leans. A non-positive EV stays off the card.
- * If the card is still short of 3, the open slots fill from same-line
- * Pinnacle pairs that missed the 1% tier, ranked by EV vs Pinnacle.
- * One game. A lean is tier 'lean' and the paired fill is flat
- * LEAN_MAX_UNITS. ev-stale is not a fill.
+ * slots fill from positive-EV leans. The noise rule still applies there.
+ * Same-line Pinnacle pairs that missed the 1% tier fill next.
+ * If the card is still short of maxN, the short-card pass ranks every
+ * remaining row by anchored stake EV. Positive EV (including a thin EV
+ * the noise rule would skip) is a lean. EV <= 0 is a 0u 'no stake' row
+ * when SHORT_CARD_NOSTAKE_FILL is on. One game. A started game is not a
+ * fill. ev-stale is not a fill.
  */
-function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
+function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool, restPool) {
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
   const usedGames = new Set();
   const usedSides = new Set();
@@ -392,26 +484,67 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({ ...c, tier: 'floor', _score: finiteEv(c) });
   }
-  if (config.LEAN_PAD !== true || out.length >= maxN) return out;
-  const leans = [...(leanPool || [])].sort(compareByEv);
-  for (const c of leans) {
-    if (out.length >= maxN) break;
-    if (!passesLeanFill(c)) continue;
-    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
-    out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
+  if (config.LEAN_PAD === true && out.length < maxN) {
+    const leans = [...(leanPool || [])].sort(compareByEv);
+    for (const c of leans) {
+      if (out.length >= maxN) break;
+      if (!passesLeanFill(c)) continue;
+      if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+      out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
+    }
+    const paired = [...(pairedPool || [])].sort(compareByEv);
+    for (const c of paired) {
+      if (out.length >= maxN) break;
+      if (!eligiblePairedFill(c)) continue;
+      if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+      out.push({
+        ...c,
+        tier: 'lean',
+        label: 'lean',
+        pairedFill: true,
+        leanReason: 'paired-ev',
+        _score: finiteEv(c),
+      });
+    }
   }
   if (out.length >= maxN) return out;
-  const paired = [...(pairedPool || [])].sort(compareByEv);
-  for (const c of paired) {
+  const rest = [];
+  const seen = new Set(out.map((c) => sideKey(c)));
+  for (const pool of [yesPool, leanPool, pairedPool, restPool]) {
+    for (const c of pool || []) {
+      if (!c) continue;
+      const id = sideKey(c);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      rest.push(c);
+    }
+  }
+  rest.sort(compareByEv);
+  for (const c of rest) {
     if (out.length >= maxN) break;
-    if (!eligiblePairedFill(c)) continue;
+    if (!eligibleShortCardPositive(c)) continue;
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({
       ...c,
       tier: 'lean',
       label: 'lean',
-      pairedFill: true,
-      leanReason: 'paired-ev',
+      shortCardFill: true,
+      leanReason: c.leanReason || 'short-card-ev',
+      _score: finiteEv(c),
+    });
+  }
+  if (out.length >= maxN) return out;
+  for (const c of rest) {
+    if (out.length >= maxN) break;
+    if (!eligibleShortCardNoStake(c)) continue;
+    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+    out.push({
+      ...c,
+      tier: 'no stake',
+      label: 'no stake',
+      noStake: true,
+      shortCardFill: true,
+      leanReason: 'no-stake',
       _score: finiteEv(c),
     });
   }
@@ -562,22 +695,27 @@ function toPickObject(c, opts = {}) {
   const qualityClv = gradeOnEdge ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
-  let tier = c && c.tier === 'lean' ? 'lean' : 'floor';
-  // Quarter Kelly on the final p. The letter above is a label only.
-  // ASSUMED publish rule, not a fitted stake. The 0.5u figure is the
-  // existing LEAN_MAX_UNITS. It is a floor only for a row labelled lean
-  // (10/10 never-block: a lean prints at that minimum even when Kelly is
-  // smaller) and Kelly does not raise a lean above it. A graded row keeps
-  // the Kelly stake and is never raised to 0.5u. If that stake rounds
-  // under 0.5u, the row is a lean at 0.5u and is labelled lean.
+  let tier = 'floor';
+  if (c && isNoStakeRow(c)) tier = 'no stake';
+  else if (c && c.tier === 'lean') tier = 'lean';
+  // Quarter Kelly on the anchored p_final. The letter above is a label only.
+  // ASSUMED publish rule, not a fitted stake. A positive-EV lean is
+  // min(max(Kelly, 0.25u), LEAN_MAX_UNITS 0.5u) on the 0.25u grid.
+  // Kelly does not raise a lean above 0.5u. A lean whose Kelly is 0
+  // because EV <= 0 at the bet price is 0u and labelled 'no stake':
+  // not a bet. A graded row keeps its Kelly stake. If that stake rounds
+  // under 0.5u and EV is positive, the row is a lean at max(Kelly, 0.25)
+  // capped at 0.5u.
   let units = quarterKellyUnits(c.coverProb, c.odds, c.pPush);
-  const leanFloor = Number(LEAN_MAX_UNITS);
-  const leanU = Number.isFinite(leanFloor) ? leanFloor : 0.5;
-  if (tier === 'lean') {
-    if (units > 0 || positiveKellyEv(c)) units = leanU;
-  } else if (units + 1e-12 < 0.5 && positiveKellyEv(c)) {
+  const betPositive = positiveKellyEv(c);
+  if (tier === 'no stake' || (tier === 'lean' && !betPositive)) {
+    tier = 'no stake';
+    units = 0;
+  } else if (tier === 'lean') {
+    units = leanStakeUnits(units);
+  } else if (units + 1e-12 < 0.5 && betPositive) {
     tier = 'lean';
-    units = leanU;
+    units = leanStakeUnits(units);
   }
   const evNum = printed.evNum;
   const evStr = printed.evStr;
@@ -639,7 +777,8 @@ function toPickObject(c, opts = {}) {
     ...(c.executionBook ? { executionBook: c.executionBook } : {}),
     line: c.line != null ? c.line : null,
     tier,
-    label: tier === 'lean' ? 'lean' : 'floor',
+    label: tier === 'no stake' ? 'no stake' : (tier === 'lean' ? 'lean' : 'floor'),
+    ...(tier === 'no stake' ? { noStake: true, excludeFromKpi: true } : {}),
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,
     steamToward: !!c.steamToward,
@@ -726,6 +865,7 @@ function applyDailyUnitCap(picks, parlayLegs) {
     }
   }
 
+  // A 'no stake' row is 0u. parseU('0u') is 0, so it does not spend the budget.
   const straightTotalOf = () => out.reduce((acc, p) => acc + parseU(p.units), 0);
   const parlayTotalOf = () => parlays.reduce((acc, pl) => acc + parseU(pl.units), 0);
   const totalOf = () => straightTotalOf() + parlayTotalOf();
@@ -853,6 +993,11 @@ module.exports = {
   qualifiesAsLean,
   passesLeanFill,
   eligiblePairedFill,
+  isNoStakeRow,
+  leanStakeUnits,
+  passesShortCardStructure,
+  eligibleShortCardPositive,
+  eligibleShortCardNoStake,
   clearsOnePctTier,
   shouldPublishNoPlays,
   straightCardLabel,

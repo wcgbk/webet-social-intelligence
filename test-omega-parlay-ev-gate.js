@@ -251,11 +251,13 @@ assert.strictEqual(qualifiesAsLean(leanEdgeThin), true);
 const leanPrintsZero = { ...leanOk, edgePct: 0.0002, ev: 0.0004, matchup: 'M @ N', side: 'N' };
 assert.strictEqual(qualifiesAsLean(leanPrintsZero), false);
 const picked = selectStraights([mainOk], 3, [leanEvZero, leanEdgeThin]);
-assert.strictEqual(picked.length, 2);
-assert.deepStrictEqual(picked.map((row) => row.tier), ['floor', 'lean']);
-assert.deepStrictEqual(picked.map((row) => row.side), ['B', 'L']);
+assert.strictEqual(picked.length, 3); // 2026-10-18: a short card lists EV <= 0 as 'no stake' when the flag is on
+assert.deepStrictEqual(picked.map((row) => row.tier), ['floor', 'lean', 'no stake']);
+assert.deepStrictEqual(picked.map((row) => row.side), ['B', 'L', 'J']);
 const withLean = selectStraights([], 3, [leanOk, leanEvZero]);
-assert.strictEqual(withLean.length, 1);
-assert.ok(withLean.every((row) => row.tier === 'lean'));
+assert.strictEqual(withLean.length, 2); // 2026-10-18: the zero-EV row is a 0u listing, not a second staked lean
+assert.strictEqual(withLean[0].tier, 'lean');
+assert.strictEqual(withLean[1].tier, 'no stake');
+assert.strictEqual(withLean[1].label, 'no stake');
 
 console.log('PASS test-omega-parlay-ev-gate');

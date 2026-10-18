@@ -9,7 +9,7 @@ const {
   normalizeRatingKey, ratingLetter, formatGameTimeET,
   stakeDollars, toWinDollars,
 } = require('./odds_math');
-const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge, printedEdgeEv, publishedParlayUnits } = require('./select');
+const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge, printedEdgeEv, publishedParlayUnits, isNoStakeRow } = require('./select');
 const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
@@ -1168,7 +1168,8 @@ function priceCardLeg(row) {
  * margin check already banned. Rank is probability edge.
  */
 function parlayLegQualifies(leg) {
-  if (!leg || leg.marginBiasExtreme) return false;
+  // A 0u 'no stake' listing is not a bet and is never a parlay leg.
+  if (!leg || leg.marginBiasExtreme || isNoStakeRow(leg)) return false;
   const cover = Number(leg.coverProb);
   if (!(Number.isFinite(cover) && cover + 1e-12 >= PARLAY_MIN_COVER)) return false;
   const ev = Number(leg.ev);
@@ -1189,7 +1190,7 @@ function twoTeamFromPublished(rows) {
   const games = new Set();
   const maxEV = Number(EV_CAP_ALL);
   for (const row of rows) {
-    if (row && row.marginBiasExtreme) return null;
+    if (row && (row.marginBiasExtreme || isNoStakeRow(row))) return null;
     const leg = priceCardLeg(row);
     if (!leg || leg.marginBiasExtreme) return null;
     const ev = Number(leg.ev);
@@ -1314,7 +1315,9 @@ function ticketFromLegs(chosen, rows, opts) {
  * still publishes and is labeled. One straight is no parlay.
  */
 function parlayFromStraights(straights, opts = {}) {
-  const rows = (straights || []).filter(Boolean);
+  // Drop 0u 'no stake' rows before the 2-team vs 3-leg choice. They are
+  // not bets, so they must not turn two real straights into a failed 3-leg.
+  const rows = (straights || []).filter((row) => row && !isNoStakeRow(row));
   const pool = (opts && opts.pool) || [];
   if (!rows.length && !(pool && pool.length)) return [];
   const anchorOn = require('./config').marketAnchorOn();
@@ -1329,8 +1332,9 @@ function parlayFromStraights(straights, opts = {}) {
   const merged = [];
   const seenId = new Set();
   for (const row of pool.concat(rows)) {
+    if (isNoStakeRow(row)) continue;
     const priced = priceCardLeg(row);
-    if (!priced) continue;
+    if (!priced || isNoStakeRow(priced)) continue;
     const id = parlaySideId(priced);
     if (seenId.has(id)) continue;
     seenId.add(id);

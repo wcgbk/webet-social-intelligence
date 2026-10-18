@@ -415,15 +415,26 @@ Object.defineProperty(GATES, 'maxEV', { enumerable: true, get() { return marketA
  * Lean fill under the 2% main floor. A positive-EV fill needs stake EV > 0
  * at DraftKings or Hard Rock and a pregame board. Edge is not required.
  * LEAN_MIN_EDGE stays exported for older diagnostics. LEAN_MIN_EV remains
- * the legacy parlay-pool bar. Stake is flat LEAN_MAX_UNITS. Every published
- * parlay on a lean-only card is LEAN_PARLAY_UNITS. A full card (any straight
- * graded A- or better) publishes PARLAY_FIXED_UNITS. The last-resort fill
- * may use a non-positive EV that already cleared the structural gates.
+ * the legacy parlay-pool bar. A positive-EV lean stake is
+ * min(max(quarter Kelly, 0.25u), LEAN_MAX_UNITS) on the 0.25u grid
+ * (ASSUMED publish rule; the grid and the 0.5u cap already existed).
+ * EV <= 0 at the bet price is 0u labelled 'no stake', not a bet.
+ * Every published parlay on a lean-only card is LEAN_PARLAY_UNITS. A full
+ * card (any straight graded A- or better) publishes PARLAY_FIXED_UNITS.
+ * The last-resort fill may list a non-positive EV that already cleared
+ * the structural gates, at 0u when SHORT_CARD_NOSTAKE_FILL is on.
  */
 const LEAN_MIN_EV = 0.015;
 const LEAN_MIN_EDGE = 0.015;
 const LEAN_MAX_UNITS = 0.5;
 const LEAN_PARLAY_UNITS = 0.25;
+/**
+ * ASSUMED 2026-10-18. Default true. Not fitted.
+ * When the straight card is still short of 3 after positive-EV fills,
+ * list the best remaining pregame side at 0u with label 'no stake'.
+ * It is not a bet. Set false to leave that slot empty.
+ */
+const SHORT_CARD_NOSTAKE_FILL = true;
 /** Parlay legs only. Straights have no coverProb floor. */
 const PARLAY_MIN_COVER = 0.45;
 
@@ -1340,6 +1351,7 @@ module.exports = {
   LEAN_MIN_EDGE,
   LEAN_MAX_UNITS,
   LEAN_PARLAY_UNITS,
+  SHORT_CARD_NOSTAKE_FILL,
   PARLAY_MIN_COVER,
   QA_HARDFAIL,
   QB_INJURY,

@@ -113,7 +113,7 @@ function stake(pick) {
   assert.strictEqual(select.quarterKellyUnits(0.527, -110), 0.25);
   assert.strictEqual(under.tier, 'lean');
   assert.strictEqual(under.label, 'lean');
-  assert.strictEqual(under.units, '0.5u');
+  assert.strictEqual(under.units, '0.25u'); // 2026-10-18: Kelly 0.25u lean publishes 0.25u, not a flat 0.5u
   assert.ok(stake(under) <= stake(atCap));
 }
 

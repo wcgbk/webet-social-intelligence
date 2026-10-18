@@ -35,7 +35,11 @@ function sportAnchored(sport) {
   return Object.prototype.hasOwnProperty.call(table, String(sport || '').toUpperCase());
 }
 
-/** Per sport and market. A bare number in the table applies to every market. */
+/**
+ * Per sport and market. A bare number in the table applies to every market.
+ * 0 is the market. It is not missing, and it must not fall through to a
+ * default (no `w || 0.25`). Null means the sport or market is unanchored.
+ */
 function modelWeightFor(sport, market) {
   const table = MARKET_ANCHOR_MODEL_WEIGHT || {};
   const key = String(sport || '').toUpperCase();
@@ -102,6 +106,7 @@ function ratingSeOf(row) {
   const sdE = effectiveSd(row.sport, kind, usedN);
   if (!(sdR > 0) || !(sdE > 0)) return 0;
   const w = modelWeightFor(row.sport, market);
+  // null is unanchored. 0 is a real weight and returns 0, not NaN.
   if (w == null) return 0;
   const pm = finiteProb(row.modelPureP);
   const p = pm != null ? pm : (finiteProb(row.p_model) != null ? finiteProb(row.p_model) : finiteProb(row.coverProb));
@@ -258,6 +263,7 @@ function applyMarketAnchor(candidates) {
   return rows.map((c) => {
     if (!c) return c;
     const w = modelWeightFor(c.sport, c.market);
+    // 0 still anchors: p_final is the fair. Only null leaves the row alone.
     if (w == null) return c;
     const fromPure = finiteProb(c.modelPureP);
     const pModel = fromPure != null ? fromPure : finiteProb(c.coverProb);

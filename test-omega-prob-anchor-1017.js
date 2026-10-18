@@ -14,9 +14,10 @@ const {
 assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
 assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
 assert.strictEqual(config.marketAnchorOn(), false);
+// 2026-10-18: NFL totals anchor weight is 0 (backtest median), was 0.10.
 assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
   NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
-  NFL: { spread: 0.25, ml: 0.25, total: 0.10 },
+  NFL: { spread: 0.25, ml: 0.25, total: 0 },
   NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
   MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
 });
@@ -137,9 +138,9 @@ const [ncaafOut, nflOut, nbaOut] = applyMarketAnchor([ncaaf, nfl, nba]);
 assert.strictEqual(ncaafOut.anchorFairSource, 'pinnacle');
 assert.strictEqual(ncaafOut.anchorWeight, 0.25);
 assert.strictEqual(nflOut.anchorFairSource, 'pinnacle');
-assert.strictEqual(nflOut.anchorWeight, 0.10);
+assert.strictEqual(nflOut.anchorWeight, 0); // 2026-10-18: NFL totals w=0, so p_final is the fair.
 assert.ok(Math.abs(ncaafOut.coverProb - (0.25 * 0.70 + 0.75 * 0.5)) < 1e-12);
-assert.ok(Math.abs(nflOut.coverProb - (0.10 * 0.70 + 0.90 * 0.5)) < 1e-12);
+assert.ok(Math.abs(nflOut.coverProb - 0.5) < 1e-12);
 assert.strictEqual(nbaOut, nba);
 assert.strictEqual(nbaOut.anchorFairSource, undefined);
 

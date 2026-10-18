@@ -370,12 +370,21 @@ const GATES = {
   rejectAdverseSteam: true,
 };
 /**
- * Market-anchor mode is off. Owner rules (docs/WEBET-MODEL-BRIEF.md, 1 and 5):
- * the published probability is the pure model, and a short card fills to
- * 3 straights plus a 3-leg parlay. OMEGA_MARKET_ANCHOR=1 blended toward
- * Pinnacle, cut max EV to 6%, and disabled lean fill. On 2026-10-15 that
- * published a 0-pick card at 12:07 ET (yes=0, gates ev-stale and
- * no-edge-vs-fair) after the 11:00 ET deadline. The env flag is ignored.
+ * OMEGA_MARKET_ANCHOR is ignored. This switch stays off: it does not blend,
+ * does not cut max EV to 6%, and does not disable lean fill.
+ * The live price is one market anchor on modelPureP (prob_anchor.js):
+ * p_final = w(sport, market) * modelPureP + (1 - w) * fair.
+ * Fair is the Pinnacle power no-vig, else the DraftKings two-way no-vig.
+ * Weights are MARKET_ANCHOR_MODEL_WEIGHT, per sport and market.
+ * NFL totals w = 0 is FITTED as the bootstrap median, not a CI exclusion.
+ * bt_w.py on afterC-rows, 114 NFL total sides, 44 games: log-loss 0.6901
+ * at w=0, 0.6953 at 0.25, 0.7624 at w=1. Median best w is 0.00. The
+ * argmin 95% CI is [0.00, 1.00], and LL(0.25)-LL(0) CI includes 0. The
+ * pure model is worse, so the median is 0: the totals model adds no
+ * information beyond the market. NFL moneyline and spread stay 0.25
+ * (ASSUMED). NCAAF is 0.25/0.25/0.10, NHL and MLB are 0.25, all ASSUMED.
+ * NBA is absent and is not anchored. w = 0 is the market, not a missing
+ * weight and not a fallback to 0.25.
  */
 function marketAnchorOn() {
   return false;
@@ -669,13 +678,15 @@ function effectiveSd(sport, kind, n) {
 
 /**
  * Probability anchor. p = w * modelPureP + (1 - w) * p_fair.
- * w = 1 is the model. w = 0 is the market. Absent sport (NBA) is not anchored.
- * Values are per sport and market (spread, ml, total). ASSUMED, not fitted.
+ * w = 1 is the model. w = 0 is the market, a real weight, not a hole.
+ * Absent sport (NBA) is not anchored. Per sport and market.
+ * NFL totals 0 is FITTED (bootstrap median 0; see marketAnchorOn).
+ * NFL spread and ml 0.25, and every other entry, stay ASSUMED.
  * This is not the marketAnchorOn() K-table. That switch stays off.
  */
 const MARKET_ANCHOR_MODEL_WEIGHT = {
   NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
-  NFL: { spread: 0.25, ml: 0.25, total: 0.10 },
+  NFL: { spread: 0.25, ml: 0.25, total: 0 },
   NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
   MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
 };

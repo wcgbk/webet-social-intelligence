@@ -18,6 +18,8 @@ const PICK_KEEP = [
   'betType', 'coreReasoning', 'commenceTime', 'gameTime', 'edgePct', 'edge', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
   'dataReviewFlag', 'placeabilityFlag', 'p_fair', 'p_model', 'calK', 'label', 'grade', 'riskDollars', 'toWinDollars',
+  // fairSource is anchorFairSource (pinnacle, sharp-books, consensus, a book key, or none).
+  // evAtFair is that same p_fair at the bet price.
   'fairP', 'fairSource', 'evAtFair', 'modelWeight',
 ];
 

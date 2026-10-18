@@ -600,11 +600,12 @@ async function generateOmegaVnext(opts = {}) {
   console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
 
   // Final p = w*modelPureP + (1-w)*fair. Calibrated coverProb does not feed it.
-  // No fair: the row stays unanchored (anchorFairSource 'none') and is kept.
-  // edge = p − vigged implied. EV = p × decimal − 1.
+  // Fair is Pinnacle, else sharp-books, else consensus, else one book's own
+  // key. No fair: the row stays unanchored (anchorFairSource 'none') and is kept.
+  // edge = p − vigged implied. EV = p × decimal − 1. evAtFair uses the same p_fair.
   candidates = applyMarketAnchor(candidates);
   candidates = priceEdgesAtBet(candidates);
-  const anchored = candidates.filter((c) => c && (c.anchorFairSource === 'pinnacle' || c.anchorFairSource === 'draftkings')).length;
+  const anchored = candidates.filter((c) => c && c.anchorFairSource && c.anchorFairSource !== 'none').length;
   console.log(`[omega-vnext] prob-anchor edge-priced=${candidates.length} anchored=${anchored}`);
 
   // Off the card only when the sport mean is past 3× and this game is too.

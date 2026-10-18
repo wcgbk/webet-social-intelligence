@@ -108,7 +108,9 @@ function legFairP(l) {
  * Joint = product of final p, times CORR_HAIRCUT_PER_LEG^(n-1).
  * That factor is a same-model-bias haircut (ASSUMED), not a fitted rho.
  * Payout is the product of the book's leg decimals.
- * ev is evAtModel and is the positive-EV gate. evAtFair uses fair p and no haircut.
+ * ev is evAtModel and is the positive-EV gate.
+ * evAtFair is the product of each leg's p_fair (the anchor fair, not a
+ * separate DraftKings number) times the parlay decimal, with no haircut.
  */
 function comboStats(legs) {
   const list = legs || [];

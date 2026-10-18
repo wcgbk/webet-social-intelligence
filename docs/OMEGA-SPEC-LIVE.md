@@ -325,7 +325,7 @@ Code: `omega-vnext/narrate.js` (`narrateAndVerify`); `omega-vnext/qa_hardfail.js
 
 ## 14. October 18 Compliance Deltas — Listed Separately
 
-Everything in this section was added to or changed in the restored era code on October 18, 2026 (commits `7e99d66` and `5a91c44`). Nothing here is era-original. The live card published at 1:57 PM ET on October 18 was generated before these fixes bit; they govern the next generate, not that card retroactively.
+Everything in this section was added to or changed in the restored era code on October 18, 2026 (commits `7e99d66` and `5a91c44`). Nothing here is era-original. The card published at 1:57 PM ET on October 18 was generated before these fixes bit. That card was replaced the same afternoon by a compliant regeneration on the stored 10:00 AM ET board (historical-snapshot replay discipline, narration skipped so no live scores or news entered): Eagles +3 (56.6%, Lock A), Ravens/Browns Over 39.5, Steelers/Buccaneers Over 38.5, and a haircut parlay (+607, 16.0% combined, 13.2% EV). The two Unders from the 1:57 PM card did not survive — they had been inflated by the era QB hand points this section removed. Section 5.2's NCAAF blend table and the parlay-leg tenth-percent print (parlay.js) were also corrected to match the live code on October 18; in both cases the document/code was brought to the code's actual behavior, and no era weight was changed.
 
 | # | Delta | Era behavior | Live behavior since Oct 18 | Code |
 |---|---|---|---|---|

@@ -6,7 +6,8 @@ const { generateV1Lock, MODEL_VERSION_V1 } = require('./lib/v1-lock/index-v1');
 exports.handler = async (event) => {
   const params = (event && event.queryStringParameters) || {};
   const secret = process.env.PICKS_SECRET_KEY || 'webetai2026';
-  if (params.key !== secret) return { statusCode: 401, body: 'Unauthorized' };
+  const wantsWrite = params.dryRun === 'false';
+  if (wantsWrite && params.key !== secret) return { statusCode: 401, body: 'Unauthorized' };
   let body = {};
   if (event && event.body) { try { body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body; } catch (_) {} }
   const started = Date.now();

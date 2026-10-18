@@ -704,9 +704,15 @@ function applyDailyUnitCap(picks, parlayLegs) {
       pl.units = null;
       continue;
     }
-    // A fair-negative parlay is a lean at LEAN_PARLAY_UNITS (0.25u, the
-    // existing minimum). The full-card stake does not raise it.
-    const fairLean = pl && pl.isLean === true;
+    // A parlay that fails EV at fair, or model EV after the haircut, is a
+    // lean at LEAN_PARLAY_UNITS (0.25u, the existing minimum). The full-card
+    // 0.5u stake does not raise it. isLean is the flag. The two labels are
+    // the same stake if the flag was dropped in transit.
+    const leanLabel = pl && (
+      pl.label === 'lean - negative EV at fair price'
+      || pl.label === 'lean - model EV not positive after haircut'
+    );
+    const fairLean = pl && (pl.isLean === true || leanLabel === true);
     const leanParlay = Number(LEAN_PARLAY_UNITS);
     const stakeU = fairLean && Number.isFinite(leanParlay) ? leanParlay : parlayStake;
     pl.units = fmtU(stakeU);

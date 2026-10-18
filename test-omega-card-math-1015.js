@@ -1,6 +1,6 @@
 'use strict';
 // Extreme margin bias is off the card. Win percent is one decimal from the
-// same probability as edge and EV. A parlay needs three covers at or above 45%.
+// same probability as edge and EV. Two positive-EV games publish a 2-leg.
 const assert = require('assert');
 const { extremeMarginSports, extremeMarginGames, marginGamesOffCard } = require('./netlify/functions/lib/omega-vnext/health');
 const { gateReason, applyGates, projectionDisagrees } = require('./netlify/functions/lib/omega-vnext/gates');
@@ -213,7 +213,11 @@ const short = parlayFromStraights([
   leg('UAB @ Rice', 0.38, 0.024),
   leg('Army @ Navy', 0.55, 0.03),
 ]);
-assert.ok(isNoQualifyingParlay(short[0]));
+// 2026-10-18: UAB at 0.38 is negative EV at -110, so it is not a leg. The other two publish as a 2-leg.
+assert.strictEqual(short[0].qualifying, true);
+assert.strictEqual(short[0].type, '2-leg-parlay');
+assert.strictEqual(short[0].legs.length, 2);
+assert.ok(!short[0].legs.some((row) => /UAB|Rice/.test(String(row.matchup))));
 
 const twoCard = parlayFromStraights([
   { ...leg('Pittsburgh Penguins @ Colorado Avalanche', 0.634, 0.047), odds: -142, rating: 'a' },
@@ -229,7 +233,11 @@ const banned = parlayFromStraights([
   leg('C @ D', 0.55, 0.04),
   leg('E @ F', 0.55, 0.04),
 ]);
-assert.ok(isNoQualifyingParlay(banned[0]));
+// 2026-10-18: the margin-bias ban leaves two eligible games, which publish as a 2-leg.
+assert.strictEqual(banned[0].qualifying, true);
+assert.strictEqual(banned[0].type, '2-leg-parlay');
+assert.strictEqual(banned[0].legs.length, 2);
+assert.ok(!(banned[0].legs || []).some((row) => row.sport === 'NHL'));
 const kept = parlayFromStraights([
   { ...leg('A @ B', 0.56, 0.09), sport: 'NHL', marginBiasExtreme: true },
   leg('C @ D', 0.55, 0.04),

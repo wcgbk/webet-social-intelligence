@@ -1,10 +1,9 @@
 'use strict';
 // Fair reference: Pinnacle, then other sharp books, then a same-book consensus.
 const assert = require('assert');
-const { americanToImplied, americanToDecimal, formatEdgePct, noVigTwoWay } = require('./netlify/functions/lib/omega-vnext/odds_math');
+const { americanToImplied, noVigTwoWay } = require('./netlify/functions/lib/omega-vnext/odds_math');
 const { powerTwoWay } = require('./netlify/functions/lib/omega-vnext/sharp_fair');
 const { powerFair } = require('./netlify/functions/lib/omega-vnext/pure_model');
-const { pushAwareEv } = require('./netlify/functions/lib/omega-vnext/push_ev');
 const {
   applyMarketAnchor, fairPickFields, anchorProbability,
 } = require('./netlify/functions/lib/omega-vnext/prob_anchor');
@@ -139,15 +138,16 @@ function pair(homeExtra, awayExtra) {
   assert.strictEqual(home.odds, -105);
   assert.strictEqual(home.book, 'hardrockbet');
   const printed = fairPickFields(home);
-  assert.strictEqual(printed.fairSource, 'consensus');
+  // 2026-10-18: DK+Hard Rock is a retail-only consensus, so EV@fair is not a number.
+  assert.strictEqual(printed.fairSource, 'consensus-soft');
+  assert.strictEqual(printed.fairQuality, 'soft');
+  assert.strictEqual(printed.fairSoft, true);
+  assert.strictEqual(printed.evAtFairValid, false);
+  assert.strictEqual(printed.evAtFair, 'n/a (soft fair)');
   assert.strictEqual(printed.p_fair, home.p_fair);
-  const ev = pushAwareEv(home.p_fair, home.odds, home.pPush);
-  assert.strictEqual(printed.evAtFair, formatEdgePct(ev));
-  assert.strictEqual(printed.evAtFair, formatEdgePct(home.p_fair * americanToDecimal(home.odds) - 1));
-  const dkOnlyEv = formatEdgePct(dk * americanToDecimal(home.odds) - 1);
-  assert.notStrictEqual(printed.evAtFair, dkOnlyEv);
+  assert.ok(Math.abs(home.p_fair - dk) > 1e-4);
   const pick = toPickObject(home);
-  assert.strictEqual(pick.fairSource, 'consensus');
+  assert.strictEqual(pick.fairSource, 'consensus-soft');
   assert.strictEqual(pick.evAtFair, printed.evAtFair);
 }
 
@@ -164,8 +164,11 @@ function pair(homeExtra, awayExtra) {
   assert.strictEqual(home.p_fair, stamp(powered));
   assert.notStrictEqual(home.p_fair, stamp(proportional));
   const printed = fairPickFields(home);
-  assert.strictEqual(printed.fairSource, 'draftkings');
-  assert.strictEqual(printed.evAtFair, formatEdgePct(home.p_fair * americanToDecimal(home.odds) - 1));
+  // 2026-10-18: a single retail book is a soft fair, so EV@fair is not a number.
+  assert.strictEqual(printed.fairSource, 'draftkings-soft');
+  assert.strictEqual(printed.fairQuality, 'soft');
+  assert.strictEqual(printed.evAtFairValid, false);
+  assert.strictEqual(printed.evAtFair, 'n/a (soft fair)');
 }
 
 // Mixed-book pairs are not a market. DK on one side and Hard Rock on the other stay 'none'.
@@ -202,7 +205,7 @@ function pair(homeExtra, awayExtra) {
   assert.strictEqual(home.p_fair, stamp(powerP(-130, 110)));
 }
 
-// A parlay EV-at-fair multiplies the anchor p_fair values, not a DK-only fair.
+// A retail-only fair leg nulls the parlay EV@fair. p_fair stays the consensus, not DK-only.
 {
   const [home] = pair(
     {
@@ -221,11 +224,11 @@ function pair(homeExtra, awayExtra) {
     p_fair: 0.47, anchorFairSource: 'pinnacle',
   };
   const stats = comboStats([home, other]);
-  const payout = americanToDecimal(home.odds) * americanToDecimal(other.odds);
-  assert.ok(Math.abs(stats.evAtFair - (home.p_fair * other.p_fair * payout - 1)) < 1e-12);
+  // 2026-10-18: one retail-only leg makes the parlay EV@fair null. p_fair stays the consensus.
+  assert.strictEqual(home.evAtFairValid, false);
+  assert.strictEqual(stats.evAtFair, null);
   const dk = powerP(-130, 110);
   assert.ok(Math.abs(home.p_fair - dk) > 1e-4);
-  assert.ok(Math.abs(stats.evAtFair - (dk * other.p_fair * payout - 1)) > 1e-4);
 }
 
 console.log('test-omega-fair-ref-1018b ok');

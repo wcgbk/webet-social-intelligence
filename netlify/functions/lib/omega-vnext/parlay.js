@@ -111,6 +111,8 @@ function legFairP(l) {
  * ev is evAtModel and is the positive-EV gate.
  * evAtFair is the product of each leg's p_fair (the anchor fair, not a
  * separate DraftKings number) times the parlay decimal, with no haircut.
+ * A leg with evAtFairValid === false is a retail-only fair. The product
+ * is then null, not a number. A missing flag is not that case.
  */
 function comboStats(legs) {
   const list = legs || [];
@@ -118,12 +120,14 @@ function comboStats(legs) {
   let independent = 1;
   let fairProd = 1;
   let fairOk = list.length > 0;
+  let fairValid = list.length > 0;
   for (const l of list) {
     combinedDecimal *= americanToDecimal(l.odds);
     independent *= Number(l.coverProb);
     const fp = legFairP(l);
     if (fp == null) fairOk = false;
     else fairProd *= fp;
+    if (l && l.evAtFairValid === false) fairValid = false;
   }
   const n = list.length;
   const bias = n > 1 ? Math.pow(Number(CORR_HAIRCUT_PER_LEG) || 0.95, n - 1) : 1;
@@ -144,7 +148,7 @@ function comboStats(legs) {
     if (!Number.isFinite(combinedProb) || combinedProb > independent) combinedProb = independent;
   }
   const ev = combinedProb * combinedDecimal - 1;
-  const evAtFair = fairOk && Number.isFinite(combinedDecimal) ? (fairProd * combinedDecimal) - 1 : null;
+  const evAtFair = fairOk && fairValid && Number.isFinite(combinedDecimal) ? (fairProd * combinedDecimal) - 1 : null;
   const games = new Set(list.map(matchupKey)).size;
   const sports = new Set(list.map(l => l.sport)).size;
   return {

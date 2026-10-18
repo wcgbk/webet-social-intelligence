@@ -19,8 +19,11 @@ const PICK_KEEP = [
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
   'dataReviewFlag', 'placeabilityFlag', 'p_fair', 'p_model', 'calK', 'label', 'grade', 'riskDollars', 'toWinDollars',
   // fairSource is anchorFairSource (pinnacle, sharp-books, consensus, a book key, or none).
-  // evAtFair is that same p_fair at the bet price.
+  // A retail-only fair appends -soft. fairQuality is sharp, soft, or none.
+  // evAtFair is p_fair at the bet price when the fair is sharp. A soft fair
+  // publishes 'n/a (soft fair)' and evAtFairValid false. p_fair still anchors.
   'fairP', 'fairSource', 'evAtFair', 'modelWeight',
+  'fairSoft', 'evAtFairValid', 'fairQuality',
 ];
 
 const PARLAY_KEEP = [

@@ -202,7 +202,9 @@ assert.strictEqual(leanTicket.isLean, true);
 assert.strictEqual(leanTicket.units, '0.25u');
 assert.strictEqual(leanTicket.label, FAIR_LEAN);
 assert.strictEqual(leanTicket.leanDay, true);
-assert.strictEqual(leanTicket.type, '3-leg-parlay-labeled');
+// 2026-10-18: no 3-leg passes both EV tests, so the lean is the best 2-leg.
+assert.strictEqual(leanTicket.type, '2-leg-parlay-labeled');
+assert.strictEqual(leanTicket.legs.length, 2);
 assert.notStrictEqual(leanTicket.type, 'no-qualifying-parlay');
 assert.strictEqual(leanTicket.riskDollars, stakeDollars(0.25));
 const held = applyDailyUnitCap(
@@ -233,20 +235,23 @@ const twoCard = parlayFromStraights([
 ])[0];
 assert.strictEqual(twoCard.qualifying, true);
 assert.strictEqual(twoCard.legs.length, 2);
-assert.strictEqual(twoCard.units, '0.5u');
-assert.notStrictEqual(twoCard.isLean, true);
-assert.notStrictEqual(twoCard.label, FAIR_LEAN);
+// 2026-10-18: a 2-leg also needs EV at fair > 0. Fair 0.40 is a 0.25u lean, not a 0.5u ticket.
+assert.strictEqual(twoCard.units, '0.25u');
+assert.strictEqual(twoCard.isLean, true);
+assert.strictEqual(twoCard.label, FAIR_LEAN);
 
 const fairPositiveModelNegative = parlayFromStraights([
   cardLeg('A @ B', { market: 'Total', side: 'Over 44.5', coverProb: 0.53, edgePct: 0.02, p_fair: 0.56, rating: 'aminus' }),
   cardLeg('C @ D', { market: 'Total', side: 'Over 45.5', coverProb: 0.53, edgePct: 0.02, p_fair: 0.56, rating: 'aminus' }),
   cardLeg('E @ F', { market: 'Total', side: 'Over 46.5', coverProb: 0.53, edgePct: 0.02, p_fair: 0.56, rating: 'aminus' }),
 ])[0];
+// 2026-10-18: fair EV > 0 is not a real ticket when model EV after the haircut is not positive. Fallback is a 2-leg lean.
 assert.ok(!(fairPositiveModelNegative.evRaw > 0));
-assert.strictEqual(fairPositiveModelNegative.isLean, false);
-assert.strictEqual(fairPositiveModelNegative.units, '0.5u');
-assert.strictEqual(fairPositiveModelNegative.type, '3-leg-parlay');
-assert.ok(fairPositiveModelNegative.label == null);
-assert.ok(!fairPositiveModelNegative.leanDay);
+assert.strictEqual(fairPositiveModelNegative.isLean, true);
+assert.strictEqual(fairPositiveModelNegative.units, '0.25u');
+assert.strictEqual(fairPositiveModelNegative.type, '2-leg-parlay-labeled');
+assert.strictEqual(fairPositiveModelNegative.label, 'lean - model EV not positive after haircut');
+assert.strictEqual(fairPositiveModelNegative.leanDay, true);
+assert.strictEqual(fairPositiveModelNegative.legs.length, 2);
 
 console.log('test-omega-floor-kelly-1018b item5 ok');

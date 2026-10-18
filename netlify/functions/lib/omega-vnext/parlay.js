@@ -9,7 +9,7 @@ const {
   normalizeRatingKey, ratingLetter, formatGameTimeET,
   stakeDollars, toWinDollars,
 } = require('./odds_math');
-const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge, printedEdgeEv, publishedParlayUnits, isNoStakeRow } = require('./select');
+const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEv, printedEdgeEv, publishedParlayUnits, isNoStakeRow } = require('./select');
 const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
@@ -105,6 +105,17 @@ function legFairP(l) {
 }
 
 /**
+ * Soft or invalid fair. prob_anchor.js sets these; this file only reads them.
+ * A missing field is valid. It is not a fitted cutoff.
+ */
+function fairIsSoft(leg) {
+  if (!leg || typeof leg !== 'object') return false;
+  if (leg.fairSoft === true) return true;
+  if (leg.evAtFairValid === false) return true;
+  return false;
+}
+
+/**
  * Joint = product of final p, times CORR_HAIRCUT_PER_LEG^(n-1).
  * That factor is a same-model-bias haircut (ASSUMED), not a fitted rho.
  * Payout is the product of the book's leg decimals.
@@ -124,6 +135,10 @@ function comboStats(legs) {
   for (const l of list) {
     combinedDecimal *= americanToDecimal(l.odds);
     independent *= Number(l.coverProb);
+    // fairSoft / evAtFairValid are stamped in prob_anchor.js by another pass.
+    // Absent means the fair is usable. A soft or invalid fair is not a number
+    // we can stake: evAtFair stays null (not available).
+    if (fairIsSoft(l)) fairOk = false;
     const fp = legFairP(l);
     if (fp == null) fairOk = false;
     else fairProd *= fp;
@@ -742,7 +757,9 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     candidatesScanned: search.length,
     source: 'omega-vnext',
   }];
-  if (out[0].legs.length === 3) stampFairParlay(out[0], chosen.evAtFair);
+  // Unrounded model EV. The printed tenth can be 0.0% while the joint is still positive.
+  if (out[0].evRaw == null) out[0].evRaw = chosen.ev;
+  if (out[0].legs.length >= 2) stampFairParlay(out[0], chosen.evAtFair);
   return out;
 }
 
@@ -1117,6 +1134,9 @@ function publishGatedLeg(leg, straights) {
   if (leg.hardRockRepriced) published.hardRockRepriced = true;
   if (leg.tier) published.tier = leg.tier;
   Object.assign(published, fairPickFields(leg));
+  // Defensive copy. Missing flags mean the fair is valid. Do not invent them.
+  if (leg.fairSoft === true) published.fairSoft = true;
+  if (leg.evAtFairValid === false) published.evAtFairValid = false;
   return published;
 }
 
@@ -1205,40 +1225,70 @@ function twoTeamFromPublished(rows) {
 }
 
 /**
- * 3-leg fair rule. Not FITTED. The cut is the sign of EV, not a tuned hurdle.
- * evAtFair is comboStats: product of no-vig fair probs times the parlay
- * decimal, minus 1, with no haircut. Fair EV above 0 is a real ticket at
- * the stake already chosen (full card 0.5u, lean card 0.25u). Fair EV at
- * or under 0 still publishes (10/10 never-block) but only as a lean at
- * LEAN_PARLAY_UNITS (the existing 0.25u minimum), labelled exactly
- * FAIR_LEAN_LABEL. It is not a real ticket and is not sized above 0.25u.
- * A missing fair price, or any ticket that is not 3 legs, is unchanged.
+ * Both-EV rule for every ticket size. Not FITTED. The cut is the sign of
+ * EV, not a tuned hurdle.
+ * Model EV is comboStats.ev: product of final p, times 0.95^(n-1)
+ * (CORR_HAIRCUT_PER_LEG, ASSUMED same-model-bias), times the parlay decimal,
+ * minus 1. evAtFair is the product of no-vig fair probs times that decimal,
+ * minus 1, with no haircut.
+ * A real ticket needs model EV > 0 and, when the fair number exists, EV at
+ * fair > 0. That stake is the one already chosen (full card 0.5u, lean card
+ * 0.25u). Either test failing still publishes (10/10 never-block) but only
+ * as a lean at LEAN_PARLAY_UNITS (the existing 0.25u minimum).
+ * Fair EV <= 0, or a soft/invalid fair (not available), uses FAIR_LEAN_LABEL.
+ * Fair that is positive while model EV is not uses MODEL_LEAN_LABEL.
+ * A missing fair price is not a negative: Number(null) is 0 and would fake
+ * a lean. Absent fairSoft / evAtFairValid means the fair is valid.
  */
 const FAIR_LEAN_LABEL = 'lean - negative EV at fair price';
+const MODEL_LEAN_LABEL = 'lean - model EV not positive after haircut';
+
+function ticketModelEv(ticket) {
+  if (!ticket) return null;
+  if (ticket.evRaw != null && ticket.evRaw !== '') {
+    const raw = Number(ticket.evRaw);
+    if (Number.isFinite(raw)) return raw;
+  }
+  const parsed = parseEdgeFraction(ticket.evAtModel != null ? ticket.evAtModel : ticket.ev);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 function stampFairParlay(ticket, evAtFair) {
-  if (!ticket || !Array.isArray(ticket.legs) || ticket.legs.length !== 3) return ticket;
-  // null is a missing fair price. Number(null) is 0, which would fake a lean.
-  if (evAtFair == null || evAtFair === '') return ticket;
-  const fair = Number(evAtFair);
-  if (!Number.isFinite(fair)) return ticket;
+  if (!ticket || !Array.isArray(ticket.legs) || ticket.legs.length < 2) return ticket;
   const n = ticket.legs.length;
-  if (fair > 0) {
-    ticket.isLean = false;
-    if (ticket.label === 'combined EV not positive') {
-      delete ticket.label;
-      delete ticket.leanDay;
+  const soft = ticket.fairSoft === true || ticket.legs.some(fairIsSoft);
+  // null is a missing fair price. Number(null) is 0, which would fake a lean.
+  let fair = null;
+  if (!soft && evAtFair != null && evAtFair !== '') {
+    const num = Number(evAtFair);
+    if (Number.isFinite(num)) fair = num;
+  }
+  const model = ticketModelEv(ticket);
+  const modelOk = model == null ? true : model > 0;
+  const fairBlocks = soft || (fair != null && !(fair > 0));
+  if (modelOk && !fairBlocks) {
+    // A finite positive fair is what makes isLean explicit. A missing fair
+    // price leaves isLean unset, same as before this rule.
+    if (fair != null && fair > 0) {
+      ticket.isLean = false;
+      if (ticket.label === FAIR_LEAN_LABEL || ticket.label === MODEL_LEAN_LABEL || ticket.label === 'combined EV not positive') {
+        delete ticket.label;
+        delete ticket.leanDay;
+      }
       if (typeof ticket.type === 'string' && ticket.type.endsWith('-labeled')) {
         ticket.type = `${n}-leg-parlay`;
       }
     }
     return ticket;
   }
+  // Fair failure wins the label when both fail. Soft fair is not available,
+  // so it is not a real ticket even if a stale fair product would be positive.
+  const label = fairBlocks ? FAIR_LEAN_LABEL : MODEL_LEAN_LABEL;
   const stake = Number(LEAN_PARLAY_UNITS);
   const units = Number.isFinite(stake) ? stake : 0.25;
   ticket.isLean = true;
   ticket.leanDay = true;
-  ticket.label = FAIR_LEAN_LABEL;
+  ticket.label = label;
   ticket.qualifying = true;
   ticket.type = `${n}-leg-parlay-labeled`;
   ticket.units = `${units}u`;
@@ -1253,7 +1303,6 @@ function ticketFromLegs(chosen, rows, opts) {
   if (anchor && !(st.ev > 0) && !(chosen.length === 3 && Number.isFinite(st.evAtFair))) {
     return [noQualifyingParlay('combined EV not positive')];
   }
-  const labeled = !(st.ev > 0);
   const straightIds = new Set(rows.map((row) => parlaySideId(row)));
   const mirrored = rows.length >= chosen.length
     && chosen.every((leg) => straightIds.has(parlaySideId(leg)));
@@ -1269,10 +1318,9 @@ function ticketFromLegs(chosen, rows, opts) {
   const n = chosen.length;
   const modelEvStr = formatEdgePct(st.evAtModel != null ? st.evAtModel : st.ev);
   const ticket = {
-    type: labeled ? `${n}-leg-parlay-labeled` : `${n}-leg-parlay`,
+    type: `${n}-leg-parlay`,
     legs: publishedLegs,
     units: `${stakeUnits}u`,
-    ...(labeled ? { leanDay: true, label: 'combined EV not positive' } : {}),
     qualifying: true,
     combinedOdds,
     combinedDecimal: Number.isFinite(combinedDecimal) ? +combinedDecimal.toFixed(2) : null,
@@ -1298,7 +1346,9 @@ function ticketFromLegs(chosen, rows, opts) {
     source: 'omega-vnext',
   };
   if (opts && opts.hrPlaceabilityNote) ticket.hrPlaceabilityNote = opts.hrPlaceabilityNote;
-  if (chosen.length === 3) stampFairParlay(ticket, st.evAtFair);
+  if (chosen.some(fairIsSoft)) ticket.fairSoft = true;
+  if (n >= 2) stampFairParlay(ticket, st.evAtFair);
+  const labeled = ticket.isLean === true;
   if (!mirrored || labeled) {
     const names = chosen.map((leg) => leg.side || leg.pick).join(' | ');
     console.log(`[omega-vnext] parlay ${labeled ? 'labeled' : 'auto-correct'} ev=${ticket.ev} legs=${names}`);
@@ -1307,12 +1357,135 @@ function ticketFromLegs(chosen, rows, opts) {
 }
 
 /**
- * Published parlay. Three qualifying games, or the two published straights
- * when that is the whole card. A 3-leg leg needs cover >= 45%, positive
- * stake EV at or under the EV cap, and a sport that passed the margin check. The
- * 2-team ticket is those two straights and does not reapply the 45% cover.
- * Rank is probability edge. A ticket whose combined EV is not positive
- * still publishes and is labeled. One straight is no parlay.
+ * Day's parlay board. Not a fitted sample size: the product top-10, the same
+ * list selectTop10 / selectStraights ranks by anchored stake EV (compareByEv).
+ */
+const PARLAY_TOP_N = 10;
+
+function rankView(leg) {
+  return {
+    ev: leg && leg._rankEv,
+    edgePct: leg && leg.edgePct,
+    _pmScoreAdj: leg && leg._pmScoreAdj,
+  };
+}
+
+/** -250/+250 inclusive. Same band as GATES. Not refit here. */
+function oddsInPublishBand(odds) {
+  const n = numericOdds(odds);
+  if (!Number.isFinite(n)) return false;
+  const min = Number(GATES && GATES.minAmericanOdds);
+  const max = Number(GATES && GATES.maxAmericanOdds);
+  if (Number.isFinite(min) && n < min) return false;
+  if (Number.isFinite(max) && n > max) return false;
+  return true;
+}
+
+/**
+ * Live and in-play are not pregame. A missing clock is not a start: the
+ * slate gate already ran, and Date.now() would drop a stored card whose
+ * kickoff is earlier than this process.
+ */
+function isPregameLeg(row) {
+  if (!row) return false;
+  if (row.inPlay === true || row.live === true || row.in_play === true) return false;
+  const st = String(row.priceState || row.marketStatus || row.status || '').trim().toLowerCase();
+  if (st === 'live' || st === 'in-play' || st === 'inplay' || st === 'in-progress-or-started') return false;
+  return true;
+}
+
+/**
+ * Top 10 distinct games. Rank is the anchored stake EV already on the row
+ * (compareByEv, the same order selectStraights uses). The bet-price EV from
+ * priceCardLeg is the inclusion test: positive, at or under EV_CAP_ALL (10%,
+ * ASSUMED), inside -250/+250, pregame, one leg per game. A margin-bias ban
+ * is not a leg. Cover is not re-gated here.
+ * Straights and the pool are one board. The published card is not the only source.
+ */
+function eligibleParlayLegs(straights, pool) {
+  const byId = new Map();
+  const rows = [].concat(straights || [], pool || []);
+  for (const row of rows) {
+    // A 0u 'no stake' listing is not a bet and is never a parlay leg.
+    if (!row || row.marginBiasExtreme || isNoStakeRow(row)) continue;
+    if (!isPregameLeg(row)) continue;
+    const priced = priceCardLeg(row);
+    if (!priced || priced.marginBiasExtreme || isNoStakeRow(priced)) continue;
+    if (!isPregameLeg(priced)) continue;
+    const betEv = Number(priced.ev);
+    if (!(betEv > 1e-12)) continue;
+    const maxEV = Number(EV_CAP_ALL);
+    if (Number.isFinite(maxEV) && betEv > maxEV + 1e-12) continue;
+    if (!oddsInPublishBand(priced.odds)) continue;
+    const stored = Number(row.ev);
+    // Stored ev is the anchored stake EV selectStraights ranks. A percent
+    // string does not parse; the bet-price EV is then the rank.
+    priced._rankEv = Number.isFinite(stored) ? stored : betEv;
+    const id = parlaySideId(priced);
+    const prev = byId.get(id);
+    if (!prev || compareByEv(rankView(priced), rankView(prev)) < 0) byId.set(id, priced);
+  }
+  const byGame = new Map();
+  const ranked = [...byId.values()].sort((a, b) => compareByEv(rankView(a), rankView(b)));
+  for (const leg of ranked) {
+    const key = matchupKey(leg);
+    if (!key || byGame.has(key)) continue;
+    byGame.set(key, leg);
+    if (byGame.size >= PARLAY_TOP_N) break;
+  }
+  return [...byGame.values()];
+}
+
+/**
+ * Highest model EV after the haircut. A tie keeps the higher EV at fair,
+ * then the earlier rank order. Neither tie-break is a fitted weight.
+ * predicate selects which combos are allowed. uniqueGames is one leg per game.
+ */
+function bestModelCombo(legs, size, predicate) {
+  let best = null;
+  for (const combo of enumerateCombos(legs, size)) {
+    const st = comboStats(combo);
+    if (st.uniqueGames !== combo.length) continue;
+    if (predicate && !predicate(st, combo)) continue;
+    const fair = Number.isFinite(st.evAtFair) ? st.evAtFair : -Infinity;
+    if (!best || st.ev > best.ev + 1e-12) {
+      best = { legs: combo, ...st, _fairKey: fair };
+      continue;
+    }
+    if (best && Math.abs(st.ev - best.ev) <= 1e-12 && fair > best._fairKey + 1e-12) {
+      best = { legs: combo, ...st, _fairKey: fair };
+    }
+  }
+  return best;
+}
+
+/**
+ * Real ticket: model EV after the haircut > 0, and EV at fair > 0 when that
+ * number exists. A soft or invalid fair is not available, so the combo is
+ * not real. A missing p_fair leaves evAtFair null and does not invent a
+ * negative (see stampFairParlay).
+ */
+function comboPassesReal(st, legs) {
+  if (!st || !(st.ev > 0)) return false;
+  if ((legs || []).some(fairIsSoft)) return false;
+  if (st.evAtFair == null) return true;
+  return st.evAtFair > 0;
+}
+
+function tooFewLegsReason(n) {
+  const found = n === 1 ? 'only 1 candidate is' : 'none of the top 10 ranked candidates are';
+  return `fewer than 2 eligible legs: ${found} pregame, positive EV at the bet price, inside the 10% cap, and inside -250/+250`;
+}
+
+/**
+ * Published parlay from the day's top 10, not only the straights.
+ * Prefer a 3-leg when some 3-leg passes both EV tests (model after the
+ * haircut, and fair). Otherwise the best 2-leg that passes both. A 2-leg
+ * that fails is not forced as a real ticket. If nothing passes and at least
+ * two legs exist, the best 2-leg by model EV still publishes as a lean at
+ * 0.25u. Fewer than two eligible legs is no parlay, with a reason.
+ * Among tickets of one size, the highest model EV after the haircut wins.
+ * A passing 3-leg beats every 2-leg, even when the 2-leg EV is higher.
  */
 function parlayFromStraights(straights, opts = {}) {
   // Drop 0u 'no stake' rows before the 2-team vs 3-leg choice. They are
@@ -1320,60 +1493,22 @@ function parlayFromStraights(straights, opts = {}) {
   const rows = (straights || []).filter((row) => row && !isNoStakeRow(row));
   const pool = (opts && opts.pool) || [];
   if (!rows.length && !(pool && pool.length)) return [];
-  const anchorOn = require('./config').marketAnchorOn();
-  // Two published straights are the ticket. Do not pull a third game from the pool.
-  if (!anchorOn && rows.length === 2) {
-    const pair = twoTeamFromPublished(rows);
-    if (!pair) {
-      return [noQualifyingParlay('two published straights did not clear as a 2-team parlay')];
-    }
-    return ticketFromLegs(pair, rows, opts);
-  }
-  const merged = [];
-  const seenId = new Set();
-  for (const row of pool.concat(rows)) {
-    if (isNoStakeRow(row)) continue;
-    const priced = priceCardLeg(row);
-    if (!priced || isNoStakeRow(priced)) continue;
-    const id = parlaySideId(priced);
-    if (seenId.has(id)) continue;
-    seenId.add(id);
-    merged.push(priced);
-  }
-  const anchor = require('./config').marketAnchorOn();
-  if (anchor) {
-    merged.sort((a, b) => {
-      const d = (Number(b.ev) || 0) - (Number(a.ev) || 0);
-      if (Math.abs(d) > 1e-12) return d;
-      return (Number(b.edgePct) || 0) - (Number(a.edgePct) || 0);
-    });
-  } else {
-    merged.sort(compareByEdge);
-  }
-  const chosen = [];
-  const games = new Set();
-  const straightIdSet = new Set(rows.map((row) => parlaySideId(row)));
-  // Anchor path: qualifying straights with positive EV.
-  // Pure path: cover, EV band, and the margin ban. Edge rank is already applied.
-  const legPool = anchor
-    ? merged.filter((l) => Number(l.ev) > 0 && straightIdSet.has(parlaySideId(l)))
-    : merged.filter(parlayLegQualifies);
-  for (const leg of legPool) {
-    const key = matchupKey(leg);
-    if (!key || games.has(key)) continue;
-    games.add(key);
-    chosen.push(leg);
-    if (chosen.length === 3) break;
-  }
-  if (anchor && chosen.length < 2) {
-    return [noQualifyingParlay('fewer than 2 qualifying positive-EV legs')];
-  }
-  if (!anchor && chosen.length < 3) {
-    return [noQualifyingParlay('fewer than 3 games with cover >= 45% and positive stake EV at or under the EV cap')];
-  }
-  const ticket = ticketFromLegs(chosen, rows, opts);
-  if (ticket[0] && ticket[0].qualifying !== false) ticket[0].candidatesScanned = merged.length;
-  return ticket;
+  const eligible = eligibleParlayLegs(rows, pool);
+  if (eligible.length < 2) return [noQualifyingParlay(tooFewLegsReason(eligible.length))];
+  const finish = (chosen) => {
+    const ticket = ticketFromLegs(chosen, rows, opts);
+    if (ticket[0] && ticket[0].qualifying !== false) ticket[0].candidatesScanned = eligible.length;
+    return ticket;
+  };
+  const real3 = eligible.length >= 3 ? bestModelCombo(eligible, 3, comboPassesReal) : null;
+  if (real3) return finish(real3.legs);
+  const real2 = bestModelCombo(eligible, 2, comboPassesReal);
+  if (real2) return finish(real2.legs);
+  // 10/10 never-block. Best 2-leg by model EV, including a negative one.
+  // Not a 3-leg: a failing 3-leg is not the fallback.
+  const lean2 = bestModelCombo(eligible, 2, () => true);
+  if (!lean2) return [noQualifyingParlay('no 2-leg combination from the eligible legs')];
+  return finish(lean2.legs);
 }
 
 module.exports = {
@@ -1381,5 +1516,7 @@ module.exports = {
   sameDirectionTotalFactor, correlatedTotalFactor, legsConflict, bestEdgeLegs, legEdge,
   passesParlayCandidate, isNoQualifyingParlay, unifiedCoverProb, priceParlayLeg,
   parlayEvLabel, parlayIndependent,
+  ticketFromLegs, stampFairParlay,
   NO_QUALIFYING_PARLAY,
+  FAIR_LEAN_LABEL, MODEL_LEAN_LABEL,
 };

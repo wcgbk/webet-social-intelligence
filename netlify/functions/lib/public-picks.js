@@ -33,6 +33,9 @@ const PICK_KEEP = [
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
   'evAtModel', 'evAtFair', 'isLean',
+  // reason is the explicit no-parlay line (fewer than 2 eligible legs).
+  // label is the lean line (fair EV or model EV after the haircut).
+  'reason',
   'evLabel', 'riskDollars', 'toWinDollars',
   'uniqueGames', 'uniqueSports', 'independent', 'mirrorsCard', 'legMarkets', 'correlationNote',
   'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote', 'label',

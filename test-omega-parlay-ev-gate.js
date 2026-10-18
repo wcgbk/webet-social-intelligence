@@ -136,8 +136,11 @@ const overs = [
 assert.ok(priceParlayLeg(overs[0]).ev > 0);
 const haircut = parlayFromStraights(overs);
 assert.strictEqual(haircut[0].qualifying, true);
-assert.strictEqual(haircut[0].units, '0.5u');
-assert.strictEqual(haircut[0].label, 'combined EV not positive');
+// 2026-10-18: no 3-leg clears model EV after the haircut, so the best 2-leg is a 0.25u lean.
+assert.strictEqual(haircut[0].units, '0.25u');
+assert.strictEqual(haircut[0].isLean, true);
+assert.strictEqual(haircut[0].legs.length, 2);
+assert.strictEqual(haircut[0].label, 'lean - model EV not positive after haircut');
 assert.ok(!(haircut[0].evRaw > 0));
 const replacement = leg('Kings @ Oilers', {
   market: 'Moneyline', side: 'Oilers', odds: -110, coverProb: 0.572, edgePct: 0.048,
@@ -228,8 +231,10 @@ const capped = applyDailyUnitCap(
   parlayFromStraights(overs),
 );
 assert.strictEqual(capped.parlayLegs[0].qualifying, true);
-assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
-assert.strictEqual(capped.parlayLegs[0].label, 'combined EV not positive');
+// 2026-10-18: the unit cap does not raise a model-negative lean above 0.25u.
+assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
+assert.strictEqual(capped.parlayLegs[0].isLean, true);
+assert.strictEqual(capped.parlayLegs[0].label, 'lean - model EV not positive after haircut');
 assert.ok(!isNoQualifyingParlay(capped.parlayLegs[0]));
 
 // Edge is not an inclusion test. A short card fills positive EV only.

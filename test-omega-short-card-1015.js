@@ -403,7 +403,11 @@ function legNames(parlayLegs) {
     allowSameGame: true,
   });
   assert.strictEqual(finished.picks.length, 3);
-  assert.ok(isNoQualifyingParlay(finished.parlayLegs[0]), 'two games do not make a 3-leg');
+  // 2026-10-18: two distinct games publish a 2-leg. The same-game third is not a third leg.
+  assert.strictEqual(finished.parlayLegs[0].qualifying, true);
+  assert.strictEqual(finished.parlayLegs[0].legs.length, 2);
+  assert.ok(!/^3-leg/.test(String(finished.parlayLegs[0].type)));
+  assert.strictEqual(new Set(finished.parlayLegs[0].legs.map((leg) => leg.matchup)).size, 2);
   assert.strictEqual(finished.topUps[0].reason, 'same-game');
   assert.strictEqual(finished.topUps[0].from, 'reserve');
   assert.strictEqual(config.ALLOW_SAME_GAME_TOPUP, false);

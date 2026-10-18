@@ -161,4 +161,91 @@ const spreadHi = {
 };
 assert.strictEqual(orderedByScore([spreadHi, alt])[0].side, 'Over 6');
 
+const blankPoint = {
+  ...kraken,
+  pinnacleSide: { american: -114, oppAmerican: 101 },
+};
+assert.strictEqual(pinnacleFair(blankPoint), null);
+const [blankOut] = applyMarketAnchor([blankPoint]);
+assert.strictEqual(blankOut.anchorFairSource, 'none');
+
+const { applyExecutionBook } = require('./netlify/functions/lib/omega-vnext/selection_pass');
+const { enrichCandidateWithEdge } = require('./netlify/functions/lib/omega-vnext/edge');
+const { buildFallbackNarrative } = require('./netlify/functions/lib/omega-vnext/narrate');
+
+const hrOffNumber = applyExecutionBook([{
+  sport: 'NCAAF', market: 'Total', side: 'Under 55', line: 55,
+  coverProb: 0.565, matchup: 'Navy Midshipmen @ UTSA Roadrunners',
+  bookPrices: [],
+  hardRock: { american: -105, point: 54.5 },
+}]);
+assert.strictEqual(hrOffNumber.candidates.length, 0);
+
+const sameNumber = applyExecutionBook([{
+  sport: 'NCAAF', market: 'Total', side: 'Under 55', line: 55,
+  coverProb: 0.565, matchup: 'Navy Midshipmen @ UTSA Roadrunners',
+  bookPrices: [
+    { book: 'hardrockbet', american: -115, point: 55 },
+    { book: 'hardrockbet', american: 120, point: 54.5 },
+  ],
+  hardRock: { american: 120, point: 54.5 },
+}]);
+assert.strictEqual(sameNumber.candidates.length, 1);
+assert.strictEqual(sameNumber.candidates[0].odds, -115);
+assert.strictEqual(sameNumber.candidates[0].line, 55);
+assert.strictEqual(sameNumber.candidates[0].side, 'Under 55');
+
+const raw = {
+  sport: 'NCAAF', market: 'Spread', side: 'Arkansas Razorbacks +6.5', line: 6.5,
+  coverProb: 0.567, modelRawP: 0.567,
+  homeTeam: 'Vanderbilt Commodores', awayTeam: 'Arkansas Razorbacks',
+};
+const bundle = {
+  side: 'Arkansas Razorbacks', point: 6.5,
+  prices: [{ book: 'betonlineag', american: -110 }],
+};
+const nearer = {
+  side: 'Arkansas Razorbacks', point: 5.5,
+  prices: [{ book: 'hardrockbet', american: -105 }],
+};
+const enriched = enrichCandidateWithEdge(raw, bundle, [bundle, nearer]);
+assert.strictEqual(enriched.hardRock, null);
+
+const sentence = buildFallbackNarrative({
+  sport: 'NCAAF',
+  pick: 'Arkansas Razorbacks +6.5',
+  side: 'Arkansas Razorbacks +6.5',
+  market: 'Spread',
+  matchup: 'Arkansas Razorbacks @ Vanderbilt Commodores',
+  awayTeam: 'Arkansas Razorbacks',
+  homeTeam: 'Vanderbilt Commodores',
+  odds: '-105',
+  units: '1.5u',
+  rating: 'aplus',
+  winProbability: '56.7%',
+  edgePct: '5.5%',
+  ev: '10.7%',
+  modelProjection: -0.8,
+  line: 5.5,
+});
+assert.ok(sentence.includes('+6.5'), sentence);
+assert.ok(!sentence.includes('+5.5'), sentence);
+
+const totalSentence = buildFallbackNarrative({
+  sport: 'NCAAF',
+  pick: 'Under 55',
+  market: 'Total',
+  matchup: 'Navy Midshipmen @ UTSA Roadrunners',
+  odds: '-105',
+  units: '1.5u',
+  rating: 'aplus',
+  winProbability: '56.5%',
+  edgePct: '5.3%',
+  ev: '10.3%',
+  modelProjection: 49.8,
+  line: 54.5,
+});
+assert.ok(totalSentence.includes('55.0'), totalSentence);
+assert.ok(!totalSentence.includes('54.5'), totalSentence);
+
 console.log('test-omega-same-line-fair-1018 ok');

@@ -173,6 +173,25 @@ function proseKeepsMath(prose, base) {
 }
 
 /**
+ * The number named by the ticket. The sentence quotes that number.
+ * A stored line from another quote does not replace it.
+ */
+function narrativeLine(p) {
+  const market = String((p && (p.market || p.betType)) || '');
+  if (!/moneyline/i.test(market)) {
+    const text = String((p && (p.pick || p.side)) || '');
+    const match = text.match(/([+-]?\d+(?:\.\d+)?)\s*$/);
+    if (match) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  const lineRaw = p && (p.line != null ? p.line : p.consensusLine);
+  const line = Number(lineRaw);
+  return Number.isFinite(line) ? line : null;
+}
+
+/**
  * Sports-desk fallback when Grok is unavailable.
  * 5 sentences, argues for the side, no gate jargon.
  */
@@ -188,8 +207,7 @@ function buildFallbackNarrative(p) {
   const edge = shownEdge(p);
   const ev = shownEv(p);
   const proj = Number(p && p.modelProjection);
-  const lineRaw = p && (p.line != null ? p.line : p.consensusLine);
-  const line = Number(lineRaw);
+  const line = narrativeLine(p);
 
   const hook = `${sport ? `${sport}: ` : ''}WeBetAI locked ${pick} in ${matchup} at ${price}.`;
   const probLine = prob

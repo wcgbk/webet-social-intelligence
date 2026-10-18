@@ -329,7 +329,8 @@ function reprice(pick, quote, pool) {
     });
   }
   const pickObj = toPickObject(cand, { modelVersion: pick.modelVersion });
-  pickObj.coreReasoning = pick.coreReasoning || pickObj.coreReasoning || '';
+  const moved = String(pickObj.pick || '') !== String(pick.pick || '');
+  pickObj.coreReasoning = moved ? '' : (pick.coreReasoning || pickObj.coreReasoning || '');
   pickObj.whatLoses = pick.whatLoses || pickObj.whatLoses || '';
   pickObj.book = 'hardrockbet';
   pickObj.line = quote.point != null ? quote.point : pick.line;

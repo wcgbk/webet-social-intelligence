@@ -12,7 +12,6 @@
 
 const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
-const { sharpFairEnabled } = require('./sharp_fair');
 const { mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { formatAmerican, etCalendarDate, parseEdgeFraction, americanToDecimal } = require('./odds_math');
 const { toPickObject, matchupKey, compareByEv } = require('./select');
@@ -122,16 +121,23 @@ function priceAtDraftKings(c) {
 }
 
 /**
- * Best Hard Rock price on this side. Used when DraftKings has no quote.
- * The line is the Hard Rock point. Stake EV uses that American price.
+ * Best Hard Rock price on this side at this number. Used when DraftKings
+ * has no quote. A Hard Rock price at another number is not this bet.
  */
 function priceAtHardRock(c) {
+  const want = c && c.line != null && c.line !== '' ? Number(c.line) : null;
+  const wantOk = want != null && Number.isFinite(want);
   const rows = [];
   const push = (american, point) => {
     const price = Number(american);
     if (!Number.isFinite(price)) return;
     const pt = point != null && point !== '' ? Number(point) : null;
-    rows.push({ book: HR_BOOK, american: price, point: Number.isFinite(pt) ? pt : null });
+    const ptOk = pt != null && Number.isFinite(pt);
+    // A quote at another number is a different bet. A blank point stays
+    // on this candidate. A moneyline does not take a numbered quote.
+    if (wantOk && ptOk && Math.abs(pt - want) > 1e-6) return;
+    if (!wantOk && ptOk) return;
+    rows.push({ book: HR_BOOK, american: price, point: ptOk ? pt : null });
   };
   if (Array.isArray(c && c.bookPrices)) {
     for (const p of c.bookPrices) {
@@ -141,15 +147,6 @@ function priceAtHardRock(c) {
   }
   if (c && c.hardRock && typeof c.hardRock === 'object') {
     push(c.hardRock.american != null ? c.hardRock.american : c.hardRock.price, c.hardRock.point);
-  }
-  if (sharpFairEnabled() && rows.length) {
-    const want = c.line != null && c.line !== '' ? Number(c.line) : null;
-    const same = rows.filter((row) => {
-      if (want == null || !Number.isFinite(want)) return row.point == null;
-      return row.point != null && Math.abs(row.point - want) < 1e-6;
-    });
-    rows.length = 0;
-    for (const row of same) rows.push(row);
   }
   if (!rows.length) return null;
   let best = rows[0];

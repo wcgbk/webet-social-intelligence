@@ -192,8 +192,10 @@ function pinnacleFair(c) {
   // differ by side, so the match is on the absolute number.
   const line = lineOf(c);
   const pinPoint = ps.point == null || ps.point === '' ? null : Number(ps.point);
-  if (line != null && pinPoint != null && Number.isFinite(pinPoint)
-    && Math.abs(Math.abs(pinPoint) - Math.abs(line)) > 1e-6) return null;
+  // A spread or total with no Pinnacle point is not this line. Moneyline
+  // has no line, so a blank point there still fairs.
+  if (line != null && (pinPoint == null || !Number.isFinite(pinPoint)
+    || Math.abs(Math.abs(pinPoint) - Math.abs(line)) > 1e-6)) return null;
   const powered = powerFair(c);
   if (powered != null) return powered;
   return finiteProb(c.pinnacleNoVigP);

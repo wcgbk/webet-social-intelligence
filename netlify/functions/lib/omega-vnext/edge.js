@@ -420,29 +420,24 @@ function predictedClvCents(bestUsAmerican, sharpAmerican, pModel, fairSharpP) {
 
 const DK_EXEC_BOOK = 'draftkings';
 
-/** Hard Rock quote for this side. Prefer the point closest to the candidate. */
+/** Hard Rock quote for this side at this number. A different number is another bet. */
 function hardRockQuote(allBundles, side, point) {
   let best = null;
   const target = point != null && point !== '' ? Number(point) : null;
+  const targetOk = target != null && Number.isFinite(target);
   for (const b of allBundles || []) {
     if (!b || b.side !== side) continue;
+    const pt = b.point != null && b.point !== '' ? Number(b.point) : null;
+    const ptOk = pt != null && Number.isFinite(pt);
+    if (targetOk) {
+      if (!ptOk || Math.abs(pt - target) > 1e-6) continue;
+    } else if (ptOk) continue;
     for (const p of b.prices || []) {
       if (canonicalizeBook(p.book) !== 'hardrockbet') continue;
       const american = Number(p.american);
       if (!Number.isFinite(american)) continue;
-      const pt = b.point != null ? Number(b.point) : null;
-      const row = { book: 'hardrockbet', american, point: Number.isFinite(pt) ? pt : null };
-      if (!best) {
-        best = row;
-        continue;
-      }
-      const dNew = target == null || row.point == null
-        ? (row.point == null && target == null ? 0 : 99)
-        : Math.abs(row.point - target);
-      const dOld = target == null || best.point == null
-        ? (best.point == null && target == null ? 0 : 99)
-        : Math.abs(best.point - target);
-      if (dNew < dOld - 1e-9 || (Math.abs(dNew - dOld) < 1e-9 && american > best.american)) best = row;
+      const row = { book: 'hardrockbet', american, point: ptOk ? pt : null };
+      if (!best || american > best.american) best = row;
     }
   }
   return best;

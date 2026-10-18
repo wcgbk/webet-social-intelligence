@@ -117,8 +117,10 @@ function toPickObject(c, opts = {}) {
     ev: evStr,
     evRaw: c.ev != null ? c.ev : edgeFrac,
     edgePct: edgePctStr,
-    coverProb: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
-    winProbability: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
+    // Display fix (2026-10-18): print p to a tenth. Whole-% p next to
+    // tenth-% EV made readers recompute a wrong EV (57% vs the 56.7% used).
+    coverProb: `${((c.coverProb || 0) * 100).toFixed(1)}%`,
+    winProbability: `${((c.coverProb || 0) * 100).toFixed(1)}%`,
     coreReasoning: c.coreReasoning || '',
     whatLoses: c.whatLoses || '',
     dataVerified: c.dataVerified || '',

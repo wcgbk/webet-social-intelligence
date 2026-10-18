@@ -31,6 +31,7 @@ functions = "/tmp/wsi-clean/netlify/functions"
 [functions.trigger-picks-beta]
 
 [functions.trigger-picks-alpha]
+schedule = "0 13 * * *"
 
 [functions.serve-dashboard]
 included_files = ["dashboard/index.html"]
@@ -38,52 +39,35 @@ included_files = ["dashboard/index.html"]
 [functions.generate-picks-alpha-background]
 
 [functions.trigger-picks-omega]
-schedule = "5 14,15 * * *"
+schedule = "30 13 * * *"
 
 [functions.generate-picks-omega-background]
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
-[functions.rerank-picks-omega]
-schedule = "15 14,15 * * *"
-
 [functions.verify-picks-omega]
-schedule = "30 14,15 * * *"
-
-[functions.narrate-card-omega]
-schedule = "45 14,15 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.post-card-omega]
-schedule = "0 15,16 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.pregame-check-omega]
-schedule = "0,30 15-23,0-4 * * *"
+schedule = "30 14 * * *"
 
 [functions.self-optimize-omega]
+schedule = "0 9 * * 0"
 
 [functions.fetch-tsp-live]
 
 [functions.trigger-picks-nfl]
+schedule = "5 13 * * *"
 
 [functions.generate-picks-nfl-background]
 
 [functions.trigger-picks-circa]
-schedule = "0,15,30,45 17,18,19,20,21 * * 3,4,5,6"
+schedule = "0,15,30,45 17,18,20 * * 3,4,5,6"
 
 [functions.generate-picks-circa-background]
-included_files = ["node_modules/@hyzyla/pdfium/package.json", "node_modules/@hyzyla/pdfium/dist/**", "node_modules/tesseract.js/**", "node_modules/tesseract.js-core/**", "node_modules/bmp-js/**", "node_modules/idb-keyval/**", "node_modules/is-electron/**", "node_modules/is-url/**", "node_modules/node-fetch/**", "node_modules/regenerator-runtime/**", "node_modules/tr46/**", "node_modules/wasm-feature-detect/**", "node_modules/webidl-conversions/**", "node_modules/whatwg-url/**", "node_modules/zlibjs/**", "netlify/functions/lib/circa-contest-pdf-ocr.js", "netlify/functions/lib/circa-contest-lines.js", "netlify/functions/lib/circa-card-health.js"]
-
-[functions.get-circa-standings]
-included_files = ["node_modules/pdf-parse/**", "node_modules/node-ensure/**", "node_modules/debug/**", "node_modules/ms/**"]
-
-[functions.regrade-circa]
-schedule = "40 * * * *"
+included_files = ["node_modules/@hyzyla/pdfium/dist/**", "node_modules/tesseract.js/**", "node_modules/tesseract.js-core/**", "netlify/functions/lib/circa-contest-pdf-ocr.js", "netlify/functions/lib/circa-contest-lines.js", "netlify/functions/lib/circa-card-health.js"]
 
 [functions.check-circa-card-health]
-schedule = "5,20,35,50 17,18,19,20,21 * * 3,4,5,6"
+schedule = "5,20,35,50 17,18,20 * * 3,4,5,6"
 
 [functions.trigger-picks-cfb]
+schedule = "10 13 * * *"
 
 [functions.generate-picks-cfb-background]
 
@@ -107,7 +91,7 @@ included_files = ["lib/grok-beta/**"]
 [functions.generate-picks-mlb-background]
 
 [functions.confirm-starters-mlb]
-schedule = "30 17,18 * * *"
+schedule = "30 17 * * *"
 
 [functions.trigger-picks-props]
 
@@ -126,104 +110,50 @@ schedule = "30 17,18 * * *"
 [functions.generate-picks-be-background]
 
 [functions.trigger-clv]
-schedule = "0 7,8 * * *"
+schedule = "0 7,17,23 * * *"
 
 [functions.capture-omega-lines]
+schedule = "0,30 10,11 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.capture-omega-lines-late]
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.capture-omega-pinnacle-lines]
-schedule = "0 7,8,14,15 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.capture-omega-pinnacle-lines-background]
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.monitor-omega-snapshot-coverage]
-schedule = "20 14,15 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.monitor-omega-missed-pull]
-schedule = "15 7,8 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.capture-omega-pinnacle-open]
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.recal-report-omega]
-schedule = "15 13,14 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.report-clv-omega]
-schedule = "15 13,14 * * *"
-included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
-
-[functions.get-clv-report]
-included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
-
-[functions.report-tracking-omega]
-schedule = "15 13,14 * * *"
-included_files = ["data/engineering-scores.json", "data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/tracking-report.js", "netlify/functions/lib/kpi-cache.js"]
-
-[functions.sync-supabase]
-schedule = "25 13,14 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/omega-grading-rules.js", "js/live-score.js"]
-
-[functions.report-calibration-omega]
-schedule = "15 10,11 * * 0"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.get-tracking]
-included_files = ["tracking/report.json", "netlify/functions/lib/tracking-report.js"]
-
-[functions.capture-candidate-closes]
+schedule = "0,15 13 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.warm-omega-feeds]
-schedule = "0 13,14 * * *"
+schedule = "0 13 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.trigger-omega-shadow]
-schedule = "5 13,14 * * *"
-
-[functions.omega-nba-shadow]
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.trigger-omega-nba-shadow]
-schedule = "30 21,22 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
-
-[functions.trigger-omega-nba-shadow-grade]
-schedule = "0 12,13 * * *"
-included_files = ["netlify/functions/lib/omega-vnext/**"]
+schedule = "5 13 * * *"
 
 [functions.capture-omega-pm-observer-open]
-schedule = "30 12,13 * * *"
+schedule = "30 12 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.capture-omega-pm-observer]
-schedule = "15 14,15 * * *"
+schedule = "15 14 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.capture-omega-walkforward]
-schedule = "15 15,16 * * *"
+schedule = "15 15 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.capture-omega-walkforward-evening]
-schedule = "45 23,0 * * *"
+schedule = "45 23 * * *"
 included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions.capture-opening-lines]
+schedule = "0 10 * * *"
 
 [functions.verify-picks]
+schedule = "30 14 * * *"
 
 [functions.self-optimize]
-schedule = "0 9,10 * * 0"
+schedule = "0 9 * * 0"
 
 [functions.trigger-trend-monitor]
-schedule = "0 1,2 * * *"
+schedule = "0 1 * * *"
 
 [functions.generate-fox-background]
 
@@ -248,7 +178,7 @@ schedule = "0 1,2 * * *"
 [functions.exodus-scan-background]
 
 [functions.monitor-tsp-public-records]
-schedule = "0 15,16 * * *"
+schedule = "0 15 * * *"
 included_files = ["netlify/functions/lib/tsp-research/**"]
 
 [functions.fetch-tsp-public-records]
@@ -267,12 +197,6 @@ Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
 for = "/daily-omega/*"
-
-[headers.values]
-Cache-Control = "public, max-age=120, must-revalidate"
-
-[[headers]]
-for = "/agentics/*"
 
 [headers.values]
 Cache-Control = "public, max-age=120, must-revalidate"
@@ -506,8 +430,8 @@ force = false
 [redirects.headers]
 
 [[redirects]]
-from = "/agentics"
-to = "/agentics/index.html"
+from = "/v1"
+to = "/v1/index.html"
 status = 200.0
 force = false
 
@@ -518,20 +442,8 @@ force = false
 [redirects.headers]
 
 [[redirects]]
-from = "/agentics/"
-to = "/agentics/index.html"
-status = 200.0
-force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
-from = "/api/agentics-ledger"
-to = "/.netlify/functions/agentics-ledger"
+from = "/v1/"
+to = "/v1/index.html"
 status = 200.0
 force = false
 
@@ -978,66 +890,6 @@ from = "/api/get-omega-clv-report"
 to = "/.netlify/functions/get-omega-clv-report"
 status = 200.0
 force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
-from = "/api/get-clv-report"
-to = "/.netlify/functions/get-clv-report"
-status = 200.0
-force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
-from = "/tracking"
-to = "/tracking/index.html"
-status = 200.0
-force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
-from = "/tracking/"
-to = "/tracking/index.html"
-status = 200.0
-force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
-from = "/api/get-tracking"
-to = "/.netlify/functions/get-tracking"
-status = 200.0
-force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
-from = "/tracking/report.json"
-to = "/.netlify/functions/get-tracking"
-status = 200.0
-force = true
 
 [redirects.query]
 

@@ -24,7 +24,7 @@
  * anyway.
  */
 const { clamp } = require('../odds_math');
-const { HFA, ENGINE_SOFT, NHL_PRIOR_K, nhlPriorK, ratingGamesN } = require('../config');
+const { HFA, ENGINE_SOFT, NHL_PRIOR_K, nhlPriorK, ratingGamesN, ratingErrorSd } = require('../config');
 const {
   formatMatchup, mapGamesSoft, LEAGUE_PPG, bindEspnGameByTeamAndTime,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
@@ -32,7 +32,7 @@ const {
 const { resolveTeamId, rowByIdentityOrFuzzy, logUnknownTeam } = require('./team_identity');
 const { applyGameDayAdjustments } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
-const { nhlPeriodEnabled } = require('../gaps_flags');
+const { nhlPeriodEnabled, flagEnabled } = require('../gaps_flags');
 const { nhlMarketQuote } = require('../nhl_period');
 
 const SPORT = 'NHL';
@@ -87,21 +87,95 @@ const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.10, spread: 0.50, total: 0.45 };
 
 /**
+ * 3-point Gauss-Hermite nodes for a standard normal: 0, ±√3,
+ * weights 2/3, 1/6, 1/6. Margin and total are independent, so the
+ * rating-error mixture is the 9-point product rule.
+ */
+const PERIOD_GH_Z = [0, Math.sqrt(3), -Math.sqrt(3)];
+const PERIOD_GH_W = [2 / 3, 1 / 6, 1 / 6];
+/**
+ * Tail nodes can push the total under the Poisson floor. 2.0 keeps a
+ * goal rate on the board when the margin is still inside ±NHL_MARGIN_CAP.
+ */
+const PERIOD_TOTAL_FLOOR = 2;
+
+/**
  * 60-minute joint plus the OT/shootout split. The empty-net end game was
  * removed 2026-10-17 (season GF/GA already include those goals), so
  * OMEGA_NHL_EMPTY_NET does not add a second step. Moneyline, puck line,
  * and total share this one distribution. Null keeps the legacy normal
  * price and the old method string.
+ *
+ * The plain Poisson quote has no rating-error term. The legacy normal
+ * path widens through ratingErrorSd (NHL margin 1.25, total 0.9, N0 6).
+ * On the default period path, average the quote over that uncertainty.
+ * sd 0, or OMEGA_NHL_PERIOD_RATING_SD=0, is the single quote.
  */
 function periodQuote(args) {
   if (!nhlPeriodEnabled()) return null;
   try {
-    const q = nhlMarketQuote(args);
-    if (!q || !Number.isFinite(q.coverProb)) return null;
-    return q;
+    const src = args || {};
+    const sdM = ratingErrorSd('NHL', 'spread', src.nGames);
+    const sdT = ratingErrorSd('NHL', 'total', src.nGames);
+    if (!flagEnabled('OMEGA_NHL_PERIOD_RATING_SD') || (!(sdM > 0) && !(sdT > 0))) {
+      return onePeriodQuote(src);
+    }
+    const margin0 = Number(src.modelMargin);
+    const total0 = Number(src.modelTotal);
+    if (!Number.isFinite(margin0) || !Number.isFinite(total0)) return onePeriodQuote(src);
+    const mixed = mixPeriodQuote(src, margin0, total0, sdM, sdT);
+    return mixed || onePeriodQuote(src);
   } catch (_) {
     return null;
   }
+}
+
+function onePeriodQuote(args) {
+  const q = nhlMarketQuote(args);
+  if (!q || !Number.isFinite(q.coverProb)) return null;
+  return q;
+}
+
+function mixPeriodQuote(src, margin0, total0, sdM, sdT) {
+  const base = {
+    market: src.market,
+    sideIsHome: src.sideIsHome,
+    line: src.line,
+    side: src.side,
+  };
+  let cover = 0;
+  let push = 0;
+  let pWin = 0;
+  let pLoss = 0;
+  let expectedTotal = 0;
+  let pTie = 0;
+  let pHomeBy2 = 0;
+  for (let i = 0; i < PERIOD_GH_Z.length; i++) {
+    const margin = clamp(margin0 + PERIOD_GH_Z[i] * sdM, -NHL_MARGIN_CAP, NHL_MARGIN_CAP);
+    for (let j = 0; j < PERIOD_GH_Z.length; j++) {
+      const rawTotal = total0 + PERIOD_GH_Z[j] * sdT;
+      const total = rawTotal >= PERIOD_TOTAL_FLOOR ? rawTotal : PERIOD_TOTAL_FLOOR;
+      const q = nhlMarketQuote({ ...base, modelMargin: margin, modelTotal: total });
+      if (!q || !Number.isFinite(q.coverProb)) return null;
+      const w = PERIOD_GH_W[i] * PERIOD_GH_W[j];
+      cover += w * q.coverProb;
+      push += w * (Number.isFinite(q.pPush) ? q.pPush : 0);
+      pWin += w * (Number.isFinite(q.pWin) ? q.pWin : 0);
+      pLoss += w * (Number.isFinite(q.pLoss) ? q.pLoss : 0);
+      expectedTotal += w * (Number.isFinite(q.expectedTotal) ? q.expectedTotal : 0);
+      pTie += w * (Number.isFinite(q.pTie) ? q.pTie : 0);
+      pHomeBy2 += w * (Number.isFinite(q.pHomeBy2) ? q.pHomeBy2 : 0);
+    }
+  }
+  return {
+    coverProb: cover,
+    pWin,
+    pPush: push,
+    pLoss,
+    expectedTotal,
+    pTie,
+    pHomeBy2,
+  };
 }
 
 function periodMethod(base, on) {
@@ -817,7 +891,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     });
     for (const b of bundles) {
       const isHome = b.side === home;
-      const q = periodQuote({ modelMargin, modelTotal, market: 'ml', sideIsHome: isHome });
+      const q = periodQuote({ modelMargin, modelTotal, market: 'ml', sideIsHome: isHome, nGames });
       const pPure = q
         ? q.coverProb
         : (isHome
@@ -845,7 +919,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const line = b.point;
       if (line == null) continue;
       const isHome = b.side === home;
-      const q = periodQuote({ modelMargin, modelTotal, market: 'spread', sideIsHome: isHome, line });
+      const q = periodQuote({ modelMargin, modelTotal, market: 'spread', sideIsHome: isHome, line, nGames });
       const pCoverPure = q
         ? q.coverProb
         : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT, undefined, nGames);
@@ -872,7 +946,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const line = b.point;
       if (line == null) continue;
       const q = periodQuote({
-        modelMargin, modelTotal, market: 'total', line, side: b.side,
+        modelMargin, modelTotal, market: 'total', line, side: b.side, nGames,
       });
       const pPure = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT, nGames);
       const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.total);
@@ -916,6 +990,7 @@ function project({ oddsEvents, standings, gameDay, espnGames } = {}) {
 
 module.exports = {
   project,
+  periodQuote,
   SPORT,
   BLEND,
   nhlStandingsEnv,

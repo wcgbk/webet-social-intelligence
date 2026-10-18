@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>WeBetAI V1 — Goals and thresholds</title>
+  <meta name="description" content="WeBetAI V1 sheet standard: KPI goals, bet thresholds, and a checker. You supply the win probability. This page places no bet." />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+    :root {
+      --white: #ffffff;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --border: #e0e3e8;
+      --muted: #5f6b7a;
+      --green: #1b5e20;
+      --green-bg: #e8f5e9;
+      --amber: #8a5a00;
+      --amber-bg: #fff6e0;
+      --red: #8e241c;
+      --red-bg: #fdecea;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--olive);
+      line-height: 1.45;
+    }
+    header, main { width: min(1080px, calc(100% - 2rem)); margin: 0 auto; }
+    header { padding: 1.5rem 0 0.5rem; }
+    .brand { font-weight: 700; letter-spacing: 0.02em; }
+    h1 { font-size: 1.75rem; line-height: 1.15; margin: 0.35rem 0 0.4rem; }
+    h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
+    .lede, .note { color: var(--muted); margin: 0; }
+    .banner {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--teal);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+      margin: 1rem 0 1.25rem;
+    }
+    section {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      margin: 0 0 1rem;
+    }
+    .goals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+    .goal {
+      background: var(--teal-light);
+      border-radius: 10px;
+      padding: 0.85rem;
+    }
+    .goal b { display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .goal strong { display: block; font-size: 1.35rem; margin-top: 0.2rem; }
+    .goal span { display: block; color: var(--muted); font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.45rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+    .scroll { overflow-x: auto; }
+    form, .rows { display: grid; gap: 0.6rem; }
+    .fields { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.6rem; align-items: end; }
+    label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; }
+    input {
+      font: inherit;
+      color: inherit;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.65rem;
+      background: var(--white);
+      width: 100%;
+    }
+    button {
+      font: inherit;
+      font-weight: 600;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      background: var(--teal);
+      color: var(--white);
+      cursor: pointer;
+    }
+    button.ghost { background: var(--bg); color: var(--olive); border: 1px solid var(--border); }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .verdict { font-weight: 700; }
+    .ok { color: var(--green); }
+    .audit { color: var(--amber); }
+    .bad { color: var(--red); }
+    .chip {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: var(--bg);
+    }
+    .chip.pass { background: var(--green-bg); color: var(--green); }
+    .chip.fail { background: var(--red-bg); color: var(--red); }
+    .result {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.6rem;
+      margin-top: 0.8rem;
+    }
+    .stat { background: var(--bg); border-radius: 8px; padding: 0.6rem 0.7rem; }
+    .stat b { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+    .rowline { display: grid; grid-template-columns: 1.2fr 1fr 0.7fr 0.7fr auto; gap: 0.4rem; }
+    footer { width: min(1080px, calc(100% - 2rem)); margin: 0 auto 2rem; color: var(--muted); font-size: 0.85rem; }
+    @media (max-width: 800px) {
+      .goals, .result, .fields { grid-template-columns: 1fr 1fr; }
+      .rowline { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">WeBetAI</div>
+    <h1>V1 goals and thresholds</h1>
+    <p class="lede">The Good Bet Checker, as a model. Version <span id="version"></span>.</p>
+  </header>
+  <main>
+    <p class="banner">You supply the American price and the win probability. V1 checks that pair against the sheet. To grade a price against the fair market, use the de-vigged Pinnacle probability. To grade the model against the bettable price, use the model probability. This page places no bet. The live Edge card stays on its own page.</p>
+
+    <section>
+      <h2>KPI goals</h2>
+      <div class="goals" id="goals"></div>
+    </section>
+
+    <section>
+      <h2>Season windows</h2>
+      <div class="scroll"><table id="seasons"></table></div>
+    </section>
+
+    <section>
+      <h2>Thresholds</h2>
+      <p class="note" id="rules"></p>
+      <div class="scroll"><table id="thresholds"></table></div>
+    </section>
+
+    <section>
+      <h2>Sheet examples</h2>
+      <p class="note">These four rows are the locked sample checks from the sheet.</p>
+      <div class="scroll"><table id="examples"></table></div>
+    </section>
+
+    <section>
+      <h2>Check one bet</h2>
+      <form id="checker">
+        <div class="fields">
+          <label>American odds<input id="odds" name="odds" inputmode="numeric" placeholder="-110" required /></label>
+          <label>Win probability, 0 to 1<input id="prob" name="prob" inputmode="decimal" placeholder="0.550" required /></label>
+          <button type="submit">Check</button>
+        </div>
+      </form>
+      <div id="check-out"></div>
+    </section>
+
+    <section>
+      <h2>Card</h2>
+      <p class="note">Rank by edge, then by EV. The top 10 stay on the board with their verdicts, including audit rows. Straights are GOOD BET only, one side per game, and they stop at 3.</p>
+      <div id="card-rows" class="rows"></div>
+      <div class="actions">
+        <button type="button" id="add-row" class="ghost">Add row</button>
+        <button type="button" id="load-examples" class="ghost">Load sheet examples</button>
+        <button type="button" id="rank">Rank card</button>
+      </div>
+      <div id="card-out"></div>
+    </section>
+  </main>
+  <footer id="foot"></footer>
+  <script src="model.js"></script>
+  <script>
+    (function () {
+      var V = window.V1Sheet;
+      if (!V) {
+        document.getElementById('check-out').textContent = 'V1 model failed to load.';
+        return;
+      }
+
+      function el(tag, cls, text) {
+        var node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text != null) node.textContent = text;
+        return node;
+      }
+      function clear(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+      }
+      function pct(fraction) {
+        return Math.round(fraction * 100) + '%';
+      }
+      function americanText(n) {
+        var value = Number(n);
+        return value > 0 ? '+' + value : String(value);
+      }
+      function verdictClass(verdict) {
+        if (verdict === 'GOOD BET') return 'verdict ok';
+        if (verdict === 'NO BET') return 'verdict';
+        return 'verdict audit';
+      }
+      function credClass(cred) {
+        if (cred === 'OK') return 'ok';
+        if (cred === 'IMPLAUSIBLE') return 'bad';
+        return 'audit';
+      }
+
+      document.getElementById('version').textContent = V.VERSION;
+      document.getElementById('rules').textContent =
+        'A good bet needs credibility OK plus all four passes: edge at least 2 points, EV at least 2%, ROI at least 2%, and expected profit at least $3 on one $150 unit. Anything that is not OK is DO NOT BET - AUDIT. A miss on the four tests, with credibility still OK, is NO BET. The edge band is BELOW BAND under 2 points, IN REALISTIC BAND through 5 points, and ABOVE BAND past 5. Exactly 10 edge points and exactly 10% EV stay OK. Above either mark is SUSPECT - AUDIT. At least 24 edge points or at least 40% EV is IMPLAUSIBLE.';
+
+      var goals = document.getElementById('goals');
+      [
+        ['Straights', pct(V.GOALS.straights.accuracy) + ' accuracy', pct(V.GOALS.straights.roi) + ' ROI', 'Profit goal left blank'],
+        ['Parlays', pct(V.GOALS.parlays.accuracy) + ' accuracy', pct(V.GOALS.parlays.roi) + ' ROI', ''],
+        ['CLV', pct(V.GOALS.clv.target), V.GOALS.clv.scope, ''],
+        ['Card shape', 'Top ' + V.GOALS.card.candidates + ' candidates', 'Top ' + V.GOALS.card.straights + ' straights', 'One straight per game']
+      ].forEach(function (item) {
+        var card = el('div', 'goal');
+        card.appendChild(el('b', '', item[0]));
+        card.appendChild(el('strong', '', item[1]));
+        card.appendChild(el('span', '', item[2]));
+        if (item[3]) card.appendChild(el('span', '', item[3]));
+        goals.appendChild(card);
+      });
+
+      var seasons = document.getElementById('seasons');
+      var sHead = el('tr');
+      ['Sport', 'Start', 'End', 'Months'].forEach(function (name) { sHead.appendChild(el('th', '', name)); });
+      seasons.appendChild(sHead);
+      V.SEASONS.forEach(function (season) {
+        var tr = el('tr');
+        [season.sport, season.start, season.end, season.months.join(', ')].forEach(function (value) {
+          tr.appendChild(el('td', '', value));
+        });
+        seasons.appendChild(tr);
+      });
+
+      var thresholds = document.getElementById('thresholds');
+      var tHead = el('tr');
+      ['Rule', 'Threshold', 'Basis'].forEach(function (name) { tHead.appendChild(el('th', '', name)); });
+      thresholds.appendChild(tHead);
+      V.THRESHOLD_NOTES.forEach(function (note) {
+        var tr = el('tr');
+        tr.appendChild(el('td', '', note.label));
+        tr.appendChild(el('td', '', note.value));
+        tr.appendChild(el('td', '', note.basis));
+        thresholds.appendChild(tr);
+      });
+
+      function fillExamples() {
+        var table = document.getElementById('examples');
+        clear(table);
+        var head = el('tr');
+        ['Note', 'Odds', 'p', 'Edge', 'EV', 'Profit', 'Band', 'Credibility', 'Verdict'].forEach(function (name) {
+          head.appendChild(el('th', '', name));
+        });
+        table.appendChild(head);
+        V.EXAMPLES.forEach(function (example) {
+          var row = V.checkBet(example.odds, example.p);
+          var tr = el('tr');
+          var cells = [
+            example.note,
+            americanText(example.odds),
+            example.p.toFixed(3),
+            row.edgeDisplay,
+            row.evDisplay,
+            row.profitDisplay,
+            row.band,
+            row.credibility,
+            row.verdict
+          ];
+          cells.forEach(function (value, index) {
+            var td = el('td');
+            if (index === 7) td.className = credClass(value);
+            if (index === 8) td.className = verdictClass(value);
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+      }
+      fillExamples();
+
+      function renderCheck(row, message) {
+        var out = document.getElementById('check-out');
+        clear(out);
+        if (!row) {
+          out.appendChild(el('p', 'note', message || 'Enter an American price and a probability from 0 to 1. 0.55 means 55%.'));
+          return;
+        }
+        var grid = el('div', 'result');
+        [
+          ['Decimal', row.decimal.toFixed(3)],
+          ['Implied', row.impliedDisplay],
+          ['Edge', row.edgeDisplay + ' pts'],
+          ['EV', row.evDisplay],
+          ['ROI', row.roiDisplay],
+          ['Profit / 1u', row.profitDisplay],
+          ['Band', row.band],
+          ['Credibility', row.credibility]
+        ].forEach(function (pair) {
+          var stat = el('div', 'stat');
+          stat.appendChild(el('b', '', pair[0]));
+          var value = el('div', '', pair[1]);
+          if (pair[0] === 'Credibility') value.className = credClass(pair[1]);
+          stat.appendChild(value);
+          grid.appendChild(stat);
+        });
+        out.appendChild(grid);
+        var tests = el('p');
+        [['Edge', row.tests.edge], ['EV', row.tests.ev], ['ROI', row.tests.roi], ['Profit', row.tests.profit]].forEach(function (item) {
+          tests.appendChild(el('span', 'chip ' + (item[1] ? 'pass' : 'fail'), item[0] + ' ' + (item[1] ? 'PASS' : 'FAIL')));
+          tests.appendChild(document.createTextNode(' '));
+        });
+        out.appendChild(tests);
+        out.appendChild(el('p', verdictClass(row.verdict), row.verdict));
+      }
+
+      document.getElementById('checker').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var odds = document.getElementById('odds').value;
+        var prob = Number(document.getElementById('prob').value);
+        var row = V.checkBet(odds, prob);
+        renderCheck(row, 'That price or probability is outside the check. Use an American price such as -110 or +122, and a probability from 0 to 1.');
+      });
+
+      var cardRows = [];
+      function blankRow() {
+        return { pick: '', matchup: '', odds: '', p: '' };
+      }
+      function renderCardInputs() {
+        var host = document.getElementById('card-rows');
+        clear(host);
+        cardRows.forEach(function (row, index) {
+          var line = el('div', 'rowline');
+          [['Pick', 'pick'], ['Game', 'matchup'], ['American', 'odds'], ['p 0–1', 'p']].forEach(function (field) {
+            var input = el('input');
+            input.placeholder = field[0];
+            input.value = row[field[1]];
+            input.setAttribute('aria-label', field[0] + ' ' + (index + 1));
+            input.addEventListener('input', function () { row[field[1]] = input.value; });
+            line.appendChild(input);
+          });
+          var remove = el('button', 'ghost', 'Remove');
+          remove.type = 'button';
+          remove.addEventListener('click', function () {
+            cardRows.splice(index, 1);
+            if (!cardRows.length) cardRows.push(blankRow());
+            renderCardInputs();
+          });
+          line.appendChild(remove);
+          host.appendChild(line);
+        });
+      }
+      function renderCard(card, dropped) {
+        var out = document.getElementById('card-out');
+        clear(out);
+        if (dropped.length) {
+          out.appendChild(el('p', 'note', 'Skipped ' + dropped.join(', ') + '. Each row needs an American price and a probability from 0 to 1.'));
+        }
+        function tableFor(title, rows) {
+          out.appendChild(el('h2', '', title));
+          if (!rows.length) {
+            out.appendChild(el('p', 'note', 'None.'));
+            return;
+          }
+          var table = el('table');
+          var head = el('tr');
+          ['Pick', 'Game', 'Edge', 'EV', 'Verdict'].forEach(function (name) { head.appendChild(el('th', '', name)); });
+          table.appendChild(head);
+          rows.forEach(function (row) {
+            var tr = el('tr');
+            [row.pick || '', row.matchup || '', row.edgeDisplay, row.evDisplay].forEach(function (value) {
+              tr.appendChild(el('td', '', value));
+            });
+            tr.appendChild(el('td', verdictClass(row.verdict), row.verdict));
+            table.appendChild(tr);
+          });
+          var wrap = el('div', 'scroll');
+          wrap.appendChild(table);
+          out.appendChild(wrap);
+        }
+        tableFor('Top ' + V.GOALS.card.candidates + ' candidates', card.top10);
+        tableFor('Straights', card.straights);
+      }
+
+      document.getElementById('add-row').addEventListener('click', function () {
+        cardRows.push(blankRow());
+        renderCardInputs();
+      });
+      document.getElementById('load-examples').addEventListener('click', function () {
+        cardRows = V.EXAMPLES.map(function (example, index) {
+          return {
+            pick: example.note,
+            matchup: 'Example ' + (index + 1),
+            odds: americanText(example.odds),
+            p: String(example.p)
+          };
+        });
+        renderCardInputs();
+      });
+      document.getElementById('rank').addEventListener('click', function () {
+        var dropped = [];
+        var ready = [];
+        cardRows.forEach(function (row, index) {
+          if (!String(row.odds).trim() && !String(row.p).trim() && !String(row.pick).trim()) return;
+          var checked = V.checkBet(row.odds, row.p);
+          if (!checked) dropped.push(row.pick || ('row ' + (index + 1)));
+          else ready.push({ pick: row.pick, matchup: row.matchup, odds: row.odds, p: row.p });
+        });
+        renderCard(V.selectCard(ready), dropped);
+      });
+
+      cardRows.push(blankRow());
+      renderCardInputs();
+      document.getElementById('foot').textContent = 'WeBetAI ' + V.VERSION + '. Analysis only. 1u = $150.';
+    }());
+  </script>
+</body>
+</html>

@@ -7,22 +7,36 @@
  * w = 1 is the model. w = 0 is the market. NBA is absent and is not touched.
  * modelPureP already carries the rating-error SD. coverProb is the fallback
  * only when modelPureP is missing, so calibration is not mixed in again.
- * p_fair is the Pinnacle power no-vig on this side at this line. Circa is
- * not used: the Odds API has no Circa book, and these rows have no stored
- * per-game Circa line (no circaSide or circasports quote). Contest PDF
- * lines are a separate NFL product. When Pinnacle has no same-line pair,
- * p_fair is the simple mean of the other SHARP_BOOKS that each post both
- * sides (source 'sharp-books'), else the simple mean of every stored book
- * that posts both sides (source 'consensus' when at least two books do,
- * otherwise that book's own key, 'draftkings' when only DraftKings does).
- * Each book is power-devigged on its own pair. One book's side is never
- * mixed with another book's opposite side. The mean is unweighted
- * (ASSUMED, 2026-10-18 audit item 4; not fit on this box). No fair: the
- * row is not dropped. coverProb stays, and anchorFairSource is 'none'.
+ *
+ * Fair order, same line. Each book is power-devigged on its own pair.
+ * One book's side is never mixed with another book's opposite side.
+ *   1. Pinnacle power no-vig (source 'pinnacle', fairQuality 'sharp')
+ *   2. other SHARP_BOOKS that each post both sides — bookmaker, betonlineag,
+ *      lowvig — unweighted mean (source 'sharp-books', fairQuality 'sharp')
+ *   3. unweighted mean of every remaining stored book that posts both sides,
+ *      when at least two do (source 'consensus')
+ *   4. that one book's own power no-vig (source is the book key)
+ *   5. no pair: the row is not dropped. coverProb stays. source 'none',
+ *      fairQuality 'none'.
+ * The mean is unweighted (ASSUMED, 2026-10-18 audit item 4; not fit on
+ * this box). Circa is not used: the Odds API has no Circa book, and these
+ * rows have no stored per-game Circa line. Contest PDF lines are a separate
+ * NFL product.
+ *
+ * A soft fair is a retail-only set: one retail book, or a consensus made
+ * only of retail books (DraftKings + Hard Rock, FanDuel + BetMGM, Caesars,
+ * and the rest). Retail means not in SHARP_BOOKS. Hard Rock is retail
+ * (product rule, 2026-10-18, not a fitted weight). Soft is not a sharp
+ * reference: fairSoft true, fairQuality 'soft', evAtFairValid false, and
+ * the published evAtFair is the text 'n/a (soft fair)' (never a number).
+ * p_fair still anchors the row. The published fairSource appends '-soft'.
  *
  * Published edge = p - vigged implied(odds). Edge is not push-adjusted.
  * Published EV = (1 - pPush) * (p * decimal(odds) - 1).
  * Missing or zero pPush leaves that EV unscaled.
+ * odds is the best retail quote already on the row. Edge, stake EV, and
+ * a sharp EV@fair all use that same price. Pinnacle and the other sharp
+ * americans are fair inputs. They are not substituted for the bet price.
  * This is not the marketAnchorOn() K-table. That switch stays off.
  */
 
@@ -159,22 +173,50 @@ function fairNumber(c) {
 }
 
 /**
+ * American price the card is betting. The best retail quote is already on
+ * the row as odds (else the same number in oddsStr). Pinnacle, bookmaker,
+ * betonlineag, lowvig, dkQuote, and hardRock feed the fair. They do not
+ * replace this price. Edge, stake EV, and EV@fair share it.
+ */
+function betAmerican(c) {
+  if (!c) return null;
+  const direct = Number(c.odds);
+  if (Number.isFinite(direct) && direct !== 0) return direct;
+  if (c.oddsStr == null || c.oddsStr === '') return null;
+  const parsed = Number(String(c.oddsStr).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(parsed) || parsed === 0) return null;
+  return parsed;
+}
+
+/**
  * Printed fair p, source, EV-at-fair, raw model p, and the anchor weight.
- * evAtFair is this row's p_fair at the bet price (c.odds). It is not a
- * second DraftKings number. fairSource is anchorFairSource.
+ * A sharp evAtFair is this row's p_fair at betAmerican (the retail quote).
+ * It is not a second book's price. A soft fair publishes the text
+ * 'n/a (soft fair)' and never a number. fairP stays, because p_fair still
+ * anchors the row. fairSource is anchorFairSource, with '-soft' on a
+ * retail-only set. fairQuality is 'sharp', 'soft', or 'none'.
  */
 function fairPickFields(c) {
   const fair = fairNumber(c);
-  const dec = americanToDecimal(c && (c.odds != null ? c.odds : c.oddsStr));
-  const evFair = fair != null && dec != null
-    ? pushAwareEv(fair, c && (c.odds != null ? c.odds : c.oddsStr), c && c.pPush)
-    : null;
+  const meta = fairMeta(c);
+  const price = betAmerican(c);
+  let evAtFair = null;
+  if (meta.quality === 'soft') {
+    evAtFair = 'n/a (soft fair)';
+  } else if (meta.quality === 'sharp' && fair != null && price != null) {
+    const evFair = pushAwareEv(fair, price, c && c.pPush);
+    evAtFair = evFair == null || !Number.isFinite(evFair) ? null : formatEdgePct(evFair);
+  }
   const raw = c && c.p_model != null ? Number(c.p_model) : null;
   const weight = c && c.anchorWeight != null ? Number(c.anchorWeight) : null;
+  const sharpEv = meta.quality === 'sharp' && fair != null;
   return {
     fairP: pctString(fair),
-    fairSource: (c && c.anchorFairSource) || 'none',
-    evAtFair: evFair == null || !Number.isFinite(evFair) ? null : formatEdgePct(evFair),
+    fairSource: meta.fairSource,
+    fairSoft: meta.soft,
+    fairQuality: meta.quality,
+    evAtFairValid: sharpEv,
+    evAtFair,
     p_model: raw != null && Number.isFinite(raw) ? +raw.toFixed(4) : null,
     p_fair: fair != null ? +Number(fair).toFixed(6) : null,
     modelWeight: weight != null && Number.isFinite(weight) ? weight : null,
@@ -265,11 +307,31 @@ function canonBook(key) {
   return k;
 }
 
+function hasStoredBoard(c) {
+  if (!c) return false;
+  if (c.dkQuote) return true;
+  if (c.hardRock && typeof c.hardRock === 'object') return true;
+  return Array.isArray(c.bookPrices);
+}
+
+function boardPosts(c, book) {
+  const name = canonBook(book);
+  if (!name || !c) return false;
+  if (c.dkQuote && name === 'draftkings') return true;
+  if (c.hardRock && typeof c.hardRock === 'object' && name === 'hardrockbet') return true;
+  const prices = Array.isArray(c.bookPrices) ? c.bookPrices : null;
+  if (!prices) return false;
+  return prices.some((p) => p && canonBook(p.book || p.key) === name);
+}
+
 /**
  * This side's American price at this line, one number per book.
- * dkQuote, hardRock, and bookPrices are the stored board. The execution
- * odds count only for the book that posted them. A price at another point
- * is skipped, so an alt line cannot fill this line.
+ * dkQuote, hardRock, and bookPrices are the stored board. The bet price
+ * fills a book only when that book posted on the board, or when the row
+ * has no board (a synthetic fixture). It does not label another book's
+ * american as this book, so a Hard Rock number cannot complete a DraftKings
+ * pair. A price at another point is skipped, so an alt line cannot fill
+ * this line. 2026-10-18: pairing rule, not a fitted weight.
  */
 function pricesByBook(c) {
   const out = new Map();
@@ -294,7 +356,7 @@ function pricesByBook(c) {
     put(p.book || p.key, p.american != null ? p.american : p.price, p.point);
   }
   const exec = canonBook(c.book || c.executionBook || c.priceBook);
-  if (exec) put(exec, c.odds, line);
+  if (exec && (!hasStoredBoard(c) || boardPosts(c, exec))) put(exec, c.odds, line);
   return out;
 }
 
@@ -338,27 +400,79 @@ function meanProb(rows) {
 
 const OTHER_SHARP = new Set((SHARP_BOOKS || []).filter((b) => b !== 'pinnacle'));
 
+/** Sharp reference books. The list is config.SHARP_BOOKS, not a fitted set. */
+function isSharpBook(book) {
+  const k = canonBook(book);
+  return k === 'pinnacle' || OTHER_SHARP.has(k);
+}
+
+/**
+ * Retail = not a sharp reference. Hard Rock, DraftKings, FanDuel, BetMGM,
+ * Caesars, and every other stored book are retail. Not a weight.
+ */
+function isRetailBook(book) {
+  const k = canonBook(book);
+  return !!k && !isSharpBook(k);
+}
+
+function baseFairSource(c) {
+  if (c && c.anchorFairSource) return String(c.anchorFairSource).replace(/-soft$/, '');
+  if (c && c.fairSource) return String(c.fairSource).replace(/-soft$/, '');
+  return 'none';
+}
+
+/**
+ * pinnacle and sharp-books are sharp, including a sharp book key.
+ * consensus is soft only when every book in the set is retail. A consensus
+ * with no book list is the retail fallback: resolveFair peels sharp books
+ * off before it emits 'consensus' (ASSUMED from that order, not a fit).
+ * One retail book is soft. No source is none.
+ */
+function qualityFor(source, books) {
+  if (!source || source === 'none') return 'none';
+  if (source === 'pinnacle' || source === 'sharp-books' || isSharpBook(source)) return 'sharp';
+  if (source === 'consensus') {
+    if (books && books.length && books.some((b) => !isRetailBook(b))) return 'sharp';
+    return 'soft';
+  }
+  if (isRetailBook(source)) return 'soft';
+  return 'none';
+}
+
+function fairMeta(c) {
+  const source = baseFairSource(c);
+  const books = Array.isArray(c && c.anchorFairBooks) ? c.anchorFairBooks : null;
+  const quality = qualityFor(source, books);
+  const soft = quality === 'soft';
+  return {
+    source: source || 'none',
+    quality,
+    soft,
+    fairSource: soft ? `${source}-soft` : (source || 'none'),
+  };
+}
+
 /**
  * Pinnacle power no-vig, else other sharp books, else the stored board.
- * Does not read or write the bet price.
+ * Does not read or write the bet price. books is the set that entered p_fair.
  */
 function resolveFair(c, opp) {
   const pin = pinnacleFair(c);
-  if (pin != null) return { pFair: pin, source: 'pinnacle' };
+  if (pin != null) return { pFair: pin, source: 'pinnacle', books: ['pinnacle'] };
   const pairs = pairedBookFairs(c, opp);
   const fromBoard = pairs.find((row) => row.book === 'pinnacle');
-  if (fromBoard) return { pFair: fromBoard.p, source: 'pinnacle' };
+  if (fromBoard) return { pFair: fromBoard.p, source: 'pinnacle', books: ['pinnacle'] };
   const sharps = pairs.filter((row) => OTHER_SHARP.has(row.book));
   if (sharps.length) {
     const p = meanProb(sharps);
-    if (p != null) return { pFair: p, source: 'sharp-books' };
+    if (p != null) return { pFair: p, source: 'sharp-books', books: sharps.map((row) => row.book) };
   }
   if (pairs.length >= 2) {
     const p = meanProb(pairs);
-    if (p != null) return { pFair: p, source: 'consensus' };
+    if (p != null) return { pFair: p, source: 'consensus', books: pairs.map((row) => row.book) };
   }
-  if (pairs.length === 1) return { pFair: pairs[0].p, source: pairs[0].book };
-  return { pFair: null, source: 'none' };
+  if (pairs.length === 1) return { pFair: pairs[0].p, source: pairs[0].book, books: [pairs[0].book] };
+  return { pFair: null, source: 'none', books: [] };
 }
 
 /**
@@ -387,7 +501,10 @@ function applyMarketAnchor(candidates) {
     const opp = (groups.get(pairKey(c)) || []).find((row) => isOpposite(c, row));
     const resolved = resolveFair(c, opp);
     const pFair = resolved.pFair;
-    const source = resolved.source;
+    const dropped = pModel == null || pFair == null;
+    const source = dropped ? 'none' : resolved.source;
+    const books = dropped ? [] : (resolved.books || []);
+    const meta = fairMeta({ anchorFairSource: source, anchorFairBooks: books });
     const se = ratingSeOf({
       ...c,
       modelPureP: pModel != null ? pModel : c.modelPureP,
@@ -395,18 +512,22 @@ function applyMarketAnchor(candidates) {
     });
     const stamped = {
       p_model: pModel != null ? +Number(pModel).toFixed(6) : (c.p_model != null ? c.p_model : null),
-      p_fair: pFair != null ? +Number(pFair).toFixed(6) : null,
+      p_fair: !dropped && pFair != null ? +Number(pFair).toFixed(6) : null,
       p_calibrated: finiteProb(c.coverProb),
       anchorWeight: w,
-      anchorFairSource: source,
+      anchorFairSource: meta.source,
+      anchorFairBooks: books,
+      fairSoft: meta.soft,
+      fairQuality: meta.quality,
+      evAtFairValid: meta.quality === 'sharp',
       ratingSe: Number.isFinite(se) ? se : 0,
     };
-    if (pModel == null || pFair == null) {
-      return { ...c, ...stamped, anchorFairSource: 'none', p_fair: null };
+    if (dropped) {
+      return { ...c, ...stamped, anchorFairSource: 'none', p_fair: null, fairSoft: false, fairQuality: 'none', evAtFairValid: false, anchorFairBooks: [] };
     }
     const p = anchorProbability(pModel, pFair, w);
     if (p == null || !Number.isFinite(p)) {
-      return { ...c, ...stamped, anchorFairSource: 'none' };
+      return { ...c, ...stamped, anchorFairSource: 'none', anchorFairBooks: [], fairSoft: false, fairQuality: 'none', evAtFairValid: false };
     }
     return { ...c, ...stamped, coverProb: p };
   });
@@ -430,10 +551,12 @@ function priceEdgeAtBet(c) {
   if (!c) return c;
   const p = Number(c.coverProb);
   if (!Number.isFinite(p)) return c;
-  const implied = americanToImplied(c.odds);
-  const dec = americanToDecimal(c.odds);
+  // Same retail quote fairPickFields uses for evAtFair. Not a sharp american.
+  const price = betAmerican(c);
+  const implied = americanToImplied(price);
+  const dec = americanToDecimal(price);
   const edge = implied != null ? p - implied : null;
-  const ev = dec != null ? pushAwareEv(p, c.odds, c && c.pPush) : null;
+  const ev = dec != null ? pushAwareEv(p, price, c && c.pPush) : null;
   const retail = retailBook(c) === 'draftkings' || retailBook(c) === 'hardrockbet';
   return {
     ...c,

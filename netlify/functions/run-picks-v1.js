@@ -20,6 +20,11 @@ exports.handler = async (event) => {
     try { const token = process.env.NETLIFY_AUTH_TOKEN; const sid = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
       const r = await fetch(`https://api.netlify.com/api/v1/blobs/${sid}/edge-picks-omega/omega-line-snap-2026-10-18-1000`, { headers: { Authorization: `Bearer ${token}` } });
       out.restSnapStatus = r.status; } catch (e) { out.restError = e.message; }
+    for (const k of ['picks-2026-10-18','omega-ops/capture-health-latest','omega-line-path/2026-10-18','latest-date']) {
+      try { const token = process.env.NETLIFY_AUTH_TOKEN; const sid = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+        const r = await fetch(`https://api.netlify.com/api/v1/blobs/${sid}/edge-picks-omega/${k}`, { headers: { Authorization: `Bearer ${token}` } });
+        out['rest:'+k] = r.status; } catch (e) { out['rest:'+k] = e.message; }
+    }
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out, null, 2) };
   }
   try {

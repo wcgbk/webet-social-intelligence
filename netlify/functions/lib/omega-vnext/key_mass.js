@@ -22,6 +22,34 @@
  * The normal CDF here is unclamped. odds_math.normCdf clamps to
  * [0.001, 0.999], which erases far-tail bin differences.
  * This module does not require sports/_common (that file requires this one).
+ *
+ * --- Moment match and the default quote (task G3, 2026-10-18) ---
+ * Key multipliers are symmetric in |margin|, so they do not preserve the
+ * caller's mean or SD. On an ARI side margin of -3.62 the unmatched PMF
+ * moved +12.5 from 74.5% to 82.3% at SD 13.5 (SIM-REPORT.md, key-mass
+ * variant). That is a distortion. After the weights are applied the integer
+ * PMF is renormalized and moment-matched back to the input mean and SD
+ * (exponential-family tilt exp(λk + βk²) on the integer grid). λ and β are
+ * solved, not fitted: MATH, so the discrete mean and SD equal the inputs.
+ * The conditional rates above are the pre-match solver targets. marginBin
+ * is the matched PMF, so a caller does not read 0.090 back at margin 3.
+ *
+ * FITTED decision, 855 walk-forward rows in
+ * /workspace/audit-scratch/elo_rows.json (home margin, Elo mean), SD 13.22,
+ * ties dropped on the moneyline (n = 854). Log-loss, lower is better:
+ *   moment-matched key PMF        0.634051
+ *   that PMF after the 0.03 rail  0.634051
+ *   plain normal Φ(μ/σ)          0.633890
+ * The rail does not move these moneyline prices (max |Δ| = 0 on the 854
+ * rows). The PMF is worse by 0.000161, so spreadQuote / mlQuote / totalQuote
+ * default to the plain normal plus an explicit integer push. Set
+ * OMEGA_KEY_MASS=1 to price with the moment-matched PMF. Offset table:
+ * /workspace/fix-1017/audit2/keymass-eval.txt.
+ *
+ * ASSUMED safeguard, not a fit: when the PMF is on, |cover − plain normal
+ * with explicit push| ≤ 0.03, and ≤ 0.009 once the line is at least 10
+ * points from the mean (the requirement is < 0.01; 0.009 keeps it inside).
+ * A 3-point cap cannot by itself flip an edge floor by more than that.
  */
 
 const { SPORT_SPREAD_STD, SPORT_TOTAL_STD } = require('./config');
@@ -116,6 +144,216 @@ function normalBin(mean, std, k) {
   const hi = normCdfOpen((k + 0.5 - mean) / std);
   const lo = normCdfOpen((k - 0.5 - mean) / std);
   return Math.max(0, hi - lo);
+}
+
+/**
+ * ASSUMED safeguards, not fits. The unmatched PMF moved a 12.5-point
+ * dog by about 8 points (SIM-REPORT key-mass variant). 0.03 is the hard
+ * cap versus the plain normal with an explicit push. 0.009 is inside the
+ * required 0.01 bound once |line − mean| ≥ 10, so a far line stays ~0.
+ */
+const KEY_MASS_CAP = 0.03;
+const KEY_MASS_FAR_CAP = 0.009;
+const KEY_MASS_FAR_POINTS = 10;
+
+/**
+ * Pricing gate. Unset / 0 / off stays on the plain normal: the 855-row
+ * moneyline log-loss above is worse for the PMF (FITTED). OMEGA_KEY_MASS=1
+ * (also on/true/yes) selects the moment-matched PMF. Read at call time.
+ * This is stricter than gaps_flags.keyMassEnabled, which treats unset as on
+ * and then calls these quotes. The quote itself is the default.
+ */
+function keyMassPmfOn() {
+  const v = process.env.OMEGA_KEY_MASS;
+  if (v == null) return false;
+  const s = String(v).trim().toLowerCase();
+  return s === '1' || s === 'on' || s === 'true' || s === 'yes';
+}
+
+function integerLine(line) {
+  return Math.abs(line - Math.round(line)) < 1e-6;
+}
+
+/** MATH. exp(λk + βk²) tilt so the integer PMF has the input mean and SD. */
+function momentMatch(w0, lo, targetMean, targetSd) {
+  const n = w0.length;
+  const logw = new Float64Array(n);
+  let rawSum = 0;
+  for (let i = 0; i < n; i++) {
+    rawSum += w0[i];
+    logw[i] = w0[i] > 0 ? Math.log(w0[i]) : -1e300;
+  }
+  if (!(rawSum > 0) || !(targetSd > 0)) return null;
+
+  function dist(lambda, beta) {
+    let m = -Infinity;
+    const sc = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const k = lo + i;
+      const s = logw[i] + lambda * k + beta * k * k;
+      sc[i] = s;
+      if (s > m) m = s;
+    }
+    if (!Number.isFinite(m)) return null;
+    let z = 0;
+    const p = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const e = Math.exp(sc[i] - m);
+      p[i] = e;
+      z += e;
+    }
+    if (!(z > 0)) return null;
+    let m1 = 0;
+    let m2 = 0;
+    for (let i = 0; i < n; i++) {
+      p[i] /= z;
+      const k = lo + i;
+      m1 += k * p[i];
+      m2 += k * k * p[i];
+    }
+    const variance = m2 - m1 * m1;
+    return { p, mean: m1, sd: Math.sqrt(variance > 0 ? variance : 0) };
+  }
+
+  function matchMean(beta) {
+    let loL = -0.5;
+    let hiL = 0.5;
+    let a = dist(loL, beta);
+    let b = dist(hiL, beta);
+    if (!a || !b) return a || b;
+    let guard = 0;
+    while (a.mean > targetMean && guard++ < 40) {
+      loL *= 2;
+      a = dist(loL, beta);
+      if (!a) return null;
+    }
+    guard = 0;
+    while (b.mean < targetMean && guard++ < 40) {
+      hiL *= 2;
+      b = dist(hiL, beta);
+      if (!b) return null;
+    }
+    let best = a;
+    for (let i = 0; i < 50; i++) {
+      const mid = 0.5 * (loL + hiL);
+      const d = dist(mid, beta);
+      if (!d) return best;
+      best = d;
+      if (Math.abs(d.mean - targetMean) < 1e-8) return d;
+      if (d.mean < targetMean) loL = mid;
+      else hiL = mid;
+    }
+    return best;
+  }
+
+  let loB = -1e-3;
+  let hiB = 1e-3;
+  let sLo = matchMean(loB);
+  let sHi = matchMean(hiB);
+  if (!sLo || !sHi) return null;
+  let guard = 0;
+  while (sLo.sd > targetSd && guard++ < 40) {
+    loB = loB * 1.6 - 1e-6;
+    sLo = matchMean(loB);
+    if (!sLo) return null;
+  }
+  guard = 0;
+  while (sHi.sd < targetSd && guard++ < 40) {
+    hiB = hiB * 1.6 + 1e-6;
+    sHi = matchMean(hiB);
+    if (!sHi) return null;
+  }
+  let best = sHi;
+  for (let i = 0; i < 40; i++) {
+    const mid = 0.5 * (loB + hiB);
+    const s = matchMean(mid);
+    if (!s) return best;
+    best = s;
+    if (Math.abs(s.sd - targetSd) < 1e-4 && Math.abs(s.mean - targetMean) < 1e-6) break;
+    if (s.sd < targetSd) loB = mid;
+    else hiB = mid;
+  }
+  if (Math.abs(best.mean - targetMean) > 0.05 || Math.abs(best.sd - targetSd) > 0.1) return null;
+  return best.p;
+}
+
+const MATCH_CACHE = new Map();
+
+function matchedMasses(tag, mean, std, mult, lo, hi) {
+  const key = tag + '|' + mean + '|' + std;
+  const hit = MATCH_CACHE.get(key);
+  if (hit) return hit;
+  const n = hi - lo + 1;
+  const w = new Float64Array(n);
+  for (let k = lo; k <= hi; k++) {
+    const nb = normalBin(mean, std, k);
+    const abs = k < 0 ? -k : k;
+    const m = mult && mult[abs] != null ? mult[abs] : 1;
+    w[k - lo] = nb * m;
+  }
+  let p = momentMatch(w, lo, mean, std);
+  if (!p) {
+    p = new Float64Array(n);
+    let sum = 0;
+    for (let k = lo; k <= hi; k++) {
+      p[k - lo] = normalBin(mean, std, k);
+      sum += p[k - lo];
+    }
+    if (!(sum > 0)) return null;
+    for (let i = 0; i < n; i++) p[i] /= sum;
+  }
+  const masses = { w: p, sum: 1, left: 0, right: 0, lo, hi };
+  if (MATCH_CACHE.size > 4000) MATCH_CACHE.clear();
+  MATCH_CACHE.set(key, masses);
+  return masses;
+}
+
+function deltaCap(distance) {
+  if (distance >= KEY_MASS_FAR_POINTS) return KEY_MASS_FAR_CAP;
+  return KEY_MASS_CAP;
+}
+
+function unclampedCover(pWin, pPush) {
+  const win = Math.max(0, pWin);
+  const push = Math.max(0, Math.min(0.999, pPush));
+  if (push > 1e-15 && push < 1) return win / (1 - push);
+  return win;
+}
+
+/**
+ * Integer push is the bin mass (no 0.001 wipe: a real atom must survive).
+ * Half-point callers pass pPush 0. coverProb is the conditional win.
+ */
+function packQuote(pWin, pPush) {
+  const win = Math.max(0, pWin);
+  const push = Math.max(0, Math.min(0.999, pPush));
+  const cover = clamp(unclampedCover(win, push), 0.001, 0.999);
+  return {
+    coverProb: cover,
+    pWin: win,
+    pPush: push > 1e-15 ? push : 0,
+    pLoss: Math.max(0, 1 - win - push),
+  };
+}
+
+/** Pull the conditional cover onto the plain normal, then rebuild pWin. */
+function railQuote(pWin, pPush, plainCover, distance) {
+  const push = Math.max(0, Math.min(0.999, pPush));
+  let cover = unclampedCover(pWin, push);
+  const cap = deltaCap(distance);
+  const plain = Number.isFinite(plainCover) ? plainCover : cover;
+  const delta = cover - plain;
+  if (Math.abs(delta) > cap) cover = plain + Math.sign(delta) * cap;
+  cover = clamp(cover, 0.001, 0.999);
+  let win = (push > 1e-15 && push < 1) ? cover * (1 - push) : cover;
+  if (win < 0) win = 0;
+  if (win + push > 1) win = Math.max(0, 1 - push);
+  return {
+    coverProb: cover,
+    pWin: win,
+    pPush: push > 1e-15 ? push : 0,
+    pLoss: Math.max(0, 1 - win - push),
+  };
 }
 
 function spreadStd(sport) {
@@ -248,7 +486,7 @@ function marginMasses(mean, sport, std) {
   if (!mult) return null;
   const s = std > 0 ? std : spreadStd(sport);
   if (!Number.isFinite(mean) || !(s > 0)) return null;
-  return weightedMasses(mean, s, mult, MARGIN_LO, MARGIN_HI);
+  return matchedMasses('m:' + sport, mean, s, mult, MARGIN_LO, MARGIN_HI);
 }
 
 function probGt(masses, t) {
@@ -266,62 +504,105 @@ function probEq(masses, k) {
   return binProb(masses, k);
 }
 
-function quoteFromWinPush(pWin, pPush) {
-  const win = Math.max(0, pWin);
-  const push = Math.max(0, Math.min(0.999, pPush));
-  const loss = Math.max(0, 1 - win - push);
-  let cover = win;
-  if (push >= 0.001 && push < 1) cover = win / (1 - push);
-  cover = clamp(cover, 0.001, 0.999);
-  return {
-    coverProb: cover,
-    pWin: win,
-    pPush: push >= 0.001 ? push : 0,
-    pLoss: loss,
-  };
+/** Plain normal with an explicit push on an integer margin. NCAAF 0 splits. */
+function plainSpreadParts(mean, line, sport, std) {
+  const thresh = -line;
+  const integer = integerLine(line);
+  if (sport === 'NCAAF' && integer && Math.round(line) === 0) {
+    const p0 = normalBin(mean, std, 0);
+    const pWin = (1 - normCdfOpen((0.5 - mean) / std)) + 0.5 * p0;
+    return { pWin, pPush: 0, cover: pWin };
+  }
+  if (!integer) {
+    const pWin = 1 - normCdfOpen((thresh - mean) / std);
+    return { pWin, pPush: 0, cover: pWin };
+  }
+  const k = Math.round(thresh);
+  const pPush = normalBin(mean, std, k);
+  const pWin = 1 - normCdfOpen((k + 0.5 - mean) / std);
+  return { pWin, pPush, cover: unclampedCover(pWin, pPush) };
+}
+
+/** NFL ties push. NCAAF overtime splits the tie, so the push is not a push. */
+function plainMlParts(mean, sport, std) {
+  const p0 = normalBin(mean, std, 0);
+  const pPos = 1 - normCdfOpen((0.5 - mean) / std);
+  if (sport === 'NCAAF') {
+    const pWin = pPos + 0.5 * p0;
+    return { pWin, pPush: 0, cover: pWin };
+  }
+  return { pWin: pPos, pPush: p0, cover: unclampedCover(pPos, p0) };
+}
+
+function plainTotalParts(mean, line, side, std) {
+  const over = /over/i.test(String(side || ''));
+  const integer = integerLine(line);
+  if (!integer) {
+    const z = (mean - line) / std;
+    const pWin = over ? normCdfOpen(z) : normCdfOpen(-z);
+    return { pWin, pPush: 0, cover: pWin };
+  }
+  const k = Math.round(line);
+  const pPush = normalBin(mean, std, k);
+  const pOver = 1 - normCdfOpen((k + 0.5 - mean) / std);
+  const pUnder = normCdfOpen((k - 0.5 - mean) / std);
+  const pWin = over ? pOver : pUnder;
+  return { pWin, pPush, cover: unclampedCover(pWin, pPush) };
 }
 
 /**
  * Side margin and the side's points. Cover when margin + line > 0.
  * Integer line pushes at margin = −line. Half points do not push.
  * NCAAF pick'em (line 0) does not push: overtime produces a winner.
+ * Default is the plain normal. OMEGA_KEY_MASS=1 uses the matched PMF.
  */
 function spreadQuote(modelMargin, line, sport, std) {
   if (sport !== 'NFL' && sport !== 'NCAAF') return null;
   if (!Number.isFinite(modelMargin) || !Number.isFinite(line)) return null;
-  const masses = marginMasses(modelMargin, sport, std);
+  const s = std > 0 ? std : spreadStd(sport);
+  if (!(s > 0)) return null;
+  const plain = plainSpreadParts(modelMargin, line, sport, s);
+  if (!keyMassPmfOn()) return packQuote(plain.pWin, plain.pPush);
+  const masses = marginMasses(modelMargin, sport, s);
   if (!masses) return null;
   const thresh = -line;
-  const integer = Math.abs(line - Math.round(line)) < 1e-6;
+  const integer = integerLine(line);
   if (sport === 'NCAAF' && integer && Math.round(line) === 0) {
     const p0 = probEq(masses, 0);
     const pWin = probGt(masses, 0) + 0.5 * p0;
-    return quoteFromWinPush(pWin, 0);
+    return railQuote(pWin, 0, plain.cover, Math.abs(modelMargin));
   }
   const pushK = integer ? Math.round(thresh) : null;
   const pPush = pushK == null ? 0 : probEq(masses, pushK);
   const pWin = probGt(masses, thresh);
-  return quoteFromWinPush(pWin, pPush);
+  return railQuote(pWin, pPush, plain.cover, Math.abs(modelMargin + line));
 }
 
 /**
  * NFL moneyline pushes on a tie. NCAAF splits the tie (overtime).
  * coverProb is the conditional win for NFL and the full win for NCAAF.
+ * Default is the plain normal. OMEGA_KEY_MASS=1 uses the matched PMF.
  */
 function mlQuote(modelMargin, sport, std) {
   if (!Number.isFinite(modelMargin)) return null;
-  const masses = marginMasses(modelMargin, sport, std);
+  if (sport !== 'NFL' && sport !== 'NCAAF') return null;
+  const s = std > 0 ? std : spreadStd(sport);
+  if (!(s > 0)) return null;
+  const plain = plainMlParts(modelMargin, sport, s);
+  if (!keyMassPmfOn()) return packQuote(plain.pWin, plain.pPush);
+  const masses = marginMasses(modelMargin, sport, s);
   if (!masses) return null;
   const pPos = probGt(masses, 0);
   const p0 = probEq(masses, 0);
-  if (sport === 'NCAAF') return quoteFromWinPush(pPos + 0.5 * p0, 0);
-  if (sport !== 'NFL') return null;
-  return quoteFromWinPush(pPos, p0);
+  if (sport === 'NCAAF') {
+    return railQuote(pPos + 0.5 * p0, 0, plain.cover, Math.abs(modelMargin));
+  }
+  return railQuote(pPos, p0, plain.cover, Math.abs(modelMargin));
 }
 
 function totalMasses(mean, std) {
   if (!Number.isFinite(mean) || !(std > 0)) return null;
-  return weightedMasses(mean, std, NFL_TOTAL_MULT, TOTAL_LO, TOTAL_HI);
+  return matchedMasses('t', mean, std, NFL_TOTAL_MULT, TOTAL_LO, TOTAL_HI);
 }
 
 /** NFL total only. Over wins when total > line. Integer line pushes on total = line. */
@@ -329,10 +610,13 @@ function totalQuote(modelTotal, line, side, sport, std) {
   if (sport !== 'NFL') return null;
   if (!Number.isFinite(modelTotal) || !Number.isFinite(line)) return null;
   const s = std > 0 ? std : totalStd(sport);
+  if (!(s > 0)) return null;
+  const plain = plainTotalParts(modelTotal, line, side, s);
+  if (!keyMassPmfOn()) return packQuote(plain.pWin, plain.pPush);
   const masses = totalMasses(modelTotal, s);
   if (!masses) return null;
   const over = /over/i.test(String(side || ''));
-  const integer = Math.abs(line - Math.round(line)) < 1e-6;
+  const integer = integerLine(line);
   const pushK = integer ? Math.round(line) : null;
   const pPush = pushK == null ? 0 : probEq(masses, pushK);
   let pWinU = 0;
@@ -348,7 +632,7 @@ function totalQuote(modelTotal, line, side, sport, std) {
     const win = over ? k > line : k < line;
     if (win) pWinU += masses.w[k - masses.lo];
   }
-  return quoteFromWinPush(pWinU / masses.sum, pPush);
+  return railQuote(pWinU / masses.sum, pPush, plain.cover, Math.abs(modelTotal - line));
 }
 
 function marginBin(mean, k, sport, std) {

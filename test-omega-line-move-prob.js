@@ -250,6 +250,7 @@ try {
       odds: -110,
     };
   }
+  // Default quote is the plain normal (PMF lost the 855-row ML log-loss), so a 1-point move through 3 matches one through 8.
   delete process.env.OMEGA_KEY_MASS;
   const keyOn = bookDelta(
     game({ pinnacle: spreadRow(-2.5) }),
@@ -258,20 +259,6 @@ try {
     spreadCand(-3.5),
     ['pinnacle'],
   );
-  process.env.OMEGA_KEY_MASS = '0';
-  const keyOff = bookDelta(
-    game({ pinnacle: spreadRow(-2.5) }),
-    game({ pinnacle: spreadRow(-3.5) }),
-    null,
-    spreadCand(-3.5),
-    ['pinnacle'],
-  );
-  delete process.env.OMEGA_KEY_MASS;
-  assert.ok(keyOn && keyOff);
-  assert.ok(
-    Math.abs(keyOn.d310 - keyOff.d310) > 0.002,
-    `key-mass ${keyOn.d310} normal ${keyOff.d310}`,
-  );
   const awayFromThree = bookDelta(
     game({ pinnacle: spreadRow(-7.5) }),
     game({ pinnacle: spreadRow(-8.5) }),
@@ -279,7 +266,21 @@ try {
     spreadCand(-8.5),
     ['pinnacle'],
   );
-  assert.ok(Math.abs(Math.abs(keyOn.d310) - Math.abs(awayFromThree.d310)) > 0.0005);
+  assert.ok(keyOn && awayFromThree);
+  close(keyOn.d310, awayFromThree.d310, 1e-12);
+  process.env.OMEGA_KEY_MASS = '1';
+  const keyed = bookDelta(
+    game({ pinnacle: spreadRow(-2.5) }),
+    game({ pinnacle: spreadRow(-3.5) }),
+    null,
+    spreadCand(-3.5),
+    ['pinnacle'],
+  );
+  delete process.env.OMEGA_KEY_MASS;
+  assert.ok(keyed);
+  assert.ok(Math.abs(keyed.p3 - keyOn.p3) <= 0.03 + 1e-9, `p3 rail ${keyed.p3 - keyOn.p3}`);
+  assert.ok(Math.abs(keyed.p10 - keyOn.p10) <= 0.03 + 1e-9, `p10 rail ${keyed.p10 - keyOn.p10}`);
+  assert.ok(Math.abs(keyed.d310 - keyOn.d310) <= 0.06 + 1e-9);
 
   const pick = toPickObject(moved);
   assert.strictEqual(pick.edgeBasis, 'calibrated-edge-vs-pinnacle-no-vig');

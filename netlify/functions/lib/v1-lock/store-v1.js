@@ -19,7 +19,8 @@ async function getStoreV1(name) {
 async function restFetch(storeName, key, opts = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
-  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${storeName}/${key}`;
+  const encKey = String(key).split('/').map(encodeURIComponent).join('/');
+  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${storeName}/${encKey}`;
   const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 20000);
   try { return await fetch(url, { method: opts.method || 'GET', signal: ctrl.signal,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

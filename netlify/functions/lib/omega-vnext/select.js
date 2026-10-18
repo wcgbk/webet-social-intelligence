@@ -443,6 +443,8 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
     out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
   }
   if (out.length >= maxN) return out;
+  // NO LEANS (2026-10-18): paired sub-1% fills are leans — disabled.
+  return out;
   const paired = [...(pairedPool || [])].sort(compareByEv);
   for (const c of paired) {
     if (out.length >= maxN) break;
@@ -584,7 +586,10 @@ function printedEdgeEv(c) {
   const evFromShown = edgeFromShown && fullEv != null && shownEv != null
     && Number.isFinite(evParsed) && evParsed !== 0
     && Math.abs(evParsed - fullEv) <= 0.0015;
-  const evNum = evFromShown ? shownEv : (Number.isFinite(evParsed) ? evParsed : null);
+  // EV print fix (2026-10-18): print EV from the UNROUNDED final p, not the
+  // one-decimal shown cover (that snap caused a ~0.25pt drift vs hand math).
+  const evNum = Number.isFinite(fullEv) ? fullEv : (Number.isFinite(evParsed) ? evParsed : null);
+  void evFromShown;
   const evStr = evNum == null || !Number.isFinite(evNum) ? null : formatEdgePct(evNum);
   return { edgeFrac, edgeFromShown, displayEdge, edgePctStr, evNum, evStr };
 }

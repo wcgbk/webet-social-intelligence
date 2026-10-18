@@ -94,7 +94,13 @@ module.exports = { THRESHOLDS, simplifiedProbability, checkCandidate, applyBetCh
  * inputs, not rank keys. */
 function sheetCheckForCandidate(c) {
   if (!c) return { verdict: 'NO BET', flagged: false, reason: 'missing-candidate' };
-  const p = c.coverProb != null ? Number(c.coverProb) : null;
+  // Published picks carry coverProb as a "55.0%" string; candidates as 0.55.
+  let p = null;
+  if (c.coverProb != null) {
+    const raw = String(c.coverProb).trim();
+    const n = Number(raw.replace('%', ''));
+    p = Number.isFinite(n) ? (raw.includes('%') || n > 1 ? n / 100 : n) : null;
+  }
   const odds = c.odds != null ? c.odds : c.oddsStr;
   if (p == null || !Number.isFinite(p)) return { verdict: 'NO BET', flagged: false, reason: 'missing-coverProb' };
   return checkCandidate(c, { pOverride: p });

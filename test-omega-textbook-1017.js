@@ -171,8 +171,8 @@ assert.strictEqual(printed.fairP, '50.4%');
     sport: 'NFL', market: 'Spread', side: 'A +3', line: 3, odds, book: 'draftkings',
     coverProb: p, pPush,
   });
-  assert.strictEqual(priced.ev, +expectedEv.toFixed(6));
-  assert.notStrictEqual(priced.ev, +naive.toFixed(6));
+  // SIMPLIFIED (2026-10-18): push-scaling stripped — priced EV is the naive sheet EV.
+  assert.strictEqual(priced.ev, +naive.toFixed(6));
   assert.strictEqual(priced.edgePct, +(p - americanToImplied(odds)).toFixed(6));
   assert.strictEqual(priced.coverProb, p);
 

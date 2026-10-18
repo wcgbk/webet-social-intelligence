@@ -97,7 +97,8 @@ assert.strictEqual(
   kellyFraction(pKelly, oddsKelly, frac),
 );
 const conditionalEv = pKelly * americanToDecimal(oddsKelly) - 1;
-assert.ok(Math.abs(pushAwareEv(pKelly, oddsKelly, pPush) - conditionalEv * (1 - pPush)) < 1e-12);
+// SIMPLIFIED (2026-10-18): push-scaling of EV stripped; EV is the sheet's p*decimal-1.
+assert.ok(Math.abs(pushAwareEv(pKelly, oddsKelly, pPush) - conditionalEv) < 1e-12);
 
 const decKelly = americanToDecimal(oddsKelly);
 const bNet = decKelly - 1;

@@ -96,7 +96,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     last5ByTeam: (gameDay && gameDay.last5ByTeam) || null,
     commenceTime,
   });
-  if (recency.applied) env.modelMargin = recency.modelMargin;
+  // SIMPLIFIED (2026-10-18): last-5 recency blend stripped (log-only).
+  if (false && recency.applied) env.modelMargin = recency.modelMargin;
   const gd = applyGameDayAdjustments({
     sport: SPORT,
     modelMargin: env.modelMargin,
@@ -111,7 +112,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NFL) || null,
     neutralSite: neutral,
     last5ByTeam: null,
-    personnelByTeam: (gameDay && gameDay.personnelBySport) || null,
+    personnelByTeam: null, // SIMPLIFIED: personnel points stripped
     depthByTeam: (gameDay && gameDay.depthCharts && gameDay.depthCharts.NFL) || null,
   });
   const stacked = applyEngineStack({
@@ -127,11 +128,9 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     event,
     espnGame,
   });
-  const wx = fb.used
-    ? fb
-    : applyNflWeatherTotalAdj(gd.modelTotal, espnGame && espnGame.weather, {
-      indoor: !!(espnGame && espnGame.indoor === true),
-    });
+  // SIMPLIFIED (2026-10-18): weather total tweaks stripped.
+  const wx = { modelTotal: gd.modelTotal, applied: false };
+  void fb; void applyNflWeatherTotalAdj;
   const eloPack = gameDay && gameDay.nflElo;
   const eloW = nflEloWeight();
   let eloPts = null;

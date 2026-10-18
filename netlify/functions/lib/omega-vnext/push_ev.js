@@ -17,9 +17,10 @@ function pushKeep(pPush) {
  * Missing or zero push leaves evAtOdds unchanged.
  */
 function pushAwareEv(p, american, pPush) {
-  const naive = evAtOdds(p, american);
-  if (naive == null || !pushEvEnabled()) return naive;
-  return naive * pushKeep(pPush);
+  // SIMPLIFIED (2026-10-18): push-scaling of EV stripped. pPush stays a
+  // tracked field only; EV is p * decimal - 1 exactly as the sheet defines.
+  void pPush; void pushEvEnabled;
+  return evAtOdds(p, american);
 }
 
 /**

@@ -190,7 +190,7 @@ assert.strictEqual(gateReason({
 
 const indexSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
 assert.ok(!indexSrc.includes('applyPureModel('));
-assert.ok(indexSrc.includes('candidates = calibrateAll(candidates, { cardDate: dateISO })'));
+assert.ok(indexSrc.includes('simplified: calibrateAll stripped')); // SIMPLIFIED 2026-10-18
 assert.ok(indexSrc.includes('applyMarketAnchor(candidates)'));
 
 console.log('test-omega-prob-anchor-1017 ok');

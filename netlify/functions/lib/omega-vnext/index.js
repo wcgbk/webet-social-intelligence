@@ -389,7 +389,10 @@ async function generateOmegaVnext(opts = {}) {
   // cardDate picks the prior-date record for OMEGA_CAL_MODE B and C.
   // Legacy and A do not read it. Gates, floors, Kelly, and unit caps are unchanged.
   console.log(`[omega-vnext] cal-mode=${resolveCalMode()} cardDate=${dateISO}`);
-  candidates = calibrateAll(candidates, { cardDate: dateISO });
+  // SIMPLIFIED (2026-10-18): calibrateAll shrink stripped — it double-counts
+  // the market anchor. Final p is the anchor on modelPureP only.
+  console.log('[omega-vnext] simplified: calibrateAll stripped (log-only)');
+  void calibrateAll;
   // Calibration stays on the row as a diagnostic. The anchor below, after
   // line-move, is the final p for sports in the weight table.
   candidates = candidates.map(attachEv);
@@ -507,7 +510,7 @@ async function generateOmegaVnext(opts = {}) {
   // does not hit Kalshi/Polymarket twice. Null means the audit may retry.
   let pmAuditMarkets = { polyMarkets: null, kalshiMarkets: null };
   const injectedPm = opts.pmPolyMarkets != null || opts.pmKalshiMarkets != null;
-  if (replayLike && !injectedPm) {
+  if (true) { // SIMPLIFIED: PM/steam are log-only, never selection inputs
     candidates = (candidates || []).map(c => ({
       ...c,
       _pmScoreAdj: 0,
@@ -584,20 +587,17 @@ async function generateOmegaVnext(opts = {}) {
   // Blend-weight shift from the 3:00 and 10:00 captures. One adjusted
   // probability feeds edge, stake EV, and the letter grade. A missing
   // slot logs and adjusts 0. DraftKings lag does not stack on top.
-  candidates = applyLineMoveProb(candidates, linePathMeta);
-  const moved = candidates.filter((c) => c && Number(c.movementAdj) !== 0).length;
-  const droppedMove = candidates.filter((c) => c && c.movementDrop).length;
-  console.log(`[omega-vnext] line-move-prob adjusted=${moved} drop=${droppedMove}/${candidates.length}`);
+  // SIMPLIFIED: line movement tracked (annotateLineMoves stamps above),
+  // never adjusts probability/rank/gates. movementAdj/movementDrop ignored.
+  console.log(`[omega-vnext] simplified: line-move-prob stripped, tracked-only candidates=${candidates.length}`);
+  void applyLineMoveProb;
 
   // Stale DraftKings vs the 10:00 one-book no-vig. When movement already
   // adjusted the row, this stamps features and does not rewrite edge.
   // Floors, caps, Kelly, and the lean fill run on the stamped row.
-  candidates = applyDkLag(candidates, {
-    linePath: linePathMeta && linePathMeta.path,
-    opener: linePathMeta && linePathMeta.earliest,
-  });
-  const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
-  console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
+  // SIMPLIFIED: DK-lag boost stripped (log-only if stamped elsewhere).
+  console.log(`[omega-vnext] simplified: dk-lag stripped candidates=${candidates.length}`);
+  void applyDkLag;
 
   // Final p = w*modelPureP + (1-w)*fair. Calibrated coverProb does not feed it.
   // Fair is Pinnacle, else sharp-books, else consensus, else one book's own
@@ -790,7 +790,11 @@ async function generateOmegaVnext(opts = {}) {
     qaHardFails: (hardFails || []).map((r) => (r && typeof r === 'object' ? { hardFail: true, ...r } : r)),
     rejections: (narr && narr.rejections) || [],
   });
-  const reserved = applyGenerateReserve({
+  // SIMPLIFIED (2026-10-18): short-card/reserve top-ups stripped from the
+  // shipped path. The card is exactly what selectStraights cleared.
+  const reserved = { reserve: [], topUps: [], rebuilt: false, picks, parlayLegs };
+  void applyGenerateReserve;
+  if (false) { const _unusedReserved = applyGenerateReserve({
     picks,
     yesPool: keepPublishable(yesPool),
     leanPool: LEAN_PAD ? keepPublishable(leanPool) : [],
@@ -799,7 +803,7 @@ async function generateOmegaVnext(opts = {}) {
     parlayPool,
     hrNote: placement.note,
     modelVersion: MODEL_VERSION,
-  });
+  }); void _unusedReserved; }
   let cardReserve = reserved.reserve;
   let generateTopUps = reserved.topUps || [];
   if (reserved.rebuilt) {

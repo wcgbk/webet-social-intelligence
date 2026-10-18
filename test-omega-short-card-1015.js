@@ -108,8 +108,9 @@ function legNames(parlayLegs) {
     sharpFairPriced: true,
   });
   const selected = selectStraights([floor], 3, [pos, zero], [paired]);
-  assert.deepStrictEqual(selected.map((row) => row.side), ['Home1 +3', 'Home2 +3', 'Home4 +3']);
-  assert.deepStrictEqual(selected.map((row) => row.tier), ['floor', 'lean', 'lean']);
+  // NO LEANS (2026-10-18 rerun): sub-sheet leans no longer fill a short card.
+  assert.deepStrictEqual(selected.map((row) => row.side), ['Home1 +3']);
+  assert.deepStrictEqual(selected.map((row) => row.tier), ['floor']);
   assert.ok(!selected.some((row) => row.side === 'Home3 +3'));
 
   const reserve = buildReserve({
@@ -123,18 +124,19 @@ function legNames(parlayLegs) {
   const reserveSnap = JSON.stringify(reserve);
   const up = topUpStraights({ picks: [], reserve, blocked: [] });
   assert.strictEqual(JSON.stringify(reserve), reserveSnap, 'top-up does not mutate the reserve');
+  // Library-only path (stripped from generate 2026-10-18): topUpStraights
+  // still walks its reserve argument as given.
   assert.deepStrictEqual(names(up.picks), ['Home1 +3', 'Home2 +3', 'Home4 +3']);
   assert.strictEqual(up.exhausted, false);
   assert.ok(!hasName(up.picks, 'Home3'));
   assert.strictEqual(up.picks[0].tier, 'floor');
+  // Library-only topUpStraights still stamps its own lean tier; it is
+  // stripped from the generate path, so this never reaches a card.
   assert.strictEqual(up.picks[1].tier, 'lean');
-  assert.strictEqual(up.picks[1].units, '0.5u');
-  assert.strictEqual(up.picks[2].units, '0.5u');
 
   const last = selectStraights([floor], 3, [zero], [paired]);
-  assert.deepStrictEqual(last.map((row) => row.side), ['Home1 +3', 'Home4 +3']);
-  assert.strictEqual(last[1].pairedFill, true);
-  assert.strictEqual(last[1].tier, 'lean');
+  // NO LEANS: paired fill disabled in selectStraights (2026-10-18).
+  assert.deepStrictEqual(last.map((row) => row.side), ['Home1 +3']);
   const reserve2 = buildReserve({
     yesPool: [floor],
     leanPool: [zero],
@@ -189,9 +191,7 @@ function legNames(parlayLegs) {
   assert.strictEqual(out.rebuilt, false);
   assert.strictEqual(out.picks, picks);
   assert.deepStrictEqual(out.added, []);
-  assert.strictEqual(out.reserve.length, 12);
-  assert.ok(names(out.reserve).includes('Home4 +3'));
-  assert.ok(!names(out.reserve).includes('Home16 +3'));
+  assert.strictEqual(out.reserve.length, 10); // sheet gate removed 2 sub-sheet rows
   assert.ok(!names(out.reserve).some((name) => names(picks).includes(name)));
 }
 

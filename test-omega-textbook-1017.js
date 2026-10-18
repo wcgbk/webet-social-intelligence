@@ -20,24 +20,24 @@ assert.strictEqual(anchorProbability(0.62, 0.50, 0), 0.50);
 assert.strictEqual(anchorProbability(0.62, 0.50, 1), 0.62);
 assert.strictEqual(anchorProbability(0.62, 0.50, 0.25), 0.53);
 
-// 2026-10-18: NFL totals anchor weight is 0 (backtest median), was 0.10.
+// 2026-10-18: NFL ml/spread 0.40 ASSUMED INTERIM; NCAAF ml/spread, NHL spread, MLB ml 0.05 token floor. NFL total stays 0.
 assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
-  NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
-  NFL: { spread: 0.25, ml: 0.25, total: 0 },
-  NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
-  MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
+  NCAAF: { spread: 0.05, ml: 0.05, total: 0.10 },
+  NFL: { spread: 0.40, ml: 0.40, total: 0 },
+  NHL: { spread: 0.05, ml: 0.25, total: 0.25 },
+  MLB: { spread: 0.25, ml: 0.05, total: 0.25 },
 });
-assert.strictEqual(modelWeightFor('NCAAF', 'Spread'), 0.25);
-assert.strictEqual(modelWeightFor('NCAAF', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('NCAAF', 'Spread'), 0.05);
+assert.strictEqual(modelWeightFor('NCAAF', 'Moneyline'), 0.05);
 assert.strictEqual(modelWeightFor('NCAAF', 'Total'), 0.10);
-assert.strictEqual(modelWeightFor('NFL', 'Spread'), 0.25);
-assert.strictEqual(modelWeightFor('NFL', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('NFL', 'Spread'), 0.40);
+assert.strictEqual(modelWeightFor('NFL', 'Moneyline'), 0.40);
 assert.strictEqual(modelWeightFor('NFL', 'Total'), 0); // 2026-10-18: 0 is the market, not a missing weight.
-assert.strictEqual(modelWeightFor('NHL', 'Puck Line'), 0.25);
+assert.strictEqual(modelWeightFor('NHL', 'Puck Line'), 0.05);
 assert.strictEqual(modelWeightFor('NHL', 'Moneyline'), 0.25);
 assert.strictEqual(modelWeightFor('NHL', 'Total'), 0.25);
 assert.strictEqual(modelWeightFor('MLB', 'Run Line'), 0.25);
-assert.strictEqual(modelWeightFor('MLB', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('MLB', 'Moneyline'), 0.05);
 assert.strictEqual(modelWeightFor('MLB', 'Total'), 0.25);
 assert.strictEqual(modelWeightFor('NBA', 'Spread'), null);
 

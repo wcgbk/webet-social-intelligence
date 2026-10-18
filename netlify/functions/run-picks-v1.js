@@ -11,9 +11,7 @@ exports.handler = async (event) => {
   let body = {};
   if (event && event.body) { try { body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body; } catch (_) {} }
   const started = Date.now();
-  if (params.probe === 'true') {
-    const out = { tokenPresent: !!process.env.NETLIFY_AUTH_TOKEN, siteIdPresent: !!process.env.SITE_ID };
-    try { const { getStore } = await import('@netlify/blobs'); out.sdkImport = true;
+  try { const { getStore } = await import('@netlify/blobs'); out.sdkImport = true;
       try { const s = getStore('edge-picks-omega'); const v = await s.get('omega-line-snap-2026-10-18-1000', { type: 'json' }); out.sdkSnap = v ? Object.keys(v) : null; } catch (e) { out.sdkSnapError = e.message; }
       try { const s2 = getStore('edge-picks-omega'); const v2 = await s2.get('omega-ops/capture-health-latest', { type: 'json' }); out.sdkHealth = v2 ? Object.keys(v2) : null; } catch (e) { out.sdkHealthError = e.message; }
     } catch (e) { out.sdkImport = false; out.sdkError = e.message; }

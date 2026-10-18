@@ -48,40 +48,38 @@ assert.ok(/OMEGA_PARLAY_CORR defaults off/.test(config.MODEL_NOTES));
 assert.ok(/1 − pPush/.test(config.MODEL_NOTES));
 assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
 
-// Keyed margin PMF. Default on.
+// Plain normal is the default: moment match dropped the 0.090 pin, and the PMF lost the 855-row ML log-loss (0.634051 vs 0.633890).
 {
   assert.strictEqual(km.keyMassReady('NFL'), true);
   assert.strictEqual(km.keyMassReady('NCAAF'), true);
   const nflStd = config.SPORT_SPREAD_STD.NFL;
   const cfbStd = config.SPORT_SPREAD_STD.NCAAF;
   const totStd = config.SPORT_TOTAL_STD.NFL;
+  const coverStd = config.effectiveSd('NFL', 'margin');
 
-  near(km.marginBin(3, 3, 'NFL'), 0.09, 0.002, 'NFL P(M=3|μ=3)');
-  near(km.marginBin(3, 3, 'NFL') + km.marginBin(3, -3, 'NFL'), 0.17, 0.015, 'NFL |M|=3');
-  near(km.marginBin(7, 7, 'NFL'), 0.065, 0.002, 'NFL P(M=7|μ=7)');
-  near(km.marginBin(10, 10, 'NFL'), 0.044, 0.002, 'NFL P(M=10|μ=10)');
-  near(km.marginBin(3, 3, 'NCAAF'), 0.0535, 0.003, 'NCAAF P(M=3|μ=3)');
+  assert.ok(km.marginBin(3, 3, 'NFL') > km.normalBin(3, nflStd, 3) + 0.03, 'NFL 3-bin still above the normal');
+  assert.ok(km.marginBin(7, 7, 'NFL') > km.normalBin(7, nflStd, 7));
+  assert.ok(km.marginBin(10, 10, 'NFL') > km.normalBin(10, nflStd, 10));
+  assert.ok(km.marginBin(3, 3, 'NCAAF') > km.normalBin(3, cfbStd, 3));
   assert.ok(Math.abs(km.marginBin(3, 3, 'NFL') - km.marginBin(3, 3, 'NCAAF')) > 0.02);
 
-  const coverStd = config.effectiveSd('NFL', 'margin');
   const gap = common.spreadCoverProb(3, -2.5, 'NFL') - common.spreadCoverProb(3, -3.5, 'NFL');
-  near(gap, km.marginBin(3, 3, 'NFL', coverStd), 1e-6, 'half-point gap is the 3 bin');
-  const normalGap = normCdf((3 - 2.5) / nflStd) - normCdf((3 - 3.5) / nflStd);
-  assert.ok(gap > normalGap + 0.04, `keyed gap ${gap} vs normal ${normalGap}`);
+  const plainGap = km.normCdfOpen((3 - 2.5) / coverStd) - km.normCdfOpen((3 - 3.5) / coverStd);
+  near(gap, plainGap, 1e-9, 'default half-point gap is the normal atom');
 
   near(common.spreadCoverProb(3, -2.5, 'NFL') + common.spreadCoverProb(-3, 2.5, 'NFL'), 1, 1e-9);
   near(common.spreadCoverProb(3, -3.5, 'NFL') + common.spreadCoverProb(-3, 3.5, 'NFL'), 1, 1e-9);
 
   const pk = km.spreadQuote(3, -3, 'NFL', coverStd);
-  assert.ok(pk.pPush > 0.08 && pk.pPush < 0.10, `integer push ${pk.pPush}`);
+  near(pk.pPush, km.normalBin(3, coverStd, 3), 1e-12, 'default integer push is the normal atom');
   near(pk.coverProb, pk.pWin / (1 - pk.pPush), 1e-9, 'conditional cover');
   near(common.spreadCoverProb(3, -3, 'NFL'), pk.coverProb, 1e-12);
   const dogInt = km.spreadQuote(-3, 3, 'NFL', coverStd);
   near(pk.coverProb + dogInt.coverProb, 1, 1e-9);
 
-  assert.ok(Math.abs(common.spreadCoverProb(3, -10, 'NFL') - normCdf((3 - 10) / nflStd)) > 0.02);
-  assert.ok(Math.abs(common.spreadCoverProb(4, -3, 'NCAAF') - normCdf((4 - 3) / cfbStd)) > 0.002);
-  assert.ok(Math.abs(common.spreadCoverProb(4, -10, 'NCAAF') - normCdf((4 - 10) / cfbStd)) > 0.02);
+  near(common.spreadCoverProb(3, -10.5, 'NFL'), km.normCdfOpen((3 - 10.5) / coverStd), 1e-12);
+  near(common.spreadCoverProb(4, -3.5, 'NCAAF'), km.normCdfOpen((4 - 3.5) / config.effectiveSd('NCAAF', 'margin')), 1e-12);
+  near(common.spreadCoverProb(4, -10.5, 'NCAAF'), km.normCdfOpen((4 - 10.5) / config.effectiveSd('NCAAF', 'margin')), 1e-12);
   near(common.spreadCoverProb(1.2, -1.5, 'MLB'), normCdf((1.2 - 1.5) / config.effectiveSd('MLB', 'margin')), 1e-12);
 
   const t44 = km.totalBin(44, 44, totStd);
@@ -91,19 +89,21 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
   assert.ok(t44 > n44, '44 is fatter than the normal bin');
   assert.ok(t42 < n42, '42 is a valley');
   assert.ok(t44 > t42);
+  const totEff = config.effectiveSd('NFL', 'total');
   const overGap = common.totalCoverProb(44, 43.5, 'Over', 'NFL') - common.totalCoverProb(44, 44.5, 'Over', 'NFL');
-  assert.ok(overGap > n44, `total key gap ${overGap} vs normal ${n44}`);
+  const plainOverGap = km.normCdfOpen((44 - 43.5) / totEff) - km.normCdfOpen((44 - 44.5) / totEff);
+  near(overGap, plainOverGap, 1e-12, 'default total gap is the normal');
   near(common.totalCoverProb(44, 43.5, 'Over', 'NCAAF'), normCdf((44 - 43.5) / config.effectiveSd('NCAAF', 'total')), 1e-12);
 
   const ml = km.mlQuote(0, 'NFL', nflStd);
-  assert.ok(ml.pPush >= 0.001 && ml.pPush < 0.01, `NFL tie ${ml.pPush}`);
+  near(ml.pPush, km.normalBin(0, nflStd, 0), 1e-12, 'default NFL tie is the normal atom');
   near(ml.coverProb, 0.5, 1e-6);
   const cfbMl = km.mlQuote(0, 'NCAAF', cfbStd);
   assert.strictEqual(cfbMl.pPush, 0);
   near(cfbMl.coverProb, 0.5, 1e-6);
 
   const intTotal = km.totalQuote(44, 44, 'Over', 'NFL', totStd);
-  assert.ok(intTotal.pPush > 0.03, `NFL total push ${intTotal.pPush}`);
+  near(intTotal.pPush, km.normalBin(44, totStd, 44), 1e-12, 'default total push is the normal atom');
   near(intTotal.coverProb, intTotal.pWin / (1 - intTotal.pPush), 1e-9);
   const under = km.totalQuote(44, 44, 'Under', 'NFL', totStd);
   near(intTotal.coverProb + under.coverProb, 1, 1e-9);

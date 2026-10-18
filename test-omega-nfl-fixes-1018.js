@@ -36,7 +36,7 @@ function withEnv(extra, fn) {
 const A = '1';
 const B = '2';
 const MEAN = elo.MEAN_ELO;
-const K = 1;
+const K = config.NFL_PRIOR_K;
 const prior = { [A]: MEAN + 120, [B]: MEAN - 120 };
 
 function game(i, homeId, awayId, homeScore, awayScore) {

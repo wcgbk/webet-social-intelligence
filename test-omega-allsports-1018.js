@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
+const config = require(path.join(root, 'config'));
+const elo = require(path.join(root, 'sports/nfl_elo'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const nhlPeriod = require(path.join(root, 'nhl_period'));
 const {
@@ -162,4 +164,58 @@ assert.strictEqual(health.bySport.MLB.bias.marginMean, null);
 assert.strictEqual(health.bySport.MLB.bias.totalN, 1);
 assert.strictEqual(health.bySport.MLB.bias.totalMean, 0.7);
 
-console.log('test-omega-allsports-1018 ok');
+assert.strictEqual(config.NFL_PRIOR_K, 16);
+assert.strictEqual(config.priorW(5, 16), 16 / 21);
+
+function eloGame(i, homeId, awayId) {
+  return {
+    id: `allsports-k16-${i}`,
+    season: 2026,
+    seasonType: 2,
+    week: i,
+    date: `2026-09-${String(10 + i).padStart(2, '0')}T17:00:00Z`,
+    homeId,
+    awayId,
+    homeScore: 24,
+    awayScore: 17,
+    neutral: true,
+  };
+}
+
+const teamA = '1';
+const teamB = '2';
+const fiveGames = [1, 2, 3, 4, 5].map((i) => (
+  i % 2 === 1 ? eloGame(i, teamA, teamB) : eloGame(i, teamB, teamA)
+));
+
+withEnv({ OMEGA_NFL_PRIOR_K: null, OMEGA_NFL_ELO_LEGACY_DECAY: null }, () => {
+  elo.resetNflEloState();
+  const card = '2026-10-18';
+  return elo.prepareNflElo(card, { games: fiveGames }).then((pack) => {
+    const applied = elo.gamesBeforeCard(fiveGames, card);
+    assert.strictEqual(applied.length, 5);
+    const prior = elo.priorRatings();
+    const counts = {};
+    for (const g of applied) {
+      counts[String(g.homeId)] = (counts[String(g.homeId)] || 0) + 1;
+      counts[String(g.awayId)] = (counts[String(g.awayId)] || 0) + 1;
+    }
+    assert.strictEqual(counts[teamA], 5);
+    assert.strictEqual(config.sportPriorK('NFL'), 16);
+    const start = {};
+    for (const id of Object.keys(prior)) {
+      const g = counts[id] || 0;
+      start[id] = elo.MEAN_ELO + config.priorW(g, 16) * (prior[id] - elo.MEAN_ELO);
+    }
+    const walked = elo.ratingsAfterGames(applied, start);
+    assert.strictEqual(pack.ratings[teamA], walked[teamA]);
+    const fromFull = elo.ratingsAfterGames(applied, prior);
+    assert.notStrictEqual(pack.ratings[teamA], fromFull[teamA]);
+    elo.resetNflEloState();
+  });
+}).then(() => {
+  console.log('test-omega-allsports-1018 ok');
+}).catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

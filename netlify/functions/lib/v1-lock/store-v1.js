@@ -6,10 +6,15 @@
  * board, via the shared blob helpers' store. No Omega key is ever written.
  */
 const { BLOB_STORE_V1, OMEGA_BOARD_STORE } = require('./config-v1');
+// Static require so the Netlify bundler traces @netlify/blobs into every
+// V1 function zip (dynamic import alone was not bundled, so SDK reads
+// silently fell through to REST, which cannot see line-path snaps).
+let blobsPkg = null;
+try { blobsPkg = require('@netlify/blobs'); } catch (_) { blobsPkg = null; }
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
 async function getStoreV1(name) {
-  const { getStore } = await import('@netlify/blobs');
-  return getStore(name);
+  const pkg = blobsPkg || await import('@netlify/blobs');
+  return pkg.getStore(name);
 }
 async function restFetch(storeName, key, opts = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;

@@ -98,7 +98,9 @@ function stake(pick) {
   assert.strictEqual(pick.units, `${select.quarterKellyUnits(0.58, -110)}u`);
 }
 
-// A B already at 0.5u stays 0.5u. A smaller positive Kelly floors at 0.5u. The B cap does not raise it.
+// A B whose quarter Kelly rounds to 0.5u stays graded at 0.5u.
+// 2026-10-18: a smaller positive Kelly is not raised inside quarterKellyUnits.
+// 0.527 at -110 rounds to 0.25u and is published as a labelled lean at 0.5u.
 {
   const atCap = select.toPickObject(candidate({ coverProb: 0.533, ev: 0.018, edgePct: 0.008 }));
   assert.strictEqual(atCap.rating, 'b');
@@ -108,7 +110,10 @@ function stake(pick) {
   const under = select.toPickObject(candidate({ coverProb: 0.527, ev: 0.006, edgePct: 0.008 }));
   assert.strictEqual(under.rating, 'b');
   assert.strictEqual(kellyUnits(0.527), 0.5);
-  assert.strictEqual(under.units, `${select.quarterKellyUnits(0.527, -110)}u`);
+  assert.strictEqual(select.quarterKellyUnits(0.527, -110), 0.25);
+  assert.strictEqual(under.tier, 'lean');
+  assert.strictEqual(under.label, 'lean');
+  assert.strictEqual(under.units, '0.5u');
   assert.ok(stake(under) <= stake(atCap));
 }
 

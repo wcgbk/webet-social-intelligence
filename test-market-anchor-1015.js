@@ -67,7 +67,8 @@ assert.strictEqual(reasonFn({
 }), 'ev-stale');
 
 assert.strictEqual(quarterKellyUnits(0.55, -110), 1.5);
-assert.strictEqual(quarterKellyUnits(0.53, -110), 0.5);
+// 2026-10-18: the 0.5u floor left quarterKellyUnits. 0.53 at -110 rounds to 0.25u.
+assert.strictEqual(quarterKellyUnits(0.53, -110), 0.25);
 assert.strictEqual(quarterKellyUnits(0.54, -110), 0.75);
 
 const narrate = require(D + 'narrate');

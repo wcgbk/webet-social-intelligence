@@ -23,7 +23,7 @@ const PICK_KEEP = [
 
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
-  'evAtModel', 'evAtFair',
+  'evAtModel', 'evAtFair', 'isLean',
   'evLabel', 'riskDollars', 'toWinDollars',
   'uniqueGames', 'uniqueSports', 'independent', 'mirrorsCard', 'legMarkets', 'correlationNote',
   'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote', 'label',

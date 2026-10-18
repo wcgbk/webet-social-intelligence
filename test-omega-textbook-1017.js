@@ -91,7 +91,8 @@ assert.ok(Math.abs(anchored[0].ratingSe - seExpected) < 1e-9);
 const implied = americanToImplied(-110);
 assert.strictEqual(quarterKellyUnits(implied, -110), 0);
 assert.strictEqual(quarterKellyUnits(implied - 0.01, -110), 0);
-assert.strictEqual(quarterKellyUnits(0.53, -110), 0.5);
+// 2026-10-18: the 0.5u floor left quarterKellyUnits. 0.53 at -110 rounds to 0.25u.
+assert.strictEqual(quarterKellyUnits(0.53, -110), 0.25);
 assert.strictEqual(quarterKellyUnits(0.54, -110), 0.75);
 assert.strictEqual(quarterKellyUnits(0.55, -110), 1.5);
 assert.strictEqual(quarterKellyUnits(0.60, -110), 1.5);
@@ -154,7 +155,7 @@ assert.strictEqual(pick.evAtFair, formatEdgePct(0.504 * americanToDecimal(-110) 
 const printed = fairPickFields(pick);
 assert.strictEqual(printed.fairP, '50.4%');
 
-// Push scales EV and Kelly only. Edge stays p − vigged implied.
+// Push scales EV only. f* does not depend on pPush. Edge stays p − vigged implied.
 {
   const p = 0.5286;
   const pPush = 0.0747;
@@ -174,16 +175,18 @@ assert.strictEqual(printed.fairP, '50.4%');
   assert.strictEqual(priced.edgePct, +(p - americanToImplied(odds)).toFixed(6));
   assert.strictEqual(priced.coverProb, p);
 
+  // 2026-10-18: Kelly is the conditional-EV maximiser. It is not kelly of the push-scaled EV.
   function kellyFromEv(ev, decimal) {
     const raw = 0.25 * (ev / (decimal - 1)) * 100;
     const rounded = Math.round(raw * 4) / 4;
-    return Math.min(1.5, Math.max(0.5, rounded));
+    if (!(rounded > 0)) return 0;
+    return Math.min(1.5, rounded);
   }
   const scaledUnits = quarterKellyUnits(p, odds, pPush);
   const plainUnits = quarterKellyUnits(p, odds);
-  assert.strictEqual(scaledUnits, kellyFromEv(expectedEv, dec));
+  assert.strictEqual(scaledUnits, plainUnits);
   assert.strictEqual(plainUnits, kellyFromEv(naive, dec));
-  assert.ok(scaledUnits < plainUnits);
+  assert.notStrictEqual(plainUnits, kellyFromEv(expectedEv, dec));
   assert.strictEqual(quarterKellyUnits(p, odds, 0), plainUnits);
   assert.strictEqual(quarterKellyUnits(p, odds, undefined), plainUnits);
   const zeroPush = priceEdgeAtBet({ odds, coverProb: p, pPush: 0, book: 'draftkings' });

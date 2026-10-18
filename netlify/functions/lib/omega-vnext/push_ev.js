@@ -22,11 +22,18 @@ function pushAwareEv(p, american, pPush) {
   return naive * pushKeep(pPush);
 }
 
-/** Quarter-Kelly scaled by the same (1 − P(push)) factor. */
+/**
+ * Fractional Kelly conditional on no push.
+ * g(f) = (1 − pPush) * [p ln(1 + f b) + (1 − p) ln(1 − f)], with p and b
+ * conditional on no push. The maximiser f* = (p b − (1 − p)) / b does not
+ * contain pPush, so the fraction is not scaled by (1 − pPush).
+ * Not FITTED. /workspace/audit-scratch/prop.js confirms the old scale is
+ * not the numeric optimum. pushAwareEv stays push-aware. pPush is kept
+ * so callers do not change. OMEGA_PUSH_EV still gates EV only.
+ */
 function pushAwareKelly(p, american, fraction, pPush) {
-  const base = kellyFraction(p, american, fraction);
-  if (!pushEvEnabled()) return base;
-  return base * pushKeep(pPush);
+  void pPush;
+  return kellyFraction(p, american, fraction);
 }
 
 module.exports = {

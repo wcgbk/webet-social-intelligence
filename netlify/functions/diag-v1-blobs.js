@@ -6,5 +6,7 @@ exports.handler = async () => {
   out.eaglesIndex = await get('odds-master','index/NFL/caca2d752fe1a1779029082e95332fcc');
   const list=async(store,prefix)=>{ const r=await fetch(`https://api.netlify.com/api/v1/blobs/${site}/${store}?prefix=${encodeURIComponent(prefix)}`,{headers:H}); const j=await r.json().catch(()=>({})); return (j.blobs||[]).map(b=>b.key+'#'+b.size); };
   out.eaglesPrices = await list('odds-master','NFL/caca2d752fe1a1779029082e95332fcc/');
+  out.hrSpread1000 = await get('odds-master','NFL/caca2d752fe1a1779029082e95332fcc/hardrockbet/spreads/2026-10-18T14:01:09.458Z');
+  out.hrTotals1000 = await get('odds-master','NFL/caca2d752fe1a1779029082e95332fcc/hardrockbet/totals/2026-10-18T14:01:09.458Z');
   return { statusCode:200, headers:{'Content-Type':'application/json'}, body: JSON.stringify(out,null,2) };
 };

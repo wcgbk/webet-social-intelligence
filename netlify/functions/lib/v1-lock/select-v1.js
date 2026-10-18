@@ -36,7 +36,7 @@ function toPickV1(c, grade, ev){
   return { sport:c.sport, matchup:c.matchup, homeTeam:c.homeTeam, awayTeam:c.awayTeam,
     pick:r.pick, pickDisplay:r.pick, betType:c.market, odds:c.oddsStr, units:`${unit}u`,
     rating:grade.toLowerCase(), lockGrade:grade, grade, commenceTime:c.commenceTime,
-    winProbability:fmtPct(c.trueProbability), trueProbability:c.trueProbability,
+    winProbability:fmtPct(c.trueProbability), trueProbability:c.trueProbability, filterFlags:c.filterFlags||[],
     ev:ev!=null?fmtPct(ev):null, book:'hardrockbet', displayBook:'Hard Rock Bet', executionBook:'Hard Rock Bet',
     source:'v1-lock', model:MODEL_VERSION_V1, coreReasoning:r.coreReasoning, lockReceipt:r,
     formula:{ spreadHome:c.formulaSpreadHome, total:c.formulaTotal, inputs:c.formulaInputs } };
@@ -44,7 +44,7 @@ function toPickV1(c, grade, ev){
 function selectV1(candidates, formulaPasses=[]){
   const funnel={ candidates:(candidates||[]).length, formulaPassGames:formulaPasses.length,
     noConfirmedHardRockLine:0, missingLast5:0, missingInjuries:0, keyStarterUnknown:0,
-    belowFloor:0, negativeEv:0, roadFavoriteRule:0, qualified:0, straights:0, parlayLegPool:0 };
+    belowFloor:0, negativeEv:0, roadFavoriteRule:0, filter2Form:0, filter4Trap:0, qualified:0, straights:0, parlayLegPool:0 };
   const rejections=formulaPasses.map(p=>({ matchup:p.matchup, sport:p.sport, reason:p.reason, detail:p.detail }));
   const qualified=[];
   for(const c of candidates||[]){
@@ -53,12 +53,43 @@ function selectV1(candidates, formulaPasses=[]){
     if(!c.last5||!Array.isArray(c.last5.home)||c.last5.home.length<5||!Array.isArray(c.last5.away)||c.last5.away.length<5){ funnel.missingLast5++; reject('lock-missing-last5'); continue; }
     if(!c.injuries||c.injuries.home==null||c.injuries.away==null){ funnel.missingInjuries++; reject('lock-missing-injury-reports'); continue; }
     if(!c.keyStarter||!c.keyStarter.homeConfirmed||!c.keyStarter.awayConfirmed||c.keyStarter.unknownReplacement){ funnel.keyStarterUnknown++; reject('lock-key-starter-unknown'); continue; }
+    // Filter 2: road favourite > -7 needs 75%+ (points sports)
+    if(c.market==='Spread'&&c.side.startsWith(c.awayTeam)&&c.line!=null&&c.line<=-7&&c.trueProbability<0.75){ funnel.roadFavoriteRule++; reject('lock-road-favorite-75'); continue; }
+    // Filter 2 — Record and Form (§6): when last-10 form is on file, do not
+    // back a sub-.500 recent-form team against an opponent in equal/better
+    // form. Team markets only; totals are not a backing of either team.
+    const flags=[];
+    const isAwaySide=c.side&&c.side.startsWith(c.awayTeam); const isHomeSide=c.side&&c.side.startsWith(c.homeTeam);
+    if(c.form&&c.market!=='Total'){
+      const sideW=isAwaySide?c.form.awayLast10WinPct:(isHomeSide?c.form.homeLast10WinPct:null);
+      const oppW=isAwaySide?c.form.homeLast10WinPct:(isHomeSide?c.form.awayLast10WinPct:null);
+      if(sideW!=null&&oppW!=null&&sideW<0.5&&oppW>=sideW){ funnel.filter2Form++; reject('lock-filter2-form'); continue; }
+      if(isAwaySide&&c.form.awayLast10WinPct>=0.6) flags.push('strong road form (Filter 2 credit)');
+    }
+    // Filter 4 — Situational (§6): flags always; a confirmed trap (big
+    // favourite off a 15+ win) with the Hard Rock line moving against the
+    // pick is a §9 pass. Line movement reads baseline-0300 -> board line.
+    let lineMoveAgainst=false;
+    const ob=c.openBooks&&c.openBooks.hardrockbet;
+    if(ob){
+      if(c.market==='Spread'&&c.line!=null){ const openLine=isAwaySide?ob.spreadAway:(isHomeSide?ob.spreadHome:null); if(openLine!=null&&c.line-openLine>=0.5) lineMoveAgainst=true; }
+      else if(c.market==='Total'&&c.line!=null&&ob.total!=null){ if(/^over/i.test(c.side)&&ob.total-c.line>=1) lineMoveAgainst=true; if(/^under/i.test(c.side)&&c.line-ob.total>=1) lineMoveAgainst=true; }
+    }
+    if(lineMoveAgainst) flags.push('line movement against pick (Filter 4 flag)');
+    if(c.situational){
+      if(isAwaySide&&c.situational.homeDemoralized) flags.push('demoralized opponent (Filter 4)');
+      if(isHomeSide&&c.situational.awayDemoralized) flags.push('demoralized opponent (Filter 4)');
+      if(isAwaySide&&c.situational.awayRevenge) flags.push('revenge spot (Filter 4)');
+      if(isHomeSide&&c.situational.homeRevenge) flags.push('revenge spot (Filter 4)');
+    }
+    const sideLastMargin=isAwaySide?(c.form&&c.form.awayLastGameMargin):(isHomeSide?(c.form&&c.form.homeLastGameMargin):null);
+    const trapRisk=c.market==='Spread'&&c.line!=null&&c.line<=-10&&sideLastMargin!=null&&sideLastMargin>=15;
+    if(trapRisk){ flags.push('trap-game scrutiny (Filter 4)'); if(lineMoveAgainst){ funnel.filter4Trap++; reject('lock-filter4-trap-line-against'); continue; } }
+    c.filterFlags=flags;
     const grade=gradeForV1(c.sport,c.trueProbability);
     if(!grade){ funnel.belowFloor++; reject('lock-below-grade-floor'); continue; }
     const ev=evFor(c.trueProbability,c.odds);
     if(ev==null||ev<=0){ funnel.negativeEv++; reject('lock-negative-ev'); continue; }
-    // Filter 2: road favourite > -7 needs 75%+ (points sports)
-    if(c.market==='Spread'&&c.side.startsWith(c.awayTeam)&&c.line!=null&&c.line<=-7&&c.trueProbability<0.75){ funnel.roadFavoriteRule++; reject('lock-road-favorite-75'); continue; }
     funnel.qualified++; qualified.push({c,grade,ev});
   }
   qualified.sort((a,b)=>b.c.trueProbability-a.c.trueProbability||b.ev-a.ev);

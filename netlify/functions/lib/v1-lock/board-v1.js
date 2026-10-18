@@ -48,6 +48,7 @@ function reconstructEventsV1(games) {
       home_team: g.homeTeam, away_team: g.awayTeam,
       commence_time: g.commenceTime || null,
       bookmakers,
+      openBooks: g.openBooks || null,
     });
   }
   return events;

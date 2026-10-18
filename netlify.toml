@@ -961,8 +961,13 @@
   included_files = ["netlify/functions/lib/tsp-research/**"]
 
 
+[functions."trigger-picks-v1"]
+  schedule = "35 14 * * *"
+  # V1 LOCK daily generate — 10:35am ET (14:35 UTC in EDT), after the 10:00 ET
+  # board. EST shift (Nov 1): move to "35 15 * * *" with the Omega clocks.
+
 [functions."generate-picks-v1-background"]
-  # V1 LOCK backend (The Lock — Unified Spec v2.0) — separate from Omega; no schedule yet (manual/first-card run 2026-10-18)
+  # V1 LOCK backend (The Lock — Unified Spec v2.0) — separate from Omega; daily via trigger-picks-v1
   included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]
 
 [functions."run-picks-v1"]

@@ -44,3 +44,14 @@ const fullMeta={byGame:{'Away @ Home':{last5:{home:[1,2,3,4,5],away:[1,2,3,4,5]}
 // Non-football sport = documented pass, no borrowed projector
 { const ev2={...events[0],sport:'NHL'}; const {candidates,pass}=projectGameV1(ev2,'NHL',{},{}); assert.strictEqual(candidates.length,0); assert.strictEqual(pass.reason,'v1-no-projector-for-sport'); }
 console.log('test-v1-lock: ALL PASS (Spec v2.0)');
+// --- Oct 18 additions: odds-master board + Filters 2/4 (appendix assertions) ---
+{ const { pickTimestamp, applyPrice }=L('board-master-v1');
+  assert.strictEqual(pickTimestamp({checks:{'1000':{at:'T10'}},baseline0300:{at:'T03'}}).hhmm,'1000');
+  assert.strictEqual(pickTimestamp({baseline0300:{at:'T03'}}).hhmm,'0300');
+  const row={}; applyPrice(row,'spreads',{home:{price:-105,line:-3},away:{price:-115,line:3}});
+  assert.strictEqual(row.spreadHome,-3); assert.strictEqual(row.spreadAwayOdds,-115); }
+{ // Filter 2: sub-.500 form backed against better form = pass
+  const {candidates}=projectGameV1(events[0],'NFL',eff,{byGame:{'Away @ Home':{last5:{home:[{margin:3},{margin:3},{margin:3},{margin:3},{margin:3}],away:[{margin:-3},{margin:-3},{margin:-3},{margin:-3},{margin:-3}]},injuries:{home:[],away:[]},keyStarter:{homeConfirmed:true,awayConfirmed:true,unknownReplacement:false},form:{awayLast10WinPct:0.3,homeLast10WinPct:0.8,awayLastGameMargin:-3,homeLastGameMargin:3}}}});
+  const sel=selectV1(candidates,[]);
+  assert.ok(sel.funnel.filter2Form>=1, 'filter2 should reject away-form candidates'); assert.ok(!sel.picks.some(x=>String(x.pick).startsWith('Away'))); }
+console.log('test-v1-lock appendix: PASS');

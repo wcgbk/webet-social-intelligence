@@ -40,6 +40,14 @@ async function writeJsonToStore(storeName, key, data) {
 async function readStoredBoardV1(dateISO) {
   const path = await readJsonFromStore(OMEGA_BOARD_STORE, `omega-line-path/${dateISO}`);
   if (path && Array.isArray(path.polls) && path.polls.length) return path;
+  // Era morning snaps were suspended 2026-10-13..18 by the pre-reset pipeline;
+  // its morning pulls live in odds-master (03:00 / 10:00 ET). Rebuild the
+  // stored board from those genuine stored lines (board-master-v1).
+  try {
+    const { reconstructBoardFromMasterV1 } = require('./board-master-v1');
+    const master = await reconstructBoardFromMasterV1((s, k) => readJsonFromStore(s, k), dateISO);
+    if (master && master.polls && master.polls.length) return master;
+  } catch (_) {}
   // Fallback mirroring Omega loadLinePath: per-slot snap keys (no slash).
   const polls = [];
   for (const hhmm of ['0300','0600','0730','0900','0915','1000','1030','1100']) {

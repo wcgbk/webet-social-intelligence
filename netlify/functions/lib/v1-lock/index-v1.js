@@ -24,9 +24,21 @@ async function generateV1Lock(opts={}){
   const unsupported=[...new Set(allEvents.map(e=>e.sport).filter(s=>s&&!SPORTS_V1.includes(s)))];
   const seeds=loadEfficiencySeeds();
   const efficiencyBySport={ NFL:seeds.NFL||{}, NCAAF:seeds.NCAAF||{} };
-  const { candidates, passes }=projectAllV1(events, efficiencyBySport, { byGame:opts.byGame||{}, boardSlot });
+  // Spec §§3-5 data: last-5 / injuries / key starter from ESPN (feeds-v1).
+  // Soft-fail: any feed error leaves byGame empty and §9 passes honestly.
+  let byGame=opts.byGame||{};
+  if(!opts.byGame && !opts.skipFeeds){
+    try {
+      const { loadFootballFeedsV1 } = require('./feeds-v1');
+      for(const sport of ['NFL','NCAAF']){
+        const games=events.filter(e=>e.sport===sport).map(e=>({ homeTeam:e.home_team, awayTeam:e.away_team, commenceTime:e.commence_time }));
+        if(games.length) Object.assign(byGame, await loadFootballFeedsV1(sport, dateISO, games));
+      }
+    } catch(e) { byGame = {}; }
+  }
+  const { candidates, passes }=projectAllV1(events, efficiencyBySport, { byGame, boardSlot });
   const { picks, parlayLegs, funnel, rejections }=selectV1(candidates, passes);
-  funnel.gamesOnBoard=events.length; funnel.unsupportedSportsOnBoard=unsupported; funnel.boardSlot=boardSlot; funnel.boardCapturedAt=poll.capturedAt||null;
+  funnel.gamesOnBoard=events.length; funnel.boardSource=(boardDoc&&boardDoc.source)||'omega-line-path'; funnel.feedsWired=Object.keys(byGame).length; funnel.unsupportedSportsOnBoard=unsupported; funnel.boardSlot=boardSlot; funnel.boardCapturedAt=poll.capturedAt||null;
   const totalUnits=picks.reduce((s,p)=>s+(parseFloat(p.units)||0),0)+(parlayLegs||[]).reduce((s,p)=>s+(parseFloat(p.units)||0),0);
   const card={ date:dateISO, dateFormatted:formatDateLong(dateISO), model:MODEL_VERSION_V1, engine:ENGINE_V1, source:'v1-lock',
     picks, parlayLegs:parlayLegs||[], sgps:[], rejections, generatedAt:new Date().toISOString(), boardSlot, boardCapturedAt:poll.capturedAt||null,

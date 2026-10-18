@@ -30,12 +30,20 @@ function projectGameV1(event, sport, efficiency, meta={}) {
     return { candidates:[], pass:{ matchup, sport, commenceTime, reason:'lock-missing-formula',
       detail:'Team-strength ratings missing for one or both teams; no traceable formula probability (Spec §§4,6,9).' } };
   }
-  const modelMargin=env.modelMargin, modelTotal=env.modelTotal;
+  let modelMargin=env.modelMargin, modelTotal=env.modelTotal;
   const gameMeta=(meta.byGame&&meta.byGame[matchup])||{};
+  // Spec §4 Tier 1: last 5 is the dominant read of team strength. When both
+  // teams have 5 completed games on file, the formula margin blends the
+  // season ratings margin (0.40) with the last-5 net margin (0.60, capped).
+  // Entries without a numeric margin (test fixtures) leave the formula as-is.
+  let last5Net=null;
+  const l5=gameMeta.last5;
+  const avgMargin=(rows)=>{ if(!Array.isArray(rows)||!rows.length||!rows.every(r=>r&&Number.isFinite(r.margin))) return null; return rows.reduce((s,r)=>s+r.margin,0)/rows.length; };
+  if(l5){ const am=avgMargin(l5.away), hm=avgMargin(l5.home); if(am!=null&&hm!=null){ last5Net=Math.max(-21,Math.min(21,hm-am)); modelMargin=0.40*modelMargin+0.60*last5Net; } }
   const base={ sport, homeTeam:home, awayTeam:away, matchup, commenceTime,
     formulaSpreadHome:+modelMargin.toFixed(2), formulaTotal:+modelTotal.toFixed(2),
-    formulaInputs:{ method:(env.methods&&env.methods.family)||'team-strength ratings', modelMargin:+modelMargin.toFixed(2), modelTotal:+modelTotal.toFixed(2) },
-    last5: gameMeta.last5||null, injuries: gameMeta.injuries||null, h2h: gameMeta.h2h||null,
+    formulaInputs:{ method:(env.methods&&env.methods.family)||'team-strength ratings', seasonMargin:+env.modelMargin.toFixed(2), last5NetMargin:last5Net, modelMargin:+modelMargin.toFixed(2), modelTotal:+modelTotal.toFixed(2) },
+    last5: gameMeta.last5||null, injuries: gameMeta.injuries||null, h2h: gameMeta.h2h||null, form: gameMeta.form||null, situational: gameMeta.situational||null, openBooks: event.openBooks||null,
     keyStarter: gameMeta.keyStarter||null, // {homeConfirmed,awayConfirmed,unknownReplacement,note}
     boardSlot: meta.boardSlot||null };
   const out=[];

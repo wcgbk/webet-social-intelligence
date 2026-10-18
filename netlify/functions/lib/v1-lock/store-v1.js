@@ -9,11 +9,7 @@ const { BLOB_STORE_V1, OMEGA_BOARD_STORE } = require('./config-v1');
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
 async function getStoreV1(name) {
   const { getStore } = await import('@netlify/blobs');
-  const token = process.env.NETLIFY_AUTH_TOKEN;
-  // Background runtimes may lack automatic Blobs context (same failure
-  // Omega logs); supply manual config when a token is available.
-  try { return token ? getStore({ name, siteID: SITE_ID, token }) : getStore(name); }
-  catch (_) { return getStore(name); }
+  return getStore(name);
 }
 async function restFetch(storeName, key, opts = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;

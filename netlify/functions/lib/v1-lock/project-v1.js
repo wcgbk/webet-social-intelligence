@@ -45,7 +45,7 @@ function projectGameV1(event, sport, efficiency, meta={}) {
     formulaInputs:{ method:(env.methods&&env.methods.family)||'team-strength ratings', seasonMargin:+env.modelMargin.toFixed(2), last5NetMargin:last5Net, modelMargin:+modelMargin.toFixed(2), modelTotal:+modelTotal.toFixed(2) },
     last5: gameMeta.last5||null, injuries: gameMeta.injuries||null, h2h: gameMeta.h2h||null, form: gameMeta.form||null, situational: gameMeta.situational||null, openBooks: event.openBooks||null,
     keyStarter: gameMeta.keyStarter||null, // {homeConfirmed,awayConfirmed,unknownReplacement,note}
-    boardSlot: meta.boardSlot||null };
+    boardSlot: meta.boardSlot||null, boardCapturedAt: meta.boardCapturedAt||null };
   const out=[];
   const emit=(bundles,build)=>{
     for(const b of bundles){ if(b.point===undefined) continue; const built=build(b); if(!built) continue;

@@ -43,12 +43,13 @@ function toPickV1(c, grade, ev){
 }
 function selectV1(candidates, formulaPasses=[]){
   const funnel={ candidates:(candidates||[]).length, formulaPassGames:formulaPasses.length,
-    noConfirmedHardRockLine:0, missingLast5:0, missingInjuries:0, keyStarterUnknown:0,
+    startedAtBoard:0, noConfirmedHardRockLine:0, missingLast5:0, missingInjuries:0, keyStarterUnknown:0,
     belowFloor:0, negativeEv:0, roadFavoriteRule:0, filter2Form:0, filter4Trap:0, qualified:0, straights:0, parlayLegPool:0 };
   const rejections=formulaPasses.map(p=>({ matchup:p.matchup, sport:p.sport, reason:p.reason, detail:p.detail }));
   const qualified=[];
   for(const c of candidates||[]){
     const reject=(reason)=>{ rejections.push({ matchup:c.matchup, sport:c.sport, side:c.side, reason }); };
+    if(c.boardCapturedAt&&c.commenceTime&&!(String(c.commenceTime)>String(c.boardCapturedAt))){ funnel.startedAtBoard++; reject('lock-game-started-at-board'); continue; }
     if(c.odds==null||!c.confirmedBook){ funnel.noConfirmedHardRockLine++; reject('lock-no-confirmed-hard-rock-line'); continue; }
     if(!c.last5||!Array.isArray(c.last5.home)||c.last5.home.length<5||!Array.isArray(c.last5.away)||c.last5.away.length<5){ funnel.missingLast5++; reject('lock-missing-last5'); continue; }
     if(!c.injuries||c.injuries.home==null||c.injuries.away==null){ funnel.missingInjuries++; reject('lock-missing-injury-reports'); continue; }

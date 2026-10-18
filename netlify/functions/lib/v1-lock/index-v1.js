@@ -36,7 +36,7 @@ async function generateV1Lock(opts={}){
       }
     } catch(e) { byGame = {}; }
   }
-  const { candidates, passes }=projectAllV1(events, efficiencyBySport, { byGame, boardSlot });
+  const { candidates, passes }=projectAllV1(events, efficiencyBySport, { byGame, boardSlot, boardCapturedAt: poll.capturedAt||null });
   const { picks, parlayLegs, funnel, rejections }=selectV1(candidates, passes);
   funnel.gamesOnBoard=events.length; funnel.boardSource=(boardDoc&&boardDoc.source)||'omega-line-path'; funnel.feedsWired=Object.keys(byGame).length; funnel.unsupportedSportsOnBoard=unsupported; funnel.boardSlot=boardSlot; funnel.boardCapturedAt=poll.capturedAt||null;
   const totalUnits=picks.reduce((s,p)=>s+(parseFloat(p.units)||0),0)+(parlayLegs||[]).reduce((s,p)=>s+(parseFloat(p.units)||0),0);

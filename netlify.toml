@@ -960,3 +960,10 @@
   # OBSERVER ONLY → tsp-research snapshots/{date}.
   included_files = ["netlify/functions/lib/tsp-research/**"]
 
+
+[functions."generate-picks-v1-background"]
+  # V1 LOCK backend (NFL-NCAAF-LOCK.md v1.2) — separate from Omega; no schedule yet (manual/first-card run 2026-10-18)
+  included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]
+
+[functions."get-picks-v1"]
+  included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]

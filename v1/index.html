@@ -1924,14 +1924,14 @@
 
   async function loadPicks() {
     try {
-      // Live page: no date param — get-picks-omega resolves newest card ≤ tomorrow ET
+      // Live page: no date param — get-picks-v1 resolves newest V1 Lock card ≤ tomorrow ET (V1 backend is separate from Omega; only the page layout is duplicated)
       // with sticky prior-day fallback. Optional ?date=YYYY-MM-DD still works for history.
       const qs = new URLSearchParams(location.search);
       const dateParam = qs.get('date');
       const apiQs = (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam))
         ? ('?date=' + encodeURIComponent(dateParam))
         : '';
-      const resp = await fetch('/api/get-picks-omega' + apiQs);
+      const resp = await fetch('/api/get-picks-v1' + apiQs);
       if (!resp.ok) throw new Error('API returned ' + resp.status);
       const data = await resp.json();
       picksData = data;

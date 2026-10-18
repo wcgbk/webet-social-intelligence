@@ -24,6 +24,7 @@
 /v1           /v1/index.html             200
 /v1/          /v1/index.html             200
 /api/get-picks-omega   /.netlify/functions/get-picks-omega   200
+/api/get-picks-v1      /.netlify/functions/get-picks-v1      200
 /api/get-results-omega /.netlify/functions/get-results-omega 200
 /grokbot      /grokbot/index.html      200
 /grokbot/     /grokbot/index.html      200

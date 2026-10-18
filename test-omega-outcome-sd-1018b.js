@@ -47,7 +47,8 @@ for (const n of [6, 17]) {
 
 assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin') - nflMarginRating(6)) < 1e-12);
 assert.ok(Math.abs(config.effectiveSd('NFL', 'margin') - nflMarginEff(6)) < 1e-12);
-assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 0) - nflMarginRating(6)) < 1e-12);
+// 2026-10-18: n=0 is zero games (full base), not the n=6 unknown default.
+assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 0) - nflMarginRating(0)) < 1e-12);
 assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 3) - nflMarginRating(3)) < 1e-12);
 assert.ok(config.ratingErrorSd('NFL', 'margin', 3) > config.ratingErrorSd('NFL', 'margin', 6));
 assert.ok(config.effectiveSd('NFL', 'margin', 17) < config.effectiveSd('NFL', 'margin', 6));

@@ -55,17 +55,17 @@ const PARLAY_TOTAL_HAIRCUT = {
   3: 0.92,
 };
 const DAILY_UNIT_CAP = 5.0;
-/** Per-straight ceiling. A+ flat stake is 1.5u. Kelly does not set the stake. */
+/** Quarter-Kelly cap per straight. Kelly sets the stake. It does not publish above 1.5u. */
 const MAX_STRAIGHT_UNITS_PER_PICK = 1.5;
 /**
- * Grade B stake. qualityToRating 'b' is calibrated edge under QUALITY_GRADE.aminus (2%).
- * The flat table already prices B at 0.5u. This cap still lowers a larger stake
- * and never raises one. A- / A / A+ are not capped. Leans are 0.5u on their own path.
+ * Grade B Kelly cap. qualityToRating 'b' is calibrated edge under QUALITY_GRADE.aminus (2%).
+ * It lowers a Kelly stake above 0.5u and never raises one.
+ * A- / A / A+ are not capped here. A labelled lean is 0.5u on its own path.
  */
 const B_GRADE_UNIT_CAP = 0.5;
 /**
- * Flat published stake by letter. Leans are 0.5u at every letter.
- * Dollars are UNIT_DOLLARS times units, rounded up to a whole dollar.
+ * Legacy letter map used by gradeStakeUnits. Published straights are quarter Kelly, not this table.
+ * A labelled lean is 0.5u. Dollars are UNIT_DOLLARS times units, rounded up to a whole dollar.
  */
 const GRADE_STAKE_UNITS = {
   aplus: 1.5,
@@ -375,7 +375,7 @@ const GATES = {
  * does not cut max EV to 6%, and does not disable lean fill.
  * The live price is one market anchor on modelPureP (prob_anchor.js):
  * p_final = w(sport, market) * modelPureP + (1 - w) * fair.
- * Fair is the Pinnacle power no-vig, else the DraftKings two-way no-vig.
+ * Fair is the Pinnacle power no-vig, else the mean of other sharps that post both sides, else the mean of every stored book that posts both sides, else that book's own no-vig.
  * Weights are MARKET_ANCHOR_MODEL_WEIGHT, per sport and market.
  * NFL totals w = 0 is FITTED as the bootstrap median, not a CI exclusion.
  * bt_w.py on afterC-rows, 114 NFL total sides, 44 games: log-loss 0.6901
@@ -607,8 +607,10 @@ const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 
 
 /**
  * Rating-error SD on the margin/total → cover conversion.
- * n is the average games played of the two teams. Unknown or non-positive
- * n uses RATING_ERROR_N0 (6).
+ * n is the average games played of the two teams. A finite n >= 0 is
+ * used as given. n = 0 means no games played, so the rating SD is the
+ * full base. undefined, null, '', NaN, or a negative n is unknown and
+ * uses RATING_ERROR_N0 (6).
  * Effective SD = sqrt(game_SD^2 + SD_rating^2). Game SD is
  * SPORT_SPREAD_STD / SPORT_TOTAL_STD (margin uses the spread SD).
  *
@@ -622,10 +624,11 @@ const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 
  * An object {base, k} uses SD_rating = base * sqrt(k / (k + n)). That is
  * the SD of a prior whose weight is priorW = k/(k+n): variance scales with
  * the weight. NFL margin uses this law. FITTED k = 16 = NFL_PRIOR_K
- * (walk-forward Elo margin MSE, 95% CI 6..inf). ASSUMED base 4, the n=0
- * margin rating-error SD. Regressed-Elo prior margin SD on 2023-25 games
- * is 3.56 / 3.70 / 4.55, so 4 is the round scale in that band, not an
- * outcome RMSE. At n=6, NFL margin effective SD is
+ * (walk-forward Elo margin MSE, 95% CI 6..inf). ASSUMED base 4, the full
+ * base when n = 0 (no games played). Unknown n still uses N0 = 6, which
+ * is 4*sqrt(16/22), not that full base. Regressed-Elo prior margin SD on
+ * 2023-25 games is 3.56 / 3.70 / 4.55, so 4 is the round scale in that
+ * band, not an outcome RMSE. At n=6, NFL margin effective SD is
  * sqrt(13.2^2 + (4*sqrt(16/22))^2) ≈ 13.63.
  */
 const RATING_ERROR_N0 = 6;
@@ -644,19 +647,36 @@ function ratingKind(kind) {
   return /total/i.test(String(kind || '')) ? 'total' : 'margin';
 }
 
-/** Average games played. Either side unknown → undefined (caller treats that as n = 6). */
+/**
+ * Average games played. A finite count >= 0 is real, including a 0-0 team.
+ * null, '', undefined, NaN, or a negative count is unknown → undefined.
+ * Callers pass undefined when the count was not sent. ratingErrorSd then
+ * uses RATING_ERROR_N0. Do not pass 0 for unknown: Number(null) is 0.
+ */
 function ratingGamesN(gpHome, gpAway) {
-  const a = Number(gpHome);
-  const b = Number(gpAway);
-  if (!(a > 0) || !(b > 0)) return undefined;
+  function games(v) {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n;
+  }
+  const a = games(gpHome);
+  const b = games(gpAway);
+  if (a == null || b == null) return undefined;
   return (a + b) / 2;
 }
 
 function ratingErrorSd(sport, kind, n) {
   const table = RATING_ERROR_SD[String(sport || '').toUpperCase()];
   const entry = table ? table[ratingKind(kind)] : 0;
-  const games = Number(n);
-  const used = Number.isFinite(games) && games > 0 ? games : RATING_ERROR_N0;
+  // Finite n >= 0 is used as given. n = 0 is zero games (full base).
+  // undefined, null, '', NaN, or negative is unknown and uses RATING_ERROR_N0.
+  // Number(null) and Number('') are 0, so those are checked before Number().
+  let used = RATING_ERROR_N0;
+  if (n != null && n !== '') {
+    const games = Number(n);
+    if (Number.isFinite(games) && games >= 0) used = games;
+  }
   // {base, k}: SD = base * sqrt(k / (k + n)). A number keeps the N0 law.
   if (entry != null && typeof entry === 'object') {
     const base = Number(entry.base);

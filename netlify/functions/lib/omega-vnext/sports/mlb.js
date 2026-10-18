@@ -14,7 +14,7 @@
  */
 const { HFA, ENGINE_SOFT, ratingGamesN } = require('../config');
 const {
-  formatMatchup, bindEspnGameByTeamAndTime, gamesPlayed,
+  formatMatchup, bindEspnGameByTeamAndTime, gamesPlayedInfo,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { rowByIdentityOrFuzzy } = require('./team_identity');
@@ -157,7 +157,13 @@ function deriveGame(event, standings, espnGame, ctx) {
     usedGameday,
   });
   const stdOpt = effStd != null ? effStd : undefined;
-  const ratingN = ratingGamesN(gamesPlayed(homeSt), gamesPlayed(awaySt));
+  // gamesPlayed() is 0 for unknown and for a real 0-0. known keeps them apart.
+  const homeGpInfo = gamesPlayedInfo(homeSt);
+  const awayGpInfo = gamesPlayedInfo(awaySt);
+  const ratingN = ratingGamesN(
+    homeGpInfo.known ? homeGpInfo.gp : undefined,
+    awayGpInfo.known ? awayGpInfo.gp : undefined,
+  );
   return {
     event, home, away, commenceTime, modelMargin, modelTotal, uncertainty,
     methods, gameDayMeta, stdOpt, ratingN,

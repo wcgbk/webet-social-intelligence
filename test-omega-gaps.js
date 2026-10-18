@@ -71,7 +71,8 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
   near(common.spreadCoverProb(3, -3.5, 'NFL') + common.spreadCoverProb(-3, 3.5, 'NFL'), 1, 1e-9);
 
   const pk = km.spreadQuote(3, -3, 'NFL', coverStd);
-  near(pk.pPush, km.normalBin(3, coverStd, 3), 1e-12, 'default integer push is the normal atom');
+  // 2026-10-18: NFL integer push is the empirical |margin| mass, not the normal atom.
+  near(pk.pPush, km.nflSpreadPush(3, 3, coverStd), 1e-12, 'default integer push is the empirical key mass');
   near(pk.coverProb, pk.pWin / (1 - pk.pPush), 1e-9, 'conditional cover');
   near(common.spreadCoverProb(3, -3, 'NFL'), pk.coverProb, 1e-12);
   const dogInt = km.spreadQuote(-3, 3, 'NFL', coverStd);
@@ -96,14 +97,16 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
   near(common.totalCoverProb(44, 43.5, 'Over', 'NCAAF'), normCdf((44 - 43.5) / config.effectiveSd('NCAAF', 'total')), 1e-12);
 
   const ml = km.mlQuote(0, 'NFL', nflStd);
-  near(ml.pPush, km.normalBin(0, nflStd, 0), 1e-12, 'default NFL tie is the normal atom');
+  // 2026-10-18: NFL tie mass is the raw 2022-2025 tie rate, not the normal atom.
+  near(ml.pPush, km.NFL_TIE_COUNT / km.NFL_FINALS_N, 1e-12, 'default NFL tie is the empirical rate');
   near(ml.coverProb, 0.5, 1e-6);
   const cfbMl = km.mlQuote(0, 'NCAAF', cfbStd);
   assert.strictEqual(cfbMl.pPush, 0);
   near(cfbMl.coverProb, 0.5, 1e-6);
 
   const intTotal = km.totalQuote(44, 44, 'Over', 'NFL', totStd);
-  near(intTotal.pPush, km.normalBin(44, totStd, 44), 1e-12, 'default total push is the normal atom');
+  // 2026-10-18: NFL integer total push is the empirical total mass around the mean.
+  near(intTotal.pPush, km.nflTotalPush(44, 44, totStd), 1e-12, 'default total push is the empirical mass');
   near(intTotal.coverProb, intTotal.pWin / (1 - intTotal.pPush), 1e-9);
   const under = km.totalQuote(44, 44, 'Under', 'NFL', totStd);
   near(intTotal.coverProb + under.coverProb, 1, 1e-9);

@@ -13,8 +13,13 @@
  * The shipped prior is end-of-2025, regressed 1/3 of the way to 1505,
  * then blended 2:1 toward the win-total Elo. This module applies 2026
  * finals strictly before the card's ET date on top of that prior.
- * A finite NFL prior K shrinks only that preseason deviation from 1505.
- * The Elo shift from games stays whole. Null K leaves the walk unchanged.
+ * A finite NFL prior K shrinks that preseason deviation before the walk.
+ * Each club starts at MEAN + priorW(g, K) * (prior - MEAN), where g is
+ * that club's games in the applied set, and the walk is the rating.
+ * The result is not also scored against the full prior and then shrunk.
+ * Null or non-finite K starts from the full prior and does not decay.
+ * OMEGA_NFL_ELO_LEGACY_DECAY=1 restores the old formula (walk from the
+ * full prior, then applyNflPriorDecay). The default is the shrunk start.
  * OMEGA_FROZEN_SNAP never hits the network. A missing frozen board
  * leaves every club on the prior.
  */
@@ -250,9 +255,12 @@ function gamesPlayedById(games) {
 }
 
 /**
- * Shrink only the preseason deviation from MEAN_ELO.
+ * Legacy shrink of the preseason deviation from MEAN_ELO.
  * rating = MEAN + priorW(g, k) * (prior - MEAN) + (walked - prior).
- * k null or non-finite is the legacy intercept (deviation weight 1).
+ * The walk in `walked` already started from the full prior, so this
+ * removes the deviation a second time. Kept for callers and for
+ * OMEGA_NFL_ELO_LEGACY_DECAY=1. k null or non-finite leaves the walk
+ * unchanged (deviation weight 1).
  */
 function applyNflPriorDecay(prior, walked, games, k) {
   const base = Object.assign({}, walked || {});
@@ -352,11 +360,54 @@ async function fetchSeasonBoards(year, fetchImpl) {
   return games;
 }
 
+function eloLegacyDecayOn() {
+  return String(process.env.OMEGA_NFL_ELO_LEGACY_DECAY || '').trim() === '1';
+}
+
+/**
+ * Start ratings for a finite K. g_id is games played in `games`.
+ * start = MEAN + priorW(g, K) * (prior - MEAN). Clubs with no games
+ * keep the full prior (weight 1).
+ */
+function shrunkPriorStart(prior, games, k) {
+  const counts = gamesPlayedById(games);
+  const start = {};
+  const ids = new Set([
+    ...Object.keys(prior || {}),
+    ...counts.keys(),
+  ]);
+  for (const id of ids) {
+    const raw = prior && prior[id];
+    const p = Number.isFinite(Number(raw)) ? Number(raw) : MEAN_ELO;
+    const g = counts.get(String(id)) || 0;
+    const w = priorW(g, k);
+    start[String(id)] = MEAN_ELO + w * (p - MEAN_ELO);
+  }
+  return start;
+}
+
+/**
+ * Ratings after `games`, from `prior`.
+ * Finite K and legacy !== true: walk from the shrunk prior. Do not add
+ * (walked - prior) again. Null or non-finite K, or legacy: true, walks
+ * from the full prior and then applyNflPriorDecay (a no-op when K is
+ * null or non-finite).
+ */
+function ratingsFromPrior(prior, games, k, opts) {
+  const base = prior && typeof prior === 'object' ? prior : {};
+  const legacy = (opts && opts.legacy === true) || k == null || !Number.isFinite(Number(k));
+  if (legacy) {
+    const walked = ratingsAfterGames(games, base);
+    return applyNflPriorDecay(base, walked, games, k);
+  }
+  return ratingsAfterGames(games, shrunkPriorStart(base, games, k));
+}
+
 function finishPack(cardDate, games, source) {
   const appliedGames = gamesBeforeCard(games, cardDate);
   const prior = priorRatings();
-  const walked = ratingsAfterGames(appliedGames, prior);
-  const ratings = applyNflPriorDecay(prior, walked, appliedGames, sportPriorK('NFL'));
+  const k = sportPriorK('NFL');
+  const ratings = ratingsFromPrior(prior, appliedGames, k, { legacy: eloLegacyDecayOn() });
   const pack = {
     cardDate: cardDate || null,
     source,
@@ -444,6 +495,7 @@ module.exports = {
   priorRatings,
   ratingsAfterGames,
   applyNflPriorDecay,
+  ratingsFromPrior,
   gamesBeforeCard,
   readWeekDir,
   fetchSeasonBoards,

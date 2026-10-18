@@ -227,11 +227,22 @@ close(elo.winTotalEloRaw(10.5), 1588.310376970833, 1e-9);
   const walked = elo.ratingsAfterGames(applied, priorMap);
   assert.ok(walked[homeId] > priorMap[homeId], 'a win still raises the Elo walk');
   const priorK = config.sportPriorK('NFL');
-  const expectedHome = (priorK == null || !Number.isFinite(Number(priorK)))
-    ? walked[homeId]
-    : elo.MEAN_ELO
-      + config.priorW(1, priorK) * (priorMap[homeId] - elo.MEAN_ELO)
-      + (walked[homeId] - priorMap[homeId]);
+  const legacyOn = String(process.env.OMEGA_NFL_ELO_LEGACY_DECAY || '').trim() === '1';
+  let expectedHome;
+  if (legacyOn || priorK == null || !Number.isFinite(Number(priorK))) {
+    expectedHome = (priorK == null || !Number.isFinite(Number(priorK)))
+      ? walked[homeId]
+      : elo.MEAN_ELO
+        + config.priorW(1, priorK) * (priorMap[homeId] - elo.MEAN_ELO)
+        + (walked[homeId] - priorMap[homeId]);
+  } else {
+    const start = {};
+    for (const id of Object.keys(priorMap)) {
+      const g = (String(id) === String(homeId) || String(id) === String(awayId)) ? 1 : 0;
+      start[id] = elo.MEAN_ELO + config.priorW(g, priorK) * (priorMap[id] - elo.MEAN_ELO);
+    }
+    expectedHome = elo.ratingsAfterGames(applied, start)[homeId];
+  }
   close(withWeeks.ratings[homeId], expectedHome);
 
   const sameDay = await elo.prepareNflElo('2026-09-14', { fetchImpl });

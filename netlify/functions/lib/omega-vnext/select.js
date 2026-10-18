@@ -228,8 +228,28 @@ function positiveKellyEv(c) {
  * Higher anchored stake EV first. That EV is push-aware EV at the bet
  * price from p_final (the posterior mean). It is not an SE-penalised score.
  * Edge is the tiebreak. The capped PM nudge breaks an exact tie.
+ * Same game and market: a Pinnacle price at this number ranks ahead of
+ * an alternate that does not have one. Other games stay on EV.
  */
+function marketFamilyOf(row) {
+  const market = String((row && (row.market || row.betType)) || '');
+  if (/total/i.test(market)) return 'total';
+  if (/spread|puck|run/i.test(market)) return 'spread';
+  return 'ml';
+}
+
+/** Same game and market: a Pinnacle price at this number ranks first. */
+function pinnacleLineFirst(a, b) {
+  if (matchupKey(a) !== matchupKey(b)) return 0;
+  if (marketFamilyOf(a) !== marketFamilyOf(b)) return 0;
+  const pa = a && a.anchorFairSource === 'pinnacle' ? 1 : 0;
+  const pb = b && b.anchorFairSource === 'pinnacle' ? 1 : 0;
+  return pb - pa;
+}
+
 function compareByEv(a, b) {
+  const lined = pinnacleLineFirst(a, b);
+  if (lined !== 0) return lined;
   const evd = finiteEv(b) - finiteEv(a);
   if (Math.abs(evd) > 1e-12) return evd;
   const ed = edgeRank(b) - edgeRank(a);

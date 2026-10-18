@@ -187,6 +187,13 @@ function pinnacleFair(c) {
   const ps = c && c.pinnacleSide;
   if (!ps || !Number.isFinite(Number(ps.american)) || !Number.isFinite(Number(ps.oppAmerican))) return null;
   if (!oneLine(ps.point, ps.oppPoint)) return null;
+  // Pinnacle's pair must be the line being bet. A total of 6 is not a fair
+  // for 6.5: Over 6 pushes at 6, and Over 6.5 loses. Spread signs can
+  // differ by side, so the match is on the absolute number.
+  const line = lineOf(c);
+  const pinPoint = ps.point == null || ps.point === '' ? null : Number(ps.point);
+  if (line != null && pinPoint != null && Number.isFinite(pinPoint)
+    && Math.abs(Math.abs(pinPoint) - Math.abs(line)) > 1e-6) return null;
   const powered = powerFair(c);
   if (powered != null) return powered;
   return finiteProb(c.pinnacleNoVigP);

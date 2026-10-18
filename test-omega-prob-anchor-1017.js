@@ -14,12 +14,12 @@ const {
 assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
 assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
 assert.strictEqual(config.marketAnchorOn(), false);
-// 2026-10-18: NFL totals anchor weight is 0 (backtest median), was 0.10.
+// 2026-10-18: NFL ml/spread 0.40 ASSUMED INTERIM; NCAAF ml/spread, NHL spread, MLB ml 0.05 token floor. NFL total stays 0.
 assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
-  NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
-  NFL: { spread: 0.25, ml: 0.25, total: 0 },
-  NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
-  MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
+  NCAAF: { spread: 0.05, ml: 0.05, total: 0.10 },
+  NFL: { spread: 0.40, ml: 0.40, total: 0 },
+  NHL: { spread: 0.05, ml: 0.25, total: 0.25 },
+  MLB: { spread: 0.25, ml: 0.05, total: 0.25 },
 });
 // 2026-10-18: NFL margin rating SD is {base:4, k:NFL_PRIOR_K}, not a flat 8.
 assert.deepStrictEqual(config.RATING_ERROR_SD.NFL.margin, { base: 4, k: config.NFL_PRIOR_K });
@@ -136,10 +136,10 @@ const nfl = { sport: 'NFL', market: 'Total', coverProb: 0.62, modelPureP: 0.70, 
 const nba = { sport: 'NBA', market: 'Spread', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
 const [ncaafOut, nflOut, nbaOut] = applyMarketAnchor([ncaaf, nfl, nba]);
 assert.strictEqual(ncaafOut.anchorFairSource, 'pinnacle');
-assert.strictEqual(ncaafOut.anchorWeight, 0.25);
+assert.strictEqual(ncaafOut.anchorWeight, 0.05); // 2026-10-18: NCAAF spread token floor, was 0.25.
 assert.strictEqual(nflOut.anchorFairSource, 'pinnacle');
 assert.strictEqual(nflOut.anchorWeight, 0); // 2026-10-18: NFL totals w=0, so p_final is the fair.
-assert.ok(Math.abs(ncaafOut.coverProb - (0.25 * 0.70 + 0.75 * 0.5)) < 1e-12);
+assert.ok(Math.abs(ncaafOut.coverProb - (0.05 * 0.70 + 0.95 * 0.5)) < 1e-12);
 assert.ok(Math.abs(nflOut.coverProb - 0.5) < 1e-12);
 assert.strictEqual(nbaOut, nba);
 assert.strictEqual(nbaOut.anchorFairSource, undefined);

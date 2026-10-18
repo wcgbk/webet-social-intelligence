@@ -86,18 +86,19 @@ assert.ok(/NFL totals w = 0/.test(anchorBlock));
 assert.ok(!/published probability is the pure model/.test(anchorBlock));
 
 assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NFL.total, 0);
-assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NFL.spread, 0.25);
-assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NFL.ml, 0.25);
+// 2026-10-18: NFL ml/spread anchor weight is 0.40 (ASSUMED INTERIM), was 0.25. MLB ml is the 0.05 token floor.
+assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NFL.spread, 0.40);
+assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NFL.ml, 0.40);
 assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NCAAF.total, 0.10);
 assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.NHL.total, 0.25);
-assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.MLB.ml, 0.25);
+assert.strictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT.MLB.ml, 0.05);
 assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 1);
 
 assert.strictEqual(modelWeightFor('NFL', 'Total'), 0);
 assert.strictEqual(modelWeightFor('NFL', 'total'), 0);
 assert.notStrictEqual(modelWeightFor('NFL', 'Total'), null);
-assert.strictEqual(modelWeightFor('NFL', 'Spread'), 0.25);
-assert.strictEqual(modelWeightFor('NFL', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('NFL', 'Spread'), 0.40);
+assert.strictEqual(modelWeightFor('NFL', 'Moneyline'), 0.40);
 assert.strictEqual(modelWeightFor('NCAAF', 'Total'), 0.10);
 assert.strictEqual(modelWeightFor('NHL', 'Total'), 0.25);
 assert.strictEqual(modelWeightFor('MLB', 'Run Line'), 0.25);
@@ -106,7 +107,7 @@ assert.strictEqual(modelWeightFor('NBA', 'Total'), null);
 assert.strictEqual(anchorProbability(0.80, 0.42, 0), 0.42);
 assert.strictEqual(anchorProbability(0.80, 0.42, modelWeightFor('NFL', 'Total')), 0.42);
 assert.ok(Math.abs(
-  anchorProbability(0.80, 0.42, modelWeightFor('NFL', 'Spread')) - (0.25 * 0.80 + 0.75 * 0.42),
+  anchorProbability(0.80, 0.42, modelWeightFor('NFL', 'Spread')) - (0.40 * 0.80 + 0.60 * 0.42),
 ) < 1e-12);
 
 const totalRow = {

@@ -47,19 +47,35 @@ function sportAnchored(sport) {
 
 /**
  * Per sport and market. A bare number in the table applies to every market.
- * 0 is the market. It is not missing, and it must not fall through to a
- * default (no `w || 0.25`). Null means the sport or market is unanchored.
+ * 0 is the market. 0.05 is a real weight. Neither is missing, and neither
+ * may fall through to a default (no `w || 0.25`). Null means the sport or
+ * market is unanchored.
+ *
+ * Replay only, read here at call time, not at load:
+ * OMEGA_ANCHOR_W_<SPORT>_<ML|SPREAD|TOTAL> (example OMEGA_ANCHOR_W_NFL_ML=0.6).
+ * Family is marketFamily: total, spread (spread / puck line / run line),
+ * else ML. A finite value in [0, 1] replaces that cell, including a sport
+ * the table does not list. Unset, blank, non-numeric, or outside [0, 1]
+ * leaves MARKET_ANCHOR_MODEL_WEIGHT. The constant is not rewritten.
  */
 function modelWeightFor(sport, market) {
   const table = MARKET_ANCHOR_MODEL_WEIGHT || {};
   const key = String(sport || '').toUpperCase();
+  const fam = marketFamily(market);
+  const suffix = fam === 'spread' ? 'SPREAD' : fam === 'total' ? 'TOTAL' : 'ML';
+  if (key) {
+    const raw = process.env[`OMEGA_ANCHOR_W_${key}_${suffix}`];
+    if (raw != null && String(raw).trim() !== '') {
+      const override = Number(raw);
+      if (Number.isFinite(override) && override >= 0 && override <= 1) return override;
+    }
+  }
   if (!Object.prototype.hasOwnProperty.call(table, key)) return null;
   const entry = table[key];
   let w;
   if (entry != null && typeof entry === 'object') {
-    const mk = marketFamily(market);
-    if (!Object.prototype.hasOwnProperty.call(entry, mk)) return null;
-    w = Number(entry[mk]);
+    if (!Object.prototype.hasOwnProperty.call(entry, fam)) return null;
+    w = Number(entry[fam]);
   } else {
     w = Number(entry);
   }

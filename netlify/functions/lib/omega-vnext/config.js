@@ -384,10 +384,14 @@ const GATES = {
  * at w=0, 0.6953 at 0.25, 0.7624 at w=1. Median best w is 0.00. The
  * argmin 95% CI is [0.00, 1.00], and LL(0.25)-LL(0) CI includes 0. The
  * pure model is worse, so the median is 0: the totals model adds no
- * information beyond the market. NFL moneyline and spread stay 0.25
- * (ASSUMED). NCAAF is 0.25/0.25/0.10, NHL and MLB are 0.25, all ASSUMED.
- * NBA is absent and is not anchored. w = 0 is the market, not a missing
- * weight and not a fallback to 0.25.
+ * information beyond the market. NFL moneyline and spread are 0.40
+ * (ASSUMED INTERIM). NCAAF moneyline and spread, NHL spread, and MLB
+ * moneyline are 0.05 (ASSUMED token floor above a fitted 0). NCAAF total
+ * stays 0.10. NHL moneyline and total, and MLB spread and total, stay
+ * 0.25, all ASSUMED. NBA is absent and is not anchored. w = 0 is the
+ * market, not a missing weight and not a fallback to 0.25. Replay-only
+ * OMEGA_ANCHOR_W_<SPORT>_<ML|SPREAD|TOTAL> overrides one cell at call
+ * time in modelWeightFor. The fit is on MARKET_ANCHOR_MODEL_WEIGHT.
  */
 function marketAnchorOn() {
   return false;
@@ -681,15 +685,53 @@ function effectiveSd(sport, kind, n) {
  * Probability anchor. p = w * modelPureP + (1 - w) * p_fair.
  * w = 1 is the model. w = 0 is the market, a real weight, not a hole.
  * Absent sport (NBA) is not anchored. Per sport and market.
- * NFL totals 0 is FITTED (bootstrap median 0; see marketAnchorOn).
- * NFL spread and ml 0.25, and every other entry, stay ASSUMED.
  * This is not the marketAnchorOn() K-table. That switch stays off.
+ * Chosen by log-loss of p = w*pm + (1-w)*pf on
+ * /workspace/fix-1017/allsports/bt/audit2-rows.json, not by pick count.
+ * Script: /workspace/audit-scratch2/w_fit.py (grid 0.05). Game-cluster
+ * bootstrap resamples games. A 0.05 cell is the grid floor, not the MLE.
+ *
+ * NFL spread and ml 0.40 — ASSUMED INTERIM. n=220 sides / 44 games,
+ * 2026-09-24..2026-10-11. LL(0.25)=0.6683, LL(0.40)=0.6610,
+ * LL(0.60)=0.6523, LL(1)=0.6383. w=0.40 beats 0.25 by +0.0073. The 95%
+ * game-cluster bootstrap (B=2000, seed=5) CI is [+0.0001, +0.0141] and
+ * excludes 0. w=0.60 beats 0.25 by +0.0160, but that CI includes 0
+ * ([-0.0006, +0.0316]), so a higher weight is not significant on 44
+ * games. Both date halves improve at 0.40 (through 2026-10-01, and from
+ * 2026-10-04). Refit weekly. The season sample is only these weeks.
+ * NFL total 0 — FITTED median on the earlier afterC cut (114 sides / 44
+ * games; see marketAnchorOn). Not moved on this pass.
+ *
+ * NCAAF ml 0.05 — ASSUMED token floor. Fitted w*=0.00. n=320 sides /
+ * 160 games. Argmin CI [0.00, 0.25] (B=2000, seed=5; w_fit.py B=300
+ * seed=5 upper bound is 0.20). LL(0)=0.4974, LL(0.05)=0.4987 (cost
+ * +0.0013, under 0.0015), LL(0.25)=0.5071.
+ * NCAAF spread 0.05 — ASSUMED token floor. Fitted w*=0.00. n=538 sides /
+ * 170 games. Argmin CI [0.00, 0.35] (w_fit.py B=300, seed=5).
+ * LL(0)=0.6933, LL(0.05)=0.6942 (cost +0.0010, under 0.0015),
+ * LL(0.25)=0.7012.
+ * NCAAF total 0.10 — unchanged, ASSUMED. Not refit on this pass.
+ *
+ * NHL spread 0.05 — ASSUMED token floor. Fitted w*=0.00. n=632 sides /
+ * 316 games. Argmin CI [0.00, 0.45] (w_fit.py B=300, seed=5; the reported
+ * band was [0, 0.50]). LL(0)=0.6551, LL(0.05)=0.6555 (cost +0.0003).
+ * NHL ml 0.25 and NHL total 0.25 — unchanged, ASSUMED.
+ *
+ * MLB ml 0.05 — ASSUMED token floor. Fitted w*=0.00. n=212 sides /
+ * 104 games. Argmin CI [0.00, 0.85] (w_fit.py B=300, seed=5).
+ * LL(0)=0.6745, LL(0.05)=0.6747 (cost +0.0002).
+ * MLB spread 0.25 and MLB total 0.25 — unchanged, ASSUMED.
+ *
+ * Replay only: OMEGA_ANCHOR_W_<SPORT>_<ML|SPREAD|TOTAL> (for example
+ * OMEGA_ANCHOR_W_NFL_ML=0.6) is read at call time in modelWeightFor.
+ * A value in [0, 1] replaces that cell. Unset, blank, or outside [0, 1]
+ * leaves this table. It does not change the shipped weights.
  */
 const MARKET_ANCHOR_MODEL_WEIGHT = {
-  NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
-  NFL: { spread: 0.25, ml: 0.25, total: 0 },
-  NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
-  MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
+  NCAAF: { spread: 0.05, ml: 0.05, total: 0.10 },
+  NFL: { spread: 0.40, ml: 0.40, total: 0 },
+  NHL: { spread: 0.05, ml: 0.25, total: 0.25 },
+  MLB: { spread: 0.25, ml: 0.05, total: 0.25 },
 };
 /** HFA base; game_day.js applies soft rest/B2B deltas on top. */
 const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
@@ -1120,7 +1162,7 @@ const GENERATOR_BOOKMAKERS = [
 
 const MODEL_NOTES = [
   'v12.4.0-webetai-pure: 2026-10-17: normal cover uses effective SD sqrt(game_SD^2+SD_rating^2), SD_rating=base*sqrt(6/max(n,6)) (NCAAF margin 8 total 6; NHL/MLB half the game SD, ASSUMED; NFL/NBA base 0). NHL/MLB anchor p=0.25*p_cal+0.75*p_fair after calibration (ASSUMED). Published edge is that p minus the vigged price. v12.4.1-webetai-pure (2026-10-17): NCAAF no pull toward Pinnacle (weight 1); NHL empty-net step removed (double count); card copy sanitizer; parlay-leg edge string identity; Hard Rock same-line placeability. OMEGA_MARKET_ANCHOR is ignored, so edge and EV stay on the pure model probability versus the bet price and a short card still fills to 3. Published stake is flat by grade. A+ is 1.5u ($225), A is 1u ($150), A- is 0.75u ($113), and B or any lean is 0.5u ($75). Kelly rounding does not override the grade. A full card (any straight graded A- or better) parlays 0.5u ($75). A lean-only card parlays 0.25u ($38). Risk and to-win are whole dollars rounded up. DAILY_UNIT_CAP is 5.0u so three A+ plus the 0.5u parlay fit. Parlay legs carry pick, odds, matchup, sport, book, edge, and grade. Combined odds are the product of the leg decimal odds. Parlay EV is labeled assumes independent legs. Edge, EV, and pick selection are unchanged. OMEGA_X_AUTOPOST stays unset. Generate prices the stored board and does not re-pull paid odds.',
-  'v12.4.2-webetai-textbook: 2026-10-17 ASSUMED. Final p = w(sport,market)*modelPureP + (1-w)*fair (Pinnacle power no-vig, else the unweighted mean of other sharp books that post both sides, else the unweighted mean of every stored book that posts both sides, else that single book power no-vig; 2026-10-18 ASSUMED mean; Circa is not on the stored board). NCAAF and NFL spread 0.25, ml 0.25, total 0.10; NHL and MLB 0.25 on every market; NBA unanchored. NFL-CHANGE: NFL point weights are 1 and RATING_ERROR_SD is margin 8 total 6 so the anchor is the only market pull. The inclusion gate is push-aware stake EV at the bet price, pushAwareEv(p_final, price, pPush) >= 2% (GATES.minEV, not a new fit). Edge versus the vigged price is not a gate: p_final is already the posterior mean (2026-10-18). ratingSe stays a diagnostic. OMEGA_EDGE_FLOOR_K is removed. EV above 0.10 is ev-stale for every pick, with no spread exception. Stake is quarter Kelly on a 100u bankroll, 0.25u steps, 1.5u cap. Kelly is not scaled by (1-pPush): f* does not depend on push probability. The 0.5u floor is only a labelled lean; a graded Kelly under 0.5u is published as that lean. Straights rank by the anchored posterior-mean stake EV. A 3-leg parlay with evAtFair <= 0 still publishes as a lean at 0.25u. Parlay joint is the product of final p times 0.95^(n-1), a same-model-bias haircut. The card prints fairP, fairSource, evAtFair, p_model, and modelWeight.',
+  'v12.4.2-webetai-textbook: 2026-10-17 ASSUMED. Final p = w(sport,market)*modelPureP + (1-w)*fair (Pinnacle power no-vig, else the unweighted mean of other sharp books that post both sides, else the unweighted mean of every stored book that posts both sides, else that single book power no-vig; 2026-10-18 ASSUMED mean; Circa is not on the stored board). NCAAF and NFL spread 0.25, ml 0.25, total 0.10; NHL and MLB 0.25 on every market; NBA unanchored. NFL-CHANGE: NFL point weights are 1 and RATING_ERROR_SD is margin 8 total 6 so the anchor is the only market pull. The inclusion gate is push-aware stake EV at the bet price, pushAwareEv(p_final, price, pPush) >= 2% (GATES.minEV, not a new fit). Edge versus the vigged price is not a gate: p_final is already the posterior mean (2026-10-18). ratingSe stays a diagnostic. OMEGA_EDGE_FLOOR_K is removed. EV above 0.10 is ev-stale for every pick, with no spread exception. Stake is quarter Kelly on a 100u bankroll, 0.25u steps, 1.5u cap. Kelly is not scaled by (1-pPush): f* does not depend on push probability. The 0.5u floor is only a labelled lean; a graded Kelly under 0.5u is published as that lean. Straights rank by the anchored posterior-mean stake EV. A 3-leg parlay with evAtFair <= 0 still publishes as a lean at 0.25u. Parlay joint is the product of final p times 0.95^(n-1), a same-model-bias haircut. The card prints fairP, fairSource, evAtFair, p_model, and modelWeight. 2026-10-18 anchor weights (fit = log-loss of w*pm+(1-w)*pf on audit2-rows.json, w_fit.py, not pick count): NFL ml and spread 0.40 ASSUMED INTERIM (n=220 sides/44 games, LL 0.6683 at 0.25 vs 0.6610 at 0.40, gain +0.0073, 95% game-cluster CI [+0.0001,+0.0141]; 0.60 not significant, refit weekly); NFL total 0 FITTED; NCAAF ml and spread 0.05, NHL spread 0.05, MLB ml 0.05, all ASSUMED token floors (fitted w*=0, CIs include 0, cost of 0.05 vs 0 under 0.0015); NCAAF total 0.10, NHL ml and total 0.25, MLB spread and total 0.25 unchanged. Replay-only OMEGA_ANCHOR_W_<SPORT>_<ML|SPREAD|TOTAL> (value in [0,1]) is read at call time in modelWeightFor.',
   'v12.3.74-omega-vnext-price-lock: Inclusion is a flat 2% stake-EV floor at the best DraftKings or Hard Rock price. The odds-scaled edge curve is display and tiebreak only, not an inclusion gate. EV above 12% is ev-stale and is logged, not published and not a lean. Straights stay inside -250 to +250. Rank is probability edge, then stake EV within 0.2 points. When fewer than 3 straights clear 2%, the card fills from the best remaining positive-EV candidates, then the best EV even if it is not positive, one per game, labeled leans at 0.5u. A full card parlays 0.5u and a lean-only card parlays 0.25u, from the best edges on distinct games, and it is labeled when combined EV is not positive. QA auto-corrects and does not block. Generate prices the stored 10:00 ET board (pinnacle, DraftKings, Hard Rock) from omega-pinnacle-line-moves slot 1000 and does not re-pull paid odds. line_move_prob is unchanged. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.73-omega-vnext-price-lock: The 10:00 ET pull is the last Odds API pull and sets final prices. It ranks the top 10 by edge and leaves the card a draft. 10:15 re-ranks that top 10 after news, weather, injury, depth-chart, team-form, and stadium inputs. 10:30 drafts the top 3 and the parlay, then checks Hard Rock placeability at the displayed best US price (Hard Rock or DraftKings, never Pinnacle). A straight that fails is flagged. A parlay that fails is re-priced at the Hard Rock price or a leg is swapped for the next positive-EV distinct-game Hard Rock candidate. The re-price keeps positive edge versus the Pinnacle no-vig and positive EV on each leg and the ticket. The check does not block publish and does not pull odds. 10:45 writes context and summaries. 11:00 is the only finalization. The 3:00 and 10:00 checks are one call, bookmakers=pinnacle,draftkings,hardrockbet. The generator request names hardrockbet in one bookmakers parameter. Stake EV uses the displayed US price. DraftKings is still required. The optional sharp-book slot stays empty. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.72-omega-vnext-price-lock: Every parlay publishes only when combined EV is positive, on a lean day and on a floor day. The probability is the same adjusted cover that sets straight edge and stake EV. A straight ticket that misses is rebuilt from the next-best positive-EV legs on distinct games. A Hard Rock offer on that row is the leg price, and a leg Hard Rock does not offer is swapped. No positive-EV 3-leg is marked no qualifying parlay. Straights still publish. A main still needs 3% edge and the 3% stake-EV floor. A lean still needs 1.5% edge and stake EV above 0.',

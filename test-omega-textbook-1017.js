@@ -57,9 +57,9 @@ function side(extra) {
     ...extra,
   };
 }
-assert.strictEqual(gateReason(side({ ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
-assert.strictEqual(gateReason(side({ market: 'Total', side: 'Over 45.5', ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
-assert.strictEqual(gateReason(side({ market: 'Moneyline', side: 'A ML', ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ ev: 0.11, edgePct: 0.06 }), asOf), null); // sheet: EV>cap = audit flag, not reject (2026-10-18)
+assert.strictEqual(gateReason(side({ market: 'Total', side: 'Over 45.5', ev: 0.11, edgePct: 0.06 }), asOf), null); // audit flag not reject (2026-10-18)
+assert.strictEqual(gateReason(side({ market: 'Moneyline', side: 'A ML', ev: 0.11, edgePct: 0.06 }), asOf), null); // audit flag not reject (2026-10-18)
 
 // 2026-10-18: default k is 0. The 1.5*SE hurdle double-counted the anchor (SIM-REPORT). Flat 2% remains.
 assert.strictEqual(config.EDGE_FLOOR_K, 0);

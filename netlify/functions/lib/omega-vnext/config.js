@@ -74,7 +74,7 @@ const GRADE_STAKE_UNITS = {
   b: 0.5,
   lean: 0.5,
 };
-const LEAN_PAD = true; // short of 3 floor straights: fill from the lean pool
+const LEAN_PAD = false; // PERMANENT (2026-10-18): no leans. Was: short-card lean fill.
 
 /** Same ET calendar day only — no weekend football on Tue/Wed cards. */
 const DAY_SCOPE_TZ = 'America/New_York';
@@ -455,6 +455,7 @@ const QA_HARDFAIL = {
  * value (spread AND total), then let the normal edge gates decide. Doubtful
  * scales by doubtfulWeight. Used by sports/game_day.js qbSoftAdjust only.
  */
+const QB_MARGIN_SCALE = 0; // 2026-10-18: unfitted QB points OFF (textbook path). Was 1.
 const QB_INJURY = {
   NFL: { outMarginPts: 3.0, outTotalPts: -1.5, doubtfulWeight: 0.75, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0 },
   NCAAF: { outMarginPts: 3.5, outTotalPts: -2.0, doubtfulWeight: 0.75, maxAbsMarginAdj: 6.0, maxAbsTotalAdj: 4.0 },
@@ -972,6 +973,11 @@ const NFL_ELO_WEIGHT = 0.8;
  * OMEGA_NFL_MARGIN_BIAS_PTS overrides; 0 disables.
  */
 const NFL_MARGIN_BIAS_CORRECTION_PTS = 1.484;
+/** Window for the interim correction: slates 2026-10-18..2026-10-25 only.
+ *  After 2026-10-25 the correction stops applying until health.js biasFor()
+ *  is re-measured on a fresh slate and this window is deliberately extended.
+ *  NHL/MLB have NO equivalent correction (their bias is unmeasured). */
+const NFL_MARGIN_BIAS_WINDOW = { from: '2026-10-18', to: '2026-10-25' };
 function nflMarginBiasCorrectionPts() {
   const w = envNumber('OMEGA_NFL_MARGIN_BIAS_PTS', NFL_MARGIN_BIAS_CORRECTION_PTS);
   return Number.isFinite(w) ? w : NFL_MARGIN_BIAS_CORRECTION_PTS;
@@ -1141,7 +1147,8 @@ const GENERATOR_BOOKMAKERS = [
 ].join(',');
 
 const MODEL_NOTES = [
-  'v12.4.0-webetai-pure: 2026-10-17: normal cover uses effective SD sqrt(game_SD^2+SD_rating^2), SD_rating=base*sqrt(6/max(n,6)) (NCAAF margin 8 total 6; NHL/MLB half the game SD, ASSUMED; NFL/NBA base 0). NHL/MLB anchor p=0.25*p_cal+0.75*p_fair after calibration (ASSUMED). Published edge is that p minus the vigged price. v12.4.1-webetai-pure (2026-10-17): NCAAF no pull toward Pinnacle (weight 1); NHL empty-net step removed (double count); card copy sanitizer; parlay-leg edge string identity; Hard Rock same-line placeability. OMEGA_MARKET_ANCHOR is ignored, so edge and EV stay on the pure model probability versus the bet price and a short card still fills to 3. Published stake is flat by grade. A+ is 1.5u ($225), A is 1u ($150), A- is 0.75u ($113), and B or any lean is 0.5u ($75). Kelly rounding does not override the grade. A full card (any straight graded A- or better) parlays 0.5u ($75). A lean-only card parlays 0.25u ($38). Risk and to-win are whole dollars rounded up. DAILY_UNIT_CAP is 5.0u so three A+ plus the 0.5u parlay fit. Parlay legs carry pick, odds, matchup, sport, book, edge, and grade. Combined odds are the product of the leg decimal odds. Parlay EV is labeled assumes independent legs. Edge, EV, and pick selection are unchanged. OMEGA_X_AUTOPOST stays unset. Generate prices the stored board and does not re-pull paid odds.',
+  'v12.4.0-webetai-pure: CURRENT (2026-10-18): SIMPLIFIED path. Final p = anchor (w*modelPureP + (1-w)*Pinnacle no-vig fair at the bet number). Gates are ONLY the Good Bet Checker sheet floors (bet_check_gate / v1 thresholds); EV>10% is an audit flag, not a reject. Rank by true anchored probability. Quarter-Kelly, 1.5u cap, daily cap trims lowest true-p first. No leans, no top-ups, no parlay at combined EV <= 0. Interim NFL margin bias -1.484 pts applies only to slates 2026-10-18..2026-10-25. QB margin points OFF (QB_MARGIN_SCALE=0). Everything below is history, not current spec.',
+  '2026-10-17: normal cover uses effective SD sqrt(game_SD^2+SD_rating^2), SD_rating=base*sqrt(6/max(n,6)) (NCAAF margin 8 total 6; NHL/MLB half the game SD, ASSUMED; NFL/NBA base 0). NHL/MLB anchor p=0.25*p_cal+0.75*p_fair after calibration (ASSUMED). Published edge is that p minus the vigged price. v12.4.1-webetai-pure (2026-10-17): NCAAF no pull toward Pinnacle (weight 1); NHL empty-net step removed (double count); card copy sanitizer; parlay-leg edge string identity; Hard Rock same-line placeability. OMEGA_MARKET_ANCHOR is ignored, so edge and EV stay on the pure model probability versus the bet price and a short card still fills to 3. Published stake is flat by grade. A+ is 1.5u ($225), A is 1u ($150), A- is 0.75u ($113), and B or any lean is 0.5u ($75). Kelly rounding does not override the grade. A full card (any straight graded A- or better) parlays 0.5u ($75). A lean-only card parlays 0.25u ($38). Risk and to-win are whole dollars rounded up. DAILY_UNIT_CAP is 5.0u so three A+ plus the 0.5u parlay fit. Parlay legs carry pick, odds, matchup, sport, book, edge, and grade. Combined odds are the product of the leg decimal odds. Parlay EV is labeled assumes independent legs. Edge, EV, and pick selection are unchanged. OMEGA_X_AUTOPOST stays unset. Generate prices the stored board and does not re-pull paid odds.',
   'v12.4.2-webetai-textbook: 2026-10-17 ASSUMED. Final p = w(sport,market)*modelPureP + (1-w)*fair (Pinnacle power no-vig, else the unweighted mean of other sharp books that post both sides, else the unweighted mean of every stored book that posts both sides, else that single book power no-vig; 2026-10-18 ASSUMED mean; Circa is not on the stored board). NCAAF and NFL spread 0.25, ml 0.25, total 0.10; NHL and MLB 0.25 on every market; NBA unanchored. NFL-CHANGE: NFL point weights are 1 and RATING_ERROR_SD is margin 8 total 6 so the anchor is the only market pull. Edge floor is the flat 2% (EDGE_FLOOR_K default 0; the 1.5*SE hurdle double-counted the anchor, SIM-REPORT 2026-10-18, not fitted). OMEGA_EDGE_FLOOR_K still overrides. EV above 0.10 is ev-stale for every pick, with no spread exception. Stake is quarter Kelly on a 100u bankroll, 0.25u steps, 1.5u cap. Kelly is not scaled by (1-pPush): f* does not depend on push probability. The 0.5u floor is only a labelled lean; a graded Kelly under 0.5u is published as that lean. Straights rank by the anchored posterior-mean stake EV. A 3-leg parlay with evAtFair <= 0 still publishes as a lean at 0.25u. Parlay joint is the product of final p times 0.95^(n-1), a same-model-bias haircut. The card prints fairP, fairSource, evAtFair, p_model, and modelWeight.',
   'v12.3.74-omega-vnext-price-lock: Inclusion is a flat 2% stake-EV floor at the best DraftKings or Hard Rock price. The odds-scaled edge curve is display and tiebreak only, not an inclusion gate. EV above 12% is ev-stale and is logged, not published and not a lean. Straights stay inside -250 to +250. Rank is probability edge, then stake EV within 0.2 points. When fewer than 3 straights clear 2%, the card fills from the best remaining positive-EV candidates, then the best EV even if it is not positive, one per game, labeled leans at 0.5u. A full card parlays 0.5u and a lean-only card parlays 0.25u, from the best edges on distinct games, and it is labeled when combined EV is not positive. QA auto-corrects and does not block. Generate prices the stored 10:00 ET board (pinnacle, DraftKings, Hard Rock) from omega-pinnacle-line-moves slot 1000 and does not re-pull paid odds. line_move_prob is unchanged. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.73-omega-vnext-price-lock: The 10:00 ET pull is the last Odds API pull and sets final prices. It ranks the top 10 by edge and leaves the card a draft. 10:15 re-ranks that top 10 after news, weather, injury, depth-chart, team-form, and stadium inputs. 10:30 drafts the top 3 and the parlay, then checks Hard Rock placeability at the displayed best US price (Hard Rock or DraftKings, never Pinnacle). A straight that fails is flagged. A parlay that fails is re-priced at the Hard Rock price or a leg is swapped for the next positive-EV distinct-game Hard Rock candidate. The re-price keeps positive edge versus the Pinnacle no-vig and positive EV on each leg and the ticket. The check does not block publish and does not pull odds. 10:45 writes context and summaries. 11:00 is the only finalization. The 3:00 and 10:00 checks are one call, bookmakers=pinnacle,draftkings,hardrockbet. The generator request names hardrockbet in one bookmakers parameter. Stake EV uses the displayed US price. DraftKings is still required. The optional sharp-book slot stays empty. OMEGA_X_AUTOPOST stays unset.',
@@ -1304,6 +1311,7 @@ module.exports = {
   PARLAY_MIN_COVER,
   QA_HARDFAIL,
   QB_INJURY,
+  QB_MARGIN_SCALE,
   QUALITY_GRADE,
   SELECT_WEIGHTS,
   SPORT_SPREAD_STD,
@@ -1321,6 +1329,7 @@ module.exports = {
   NFL_ELO_WEIGHT,
   nflEloWeight,
   NFL_MARGIN_BIAS_CORRECTION_PTS,
+  NFL_MARGIN_BIAS_WINDOW,
   nflMarginBiasCorrectionPts,
   priorW,
   readPriorEnv,

@@ -14,7 +14,7 @@
 
 const { clamp, etCalendarDate } = require('../odds_math');
 const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId, isFbsTeamId, teamRecord } = require('./team_identity');
-const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, QB_MARGIN_SCALE, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
 const { shrinkLast5IntoRating, lookupLast5 } = require('../last5');
 const { conservativeNonQbAdj, rowsForTeam } = require('../personnel');
 
@@ -515,7 +515,8 @@ function qbSoftAdjust(sport, homeQb, awayQb, feed, teams) {
   apply(homeQb, 'home', homeEntry, teams && teams.home);
   apply(awayQb, 'away', awayEntry, teams && teams.away);
   return {
-    marginAdj: clamp(marginAdj, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
+    // QB_MARGIN_SCALE=0 (2026-10-18): unfitted QB points do not move margins.
+    marginAdj: clamp(marginAdj * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE), -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
     totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
     uncBump,
     note: notes.length ? notes.join('; ') : null,

@@ -38,7 +38,7 @@ assert.strictEqual(gateReason(thin, asOf), 'edge-floor-se');
 
 // 2% stake EV, 10% cap, and the -250/+250 band stay.
 assert.strictEqual(gateReason(side({ ev: 0.019, edgePct: 0.04 }), asOf), 'ev-floor');
-assert.strictEqual(gateReason(side({ ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ ev: 0.11, edgePct: 0.06 }), asOf), null); // sheet: EV>cap = audit flag, not reject (2026-10-18)
 assert.strictEqual(gateReason(side({ odds: 300, ev: 0.04, edgePct: 0.04 }), asOf), 'odds-out-of-band');
 assert.strictEqual(gateReason(side({ odds: -300, ev: 0.04, edgePct: 0.04 }), asOf), 'odds-out-of-band');
 

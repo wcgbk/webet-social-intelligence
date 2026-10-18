@@ -90,6 +90,9 @@ function publicPicksPayload(data) {
     ? data.picks.filter((p) => !isVoidPregame(p)).map(pickPublic)
     : [];
   clone.parlayLegs = parlayPublic(data.parlayLegs);
+  // Board price time for fans (2026-10-18): when the stored board prices
+  // were captured (generate does not re-pull paid odds).
+  if (data.priceLock) clone.boardPriceTime = data.priceLock.servedAt || data.priceLock.requested || null;
   clone.rejections = [];
   return clone;
 }

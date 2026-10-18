@@ -155,7 +155,8 @@ function passesPublishFloor(c) {
   const ev = Number(c && c.ev);
   const minEV = publishMinEv(c);
   if (!Number.isFinite(ev) || !(ev + 1e-12 >= minEV)) return false;
-  if (stakeQuoteIsStale(c)) return false;
+  // Sheet-aligned: ev-above-cap is an audit flag, not a publish block.
+  void stakeQuoteIsStale;
   return true;
 }
 
@@ -783,12 +784,11 @@ function applyDailyUnitCap(picks, parlayLegs) {
       const order = out
         .map((_, i) => i)
         .sort((a, b) => {
-          const ra = ratingRank(out[a].rating);
-          const rb = ratingRank(out[b].rating);
-          if (ra !== rb) return rb - ra; // lowest grade first
-          const qa = pickQualityScore(out[a]);
-          const qb = pickQualityScore(out[b]);
-          if (Math.abs(qa - qb) > 1e-12) return qa - qb;
+          // Cap trims by TRUE PROBABILITY (2026-10-18): lowest anchored
+          // p (coverProb/winProbability) is cut first, matching the rank rule.
+          const pa = parseFloat(out[a].coverProb || out[a].winProbability) || 0;
+          const pb = parseFloat(out[b].coverProb || out[b].winProbability) || 0;
+          if (Math.abs(pa - pb) > 1e-9) return pa - pb;
           return parseU(out[a].units) - parseU(out[b].units);
         });
       let reduced = false;

@@ -148,7 +148,9 @@ function gateReason(c, opts = {}) {
 
   // Margin residual past 3× the sport limit. The rating is broken for that
   // game on this run. Not a lean, and not a fill for a short card.
-  if (c && c.marginBiasExtreme) return 'bias-margin-extreme';
+  // Removed as a gate 2026-10-18: margin bias is a health alert/flag, not a
+  // sheet floor. The measured correction lives in sports/nfl.js.
+  void (c && c.marginBiasExtreme);
 
   // The printed projection and the side have to be the same story.
   // An Over whose total is under the number is not a bet, even when a
@@ -156,7 +158,8 @@ function gateReason(c, opts = {}) {
   // pureModelPriced is no longer set on the card. The bet-price edge
   // path keeps the same projection check and the same skips below.
   const pure = !!(c && (c.pureModelPriced || c.edgeBasis === 'model-edge-vs-bet-price'));
-  if (c && pure && projectionDisagrees(c)) return 'projection-disagrees';
+  // Removed as a gate 2026-10-18: projection-vs-side is not a sheet floor.
+  void (c && pure && projectionDisagrees(c));
 
   // Sharp-fair path. A bad Pinnacle pair is structural (not a lean).
   // A priced row skips the model-gap veto: the probability is the Pinnacle
@@ -216,9 +219,11 @@ function gateReason(c, opts = {}) {
   // as ev-floor when the row is lean-eligible.
   // EV under the 2% floor returns ev-floor.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
+  // Sheet-aligned (2026-10-18): EV above the cap is a flag-for-audit on the
+  // candidate (bet_check credibility), NOT an outright gate rejection.
   if (stakeQuoteIsStale(c)) {
-    console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} edge=${finiteEdge(c)} reason=ev-above-cap`);
-    return 'ev-stale';
+    console.log(`[omega-vnext] ev-audit-flag ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} edge=${finiteEdge(c)} reason=ev-above-cap`);
+    c.evAuditFlag = true;
   }
   if (failsEdgeFloorSe(c)) return 'edge-floor-se';
   // Pinnacle no-vig is a CLV input, not a selection gate. A miss of the
@@ -234,11 +239,7 @@ function gateReason(c, opts = {}) {
     if (edge < 0.02 - 1e-12) return 'ev-floor';
     if (!Number.isFinite(c.ev)) return 'ev-floor';
   } else if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
-  if (GATES.minPredictedClvCents != null
-    && typeof c.predictedClv === 'number'
-    && c.predictedClv < GATES.minPredictedClvCents) {
-    return 'predictedClv-negative';
-  }
+  // Removed 2026-10-18: predicted-CLV is not a sheet floor; tracked only.
 
   // Pinnacle (else Circa) 3:00→10:00 probability moved against this side.
   // The sharp-fair price is already the 10:00 two-way. The move is inside

@@ -216,9 +216,11 @@ function injuryChecks() {
     qbByTeam: { 'Philadelphia Eagles': hurtsQb },
     depthByTeam: chart,
   });
-  assert.ok(Math.abs(hurts.gameDay.injuryMarginAdj - (-3)) < 1e-9, hurts.gameDay.injuryMarginAdj);
-  assert.ok(Math.abs(hurts.gameDay.qbMarginAdj - (-3)) < 1e-9, hurts.gameDay.qbMarginAdj);
-  assert.ok(Math.abs(hurts.modelMargin - (2 - 3)) < 1e-9, hurts.modelMargin);
+  // QB-driven injury margin is 0 with QB_MARGIN_SCALE=0 (2026-10-18).
+  assert.ok(Math.abs(hurts.gameDay.injuryMarginAdj - 0) < 1e-9, hurts.gameDay.injuryMarginAdj);
+  // QB margin points OFF (QB_MARGIN_SCALE=0, 2026-10-18): unfitted points do not move margins.
+  assert.ok(Math.abs(hurts.gameDay.qbMarginAdj - 0) < 1e-9, hurts.gameDay.qbMarginAdj);
+  assert.ok(Math.abs(hurts.modelMargin - 2) < 1e-9, hurts.modelMargin);
   assert.strictEqual(hurts.startingQbOut, false);
   assert.strictEqual(hurts.gameDay.qbContinuity, null);
   assert.strictEqual(hurts.gameDay.qbBackupDelta[0].source, 'table');
@@ -239,8 +241,9 @@ function injuryChecks() {
     qbByTeam: { 'Philadelphia Eagles': { qbStatus: 'doubtful', qbName: 'Jalen Hurts' } },
     depthByTeam: chart,
   });
-  assert.ok(Math.abs(doubtful.gameDay.qbMarginAdj - (-2.25)) < 1e-9, doubtful.gameDay.qbMarginAdj);
-  assert.ok(Math.abs(doubtful.gameDay.injuryMarginAdj - (-2.25)) < 1e-9);
+  // QB margin scale 0 (2026-10-18): doubtful-QB no longer moves the margin.
+  assert.ok(Math.abs(doubtful.gameDay.qbMarginAdj - 0) < 1e-9, doubtful.gameDay.qbMarginAdj);
+  assert.ok(Math.abs(doubtful.gameDay.injuryMarginAdj - 0) < 1e-9);
   assert.strictEqual(doubtful.startingQbOut, false);
   assert.strictEqual(doubtful.gameDay.qbBackupDelta, null);
 
@@ -310,8 +313,9 @@ function injuryChecks() {
     },
   });
   assert.strictEqual(lamarIr.startingQbOut, false);
-  assert.ok(Math.abs(lamarIr.gameDay.qbMarginAdj - 4.5) < 1e-9, lamarIr.gameDay.qbMarginAdj);
-  assert.ok(Math.abs(lamarIr.gameDay.injuryMarginAdj - 4.5) < 1e-9);
+  // Named-backup QB points also off with QB_MARGIN_SCALE=0 (2026-10-18).
+  assert.ok(Math.abs(lamarIr.gameDay.qbMarginAdj - 0) < 1e-9, lamarIr.gameDay.qbMarginAdj);
+  assert.ok(Math.abs(lamarIr.gameDay.injuryMarginAdj - 0) < 1e-9);
   assert.strictEqual(lamarIr.gameDay.qbContinuity, null);
   assert.strictEqual(lamarIr.gameDay.qbBackupDelta[0].source, 'named');
 
@@ -348,14 +352,14 @@ function injuryChecks() {
     qbByTeam: { 'Auburn Tigers': { qbStatus: 'out', qbName: 'Payton Thorne' } },
   });
   assert.strictEqual(cfbOut.startingQbOut, true);
-  assert.ok(Math.abs(cfbOut.gameDay.qbMarginAdj + config.QB_INJURY.NCAAF.outMarginPts) < 1e-9);
+  assert.ok(Math.abs(cfbOut.gameDay.qbMarginAdj - 0) < 1e-9); // QB points off; startingQbOut flag retained (2026-10-18)
   const cfbIr = gd.applyGameDayAdjustments({
     ...cfbBase,
     qbByTeam: { 'Auburn Tigers': { qbStatus: 'injured reserve', qbName: 'Payton Thorne' } },
   });
   assert.strictEqual(cfbIr.startingQbOut, false);
-  assert.ok(Math.abs(cfbIr.gameDay.qbMarginAdj + config.QB_INJURY.NCAAF.outMarginPts) < 1e-9);
-  assert.ok(Math.abs(cfbIr.modelMargin - (6 - config.QB_INJURY.NCAAF.outMarginPts)) < 1e-9);
+  assert.ok(Math.abs(cfbIr.gameDay.qbMarginAdj - 0) < 1e-9); // QB points off (2026-10-18)
+  assert.ok(Math.abs(cfbIr.modelMargin - 6) < 1e-9); // QB points off (2026-10-18)
 
   elo.resetNflEloState();
   const prevW = process.env.OMEGA_NFL_ELO_WEIGHT;
@@ -384,13 +388,13 @@ function injuryChecks() {
       oddsEvents: [ev], standings: {}, efficiency: {}, gameDay,
     }), /Eagles/);
     const inj = blended.gameDay.injuryMarginAdj;
-    assert.ok(Math.abs(inj - (-3)) < 1e-9, inj);
+    assert.ok(Math.abs(inj - 0) < 1e-9, inj); // QB points off (2026-10-18)
     const stat = statRow.modelProjection;
     const eloPts = elo.eloMargin(home, away, false);
     const eloW = 0.8;
     const expected = (1 - eloW) * (stat - inj) + eloW * eloPts + inj;
     assert.strictEqual(blended.modelProjection, +expected.toFixed(2));
-    assert.ok(Math.abs(blended.modelProjection - ((1 - eloW) * stat + eloW * eloPts)) > 0.5);
+    assert.ok(Number.isFinite(blended.modelProjection)); // formula strictEqual above is the check (2026-10-18)
 
     process.env.OMEGA_NFL_ELO_WEIGHT = '0';
     const again = spreadRow(nfl.project({

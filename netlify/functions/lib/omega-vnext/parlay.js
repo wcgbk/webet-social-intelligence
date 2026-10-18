@@ -1324,7 +1324,10 @@ function parlayFromStraights(straights, opts = {}) {
     if (!pair) {
       return [noQualifyingParlay('two published straights did not clear as a 2-team parlay')];
     }
-    return ticketFromLegs(pair, rows, opts);
+    const _pair = ticketFromLegs(pair, rows, opts);
+    const _pev = _pair[0] && (_pair[0].evRaw != null ? Number(_pair[0].evRaw) : parseFloat(_pair[0].ev));
+    if (_pair[0] && _pair[0].qualifying !== false && !(_pev > 0)) return [noQualifyingParlay('combined parlay EV not positive')];
+    return _pair;
   }
   const merged = [];
   const seenId = new Set();
@@ -1368,6 +1371,12 @@ function parlayFromStraights(straights, opts = {}) {
     return [noQualifyingParlay('fewer than 3 games with cover >= 45% and positive stake EV at or under the EV cap')];
   }
   const ticket = ticketFromLegs(chosen, rows, opts);
+  // Sheet-aligned (2026-10-18): no parlay publishes at combined EV <= 0
+  // (after the 0.95^(n-1) haircut inside comboStats).
+  const _tev = ticket[0] && (ticket[0].evRaw != null ? Number(ticket[0].evRaw) : parseFloat(ticket[0].ev));
+  if (ticket[0] && ticket[0].qualifying !== false && !( _tev > 0)) {
+    return [noQualifyingParlay('combined parlay EV not positive')];
+  }
   if (ticket[0] && ticket[0].qualifying !== false) ticket[0].candidatesScanned = merged.length;
   return ticket;
 }

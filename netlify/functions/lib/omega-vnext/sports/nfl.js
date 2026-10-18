@@ -151,7 +151,9 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
   const biasCorrPts = nflMarginBiasCorrectionPts();
   // Interim correction is measured on the 2026-10-18 slate. It must not
   // rewrite historical replays of earlier slates.
-  const biasDateOk = !commenceTime || String(commenceTime) >= '2026-10-18';
+  const _bw = require('../config').NFL_MARGIN_BIAS_WINDOW || { from: '2026-10-18', to: '2026-10-25' };
+  const _day = String(commenceTime || '').slice(0, 10);
+  const biasDateOk = !_day || (_day >= _bw.from && _day <= _bw.to);
   if (Number.isFinite(modelMargin) && biasCorrPts && biasDateOk) modelMargin -= biasCorrPts;
   const modelTotal = wx.modelTotal;
   const uncertainty = gd.uncertainty;

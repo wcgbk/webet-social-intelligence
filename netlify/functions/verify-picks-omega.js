@@ -51,6 +51,7 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
+const { passesSheetMinimums } = require('./lib/omega-vnext/bet_check_gate');
 const { finishShortCard, sideBlocked } = require('./lib/omega-vnext/card_topup');
 const { buildShortfall } = require('./lib/omega-vnext/shortfall');
 const { MAX_STRAIGHTS } = require('./lib/omega-vnext/config');
@@ -431,6 +432,9 @@ function sportCoverFloor(sport) {
   return 0;
 }
 function candidateClearsSportGates(c) {
+  // Sheet floors are the only admission rule post-generate (2026-10-18):
+  // no sub-sheet replacement/backfill pick can be added after generate.
+  if (!passesSheetMinimums(c)) return false;
   if (!c || !(c.ev > 0) || !(c.ev + 1e-12 >= sportEvFloor(c.sport))) return false;
   const cp = typeof c.coverProb === "number" ? c.coverProb : parseFloat(c.coverProb) || 0;
   if (cp < sportCoverFloor(c.sport)) return false;

@@ -31,7 +31,7 @@ const quotes = [
 assert.strictEqual(holdReason({
   betType: 'Spread', pick: 'Georgia Southern Eagles -3.5', line: -3.5,
   homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles',
-}, quotes), 'line-moved');
+}, quotes), null); // 0.5pt move = noise under 1.0pt material tolerance (2026-10-18)
 
 assert.strictEqual(holdReason({
   betType: 'Total', pick: 'Under 47.5', line: 47.5,
@@ -60,7 +60,7 @@ assert.strictEqual(holdReason({
 }, []), null);
 
 const board = [
-  { market: 'Spread', side: 'Georgia Southern Eagles -3.5', line: -3.5, homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
+  { market: 'Spread', side: 'Georgia Southern Eagles -4.5', line: -4.5, homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' }, // 1.5pt off current -3: stale under 1.0pt tolerance (2026-10-18)
   { market: 'Moneyline', side: 'Georgia Southern Eagles', homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
   { market: 'Spread', side: 'East Carolina Pirates -5.5', line: -5.5, homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
   { market: 'Moneyline', side: 'UAB Blazers', homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },

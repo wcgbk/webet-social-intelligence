@@ -245,12 +245,15 @@ function gateReason(c, opts = {}) {
   // The sharp-fair price is already the 10:00 two-way. The move is inside
   // that fair, so it does not veto a soft price that still beats it.
   // Pure-model rows do not use the move or the steam print to select.
-  if (!(c && c.sharpFairPriced) && !pure && c.movementDrop) return c.movementDropReason || 'sharp_prob_against';
+  // Tracked-only (2026-10-18): sharp-prob movement is logged on the row,
+  // never a gate. Movement/steam do not select.
+  if (!(c && c.sharpFairPriced) && !pure && c.movementDrop) c.movementGateFlag = c.movementDropReason || 'sharp_prob_against';
 
   // Open→now adverse steam on the Pinnacle print (when line-move annotated)
+  // Tracked-only (2026-10-18): adverse steam is stamped, never a gate.
   if (!(c && c.sharpFairPriced) && !pure && GATES.rejectAdverseSteam && c.lineMove) {
     const steamReason = adverseSteamReason(c.lineMove, { verify: false });
-    if (steamReason) return steamReason;
+    if (steamReason) c.steamGateFlag = steamReason;
   }
 
   // One US book, or a price the other majors do not offer, is logged.

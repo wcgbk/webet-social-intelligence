@@ -238,14 +238,8 @@ function evaluateHardFail(pick, ctx = {}) {
     }
   }
 
-  // Open→pick adverse steam (generate annotate or verify recheck)
-  {
-    const move = pick.lineMove || ctx.lineMove || null;
-    if (move) {
-      const reason = adverseSteamReason(move, { verify: !!ctx.verifySteam });
-      if (reason) return reason;
-    }
-  }
+  // Tracked-only (2026-10-18): adverse steam never hard-fails a pick.
+  void (pick && pick.lineMove);
 
   // Market no longer offered at major books
   if (cfg.requireMajorBookStillOffered && ctx.majorBooksOffering === false) {

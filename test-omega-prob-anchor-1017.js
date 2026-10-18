@@ -186,7 +186,7 @@ assert.strictEqual(gateReason({
   sport: 'NFL', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.04, edgePct: 0.03,
   liquid: true, commenceTime: future,
   movementDrop: true, movementDropReason: 'sharp_prob_against: -0.0300',
-}), 'sharp_prob_against: -0.0300');
+}), null); // movement tracked-only, never a gate (2026-10-18)
 
 const indexSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
 assert.ok(!indexSrc.includes('applyPureModel('));

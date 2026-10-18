@@ -17,6 +17,7 @@ const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, GATES, LEAN_MIN_EV } = require('./con
 const { americanToImplied, formatAmerican, normCdf, parseEdgeFraction, clamp, writeSummaryStakeDisplay } = require('./odds_math');
 const { attachEv } = require('./edge');
 const { toPickObject } = require('./select');
+const { passesSheetMinimums } = require('./bet_check_gate');
 const { parlayFromStraights } = require('./parlay');
 const { minEdgeFor, mainMinEv } = require('./edge_floor');
 
@@ -193,24 +194,14 @@ function stakeEv(c) {
 
 /** Main keep: stake EV from 2% through 12%. Edge is not required. */
 function clears(c) {
-  const ev = stakeEv(c);
-  const odds = typeof c.odds === 'number' ? c.odds : parseAmerican(c.odds);
-  if (!Number.isFinite(ev)) return false;
-  const needEv = mainMinEv(odds, GATES.minEV.default || 0.02);
-  if (ev + 1e-12 < needEv) return false;
-  const maxEV = Number(require('./config').EV_CAP_ALL);
-  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
-  return true;
+  // Sheet gate (2026-10-18): autocorrect may only keep/replace with a
+  // candidate that passes the Good Bet Checker minimums. No EV-only path,
+  // no EV cap reject (sheet treats >10% as an audit flag, not a reject).
+  return passesSheetMinimums(c);
 }
 
-/** Lean keep: positive stake EV at or under EV_CAP_ALL. Edge is not required. */
-function leanClears(c) {
-  const ev = stakeEv(c);
-  if (!Number.isFinite(ev) || !(ev > 0)) return false;
-  const maxEV = Number(require('./config').EV_CAP_ALL);
-  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
-  return true;
-}
+// leanClears removed 2026-10-18: positive-EV-only leans are sub-sheet and
+// must never be published post-generate. Non-clearing picks are dropped.
 
 function markLean(built) {
   if (!built || !built.pick) return built;
@@ -352,7 +343,7 @@ function nextBest(pool, sportGames, used) {
       continue;
     }
     const cand = scoreAt(row, quote);
-    if (!clears(cand) && !leanClears(cand)) continue;
+    if (!clears(cand)) continue; // sheet-only (2026-10-18)
     const pickObj = toPickObject(cand, { modelVersion: row.modelVersion });
     pickObj.book = 'hardrockbet';
     pickObj.line = quote.point != null ? quote.point : row.line;
@@ -396,21 +387,7 @@ function autoCorrectHardRock(picksData, sportGames) {
       built.push(repriced);
       continue;
     }
-    if (repriced && leanClears(repriced.cand)) {
-      markLean(repriced);
-      log.push({
-        index: i,
-        action: 'repriced',
-        from: pick.pick,
-        to: repriced.pick.pick,
-        line: quote.point,
-        odds: formatAmerican(quote.american),
-        edge: repriced.cand.edgePct,
-        reason: 'Hard Rock number misses the 3% floor; kept as a lean',
-      });
-      built.push(repriced);
-      continue;
-    }
+    // Repriced below sheet: fall through to replacement/drop (no lean keep).
     const used = new Set(built.map((b) => sideKey(b.pick)));
     used.add(sideKey(pick));
     const alt = nextBest(pool, sportGames, used);
@@ -426,46 +403,18 @@ function autoCorrectHardRock(picksData, sportGames) {
         reason: 'Hard Rock number missed the 2% floor; next Hard Rock candidate',
       });
       built.push(alt);
-    } else if (alt && leanClears(alt.cand)) {
-      markLean(alt);
-      log.push({
-        index: i,
-        action: 'replaced',
-        from: pick.pick,
-        to: alt.pick.pick,
-        line: alt.pick.line,
-        odds: alt.pick.odds,
-        edge: alt.cand.edgePct,
-        reason: 'Hard Rock number missed the 2% floor; next positive-EV lean',
-      });
-      built.push(alt);
-    } else if (repriced) {
-      markLean(repriced);
-      log.push({
-        index: i,
-        action: 'kept-lean',
-        from: pick.pick,
-        to: repriced.pick.pick,
-        line: quote.point,
-        odds: formatAmerican(quote.american),
-        edge: repriced.cand.edgePct,
-        reason: 'Hard Rock number missed the floor; kept as a lean',
-      });
-      built.push(repriced);
     } else {
-      const kept = { pick: { ...pick, tier: 'lean', label: 'lean' }, cand: pickToCand(pick) };
-      markLean(kept);
+      // Sub-sheet after reprice/replacement: DROP, never keep as a lean.
       log.push({
         index: i,
-        action: 'kept-lean',
+        action: 'dropped-sub-sheet',
         from: pick.pick,
-        to: kept.pick.pick,
+        to: null,
         line: quote.point,
         odds: formatAmerican(quote.american),
-        edge: kept.cand.edgePct,
-        reason: 'Hard Rock number missed the floor; kept as a lean',
+        edge: repriced ? repriced.cand.edgePct : (alt ? alt.cand.edgePct : null),
+        reason: 'Hard Rock number missed the sheet floors; dropped (no lean keep)',
       });
-      built.push(kept);
     }
   }
 
@@ -498,7 +447,6 @@ function autoCorrectHardRock(picksData, sportGames) {
 module.exports = {
   autoCorrectHardRock,
   minEdgeClears: clears,
-  leanClears,
   quoteFor,
   materialHardRockGap: material,
 };

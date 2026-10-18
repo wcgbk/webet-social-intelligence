@@ -864,6 +864,29 @@ async function generateOmegaVnext(opts = {}) {
     }
   }
 
+  // Selection trace (2026-10-18, private diagnostics): why each gated
+  // candidate is not on the published card. Stored on the card blob only;
+  // public-picks strips it. Settles tomorrow what logs could not today.
+  const selectionTrace = [];
+  try {
+    const pubKeys = new Set(picks.map((pk) => `${pk.matchup}|${pk.pick || pk.side}`));
+    for (const c of yesPool || []) {
+      const key = `${c.matchup}|${c.side}`;
+      if (pubKeys.has(key)) continue;
+      let stage = 'selection', reason = 'not-selected (rank/cap/one-per-game/sheet-recheck)';
+      const hf = (hardFails || []).find((h) => h.matchup === c.matchup && (h.side === c.side));
+      if (hf) { stage = 'qa'; reason = hf.reason; }
+      const nr = ((narr && narr.rejections) || []).find((r) => r.matchup === c.matchup);
+      if (nr) { stage = 'narrate'; reason = nr.reason || 'news veto'; }
+      if (stage === 'selection') {
+        const hold = holdOf(c);
+        if (hold) { stage = 'posted-line-hold'; reason = hold; }
+      }
+      selectionTrace.push({ matchup: c.matchup, side: c.side, market: c.market, stage, reason });
+      if (selectionTrace.length >= 15) break;
+    }
+  } catch (e) { console.error(`[omega-vnext] selection trace failed: ${e.message}`); }
+
   const sportsCovered = [...new Set(picks.map(p => p.sport))];
 
   const candidateTable = orderedByScore(yesPool).slice(0, 15).map((c, i) => ({
@@ -948,6 +971,7 @@ async function generateOmegaVnext(opts = {}) {
     gapReview: buildGapReview(candidates, picks, publishedParlay),
     // Private. Counts and the next 10 candidates when the card is short of
     // 3 straights or a 3-leg. Does not add a pick. publicPicksPayload drops it.
+    selectionTrace,
     shortfall: buildShortfall({
       picks,
       parlayLegs: publishedParlay,

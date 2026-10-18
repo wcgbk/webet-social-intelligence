@@ -515,10 +515,11 @@ function qbSoftAdjust(sport, homeQb, awayQb, feed, teams) {
   apply(homeQb, 'home', homeEntry, teams && teams.home);
   apply(awayQb, 'away', awayEntry, teams && teams.away);
   return {
-    // QB_MARGIN_SCALE=0 (2026-10-18): unfitted QB points do not move margins.
+    // QB_MARGIN_SCALE=0 (2026-10-18): unfitted QB points move NOTHING —
+    // not margins, not totals, not uncertainty. Flags/statuses still report.
     marginAdj: clamp(marginAdj * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE), -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
-    totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
-    uncBump,
+    totalAdj: clamp(totalAdj * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE), -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
+    uncBump: uncBump * (QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE),
     note: notes.length ? notes.join('; ') : null,
     backupDeltas: deltas,
   };

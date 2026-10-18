@@ -224,7 +224,7 @@ function injuryChecks() {
   assert.strictEqual(hurts.startingQbOut, false);
   assert.strictEqual(hurts.gameDay.qbContinuity, null);
   assert.strictEqual(hurts.gameDay.qbBackupDelta[0].source, 'table');
-  assert.ok(Math.abs(hurts.gameDay.qbTotalAdj - (-1.5)) < 1e-9, hurts.gameDay.qbTotalAdj);
+  assert.ok(Math.abs(hurts.gameDay.qbTotalAdj - 0) < 1e-9, hurts.gameDay.qbTotalAdj); // QB totals also off (2026-10-18)
   assert.strictEqual(
     hurts.gameDay.injuryMarginAdj,
     (hurts.gameDay.qbMarginAdj || 0) + 0,
@@ -259,7 +259,7 @@ function injuryChecks() {
     depthByTeam: chart,
   });
   assert.strictEqual(questionable.gameDay.qbMarginAdj, 0);
-  assert.ok(questionable.uncertainty > 0.16);
+  assert.ok(Math.abs(questionable.uncertainty - 0.16) < 1e-9); // QB uncBump off (2026-10-18);
 
   const quiet = gd.applyGameDayAdjustments({
     sport: 'NFL',

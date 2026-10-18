@@ -620,6 +620,14 @@ function buildHealthRecord(input) {
     }, 0);
     bySport[sport].modelMarketGap = gapN;
     if (gapN > 0) alerts.push({ sport, code: 'model_market_gap', detail: `candidates=${gapN}` });
+    if (sport === 'NFL' && src.dateISO) {
+      try {
+        const bw = require('./config').NFL_MARGIN_BIAS_WINDOW;
+        if (bw && String(src.dateISO).slice(0, 10) > bw.to) {
+          alerts.push({ sport, code: 'nfl_bias_correction_expired', detail: `window ended ${bw.to}; 1.484pt correction INACTIVE — re-measure biasFor before extending` });
+        }
+      } catch (e) { /* alert is best-effort */ }
+    }
     if (sport === 'NFL' || sport === 'NCAAF') {
       const sched = snap.gameDay && snap.gameDay.restSchedule && snap.gameDay.restSchedule[sport];
       if (sched) {

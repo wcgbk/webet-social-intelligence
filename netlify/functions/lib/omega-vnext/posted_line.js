@@ -133,14 +133,17 @@ function holdReason(row, quotes) {
   if (!quote) return null;
   const line = rowLine(row);
   if (line == null) return null;
+  // Material-move tolerance (2026-10-18): sub-1pt ticks between the stored
+  // capture and generate are line noise, not staleness. >= 1.0 pt is a
+  // genuinely different number and still holds. (Was >0.01: any tick held.)
   if (/total/i.test(market)) {
     if (quote.total == null) return null;
-    return Math.abs(line - quote.total) > 0.01 ? 'line-moved' : null;
+    return Math.abs(line - quote.total) >= 1.0 ? 'line-moved' : null;
   }
   if (/spread|puck|run line/i.test(market)) {
     const current = currentSpreadForRow(row, quote);
     if (current == null) return null;
-    return Math.abs(line - current) > 0.01 ? 'line-moved' : null;
+    return Math.abs(line - current) >= 1.0 ? 'line-moved' : null;
   }
   return null;
 }

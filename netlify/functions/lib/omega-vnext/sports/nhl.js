@@ -19,7 +19,7 @@ const {
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { applyGameDayAdjustments } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, collectLinesForEdge, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'NHL';
 const LEAGUE_GPG = LEAGUE_PPG.NHL; // 3.1
@@ -433,7 +433,7 @@ function projectGame(event, standings, espnGame, gameDay) {
   }
 
   {
-    const bundles = collectMarketOutcomes(event, 'spreads');
+    const bundles = collectLinesForEdge(event, 'spreads');
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
@@ -454,7 +454,7 @@ function projectGame(event, standings, espnGame, gameDay) {
   }
 
   {
-    const bundles = collectMarketOutcomes(event, 'totals');
+    const bundles = collectLinesForEdge(event, 'totals');
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;

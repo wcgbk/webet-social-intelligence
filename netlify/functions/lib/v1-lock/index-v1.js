@@ -43,13 +43,13 @@ async function generateV1Lock(opts={}){
     } catch(e) { byGame = {}; }
   }
   const { candidates, passes }=projectAllV1(events, efficiencyBySport, { byGame, boardSlot, boardCapturedAt: poll.capturedAt||null });
-  const { picks, parlayLegs, funnel, rejections }=selectV1(candidates, passes);
+  const { picks, parlayLegs, funnel, rejections, diagnostics }=selectV1(candidates, passes);
   funnel.gamesOnBoard=events.length; funnel.boardSource=(boardDoc&&boardDoc.source)||'omega-line-path'; funnel.feedsWired=Object.keys(byGame).length; funnel.unsupportedSportsOnBoard=unsupported; funnel.boardSlot=boardSlot; funnel.boardCapturedAt=poll.capturedAt||null; funnel.openSlot=(openGames?openSlot:null); funnel.openSource=(boardDoc&&boardDoc.openSource)||(openGames?'earliest-poll':null);
   const totalUnits=picks.reduce((s,p)=>s+(parseFloat(p.units)||0),0)+(parlayLegs||[]).reduce((s,p)=>s+(parseFloat(p.units)||0),0);
   const card={ date:dateISO, dateFormatted:formatDateLong(dateISO), model:MODEL_VERSION_V1, engine:ENGINE_V1, source:'v1-lock',
-    picks, parlayLegs:parlayLegs||[], sgps:[], rejections, generatedAt:new Date().toISOString(), boardSlot, boardCapturedAt:poll.capturedAt||null,
+    picks, parlayLegs:parlayLegs||[], sgps:[], rejections, diagnostics:diagnostics||{ fallback:[], dataFlags:[] }, generatedAt:new Date().toISOString(), boardSlot, boardCapturedAt:poll.capturedAt||null,
     summary:{ totalPicks:picks.length, totalStraightBets:picks.length, totalUnits:`${totalUnits}u`, sportsCovered:[...new Set(picks.map(p=>p.sport))], modelVersion:MODEL_VERSION_V1 },
-    funnel, modelNotes:'V1 governed solely by The Lock — Unified Spec v2.0 (NFL, NCAAF, NHL, NBA, NCAAM, MLB): Hard Rock confirmed line, last-5 Tier 1, formula probability from team strength, Filter 1 grading (B parlay only), mandatory passes. Football projector live; NHL/NBA/NCAAM/MLB documented pass until a V1 projector exists.',
+    funnel, modelNotes:'V1 governed solely by The Lock — Unified Spec v2.0 (NFL, NCAAF, NHL, NBA, NCAAM, MLB): Hard Rock confirmed line, last-5 Tier 1, formula probability from team strength, Filter 1 grading (B parlay only), mandatory passes. Football projector live. NHL/NBA/NCAAM/MLB use de-vigged Pinnacle fair vs the best DraftKings/Hard Rock price. A short strict pass fills from fallback candidates so the card is 3 straights and a 3-leg parlay.',
     claudeVerified:false, fallback:false };
   if(!picks.length){ Object.assign(card, noPlaysFields(`No qualifying plays today. Discipline wins long term. (V1 priced ${events.length} game(s) from the stored ${boardSlot} board; see rejections/funnel for the Spec §9 pass reasons.)`, { noGames:events.length===0 })); card.edgeSummary=card.noPlaysReason; card.insights=''; }
   if(!dryRun) await storeCardV1(dateISO, card);

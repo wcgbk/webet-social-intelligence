@@ -657,6 +657,121 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   }
 }
 
+// --- 1019: one DK/HR position per game+market+side, miscalibration, exposure ---
+{
+  const evAlt = {
+    home_team: 'Home', away_team: 'Away',
+    bookmakers: [{
+      key: 'draftkings',
+      markets: [
+        { key: 'spreads', outcomes: [
+          { name: 'Home', price: -110, point: -3 },
+          { name: 'Away', price: -110, point: 3 },
+        ] },
+        { key: 'alternate_spreads', outcomes: [
+          { name: 'Home', price: -105, point: -7.5 },
+          { name: 'Away', price: -115, point: 7.5 },
+        ] },
+      ],
+    }],
+  };
+  const lines = edge.collectLinesForEdge(evAlt, 'spreads');
+  assert.ok(lines.some(b => b.point === -3 && b.alternate === false));
+  assert.ok(lines.some(b => b.point === -7.5 && b.alternate === true));
+  assert.strictEqual(edge.collectLinesForEdge(evAlt, 'h2h').length, 0);
+
+  const row = (over) => ({
+    sport: 'NFL', matchup: 'Away @ Home', homeTeam: 'Home', awayTeam: 'Away',
+    market: 'Spread', commenceTime: '2026-10-18T17:00:00Z',
+    coverProb: 0.55, fair_sharp_p: 0.52, predictedClv: 0, uncertainty: 0.12,
+    liquid: true, placeable: true, ev: 0.04, ...over,
+  });
+  const main = row({
+    side: 'Home -3', line: -3, odds: 130, book: 'fanduel', edgePct: 0.04, alternate: false,
+    bestDkHr: { book: 'draftkings', american: -105 },
+  });
+  const alt = row({
+    side: 'Home -7.5', line: -7.5, odds: -110, book: 'draftkings', edgePct: 0.09, alternate: true,
+    bestDkHr: { book: 'hardrockbet', american: -102 },
+  });
+  const wild = row({
+    side: 'Home -3', line: -3, odds: -110, book: 'fanduel', edgePct: 0.15, alternate: false,
+    bestDkHr: { book: 'draftkings', american: -110 },
+  });
+  const onTen = row({
+    matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C', market: 'Moneyline', side: 'D', line: null,
+    odds: -110, book: 'fanduel', edgePct: 0.10, ev: 0.05, alternate: false, bestDkHr: null,
+    commenceTime: '2026-10-18T20:00:00Z',
+  });
+  const prep = select.prepareEdgePositions([main, alt, wild, onTen]);
+  assert.strictEqual(prep.diagnostics.miscalibrated.length, 1);
+  assert.strictEqual(prep.diagnostics.miscalibrated[0].reason, 'edge-over-10pp');
+  assert.strictEqual(prep.diagnostics.miscalibrated[0].edgePct, 0.15);
+  assert.ok(prep.positions.every(p => !(typeof p.edgePct === 'number' && p.edgePct > 0.10)));
+  const homeSpread = prep.positions.find(p => p.matchup === 'Away @ Home');
+  assert.ok(homeSpread);
+  assert.strictEqual(homeSpread.line, -3);
+  assert.strictEqual(homeSpread.alternate, false);
+  assert.strictEqual(homeSpread.collapsedFrom, 2);
+  assert.strictEqual(homeSpread.odds, -105);
+  assert.strictEqual(homeSpread.book, 'draftkings');
+  assert.strictEqual(homeSpread.pricedAt, 'dk-hr');
+  assert.strictEqual(homeSpread.edgePct, 0.04);
+  const kept = prep.positions.find(p => p.matchup === 'C @ D');
+  assert.ok(kept);
+  assert.strictEqual(kept.odds, -110);
+  assert.strictEqual(kept.book, 'fanduel');
+  assert.ok(!kept.pricedAt);
+
+  const plus = row({ side: 'Home +3', line: 3, edgePct: 0.02, alternate: false, bestDkHr: null, odds: -110, book: 'fanduel' });
+  const minus = row({ side: 'Home -3', line: -3, edgePct: 0.03, alternate: false, bestDkHr: null, odds: -110, book: 'fanduel' });
+  assert.strictEqual(select.prepareEdgePositions([plus, minus]).positions.length, 2);
+  assert.notStrictEqual(select.positionKey(plus), select.positionKey(minus));
+  const over = row({ market: 'Total', side: 'Over 45', line: 45, edgePct: 0.02, alternate: false, bestDkHr: null, odds: -110 });
+  const overAlt = row({ market: 'Total', side: 'Over 48.5', line: 48.5, edgePct: 0.05, alternate: true, bestDkHr: null, odds: -110 });
+  const under = row({ market: 'Total', side: 'Under 45', line: 45, edgePct: 0.03, alternate: false, bestDkHr: null, odds: -110 });
+  const totals = select.prepareEdgePositions([over, overAlt, under]);
+  assert.strictEqual(totals.positions.length, 2);
+  const overPos = totals.positions.find(p => String(p.side).startsWith('Over'));
+  assert.strictEqual(overPos.line, 45);
+  assert.strictEqual(overPos.alternate, false);
+
+  const altOnly = {
+    sport: 'MLB', matchup: 'X @ Y', homeTeam: 'Y', awayTeam: 'X', market: 'Total',
+    side: 'Over 8.5', line: 8.5, edgePct: 0.09, ev: 0.08, odds: -110, coverProb: 0.57,
+    alternate: true, predictedClv: 0, uncertainty: 0.12,
+  };
+  const mainThin = {
+    sport: 'MLB', matchup: 'P @ Q', homeTeam: 'Q', awayTeam: 'P', market: 'Moneyline',
+    side: 'Q', line: null, edgePct: 0.02, ev: 0.03, odds: -110, coverProb: 0.53,
+    alternate: false, predictedClv: 0, uncertainty: 0.12,
+  };
+  assert.ok(select.scoreCandidate(mainThin) > select.scoreCandidate(altOnly));
+  const ranked = select.selectStraights([altOnly, mainThin], 2);
+  assert.strictEqual(ranked[0].matchup, 'P @ Q');
+  assert.strictEqual(ranked[1].matchup, 'X @ Y');
+
+  const cap1 = select.applyExposureCaps([{ matchup: 'A @ B', units: '1.25u', rating: 'a' }], []);
+  assert.strictEqual(cap1.picks[0].units, '1u');
+  assert.strictEqual(cap1.picks[0].rating, 'a');
+  const capHalf = select.applyExposureCaps(
+    [{ matchup: 'A @ B', units: '1.25u', rating: 'aplus' }],
+    [{ units: '0.5u', legs: [{ matchup: 'A @ B' }] }],
+  );
+  assert.strictEqual(capHalf.picks[0].units, '0.5u');
+  assert.strictEqual(capHalf.parlayLegs[0].units, '0.5u');
+  const eight = [];
+  for (let i = 0; i < 8; i++) eight.push({ matchup: `T${i} @ H${i}`, units: '1u', rating: 'a' });
+  const slate = select.applyExposureCaps(eight, []);
+  const sum = slate.picks.reduce((s, p) => s + parseFloat(p.units), 0);
+  assert.ok(sum <= select.SLATE_EXPOSURE_U + 1e-9);
+  assert.strictEqual(sum, 6);
+  assert.ok(slate.picks.every(p => p.rating === 'a'));
+  assert.strictEqual(select.PER_GAME_EXPOSURE_U, 1);
+  assert.strictEqual(select.SLATE_EXPOSURE_U, 6);
+}
+console.log('test-omega-vnext 1019 positions: PASS');
+
 (async () => {
   const prevA = process.env.ANTHROPIC_API_KEY;
   const prevB = process.env.ANTHROPIC_KEY;

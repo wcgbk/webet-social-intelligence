@@ -8,7 +8,7 @@ const {
 const {
   kellyFraction, kellyToUnits, ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
-  parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
+  parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore, evAtOdds,
 } = require('./odds_math');
 
 function matchupKey(c) {
@@ -38,7 +38,141 @@ function scoreCandidate(c, selectedSports) {
   if (selectedSports && selectedSports.size && !selectedSports.has(c.sport)) {
     s += w.softSportMixBonus;
   }
+  // Alternate lines are the same bet as the main line and rank below every main.
+  if (c && c.alternate) s -= 1;
   return s;
+}
+
+/** Edge as a probability fraction. > 0.10 is more than 10 percentage points. */
+function edgeFractionOf(c) {
+  return parseEdgeFraction(c && c.edgePct);
+}
+
+/**
+ * Side family for one bet. Spread/total ladders share a family; the point does not.
+ * Packers -3 and Packers -7.5 are one bet. Packers +3 is the other side.
+ */
+function positionSide(c) {
+  const market = String((c && c.market) || '');
+  const side = String((c && c.side) || '').trim();
+  if (/total/i.test(market)) {
+    if (/^over\b/i.test(side)) return 'over';
+    if (/^under\b/i.test(side)) return 'under';
+    return side.toLowerCase();
+  }
+  if (/spread|puck|run line/i.test(market)) {
+    const m = side.match(/^(.*)\s+([+-]?\d+(?:\.\d+)?)$/);
+    if (m) {
+      const num = Number(m[2]);
+      const sign = num > 0 ? 'plus' : num < 0 ? 'minus' : 'pk';
+      return `${m[1].trim().toLowerCase()}|${sign}`;
+    }
+    return side.toLowerCase();
+  }
+  return side.replace(/\s+ml$/i, '').trim().toLowerCase();
+}
+
+function positionKey(c) {
+  return `${matchupKey(c)}|${String((c && c.market) || '').toLowerCase()}|${positionSide(c)}`;
+}
+
+function priceAtBestDkHr(c) {
+  const px = c && c.bestDkHr;
+  if (!px || !Number.isFinite(Number(px.american))) return c;
+  const odds = Number(px.american);
+  const ev = evAtOdds(c.coverProb, odds);
+  return {
+    ...c,
+    odds,
+    oddsStr: formatAmerican(odds),
+    book: px.book,
+    ev: ev != null ? +ev.toFixed(4) : c.ev,
+    pricedAt: 'dk-hr',
+  };
+}
+
+/**
+ * One position per game+market+side, priced at the best real DK/Hard Rock number.
+ * Main line wins the collapse. Edge above 10 percentage points is miscalibration:
+ * it leaves the ranked pool and is listed on diagnostics.miscalibrated.
+ */
+function prepareEdgePositions(candidates) {
+  const miscalibrated = [];
+  const groups = new Map();
+  for (const c of candidates || []) {
+    const ef = edgeFractionOf(c);
+    if (ef != null && ef > 0.10 + 1e-12) {
+      miscalibrated.push({
+        matchup: c.matchup || null,
+        side: c.side || null,
+        market: c.market || null,
+        sport: c.sport || null,
+        line: c.line != null ? c.line : null,
+        edgePct: c.edgePct,
+        odds: c.odds != null ? c.odds : null,
+        book: c.book || null,
+        reason: 'edge-over-10pp',
+      });
+      continue;
+    }
+    const key = positionKey(c);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  }
+  const positions = [];
+  for (const [key, rows] of groups) {
+    const mains = rows.filter(r => !r.alternate);
+    const pool = mains.length ? mains : rows;
+    pool.sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+    const chosen = priceAtBestDkHr({
+      ...pool[0],
+      alternate: mains.length ? false : true,
+      positionKey: key,
+      collapsedFrom: rows.length,
+    });
+    positions.push(chosen);
+  }
+  return { positions, diagnostics: { miscalibrated } };
+}
+
+/** Per-game exposure ≤ 1u (straight + parlay stake on that game). Slate ≤ 6u. Grades stay. */
+const PER_GAME_EXPOSURE_U = 1;
+const SLATE_EXPOSURE_U = 6;
+
+function applyExposureCaps(picks, parlayLegs) {
+  let out = (picks || []).map(p => ({ ...p }));
+  const parlays = Array.isArray(parlayLegs)
+    ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
+    : [];
+  const parlayU = parlays.reduce((s, pl) => s + parseU(pl.units), 0);
+  const parlayGames = new Set();
+  for (const pl of parlays) {
+    for (const leg of pl.legs || []) parlayGames.add(matchupKey(leg));
+  }
+  for (const p of out) {
+    const extra = parlayGames.has(matchupKey(p)) ? parlayU : 0;
+    const room = PER_GAME_EXPOSURE_U - extra;
+    let u = parseU(p.units);
+    if (!(room > 0)) u = 0;
+    else if (u > room) u = Math.floor((room + 1e-9) * 4) / 4;
+    p.units = fmtU(Math.max(0, u));
+  }
+  const totalOf = () => out.reduce((s, p) => s + parseU(p.units), 0) + parlayU;
+  let guard = 0;
+  while (totalOf() > SLATE_EXPOSURE_U + 1e-9 && guard++ < 400) {
+    let idx = -1;
+    for (let i = 0; i < out.length; i++) {
+      const u = parseU(out[i].units);
+      if (u <= 0) continue;
+      if (idx < 0 || u > parseU(out[idx].units) + 1e-9) idx = i;
+    }
+    if (idx < 0) break;
+    const u = parseU(out[idx].units);
+    const nu = Math.max(0, Math.round((u - 0.25) * 4) / 4);
+    if (nu >= u - 1e-9) break;
+    out[idx].units = fmtU(nu);
+  }
+  return { picks: out, parlayLegs: parlays };
 }
 
 /**
@@ -266,7 +400,12 @@ module.exports = {
   toPickObject,
   applyDailyCap,
   applyDailyUnitCap,
+  applyExposureCaps,
+  prepareEdgePositions,
+  positionKey,
   matchupKey,
   formatMoneylinePick,
   sortByGradeThenUnits,
+  PER_GAME_EXPOSURE_U,
+  SLATE_EXPOSURE_U,
 };

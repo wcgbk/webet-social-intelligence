@@ -5,24 +5,92 @@
  * (expected margin / expected total vs the confirmed line).
  * No market anchor, no fitted weight, no bias correction, no hand points.
  * Confirmed line = Hard Rock Bet only (Spec §3.1). Other books are ignored.
- * NHL/NBA/NCAAM/MLB: no V1 projector in this build -> documented pass
- * (Spec §9, formula inputs unavailable), never a borrowed Omega pick.
+ * NHL/NBA/NCAAM/MLB have no V1 projector. Those sports use a Pinnacle
+ * de-vigged fair probability against the best DraftKings/Hard Rock price
+ * on the stored board. Never a borrowed Omega pick, never a live fetch.
  */
 const { footballProjection } = require('../omega-vnext/sports/epa');
 const { spreadCoverProb, totalCoverProb, mlFromSpread, formatMatchup } = require('../omega-vnext/sports/_common');
-const { collectMarketOutcomes } = require('../omega-vnext/edge');
+const { collectMarketOutcomes, sharpFairForSide } = require('../omega-vnext/edge');
+const { americanToImplied } = require('../omega-vnext/odds_math');
 
 function isHardRock(book){ const k=String(book||'').toLowerCase(); return k==='hardrockbet'||k==='hardrock'||k==='hardrockbet_oh'; }
+function isDraftKings(book){ return String(book||'').toLowerCase()==='draftkings'; }
 function hardRockPriceV1(target){
   const p=((target&&target.prices)||[]).find(x=>isHardRock(x.book));
   return p && Number.isFinite(p.american) ? p : null;
+}
+/** Best of draftkings and hardrockbet. Higher American is the better price. */
+function bestDkHrPriceV1(prices){
+  let best=null;
+  for(const p of prices||[]){
+    if(!isHardRock(p.book)&&!isDraftKings(p.book)) continue;
+    if(!Number.isFinite(p.american)) continue;
+    if(!best||p.american>best.american) best=p;
+  }
+  return best;
+}
+function hasPinnaclePrice(bundle){
+  return !!(bundle&&(bundle.prices||[]).some(p=>String(p.book||'').toLowerCase()==='pinnacle'&&Number.isFinite(Number(p.american))));
+}
+function oppositeBundleV1(bundles, target){
+  if(!target) return null;
+  if(target.point==null) return (bundles||[]).find(s=>s.side!==target.side)||null;
+  return (bundles||[]).find(s=>{
+    if(s===target) return false;
+    if(/over|under/i.test(target.side)&&/over|under/i.test(s.side)) return s.point===target.point;
+    return s.point===-target.point;
+  })||null;
+}
+/**
+ * No projector: de-vigged Pinnacle fair vs best DK/Hard Rock price.
+ * edge = fair prob − implied prob of that price. Missing Pinnacle pair or
+ * missing DK/Hard Rock price produces no candidate.
+ */
+function projectFallbackV1(event, sport, meta){
+  const home=event.home_team, away=event.away_team, commenceTime=event.commence_time;
+  const matchup=formatMatchup(away, home);
+  const gameMeta=(meta.byGame&&meta.byGame[matchup])||{};
+  const base={ sport, homeTeam:home, awayTeam:away, matchup, commenceTime,
+    fallback:true, projector:'pinnacle-fair',
+    formulaSpreadHome:null, formulaTotal:null,
+    formulaInputs:{ method:'pinnacle-fair-devig' },
+    last5:gameMeta.last5||null, injuries:gameMeta.injuries||null, h2h:gameMeta.h2h||null,
+    form:gameMeta.form||null, situational:gameMeta.situational||null, openBooks:event.openBooks||null,
+    keyStarter:gameMeta.keyStarter||null, boardSlot:meta.boardSlot||null, boardCapturedAt:meta.boardCapturedAt||null };
+  const out=[];
+  const markets=[['h2h','Moneyline'],['spreads','Spread'],['totals','Total']];
+  for(const [key, market] of markets){
+    const bundles=collectMarketOutcomes(event, key);
+    for(const b of bundles){
+      if(key!=='h2h'&&b.point==null) continue;
+      const opp=oppositeBundleV1(bundles, b);
+      if(!hasPinnaclePrice(b)||!hasPinnaclePrice(opp)) continue;
+      const fair=sharpFairForSide(bundles, b.side, b.point);
+      const px=bestDkHrPriceV1(b.prices);
+      if(fair==null||!px) continue;
+      const implied=americanToImplied(px.american);
+      if(implied==null) continue;
+      const edge=fair-implied;
+      const side=market==='Moneyline'?b.side:(market==='Total'?`${b.side} ${b.point}`:(b.point>0?`${b.side} +${b.point}`:`${b.side} ${b.point}`));
+      const hr=isHardRock(px.book);
+      out.push({ ...base, market, side, line:market==='Moneyline'?null:b.point,
+        trueProbability:+fair.toFixed(6), edge:+edge.toFixed(6), fairProb:+fair.toFixed(6), impliedProb:+implied.toFixed(6),
+        confirmedBook:hr?'Hard Rock Bet':'DraftKings', odds:px.american,
+        oddsStr:String(px.american>0?`+${px.american}`:`${px.american}`), book:hr?'hardrockbet':'draftkings' });
+    }
+  }
+  if(!out.length){
+    return { candidates:[], pass:{ matchup, sport, commenceTime, reason:'v1-no-pinnacle-fair',
+      detail:'No de-vigged Pinnacle pair versus a DraftKings or Hard Rock price on the stored board.' } };
+  }
+  return { candidates:out, pass:null };
 }
 function projectGameV1(event, sport, efficiency, meta={}) {
   const home=event.home_team, away=event.away_team, commenceTime=event.commence_time;
   const matchup=formatMatchup(away,home);
   if (!['NFL','NCAAF'].includes(sport)) {
-    return { candidates:[], pass:{ matchup, sport, commenceTime, reason:'v1-no-projector-for-sport',
-      detail:'No V1 formula projector for this sport in this build; pass per Spec §9 (formula inputs unavailable).' } };
+    return projectFallbackV1(event, sport, meta);
   }
   const env=footballProjection({ sport, home, away, standings:{}, efficiency:efficiency||{} });
   const formulaComplete=!!(env && env.usedEpa && Number.isFinite(env.modelMargin) && Number.isFinite(env.modelTotal));

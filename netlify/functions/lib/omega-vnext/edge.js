@@ -35,6 +35,30 @@ function collectMarketOutcomes(event, marketKey) {
   return [...bySide.values()];
 }
 
+/**
+ * Main market plus alternate_spreads / alternate_totals.
+ * Alternate rows are the same bet (game + market + side) and carry alternate:true
+ * so selection can keep the main line and rank alts below it.
+ */
+function collectLinesForEdge(event, marketKey) {
+  const main = collectMarketOutcomes(event, marketKey).map(b => ({ ...b, alternate: false, marketKey }));
+  const altKey = marketKey === 'spreads' ? 'alternate_spreads'
+    : marketKey === 'totals' ? 'alternate_totals'
+    : null;
+  if (!altKey) return main;
+  const alt = collectMarketOutcomes(event, altKey).map(b => ({ ...b, alternate: true, marketKey: altKey }));
+  return main.concat(alt);
+}
+
+const DK_HR_BOOKS = ['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh'];
+
+/** Best American price on DraftKings or Hard Rock. Higher American is better for the bettor. */
+function bestDkHrPrice(prices) {
+  const row = bestPrice(prices, DK_HR_BOOKS);
+  if (!row) return null;
+  return { book: canonicalizeBook(row.book), american: row.american };
+}
+
 function bestPrice(prices, allowBooks) {
   const set = allowBooks ? new Set(allowBooks.map(bookKey)) : null;
   let best = null;
@@ -406,6 +430,7 @@ function predictedClvCents(bestUsAmerican, sharpAmerican, pModel, fairSharpP) {
 
 function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
+  const bestDkHr = bestDkHrPrice(sideBundle.prices);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
   const fairSharp = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
   const odds = bestUs ? bestUs.american : sharpAm;
@@ -440,6 +465,8 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     placeableBooks: place.placeableBooks,
     bestPlaceable: place.bestPlaceable,
     placeable: place.placeable,
+    bestDkHr,
+    alternate: !!(raw && raw.alternate) || !!(sideBundle && sideBundle.alternate),
   };
 }
 
@@ -474,7 +501,10 @@ function attachEv(c) {
 
 module.exports = {
   collectMarketOutcomes,
+  collectLinesForEdge,
   bestPrice,
+  bestDkHrPrice,
+  DK_HR_BOOKS,
   sharpConsensusAmerican,
   hasMajorLiquidity,
   americanCentsWorse,

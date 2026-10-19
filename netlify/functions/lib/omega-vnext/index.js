@@ -8,7 +8,7 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -401,6 +401,12 @@ async function generateOmegaVnext(opts = {}) {
   const placeableAnnotated = candidates.filter(c => Array.isArray(c.placeableBooks)).length;
   console.log(`[omega-vnext] placeability annotated=${placeableAnnotated}/${candidates.length}`);
 
+  // One DK/Hard Rock price per game+market+side. Edges over 10pp are miscalibration.
+  const prepared = prepareEdgePositions(candidates);
+  candidates = prepared.positions;
+  const edgeDiagnostics = prepared.diagnostics || { miscalibrated: [] };
+  console.log(`[omega-vnext] positions=${candidates.length} miscalibrated=${(edgeDiagnostics.miscalibrated || []).length}`);
+
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   const gateOpts = { cardDate: dateISO };
@@ -473,8 +479,9 @@ async function generateOmegaVnext(opts = {}) {
   // Final unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX. Sort grade then units.
   {
     const capped = applyDailyUnitCap(picks, parlayLegs);
-    picks = capped.picks;
-    parlayLegs = capped.parlayLegs;
+    const exposed = applyExposureCaps(capped.picks, capped.parlayLegs);
+    picks = exposed.picks;
+    parlayLegs = exposed.parlayLegs;
   }
   picks = sortByGradeThenUnits(picks);
 
@@ -550,6 +557,7 @@ async function generateOmegaVnext(opts = {}) {
     claudeVerified: !!narr.claudeVerified,
     fallback: false,
     candidateTable,
+    diagnostics: edgeDiagnostics,
     modelNotes: MODEL_NOTES,
     engine: 'omega-vnext',
     qaHardFails: hardFails,

@@ -13,7 +13,7 @@ const {
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments } = require('./game_day');
 const { HFA } = require('../config');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, collectLinesForEdge, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'NFL';
 
@@ -88,7 +88,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     }
   }
   {
-    const bundles = collectMarketOutcomes(event, 'spreads');
+    const bundles = collectLinesForEdge(event, 'spreads');
     for (const b of bundles) {
       if (b.point == null) continue;
       const isHome = b.side === home;
@@ -106,7 +106,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     }
   }
   {
-    const bundles = collectMarketOutcomes(event, 'totals');
+    const bundles = collectLinesForEdge(event, 'totals');
     for (const b of bundles) {
       if (b.point == null) continue;
       let p = totalCoverProb(modelTotal, b.point, b.side, SPORT);

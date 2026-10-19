@@ -17,7 +17,7 @@ const {
   resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd, mlbStandingsEnv,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, collectLinesForEdge, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'MLB';
 
@@ -154,7 +154,7 @@ function projectGame(event, standings, espnGame, ctx) {
   }
 
   {
-    const bundles = collectMarketOutcomes(event, 'spreads');
+    const bundles = collectLinesForEdge(event, 'spreads');
     for (const b of bundles) {
       const isHome = b.side === home;
       const line = b.point;
@@ -182,7 +182,7 @@ function projectGame(event, standings, espnGame, ctx) {
   }
 
   {
-    const bundles = collectMarketOutcomes(event, 'totals');
+    const bundles = collectLinesForEdge(event, 'totals');
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;

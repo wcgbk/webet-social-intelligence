@@ -94,13 +94,13 @@ Code: `netlify/functions/lib/omega-vnext/ingest.js` (`fetchOddsApi`, `ODDS_SPORT
 
 | Capture | ET slot | Function |
 |---|---|---|
-| Early snaps | 6:00 AM, 7:30 AM ET | `capture-omega-lines` |
-| Late snaps | 9:00 AM, 9:15 AM ET | `capture-omega-lines-late` |
-| Feed warm | 9:00 AM ET | `warm-omega-feeds` (ESPN injuries/QB, MLB weather, StatsAPI probables) |
-| Shadow dry-run | 9:05 AM ET | `trigger-omega-shadow` (writes omega-shadow keys only; never the live card) |
+| Baseline pull | 3:00 AM ET | `capture-odds-3am` (odds-master baseline-0300, all books/markets) **[Oct 18 — changed: Ben ordered only 3AM + 10AM pulls]** |
+| Board pull | 10:00 AM ET | `capture-odds-10am` (odds-master check-1000; the board Omega and V1 both read) **[Oct 18 — changed]** |
+| Feed warm | 9:00 AM ET | `warm-omega-feeds` (ESPN injuries/QB, MLB weather, StatsAPI probables; free feeds, unchanged) |
 | Prediction-market open snap | 8:30 AM ET | `capture-omega-pm-observer-open` |
-| Generate trigger | 9:30 AM ET | `trigger-picks-omega` |
-| Prediction-market observer | 10:15 AM ET | `capture-omega-pm-observer` (audit log only; never mutates the card) |
+| Generate trigger | 10:15 AM ET | `trigger-picks-omega` (reads stored 1000 board; no live Odds pull in generate) **[Oct 18 — changed, was 9:30 AM]** |
+| Verify | 10:45 AM ET | `verify-picks-omega` (reads stored 1000 board) **[Oct 18 — changed, was 10:30 AM]** |
+| Prediction-market observer | 10:50 AM ET | `capture-omega-pm-observer` (audit log only; never mutates the card) |
 
 **[Era]** There is deliberately no 9:30 AM capture — it would race the 9:30 generate. If required morning snaps are missing at generate time, the generator attempts one real capture into the current ET slot and re-reads; if zero usable snaps remain, generate hard-fails with a `CAPTURE_HEALTH` error and writes no card rather than inventing one.
 
@@ -118,7 +118,7 @@ Code: `netlify/functions/lib/omega-vnext/ingest.js` (`fetchEspnScoreboard`, stan
 
 Code: `netlify/functions/lib/omega-vnext/config.js` (`LINE_MOVE.verifyAdverseCents`, `verifyAdversePts`, `QA_HARDFAIL.staleLinePts`, `staleOddsCents`); `netlify/functions/lib/omega-vnext/qa_hardfail.js`; `netlify/functions/verify-picks-omega.js`.
 
-> **Note on capture times.** Any summary describing Omega captures as "3 AM / 10 AM" does not match the live code. The live morning slots are 6:00, 7:30, 9:00, and 9:15 AM ET with a 9:30 AM ET generate, as tabled above. This spec follows the code.
+> **Note on capture times.** Superseded 2026-10-18 (Ben): the only Odds API pulls are 3:00 AM ET (baseline) and 10:00 AM ET (board), both into the odds-master store, and both Omega and V1 read those stored boards. The former 6:00/7:30/9:00/9:15 AM ET Omega capture schedules are paused and Omega generate (10:15 AM ET) makes no live Odds pull. This spec follows the code.
 
 ---
 

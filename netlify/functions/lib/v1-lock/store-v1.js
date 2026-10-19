@@ -39,6 +39,14 @@ async function writeJsonToStore(storeName, key, data) {
 }
 /** READ-ONLY: stored morning board from Omega's capture store. */
 async function readStoredBoardV1(dateISO) {
+  // Primary board (Ben 2026-10-18): the odds-master 1000 pull with the
+  // 0300 baseline as open. Era line-path is a fallback only, for dates
+  // the odds-master pull does not cover.
+  try {
+    const { reconstructBoardFromMasterV1 } = require('./board-master-v1');
+    const masterFirst = await reconstructBoardFromMasterV1((s2, k) => readJsonFromStore(s2, k), dateISO);
+    if (masterFirst && masterFirst.polls && masterFirst.polls.length) { masterFirst.source = 'odds-master'; return masterFirst; }
+  } catch (_) {}
   const path = await readJsonFromStore(OMEGA_BOARD_STORE, `omega-line-path/${dateISO}`);
   if (path && Array.isArray(path.polls) && path.polls.length) {
     // 3 AM feed for V1: merge the odds-master baseline-0300 Hard Rock line

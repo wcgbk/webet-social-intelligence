@@ -16,7 +16,8 @@
   # PAUSED — alpha pipeline is now the primary picks pipeline
 
 [functions."trigger-picks-alpha"]
-  schedule = "0 13 * * *"
+  # schedule = "0 13 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; alpha background makes live Odds pulls outside 3/10)
   # Alpha pipeline — 9am EDT (13:00 UTC), 1hr earlier than beta for max CLV runway
   # Writes to edge-picks-alpha blob store. Model: v10.2-alpha-calibrated
 
@@ -28,17 +29,18 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-omega"]
-  schedule = "30 13 * * *"
+  schedule = "15 14 * * *"  # 10:15am ET EDT, after 10AM pull (was "30 13 * * *")
   # OMEGA vNext (v12 CLV-first) — 9:30am ET (13:30 UTC in EDT). Generate early enough for QA;
   # verify 10:30am ET; public card live by ~11:00am ET. Writes edge-picks-omega → /omega.
   # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
 
 [functions."generate-picks-omega-background"]
   # Background function — 15min timeout for Omega pick generation (omega-vnext)
-  included_files = ["netlify/functions/lib/omega-vnext/**"]
+  included_files = ["netlify/functions/lib/omega-vnext/**", "netlify/functions/lib/odds-master/**"]
 
 [functions."verify-picks-omega"]
-  schedule = "30 14 * * *"
+  # Reads stored odds-master 1000 board (no live Odds pull since 2026-10-18).
+  schedule = "45 14 * * *"  # 10:45am ET EDT, reads stored 1000 board (was "30 14 * * *")
   # Omega QA — 10:30am ET (14:30 UTC EDT). Target: publish unlock by 11:00am ET.
   # Placeability advisory; must not invent sides. Empty card remains valid.
 
@@ -56,7 +58,8 @@
   # writes isolated "tsp-live" blob. Needs env: TSP_SESSION_COOKIE + TSP_PAGE_KEY.
 
 [functions."trigger-picks-nfl"]
-  schedule = "5 13 * * *"
+  # schedule = "5 13 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; NFL background makes live Odds pulls outside 3/10)
   # NFL pipeline — 9:05am ET (13:05 UTC). Aligned with Omega MAIN daily process (Omega 9:00,
   # NFL 9:05, CFB 9:10) so gen+QA share the live morning window; +5min avoids Odds API burst
   # with Omega. GATED: fires only on days with NFL games (ESPN scoreboard) — quiet no-op else.
@@ -78,7 +81,8 @@
   #   Wed 17:15 UTC — holiday first card only (2026-11-25 Thanksgiving, 2026-12-23 Christmas)
   # After DST (Nov) 17:15 UTC is 9:15 AM PST; Circa still posts ~10:00 AM PT — TODO
   # if a PST-shifted 18:15 UTC first-card cron is needed.
-  schedule = "0,15,30,45 17,18,20 * * 3,4,5,6"
+  # schedule = "0,15,30,45 17,18,20 * * 3,4,5,6"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; Circa background makes live Odds pulls outside 3/10)
 
 [functions."generate-picks-circa-background"]
   # Background function — 15min timeout for Circa Million VIII weekly ATS card
@@ -96,10 +100,12 @@
 [functions."check-circa-card-health"]
   # Follow-up ~5 min after each Circa generate slot (Thu/Fri/Sat + holiday Wed).
   # Persists circa-ops/card-health-* + alerts when card pending/empty/error/<5 picks.
-  schedule = "5,20,35,50 17,18,20 * * 3,4,5,6"
+  # schedule = "5,20,35,50 17,18,20 * * 3,4,5,6"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; Circa pipeline paused with trigger-picks-circa)
 
 [functions."trigger-picks-cfb"]
-  schedule = "10 13 * * *"
+  # schedule = "10 13 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; CFB background makes live Odds pulls outside 3/10)
   # College Football pipeline — 9:10am ET (13:10 UTC). Aligned with Omega/NFL morning window
   # (Omega 9:00, NFL 9:05, CFB 9:10) to share gen timing for the live daily process; staggered
   # to avoid Odds API burst. Generator no-ops on non-CFB days. Separate env: edge-picks-cfb → /cfb.
@@ -198,7 +204,8 @@
 
 
 [functions."capture-omega-lines"]
-  schedule = "0,30 10,11 * * *"
+  # schedule = "0,30 10,11 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; Omega morning captures replaced by odds-master 0300/1000; generate reads stored board)
   # Omega-only US morning line-path (edge-picks-omega). 6:00/7:30 ET window:
   #   10:00 UTC = 6:00am ET, 11:30 UTC = 7:30am ET.
   # Union also fires 10:30/11:00 — handler no-ops outside ±5min of allowed UTC slots.
@@ -208,7 +215,8 @@
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-lines-late"]
-  schedule = "0,15 13 * * *"
+  # schedule = "0,15 13 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; same as capture-omega-lines)
   # 13:00 UTC = 9:00am ET, 13:15 UTC = 9:15am ET. Dedicated late-morning snaps.
   # 9:30 (13:30) intentionally omitted — races trigger-picks-omega.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
@@ -221,7 +229,8 @@
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."trigger-omega-shadow"]
-  schedule = "5 13 * * *"
+  # schedule = "5 13 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; shadow generate would run on 0300-only board pre-10AM; Omega generate now reads stored 1000 board at 10:15 ET)
   # 13:05 UTC ≈ 9:05am ET (EDT). Shadow dry-run → omega-shadow/picks-{date} only.
   # Never latest-date / picks-dates / live picks-{date}. Same minute as NFL trigger is fine.
   # See docs/OMEGA-SHADOW-DRYRUN.md.
@@ -236,7 +245,7 @@
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pm-observer"]
-  schedule = "15 14 * * *"
+  schedule = "50 14 * * *"  # 10:50am ET EDT, after 10:15 generate (was "15 14 * * *")
   # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after 9:30 generate.
   # Audit log: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
   # Generate already applied hard-capped soft score in-process. This job does
@@ -266,14 +275,14 @@
   #
   # Full Omega EDT→EST shift, prepared and NOT applied (clocks change 2026-11-01,
   # UTC-4 → UTC-5, so each live UTC cron fires one hour earlier in ET until moved):
-  #   trigger-picks-omega              "30 13" → "30 14"   (9:30am ET)
-  #   verify-picks-omega               "30 14" → "30 15"   (10:30am ET)
-  #   capture-omega-lines              "0,30 10,11" → "0,30 11,12"
-  #   capture-omega-lines-late         "0,15 13" → "0,15 14"
+  #   capture-odds-3am                 "0 7" → "0 8"       (3:00am ET)
+  #   capture-odds-10am                "0 14" → "0 15"     (10:00am ET)
+  #   trigger-picks-omega              "15 14" → "15 15"   (10:15am ET)
+  #   trigger-picks-v1                 "35 14" → "35 15"   (10:35am ET)
+  #   verify-picks-omega               "45 14" → "45 15"   (10:45am ET)
+  #   capture-omega-pm-observer        "50 14" → "50 15"   (10:50am ET)
   #   warm-omega-feeds                 "0 13" → "0 14"
-  #   trigger-omega-shadow             "5 13" → "5 14"
   #   capture-omega-pm-observer-open   "30 12" → "30 13"
-  #   capture-omega-pm-observer        "15 14" → "15 15"
   #   capture-omega-walkforward        "15 15" → "15 16"
   #   capture-omega-walkforward-evening "45 23" → "45 0"
   # trigger-clv "0 7,17,23" is shared with the settler. Its evening pass is the
@@ -282,12 +291,14 @@
 
 
 [functions."capture-opening-lines"]
-  schedule = "0 10 * * *"
+  # schedule = "0 10 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; paid Odds pull outside 3/10; median-only, no Hard Rock, not used by Omega/V1 boards)
   # 10:00 UTC = 6am EDT. Capture early morning lines before US sharp action.
   # 4-hour window before 10am picks maximizes line movement detection.
 
 [functions."verify-picks"]
-  schedule = "30 14 * * *"
+  # schedule = "30 14 * * *"
+  # PAUSED 2026-10-18 (Ben: only 3AM + 10AM Odds pulls; legacy verify makes live Hard Rock Odds pulls outside 3/10; Omega verify adapted to stored board)
   # 14:30 UTC = 10:30am EDT. Runs 30min after picks to verify math + narrative.
 
 [functions."self-optimize"]
@@ -963,8 +974,8 @@
 
 [functions."trigger-picks-v1"]
   schedule = "35 14 * * *"
-  # V1 LOCK daily generate — 10:35am ET (14:35 UTC in EDT), after the 10:00 ET
-  # board. EST shift (Nov 1): move to "35 15 * * *" with the Omega clocks.
+  # V1 LOCK daily generate — 10:35am ET (14:35 UTC in EDT), after the 10AM odds-master pull
+  # (Omega generate 10:15, V1 10:35, Omega verify 10:45). EST shift (Nov 1): "35 15 * * *".
 
 [functions."generate-picks-v1-background"]
   # V1 LOCK backend (The Lock — Unified Spec v2.0) — separate from Omega; daily via trigger-picks-v1
@@ -975,3 +986,25 @@
 
 [functions."get-picks-v1"]
   included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]
+
+[functions."capture-odds-3am"]
+  schedule = "0 7 * * *"
+  # 07:00 UTC = 3:00am ET (EDT). The ONLY overnight Odds pull (Ben 2026-10-18):
+  # writes odds-master baseline-0300 (all books/markets, raw events stored).
+  # EST shift (Nov 1): move to "0 8 * * *".
+  included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
+
+[functions."capture-odds-10am"]
+  schedule = "0 14 * * *"
+  # 14:00 UTC = 10:00am ET (EDT). The ONLY morning Odds pull (Ben 2026-10-18):
+  # writes odds-master check-1000, the board both Omega (10:15) and V1 (10:35) read.
+  # EST shift (Nov 1): move to "0 15 * * *".
+  included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
+
+[functions."capture-omega-pinnacle-lines"]
+  # Repaired 2026-10-18 as a manual alias for the odds-master pull; NO schedule
+  # (scheduled pulls are capture-odds-3am / capture-odds-10am only).
+  included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
+
+[functions."capture-omega-pinnacle-lines-background"]
+  included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]

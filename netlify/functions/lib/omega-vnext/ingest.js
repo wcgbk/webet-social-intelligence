@@ -23,6 +23,11 @@ async function fetchJson(url, timeoutMs = 12000) {
  * Odds API multi-sport snapshot. Timestamped. Does not burn extras beyond one pass/sport.
  */
 async function fetchOddsMultiSport(dateISO, opts = {}) {
+  // Stored-board mode (Ben 2026-10-18: only 3AM/10AM pulls): the 10AM
+  // odds-master board is the odds source; no live Odds API call is made.
+  if (opts.storedOddsBySport) {
+    return { bySport: opts.storedOddsBySport, fetchedAt: opts.storedFetchedAt || new Date().toISOString(), snapshotNote: 'stored-odds-master-1000' };
+  }
   const apiKey = process.env.ODDS_API_KEY;
   const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live' };
   if (!apiKey) {

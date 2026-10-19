@@ -50,12 +50,21 @@ async function reconstructBoardFromMasterV1(readJson, dateISO) {
     const ts = pickTimestamp(index);
     if (!ts) return;
     boardAt = ts.at; boardHHMM = ts.hhmm;
-    const row = { mlHome: null, mlAway: null, spreadHome: null, spreadHomeOdds: null, spreadAway: null, spreadAwayOdds: null, total: null, overOdds: null, underOdds: null };
     const markets = ['h2h', 'spreads', 'totals'];
-    await Promise.all(markets.map(async (m) => {
-      const price = await readJson(MASTER_STORE, `${ev.sport}/${ev.eventId}/hardrockbet/${m}/${ts.at}`);
-      if (price && price.sides) applyPrice(row, m, price.sides);
+    // Use ALL data pulled: every book stored for this event (index.books),
+    // not just Hard Rock. V1 prices only off Hard Rock at selection (Spec
+    // §3.1); the other books ride the event for context/placeability.
+    const bookList = (index && Array.isArray(index.books) && index.books.length) ? index.books : ['hardrockbet'];
+    const books = {};
+    await Promise.all(bookList.map(async (book) => {
+      const row = { mlHome: null, mlAway: null, spreadHome: null, spreadHomeOdds: null, spreadAway: null, spreadAwayOdds: null, total: null, overOdds: null, underOdds: null };
+      await Promise.all(markets.map(async (m) => {
+        const price = await readJson(MASTER_STORE, `${ev.sport}/${ev.eventId}/${book}/${m}/${ts.at}`);
+        if (price && price.sides) applyPrice(row, m, price.sides);
+      }));
+      if (row.mlHome != null || row.spreadHome != null || row.total != null) books[book] = row;
     }));
+    const row = books.hardrockbet || { mlHome: null, mlAway: null, spreadHome: null, spreadHomeOdds: null, spreadAway: null, spreadAwayOdds: null, total: null, overOdds: null, underOdds: null };
     // Baseline (03:00 ET) Hard Rock line for Filter 4 line-movement read.
     let openRow = null;
     if (index.baseline0300 && index.baseline0300.at && index.baseline0300.at !== ts.at) {
@@ -66,8 +75,9 @@ async function reconstructBoardFromMasterV1(readJson, dateISO) {
       }));
     }
     const key = `${ev.awayTeam} @ ${ev.homeTeam}`;
+    if (!books.hardrockbet) books.hardrockbet = row;
     games[key] = { sport: ev.sport, homeTeam: ev.homeTeam, awayTeam: ev.awayTeam,
-      commenceTime: ev.commenceTime || null, books: { hardrockbet: row }, openBooks: openRow ? { hardrockbet: openRow } : null };
+      commenceTime: ev.commenceTime || null, books, openBooks: openRow ? { hardrockbet: openRow } : null };
   });
   if (!Object.keys(games).length) return null;
   return { date: dateISO, source: 'odds-master', polls: [{ hhmm: boardHHMM, slot: boardHHMM, capturedAt: boardAt, games }] };

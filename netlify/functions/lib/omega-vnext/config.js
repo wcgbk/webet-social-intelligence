@@ -95,9 +95,9 @@ const MAJOR_LIQUIDITY_BOOKS = [
  */
 const LINE_MOVE = {
   /** Morning capture slots (ET HHMM). */
-  captureSlotsET: ['0600', '0730', '0900', '0915'],
+  captureSlotsET: ['0300', '1000'],
   /** UTC cron targets during EDT (UTC-4). 13:30 is not a capture slot. */
-  captureSlotsUtcEDT: ['1000', '1130', '1300', '1315'],
+  captureSlotsUtcEDT: ['0700', '1400'], // 0300/1000 ET during EDT (Ben 2026-10-18: only 3AM+10AM pulls)
   steamTowardEpsilon: 0.15,
   /** Generate: reject when odds shortened against pick by this many American cents. */
   rejectSteamAgainstCents: 18,

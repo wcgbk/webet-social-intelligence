@@ -245,9 +245,9 @@ assert.ok(/storeWalkforwardSamples/.test(captureSrc));
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
 assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15 \* \* \*"/.test(toml));
 assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "30 13 \* \* \*"/.test(toml), 'Wednesday generate stays 9:30am EDT');
+assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "15 14 \* \* \*"/.test(toml), 'generate 10:15am EDT after 10AM pull (changed 2026-10-18)');
 assert.ok(/2026-11-01/.test(toml));
-assert.ok(/"30 13" → "30 14"/.test(toml) || /30 13.+\u2192.+30 14/.test(toml) || toml.includes('"30 13" → "30 14"'));
+assert.ok(toml.includes('"0 7" → "0 8"'), 'EST shift list covers capture-odds-3am');
 assert.ok(/Do not switch it before/.test(toml));
 
 const eveningSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/capture-omega-walkforward-evening.js'), 'utf8');

@@ -513,7 +513,12 @@ async function runHardRockCheck(picksData) {
   const pickResults = [];
   const parlayFindings = [];
   const legDecisions = [];
-  const apiKey = process.env.ODDS_API_KEY;
+  // Ben 2026-10-18: verify reads the stored 1000 odds-master board, not a
+  // fresh paid pull. F5 per-event markets are not in the 3/10 pull, so F5
+  // picks take the existing feed-down warn path (never dropped on it).
+  let storedBoard = null;
+  try { const { loadMasterBoard } = require('./lib/odds-master/board'); storedBoard = await loadMasterBoard(picksData.date); } catch (_) {}
+  const apiKey = storedBoard ? 'stored' : process.env.ODDS_API_KEY;
   if (!apiKey) {
     summary.skipped = true;
     summary.apiDown = true;
@@ -544,6 +549,11 @@ async function runHardRockCheck(picksData) {
     const key = HR_SPORT_KEYS[sport];
     if (!key) continue;
     sportsAttempted++;
+    if (storedBoard) {
+      sportGames[sport] = (storedBoard.eventsBySport && storedBoard.eventsBySport[sport]) || null;
+      if (sportGames[sport]) anySportOk = true;
+      continue;
+    }
     try {
       const resp = await fetch(
         `https://api.the-odds-api.com/v4/sports/${key}/odds?markets=h2h,spreads,totals&oddsFormat=american&bookmakers=${bookmakers}&apiKey=${apiKey}`,
@@ -563,6 +573,7 @@ async function runHardRockCheck(picksData) {
     if (!game) return { game: null, feedDown: false };
     if ((pick.betType || "").startsWith("F5")) {
       if (!(game.id in f5Cache)) {
+        if (storedBoard) { f5Cache[game.id] = null; return { game: null, feedDown: true }; }
         try {
           // All US books, not HR-scoped: HR's F5 prices aren't in the feed, so the
           // majors-fallback needs the full field to confirm placeability.

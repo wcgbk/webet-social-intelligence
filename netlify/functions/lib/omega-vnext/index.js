@@ -184,8 +184,23 @@ async function generateOmegaVnext(opts = {}) {
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow}`);
 
+  // Stored 3AM/10AM board (Ben 2026-10-18: only those two pulls). Live
+  // generates read the odds-master 1000 board with all books; historical
+  // replay keeps its snapshot path. No live Odds API call in generate.
+  let masterBoard = null;
+  if (!opts.historicalSnapshot && !opts.replay) {
+    try {
+      const { loadMasterBoard } = require('../odds-master/board');
+      masterBoard = await loadMasterBoard(dateISO);
+    } catch (e) { console.error(`[omega-vnext] odds-master board load failed: ${e.message}`); }
+  }
+  const storedOddsBySport = masterBoard && Object.keys(masterBoard.eventsBySport || {}).length
+    ? Object.fromEntries(Object.entries(masterBoard.eventsBySport).map(([k, v]) => [k, v.map(ev => ({ ...ev, sport_key: (require('./config').ODDS_SPORT_KEYS || {})[k] || ev.sport_key }))]))
+    : null;
   const snap = await ingest(dateISO, {
     historicalSnapshot: opts.historicalSnapshot,
+    storedOddsBySport,
+    storedFetchedAt: masterBoard ? (masterBoard.at1000 || masterBoard.at0300) : null,
   });
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
 
@@ -200,11 +215,16 @@ async function generateOmegaVnext(opts = {}) {
   // Zero usable snaps after that hard-fails. Partial snaps warn and continue.
   // Does not invent snaps and does not force-fill leans.
   let linePathMeta = { path: null, earliest: null, latest: null };
-  try {
-    const loaded = await loadLinePath(dateISO);
-    if (loaded) linePathMeta = loaded;
-  } catch (e) {
-    console.error(`[omega-vnext] line-move load failed: ${e.message}`);
+  if (masterBoard && masterBoard.polls && masterBoard.polls.length) {
+    const polls = masterBoard.polls;
+    linePathMeta = { path: { date: dateISO, polls }, earliest: polls[0], latest: polls[polls.length - 1] };
+  } else {
+    try {
+      const loaded = await loadLinePath(dateISO);
+      if (loaded) linePathMeta = loaded;
+    } catch (e) {
+      console.error(`[omega-vnext] line-move load failed: ${e.message}`);
+    }
   }
 
   const requiredSlotsET = (LINE_MOVE && LINE_MOVE.captureSlotsET) || ['0600', '0730', '0900', '0915'];
@@ -213,7 +233,8 @@ async function generateOmegaVnext(opts = {}) {
   let retryOk = null;
   // Retry only for snaps that should already exist (9:05 must not treat 9:15 as failed).
   const dueMissing = missingDueSlots(captureHealth.missingSlotsET, now);
-  const retrySlot = replayLike ? null : canonicalRetrySlot(now, {
+  const retrySlot = null; // Ben 2026-10-18: generate never fires a paid capture retry; missing 0300/1000 snaps warn/hard-fail per capture health.
+  const _unusedRetrySlot = (replayLike || storedOddsBySport) ? null : canonicalRetrySlot(now, {
     slots: requiredSlotsET,
     missingDue: dueMissing,
     usableSnapCount: captureHealth.usableSnapCount,

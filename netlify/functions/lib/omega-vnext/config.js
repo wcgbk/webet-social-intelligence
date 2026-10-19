@@ -33,6 +33,19 @@ const SPORTS_ENABLED = {
   NHL: true, // WeBet voice order 2026-09-30 — v12.3.13 NHL engine live
 };
 
+/**
+ * Daily-card switch for NBA. Stays false. The card does not read OMEGA_NBA.
+ * Unset OMEGA_NBA is off. This flag does not change any other sport.
+ */
+const NBA_CARD_LIVE = false;
+
+/**
+ * NBA shadow observer switch. Independent of SPORTS_ENABLED.NBA.
+ * Server env OMEGA_NBA_SHADOW=0 kills the shadow fetch and blob write.
+ * A request body cannot turn the job on. Not a card publish flag.
+ */
+const NBA_SHADOW = Object.freeze({ enabled: true });
+
 const ODDS_SPORT_KEYS = {
   MLB: 'baseball_mlb',
   NFL: 'americanfootball_nfl',
@@ -357,6 +370,8 @@ module.exports = {
   DAY_SCOPE_TZ,
   DAY_SCOPE_STRICT,
   SPORTS_ENABLED,
+  NBA_CARD_LIVE,
+  NBA_SHADOW,
   ODDS_SPORT_KEYS,
   ESPN_LEAGUES,
   SHARP_BOOKS,

@@ -7,7 +7,9 @@
  *
  * Stake caps (WeBet, 1u = $150). No straight tier is above 1.5u:
  *   A+ 1.5u, A / A- / B+ 1.0u, B 0.5u.
- * Fallback fills stay 0.5u. The 3-leg parlay stays its fixed 0.5u stake.
+ * Fallback fills stay 0.5u and are labeled rating lean / grade B. They are
+ * not A-family stakes. A straight with EV at or below 0 is never graded
+ * above B. The 3-leg parlay stays its fixed 0.5u stake.
  *
  * Heavy-favorite guard: a straight priced shorter than -250 (American
  * odds < -250; -250 itself is not shorter) cannot be graded above A-.
@@ -55,6 +57,11 @@ function unitsForGradeV1(grade){
   if (u > MAX_STRAIGHT_UNITS_V1) u = MAX_STRAIGHT_UNITS_V1;
   return u;
 }
+function isGradeAboveBV1(grade){
+  if (!grade || GRADE_RANK_V1[grade] == null) return false;
+  return GRADE_RANK_V1[grade] > GRADE_RANK_V1['B'];
+}
 module.exports = { MODEL_VERSION_V1, ENGINE_V1, SPORTS_V1, POINTS_SPORTS_V1, LOW_SPORTS_V1,
   BLOB_STORE_V1, OMEGA_BOARD_STORE, MAX_STRAIGHT_UNITS_V1, HEAVY_FAVORITE_AMERICAN_V1,
-  gradeForV1, floorForV1, unitsForGradeV1, isHeavyFavoritePriceV1, capGradeForPriceV1 };
+  gradeForV1, floorForV1, unitsForGradeV1, isHeavyFavoritePriceV1, capGradeForPriceV1,
+  isGradeAboveBV1 };

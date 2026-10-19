@@ -10,8 +10,12 @@
  * Straight EV is win probability times the confirmed decimal price, minus 1.
  * Parlay joint probability is the product of the leg probabilities;
  * parlay EV is that joint probability times the product of the leg decimals, minus 1.
+ * A fallback fill (it did not pass the strict pass) is 0.5u with rating
+ * lean and grade B. It does not keep an A-family grade. A straight with
+ * EV at or below 0 is never graded above B, and uses that same lean / B
+ * label when the probability grade would have been higher.
  */
-const { gradeForV1, floorForV1, unitsForGradeV1, MODEL_VERSION_V1, capGradeForPriceV1, isHeavyFavoritePriceV1 } = require('./config-v1');
+const { gradeForV1, floorForV1, unitsForGradeV1, MODEL_VERSION_V1, capGradeForPriceV1, isHeavyFavoritePriceV1, isGradeAboveBV1 } = require('./config-v1');
 function fmtPct(p){ return p==null||!Number.isFinite(p)?null:`${(p*100).toFixed(1)}%`; }
 function decFromAmerican(a){ return a>0?1+a/100:1+100/Math.abs(a); }
 function evFor(p, odds){ return odds==null?null:p*decFromAmerican(odds)-1; }
@@ -56,13 +60,32 @@ function receiptV1(c, grade, ev, unitOverride){
     whatLoses:whatLosesV1(c),
   };
 }
+function canonGradeV1(g){
+  if(g==null) return null;
+  const map={'a+':'A+','a':'A','a-':'A-','b+':'B+','b':'B','A+':'A+','A':'A','A-':'A-','B+':'B+','B':'B'};
+  return map[String(g).trim()]||null;
+}
+function mustUseLeanFillV1(grade, ev, opts){
+  // Fills miss the strict pass. EV<=0 never keeps a grade above B.
+  if(opts&&opts.fillLabel) return true;
+  if(typeof ev==='number'&&ev>0) return false;
+  return isGradeAboveBV1(canonGradeV1(grade))
+    ||isGradeAboveBV1(canonGradeV1(opts&&opts.lockGrade))
+    ||isGradeAboveBV1(canonGradeV1(opts&&opts.rating));
+}
 function toPickV1(c, grade, ev, opts={}){
-  const unit=opts.units!=null?opts.units:unitsForGradeV1(grade);
-  const r=receiptV1(c,grade,ev,unit);
+  let unit=opts.units!=null?opts.units:unitsForGradeV1(grade);
+  let outGrade=grade;
+  let rating=opts.rating!=null?opts.rating:(grade?String(grade).toLowerCase():'fallback');
+  let lockGrade=opts.lockGrade!==undefined?opts.lockGrade:grade;
+  if(mustUseLeanFillV1(outGrade, ev, { ...opts, lockGrade, rating })){
+    outGrade='B'; lockGrade='B'; rating='lean'; unit=0.5;
+  }
+  const r=receiptV1(c,outGrade,ev,unit);
   const bookName=c.confirmedBook||'Hard Rock Bet';
   return { sport:c.sport, matchup:c.matchup, homeTeam:c.homeTeam, awayTeam:c.awayTeam,
     pick:r.pick, pickDisplay:r.pick, betType:c.market, odds:c.oddsStr, units:`${unit}u`,
-    rating:grade?String(grade).toLowerCase():'fallback', lockGrade:grade, grade, commenceTime:c.commenceTime,
+    rating, lockGrade, grade:outGrade, commenceTime:c.commenceTime,
     winProbability:fmtPct(c.trueProbability), trueProbability:c.trueProbability, filterFlags:c.filterFlags||[],
     ev:ev!=null?fmtPct(ev):null, edge:Number.isFinite(c.edge)?c.edge:null,
     book:c.book||'hardrockbet', displayBook:bookName, executionBook:bookName,
@@ -146,6 +169,37 @@ function bestByGameV1(rows, skip){
   }
   return [...best.values()].sort((a,b)=>b.e-a.e);
 }
+function leanFillPickV1(row){
+  return toPickV1({ ...row.c, fallback:true }, 'B', row.ev, { fallback:true, units:0.5, rating:'lean', lockGrade:'B', fillLabel:true });
+}
+function fmtUnitsV1(n){
+  const r=Math.round((Number(n)||0)*100)/100;
+  return `${r}u`;
+}
+function summaryTotalsV1(picks, parlayLegs){
+  const straightUnits=(picks||[]).reduce((s,p)=>s+(parseFloat(p.units)||0),0);
+  const parlayUnits=(parlayLegs||[]).reduce((s,p)=>s+(parseFloat(p.units)||0),0);
+  // Partition straight units by the published grade. A lean fill is grade B,
+  // so its stake cannot land in an A-family total.
+  const gradeUnits={'A+':0,'A':0,'A-':0,'B+':0,'B':0};
+  let leanUnits=0;
+  for(const p of picks||[]){
+    const units=parseFloat(p.units)||0;
+    if(p.rating==='lean') leanUnits+=units;
+    const g=p.rating==='lean'?'B':(p.lockGrade||p.grade);
+    if(Object.prototype.hasOwnProperty.call(gradeUnits, g)) gradeUnits[g]+=units;
+  }
+  const formatted={};
+  for(const k of Object.keys(gradeUnits)) formatted[k]=fmtUnitsV1(gradeUnits[k]);
+  return {
+    totalPicks:(picks||[]).length,
+    totalStraightBets:(picks||[]).length,
+    straightUnits:fmtUnitsV1(straightUnits),
+    totalUnits:fmtUnitsV1(straightUnits+parlayUnits),
+    gradeUnits:formatted,
+    leanUnits:fmtUnitsV1(leanUnits),
+  };
+}
 function parlayFromPicksV1(legs){
   if(!legs||legs.length<3) return [];
   const three=legs.slice(0,3);
@@ -189,11 +243,9 @@ function selectV1(candidates, formulaPasses=[]){
     else if(qualifiesV1(row,soften)) funnel.qualified++;
   }
   const pushFill=(row, e)=>{
-    const grade=row.grade&&row.grade!=='B'?row.grade:null;
-    const units=grade?unitsForGradeV1(grade):0.5;
-    const pick=toPickV1({ ...row.c, fallback:true }, grade, row.ev, { fallback:true, units });
+    const pick=leanFillPickV1(row);
     picks.push(pick);
-    diagnostics.fallback.push({ matchup:row.c.matchup, side:row.c.side, sport:row.c.sport, edge:e, grade, flags:row.data, fill:true });
+    diagnostics.fallback.push({ matchup:row.c.matchup, side:row.c.side, sport:row.c.sport, edge:e, grade:'B', rating:'lean', flags:row.data, fill:true });
     funnel.fallbackFill++;
   };
   if(picks.length<3){
@@ -216,8 +268,7 @@ function selectV1(candidates, formulaPasses=[]){
     const seen=new Set(legPicks.map(p=>p.matchup));
     for(const { row } of bestByGameV1(rows, seen)){
       if(legPicks.length>=3) break;
-      const grade=row.grade&&row.grade!=='B'?row.grade:null;
-      legPicks.push(toPickV1({ ...row.c, fallback:true }, grade, row.ev, { fallback:true, units:grade?unitsForGradeV1(grade):0.5 }));
+      legPicks.push(leanFillPickV1(row));
       seen.add(row.c.matchup);
     }
   }
@@ -225,4 +276,4 @@ function selectV1(candidates, formulaPasses=[]){
   funnel.parlayLegPool=legPicks.length;
   return { picks, parlayLegs, funnel, rejections, diagnostics, qualifiedPoolSize:qualified.length };
 }
-module.exports={ selectV1, receiptV1, evFor, decFromAmerican };
+module.exports={ selectV1, receiptV1, evFor, decFromAmerican, summaryTotalsV1 };

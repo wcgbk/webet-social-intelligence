@@ -344,3 +344,111 @@ console.log('test-v1-lock 1019 fallback: PASS');
   assert.notStrictEqual(gradeForV1('NFL', homeLay.trueProbability), 'A+');
 }
 console.log('test-v1-lock 1019 caps and shrink: PASS');
+// --- 1019 v1: negative-EV and fallback fills are lean / B at 0.5u, never A ---
+{
+  const { summaryTotalsV1 } = L('select-v1');
+  const A_FAMILY = new Set(['A+', 'A', 'A-', 'a+', 'a', 'a-']);
+  const assertLeanFill = (p) => {
+    assert.ok(p, 'missing fill pick');
+    assert.strictEqual(p.fallback, true);
+    assert.strictEqual(p.rating, 'lean');
+    assert.strictEqual(p.grade, 'B');
+    assert.strictEqual(p.lockGrade, 'B');
+    assert.strictEqual(p.units, '0.5u');
+    assert.strictEqual(p.lockReceipt.rating, 'B');
+    assert.strictEqual(p.lockReceipt.unitSize, '0.5u');
+    assert.ok(!A_FAMILY.has(p.grade) && !A_FAMILY.has(p.rating) && !A_FAMILY.has(p.lockGrade) && !A_FAMILY.has(p.lockReceipt.rating));
+    assert.ok(parseFloat(p.ev) <= 0, p.ev);
+  };
+  // NHL A-band fair (0.664) against -200 is about -0.3% EV. That price grade
+  // is A, and it must not survive onto a fill.
+  const pCanes = 0.664439;
+  assert.strictEqual(gradeForV1('NHL', pCanes), 'A');
+  assert.ok(evFor(pCanes, -200) < 0);
+  assert.ok(Math.abs(evFor(pCanes, -200) * 100 + 0.3) < 0.05);
+  const canes = {
+    sport: 'NHL', matchup: 'Carolina Hurricanes @ Calgary Flames',
+    awayTeam: 'Carolina Hurricanes', homeTeam: 'Calgary Flames',
+    side: 'Carolina Hurricanes', edge: -0.002227, trueProbability: pCanes,
+    odds: -200, oddsStr: '-200', market: 'Moneyline', line: null, fallback: true,
+    projector: 'pinnacle-fair', confirmedBook: 'Hard Rock Bet', book: 'hardrockbet',
+    commenceTime: '2026-10-18T23:00:00Z', last5: null, injuries: null, keyStarter: null,
+    formulaSpreadHome: null, formulaTotal: null, formulaInputs: { method: 'pinnacle-fair-devig' },
+  };
+  const strict = (matchup, side, p, odds) => {
+    const [awayTeam, homeTeam] = matchup.split(' @ ');
+    return {
+      sport: 'NFL', matchup, awayTeam, homeTeam, side, trueProbability: p, odds, oddsStr: String(odds),
+      market: 'Moneyline', line: null, fallback: false, confirmedBook: 'Hard Rock Bet', book: 'hardrockbet',
+      commenceTime: '2026-10-18T17:00:00Z',
+      last5: { home: [1, 2, 3, 4, 5], away: [1, 2, 3, 4, 5] },
+      injuries: { home: [], away: [] },
+      keyStarter: { homeConfirmed: true, awayConfirmed: true, unknownReplacement: false },
+      formulaSpreadHome: 3, formulaTotal: 44, formulaInputs: { method: 'test' },
+    };
+  };
+  const sel = selectV1([
+    strict('Buffalo Bills @ Las Vegas Raiders', 'Buffalo Bills', 0.72, -250),
+    strict('Baltimore Ravens @ Cleveland Browns', 'Baltimore Ravens', 0.68, -175),
+    canes,
+  ], []);
+  assert.strictEqual(sel.picks.length, 3);
+  assert.strictEqual(sel.parlayLegs.length, 1);
+  assert.strictEqual(sel.parlayLegs[0].legs.length, 3);
+  assert.strictEqual(sel.funnel.fallbackFill, 1);
+  const fill = sel.picks.find(p => p.pick === 'Carolina Hurricanes');
+  assertLeanFill(fill);
+  assert.ok(sel.picks.filter(p => p.pick !== 'Carolina Hurricanes').every(p => p.rating !== 'lean' && parseFloat(p.units) > 0.5));
+  const leg = sel.parlayLegs[0].legs.find(p => p.pick === 'Carolina Hurricanes');
+  assertLeanFill(leg);
+  assert.strictEqual(sel.diagnostics.fallback.length, 1);
+  assert.strictEqual(sel.diagnostics.fallback[0].grade, 'B');
+  assert.strictEqual(sel.diagnostics.fallback[0].rating, 'lean');
+  const totals = summaryTotalsV1(sel.picks, sel.parlayLegs);
+  assert.strictEqual(totals.gradeUnits.A, '0u');
+  assert.strictEqual(totals.gradeUnits['A+'], '0u');
+  assert.strictEqual(totals.gradeUnits.B, '0.5u');
+  assert.strictEqual(totals.leanUnits, '0.5u');
+  assert.strictEqual(totals.straightUnits, '2.5u');
+  assert.strictEqual(totals.totalUnits, '3u');
+  const aFamilyUnits = ['A+', 'A', 'A-'].reduce((s, g) => s + parseFloat(totals.gradeUnits[g]), 0);
+  const nonLeanUnits = sel.picks.filter(p => p.rating !== 'lean').reduce((s, p) => s + parseFloat(p.units), 0);
+  assert.ok(Math.abs(aFamilyUnits - nonLeanUnits) < 1e-9 || aFamilyUnits <= nonLeanUnits);
+  assert.ok(aFamilyUnits + parseFloat(totals.gradeUnits['B+']) + parseFloat(totals.gradeUnits.B) === parseFloat(totals.straightUnits));
+
+  // A straight with EV<=0 is not graded above B, even when the price cap
+  // would have left an A- on an 80% favorite at -425.
+  assert.strictEqual(gradeForV1('NFL', 0.80), 'A+');
+  assert.ok(evFor(0.80, -425) <= 0);
+  const chalk = selectV1([strict('Washington Commanders @ San Francisco 49ers', 'San Francisco 49ers', 0.80, -425)], []);
+  assert.strictEqual(chalk.picks.length, 1);
+  assertLeanFill(chalk.picks[0]);
+  assert.notStrictEqual(chalk.picks[0].grade, 'A-');
+  assert.notStrictEqual(chalk.picks[0].grade, 'A+');
+  const chalkTotals = summaryTotalsV1(chalk.picks, chalk.parlayLegs);
+  assert.strictEqual(chalkTotals.gradeUnits['A-'], '0u');
+  assert.strictEqual(chalkTotals.gradeUnits['A+'], '0u');
+  assert.strictEqual(chalkTotals.gradeUnits.A, '0u');
+  assert.strictEqual(chalkTotals.gradeUnits.B, '0.5u');
+  assert.strictEqual(chalkTotals.leanUnits, '0.5u');
+
+  // A fallback that clears the strict pass with EV>0 keeps its grade and stake.
+  const plus = {
+    sport: 'NHL', matchup: 'Away Ice @ Home Ice', awayTeam: 'Away Ice', homeTeam: 'Home Ice',
+    side: 'Home Ice', trueProbability: 0.70, odds: 110, oddsStr: '+110', edge: 0.20,
+    market: 'Moneyline', line: null, fallback: true, confirmedBook: 'DraftKings', book: 'draftkings',
+    commenceTime: '2026-10-18T23:00:00Z', last5: null, injuries: null, keyStarter: null,
+    formulaInputs: { method: 'pinnacle-fair-devig' },
+  };
+  assert.ok(evFor(0.70, 110) > 0);
+  const kept = selectV1([plus], []);
+  assert.strictEqual(kept.picks.length, 1);
+  assert.strictEqual(kept.funnel.fallbackFill, 0);
+  assert.strictEqual(kept.picks[0].grade, 'A+');
+  assert.strictEqual(kept.picks[0].rating, 'a+');
+  assert.strictEqual(kept.picks[0].lockGrade, 'A+');
+  assert.strictEqual(kept.picks[0].lockReceipt.rating, 'A+');
+  assert.strictEqual(kept.picks[0].units, '1.5u');
+  assert.strictEqual(summaryTotalsV1(kept.picks, kept.parlayLegs).gradeUnits['A+'], '1.5u');
+}
+console.log('test-v1-lock 1019 lean fill: PASS');

@@ -180,15 +180,17 @@ async function generateOmegaVnext(opts = {}) {
   const now = new Date();
   // Historical replay has no morning snap series. Do not retry live Odds into
   // the line-path store and do not hard-fail the eval day.
-  const replayLike = !!(opts.historicalSnapshot || opts.replay);
+  const fixtureCandidates = Array.isArray(opts.fixtureCandidates) ? opts.fixtureCandidates : null;
+  const replayLike = !!(opts.historicalSnapshot || opts.replay || fixtureCandidates);
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow}`);
 
   // Stored 3AM/10AM board (Ben 2026-10-18: only those two pulls). Live
   // generates read the odds-master 1000 board with all books; historical
   // replay keeps its snapshot path. No live Odds API call in generate.
+  // fixtureCandidates is a local card replay: no board, no odds, no ESPN.
   let masterBoard = null;
-  if (!opts.historicalSnapshot && !opts.replay) {
+  if (!opts.historicalSnapshot && !opts.replay && !fixtureCandidates) {
     try {
       const { loadMasterBoard } = require('../odds-master/board');
       masterBoard = await loadMasterBoard(dateISO);
@@ -197,18 +199,26 @@ async function generateOmegaVnext(opts = {}) {
   const storedOddsBySport = masterBoard && Object.keys(masterBoard.eventsBySport || {}).length
     ? Object.fromEntries(Object.entries(masterBoard.eventsBySport).map(([k, v]) => [k, v.map(ev => ({ ...ev, sport_key: (require('./config').ODDS_SPORT_KEYS || {})[k] || ev.sport_key }))]))
     : null;
-  const snap = await ingest(dateISO, {
-    historicalSnapshot: opts.historicalSnapshot,
-    storedOddsBySport,
-    storedFetchedAt: masterBoard ? (masterBoard.at1000 || masterBoard.at0300) : null,
-  });
-  console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
+  let snap;
+  let candidates;
+  if (fixtureCandidates) {
+    snap = { dateISO, oddsBySport: {}, espnBySport: {} };
+    candidates = fixtureCandidates.map(c => ({ ...c }));
+    console.log(`[omega-vnext] fixture candidates=${candidates.length} (no ingest)`);
+  } else {
+    snap = await ingest(dateISO, {
+      historicalSnapshot: opts.historicalSnapshot,
+      storedOddsBySport,
+      storedFetchedAt: masterBoard ? (masterBoard.at1000 || masterBoard.at0300) : null,
+    });
+    console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
 
-  let candidates = projectAll(snap);
-  console.log(`[omega-vnext] raw candidates=${candidates.length}`);
+    candidates = projectAll(snap);
+    console.log(`[omega-vnext] raw candidates=${candidates.length}`);
 
-  candidates = calibrateAll(candidates).map(attachEv);
-  candidates = annotateMajorBooks(candidates, snap);
+    candidates = calibrateAll(candidates).map(attachEv);
+    candidates = annotateMajorBooks(candidates, snap);
+  }
 
   // Open→pick US line-move (earliest morning snap → latest pre-generate).
   // Missing required snaps: one real Odds capture into the current ET slot, then re-load.
@@ -218,7 +228,7 @@ async function generateOmegaVnext(opts = {}) {
   if (masterBoard && masterBoard.polls && masterBoard.polls.length) {
     const polls = masterBoard.polls;
     linePathMeta = { path: { date: dateISO, polls }, earliest: polls[0], latest: polls[polls.length - 1] };
-  } else {
+  } else if (!fixtureCandidates) {
     try {
       const loaded = await loadLinePath(dateISO);
       if (loaded) linePathMeta = loaded;
@@ -410,7 +420,9 @@ async function generateOmegaVnext(opts = {}) {
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   const gateOpts = { cardDate: dateISO };
-  if (replayLike) {
+  if (Number.isFinite(Number(opts.pregameAsOfMs))) {
+    gateOpts.asOfMs = Number(opts.pregameAsOfMs);
+  } else if (replayLike) {
     const asOfMs = Date.parse(opts.historicalSnapshot);
     if (Number.isFinite(asOfMs)) gateOpts.asOfMs = asOfMs;
   }
@@ -425,12 +437,14 @@ async function generateOmegaVnext(opts = {}) {
 
   // QA hard-fails on gate-clearers. The never-block fill runs after, from DK/Hard Rock prices.
   let qaCtx = {};
-  try {
-    const sports = [...new Set(selected.map(c => c.sport).concat(yesPool.slice(0, 12).map(c => c.sport)))];
-    qaCtx = await loadQaContext(dateISO, sports);
-    console.log(`[omega-vnext] QA context loaded sports=${sports.join(',')}`);
-  } catch (e) {
-    console.error(`[omega-vnext] QA context load failed (continuing): ${e.message}`);
+  if (!fixtureCandidates) {
+    try {
+      const sports = [...new Set(selected.map(c => c.sport).concat(yesPool.slice(0, 12).map(c => c.sport)))];
+      qaCtx = await loadQaContext(dateISO, sports);
+      console.log(`[omega-vnext] QA context loaded sports=${sports.join(',')}`);
+    } catch (e) {
+      console.error(`[omega-vnext] QA context load failed (continuing): ${e.message}`);
+    }
   }
 
   const qa = applyHardFails(selected, yesPool, qaCtx, {
@@ -526,6 +540,17 @@ async function generateOmegaVnext(opts = {}) {
   {
     const capped = applyDailyUnitCap(picks, parlayLegs);
     const exposed = applyExposureCaps(capped.picks, capped.parlayLegs);
+    for (const p of exposed.picks || []) {
+      const u = parseFloat(String(p.units || '').replace(/[^0-9.]/g, '')) || 0;
+      if (u > 0) continue;
+      narrRejections.push({
+        matchup: p.matchup || null,
+        side: p.pick || p.side || null,
+        market: p.betType || p.market || null,
+        sport: p.sport || null,
+        reason: 'exposure-cap',
+      });
+    }
     picks = exposed.picks.filter(p => (parseFloat(String(p.units || '').replace(/[^0-9.]/g, '')) || 0) > 0);
     parlayLegs = exposed.parlayLegs;
   }

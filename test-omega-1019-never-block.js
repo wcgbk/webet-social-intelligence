@@ -160,7 +160,7 @@ function publishSlate() {
   return { prepared, yesPool, rejected, qualified, built };
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.4.1-omega-vnext-never-block');
+assert.strictEqual(config.MODEL_VERSION, 'v12.4.2-omega-vnext-parlay-guard');
 assert.strictEqual(config.LEAN_PAD, false);
 
 {

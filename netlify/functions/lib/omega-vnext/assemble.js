@@ -99,9 +99,18 @@ function finishPublication(args) {
     picks: seedPicks, chosen, positions, yesPool, rejected, miscalibrated, hardFails, cardDate, modelVersion, dateFormatted,
   } = args;
   let picks = seedPicks || [];
-  let parlayLegs = ensureCardParlay(positions || [], picks, { cardDate, yesPool: yesPool || positions });
+  const parlayBuilt = ensureCardParlay(positions || [], picks, { cardDate, yesPool: yesPool || positions });
+  const parlayExclusions = (parlayBuilt && parlayBuilt.parlayExclusions) || [];
+  let parlayLegs = Array.isArray(parlayBuilt) ? parlayBuilt : [];
   const capped = applyDailyUnitCap(picks, parlayLegs);
   const exposed = applyExposureCaps(capped.picks, capped.parlayLegs);
+  const exposureRejections = (exposed.picks || []).filter(p => parseU(p.units) <= 0).map(p => ({
+    matchup: p.matchup || null,
+    side: p.pick || p.side || null,
+    market: p.betType || p.market || null,
+    sport: p.sport || null,
+    reason: 'exposure-cap',
+  }));
   picks = exposed.picks.filter(p => parseU(p.units) > 0);
   parlayLegs = exposed.parlayLegs || [];
   picks = sortByGradeThenUnits(picks);
@@ -117,6 +126,8 @@ function finishPublication(args) {
   const rejections = dedupeRejections([
     ...hf,
     ...droppedRejections(positions, chosen, rejected, miscalibrated),
+    ...parlayExclusions,
+    ...exposureRejections,
   ]);
   const copy = buildCardFallbackCopy({ picks, parlayLegs, dateFormatted });
   const edgeSummary = alignEdgeSummary(copy.edgeSummary, picks, parlayLegs, dateFormatted);

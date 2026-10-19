@@ -12,7 +12,8 @@ assert.strictEqual(gradeForV1('NFL',0.80),'A+'); assert.strictEqual(gradeForV1('
 assert.strictEqual(gradeForV1('NBA',0.60),'B'); assert.strictEqual(gradeForV1('NFL',0.59),null);
 assert.strictEqual(gradeForV1('NHL',0.70),'A+'); assert.strictEqual(gradeForV1('MLB',0.58),'B'); assert.strictEqual(gradeForV1('MLB',0.57),null);
 assert.strictEqual(floorForV1('NFL'),0.60); assert.strictEqual(floorForV1('NHL'),0.58);
-assert.strictEqual(unitsForGradeV1('A+'),2.0); assert.strictEqual(unitsForGradeV1('B'),0.5);
+assert.strictEqual(unitsForGradeV1('A+'),1.5); assert.strictEqual(unitsForGradeV1('A'),1.0);
+assert.strictEqual(unitsForGradeV1('A-'),1.0); assert.strictEqual(unitsForGradeV1('B+'),1.0); assert.strictEqual(unitsForGradeV1('B'),0.5);
 // EV (Spec §9 negative-EV pass)
 assert.ok(Math.abs(evFor(0.55,-110)-0.05)<1e-9);
 // Board poll
@@ -166,5 +167,180 @@ console.log('test-v1-lock QA additions: PASS');
   assert.ok(!sel.rejections.some(r => r.reason === 'lock-key-starter-unknown'));
   assert.ok(sel.rejections.some(r => r.reason === 'lock-road-favorite-75'));
   assert.ok(!sel.picks.some(p => p.matchup === 'G @ H'));
+  assert.ok(sel.picks.every(p => p.units === '0.5u'), 'ungraded fallback fills stay 0.5u');
 }
 console.log('test-v1-lock 1019 fallback: PASS');
+// --- 1019 v1: A+ cap, heavy-favorite guard, Pinnacle shrink, parlay EV ---
+{
+  const { capGradeForPriceV1, isHeavyFavoritePriceV1, MAX_STRAIGHT_UNITS_V1 } = L('config-v1');
+  const { shrinkFormulaProbV1, pinnacleFairAtLine, FORMULA_WEIGHT_FOOTBALL_V1, PINNACLE_DEV_CAP_V1 } = L('project-v1');
+  const { decFromAmerican } = L('select-v1');
+  assert.strictEqual(MAX_STRAIGHT_UNITS_V1, 1.5);
+  assert.strictEqual(FORMULA_WEIGHT_FOOTBALL_V1, 0.35);
+  assert.strictEqual(PINNACLE_DEV_CAP_V1, 0.08);
+  for (const g of ['A+','A','A-','B+','B']) assert.ok(unitsForGradeV1(g) <= 1.5, g);
+  assert.strictEqual(unitsForGradeV1('A+'), 1.5);
+  // -250 is the boundary: shorter means more negative than -250.
+  assert.strictEqual(isHeavyFavoritePriceV1(-250), false);
+  assert.strictEqual(isHeavyFavoritePriceV1(-251), true);
+  assert.strictEqual(isHeavyFavoritePriceV1(-425), true);
+  assert.strictEqual(isHeavyFavoritePriceV1(-110), false);
+  assert.strictEqual(capGradeForPriceV1('A+', -425), 'A-');
+  assert.strictEqual(capGradeForPriceV1('A', -300), 'A-');
+  assert.strictEqual(capGradeForPriceV1('A-', -400), 'A-');
+  assert.strictEqual(capGradeForPriceV1('B+', -400), 'B+');
+  assert.strictEqual(capGradeForPriceV1('A+', -250), 'A+');
+  assert.strictEqual(capGradeForPriceV1('A+', -110), 'A+');
+  // Blend then cap. 0.35*0.977 + 0.65*0.50 = 0.66695, which is outside ±0.08.
+  const capped = shrinkFormulaProbV1(0.97725, 0.5, 'NFL');
+  assert.strictEqual(capped.shrunk, true);
+  assert.ok(Math.abs(capped.p - 0.58) < 1e-12, capped.p);
+  assert.ok(Math.abs(capped.p - 0.5) <= 0.08);
+  const mild = shrinkFormulaProbV1(0.55, 0.52, 'NCAAF');
+  const mildBlend = 0.35 * 0.55 + 0.65 * 0.52;
+  assert.ok(Math.abs(mild.p - mildBlend) < 1e-12);
+  assert.ok(Math.abs(mild.p - 0.52) <= 0.08);
+  const raw = shrinkFormulaProbV1(0.91, null, 'NFL');
+  assert.strictEqual(raw.shrunk, false);
+  assert.strictEqual(raw.p, 0.91);
+  assert.strictEqual(shrinkFormulaProbV1(0.8, 0.55, 'NHL').shrunk, false);
+
+  const full = {
+    last5: { home: [1,2,3,4,5], away: [1,2,3,4,5] },
+    injuries: { home: [], away: [] },
+    keyStarter: { homeConfirmed: true, awayConfirmed: true, unknownReplacement: false },
+    formulaSpreadHome: 8, formulaTotal: 45, formulaInputs: { method: 'test' },
+    confirmedBook: 'Hard Rock Bet', book: 'hardrockbet', commenceTime: '2026-10-18T17:00:00Z',
+  };
+  const row = (matchup, side, p, odds, extra = {}) => {
+    const [awayTeam, homeTeam] = matchup.split(' @ ');
+    return {
+      sport: 'NFL', matchup, awayTeam, homeTeam, side, trueProbability: p, odds, oddsStr: String(odds),
+      market: 'Moneyline', line: null, ...full, ...extra,
+    };
+  };
+  // A+ at a normal price is 1.5u, not 2u.
+  {
+    const sel = selectV1([row('Away @ Home', 'Home', 0.86, -150)], []);
+    assert.strictEqual(sel.picks.length, 1);
+    assert.strictEqual(sel.picks[0].grade, 'A+');
+    assert.strictEqual(sel.picks[0].units, '1.5u');
+    assert.strictEqual(sel.picks[0].lockReceipt.unitSize, '1.5u');
+  }
+  // -425 cannot be graded above A-, even at 90%.
+  {
+    const sel = selectV1([row('Washington Commanders @ San Francisco 49ers', 'San Francisco 49ers', 0.90, -425)], []);
+    assert.strictEqual(sel.picks.length, 1);
+    assert.strictEqual(sel.picks[0].grade, 'A-');
+    assert.strictEqual(sel.picks[0].units, '1u');
+    assert.notStrictEqual(sel.picks[0].grade, 'A+');
+  }
+  // -250 itself may still be A+. A price one cent shorter may not.
+  {
+    const at = selectV1([row('A @ B', 'B', 0.85, -250)], []);
+    assert.strictEqual(at.picks[0].grade, 'A+');
+    assert.strictEqual(at.picks[0].units, '1.5u');
+    const under = selectV1([row('A @ B', 'B', 0.85, -251)], []);
+    assert.strictEqual(under.picks[0].grade, 'A-');
+    assert.strictEqual(under.picks[0].units, '1u');
+  }
+  // Heavy chalk loses the first straight slot to the next qualifying price.
+  {
+    const sel = selectV1([
+      row('Washington Commanders @ San Francisco 49ers', 'San Francisco 49ers', 0.90, -425),
+      row('Carolina Panthers @ Philadelphia Eagles', 'Philadelphia Eagles', 0.72, -110),
+      row('Buffalo Bills @ Las Vegas Raiders', 'Buffalo Bills', 0.88, -300),
+      row('Dallas Cowboys @ Green Bay Packers', 'Green Bay Packers', 0.71, 100),
+    ], []);
+    assert.strictEqual(sel.picks.length, 3);
+    assert.deepStrictEqual(sel.picks.map(p => p.odds), ['-110', '100', '-425']);
+    assert.ok(sel.picks.every(p => !(Number(p.odds) < -250) || p.grade === 'A-' || p.grade === 'B+' || p.grade === 'B'));
+    assert.ok(!sel.picks.some(p => Number(p.odds) < -250 && (p.grade === 'A+' || p.grade === 'A')));
+    const heavy = sel.picks.find(p => p.odds === '-425');
+    assert.strictEqual(heavy.grade, 'A-');
+    assert.strictEqual(heavy.units, '1u');
+  }
+
+  // Wild formula vs a pick'em Pinnacle line stays inside the 0.08 band.
+  const mkts = (home, away, priceHome, priceAway, point) => ([
+    { key: 'h2h', outcomes: [{ name: away, price: priceAway }, { name: home, price: priceHome }] },
+    { key: 'spreads', outcomes: [{ name: away, price: -110, point }, { name: home, price: -110, point: -point }] },
+    { key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 45 }, { name: 'Under', price: -110, point: 45 }] },
+  ]);
+  const nflGame = (home, away) => ({
+    sport: 'NFL', home_team: home, away_team: away, commence_time: '2026-10-18T17:00:00Z',
+    bookmakers: [
+      { key: 'pinnacle', markets: mkts(home, away, -110, -110, 3) },
+      { key: 'hardrockbet', markets: mkts(home, away, -110, -110, 3) },
+    ],
+  });
+  const pairs = [['Home One', 'Away One'], ['Home Two', 'Away Two'], ['Home Three', 'Away Three']];
+  const eff = {};
+  for (const [h, a] of pairs) {
+    eff[h] = { offEpa: 0.35, defEpa: 0.25 };
+    eff[a] = { offEpa: -0.30, defEpa: -0.25 };
+  }
+  const projected = [];
+  for (const [h, a] of pairs) {
+    const { candidates, pass } = projectGameV1(nflGame(h, a), 'NFL', eff, {});
+    assert.strictEqual(pass, null);
+    assert.ok(candidates.length >= 4);
+    for (const c of candidates) {
+      if (!Number.isFinite(c.pPinnacle)) continue;
+      assert.ok(Math.abs(c.trueProbability - c.pPinnacle) <= 0.08 + 1e-9, `${c.side} ${c.trueProbability} vs ${c.pPinnacle}`);
+      assert.strictEqual(c.shrinkWeight, 0.35);
+      if (c.market !== 'Total') assert.ok(c.pFormula > 0.8 || c.pFormula < 0.2, `expected a wild formula, got ${c.pFormula} on ${c.market} ${c.side}`);
+    }
+    const homeMl = candidates.find(c => c.market === 'Moneyline' && c.side === h);
+    assert.ok(homeMl.pFormula > 0.9, homeMl.pFormula);
+    assert.ok(homeMl.trueProbability <= homeMl.pPinnacle + 0.08 + 1e-9);
+    assert.ok(homeMl.trueProbability < 0.7, homeMl.trueProbability);
+    projected.push(...candidates);
+  }
+  const card = selectV1(projected, []);
+  assert.strictEqual(card.picks.length, 3);
+  assert.strictEqual(card.parlayLegs.length, 1);
+  assert.strictEqual(card.parlayLegs[0].legs.length, 3);
+  assert.strictEqual(card.parlayLegs[0].units, '0.5u');
+  assert.ok(card.picks.every(p => parseFloat(p.units) <= 1.5));
+  assert.ok(card.picks.every(p => p.units === '0.5u'), card.picks.map(p => `${p.pick} ${p.units} ${p.grade}`).join(' | '));
+  const evNum = parseFloat(card.parlayLegs[0].ev);
+  assert.ok(evNum < 60, `parlay EV ${card.parlayLegs[0].ev} should be under +60% for three near-even legs`);
+  let dec = 1, jp = 1;
+  for (const leg of card.parlayLegs[0].legs) {
+    dec *= decFromAmerican(Number(leg.odds));
+    jp *= leg.trueProbability;
+    assert.ok(Math.abs(Number(leg.odds)) <= 110, leg.odds);
+  }
+  assert.ok(Math.abs((jp * dec - 1) * 100 - evNum) < 0.06, `${(jp * dec - 1) * 100} vs ${evNum}`);
+
+  // Half-point off Pinnacle is still anchored. Laying -3.5 against a -3 pick'em
+  // fair must not keep a 90% formula.
+  const offBundles = [
+    { side: 'Home', point: -3.5, prices: [{ book: 'hardrockbet', american: -110 }] },
+    { side: 'Away', point: 3.5, prices: [{ book: 'hardrockbet', american: -110 }] },
+    { side: 'Home', point: -3, prices: [{ book: 'pinnacle', american: -110 }] },
+    { side: 'Away', point: 3, prices: [{ book: 'pinnacle', american: -110 }] },
+  ];
+  const shifted = pinnacleFairAtLine(offBundles, offBundles[0], 'NFL');
+  assert.ok(shifted < 0.5 && shifted > 0.45, shifted);
+  const offGame = {
+    sport: 'NFL', home_team: 'Home', away_team: 'Away', commence_time: '2026-10-18T17:00:00Z',
+    bookmakers: [
+      { key: 'pinnacle', markets: [{ key: 'spreads', outcomes: [
+        { name: 'Away', price: -110, point: 3 }, { name: 'Home', price: -110, point: -3 },
+      ] }] },
+      { key: 'hardrockbet', markets: [{ key: 'spreads', outcomes: [
+        { name: 'Away', price: -110, point: 3.5 }, { name: 'Home', price: -110, point: -3.5 },
+      ] }] },
+    ],
+  };
+  const off = projectGameV1(offGame, 'NFL', { Home: { offEpa: 0.35, defEpa: 0.25 }, Away: { offEpa: -0.30, defEpa: -0.25 } }, {});
+  const homeLay = off.candidates.find(c => c.market === 'Spread' && c.side.startsWith('Home'));
+  assert.ok(homeLay, 'home spread candidate');
+  assert.ok(homeLay.pFormula > 0.8, homeLay.pFormula);
+  assert.ok(Math.abs(homeLay.trueProbability - homeLay.pPinnacle) <= 0.08 + 1e-9);
+  assert.ok(homeLay.trueProbability < 0.65, homeLay.trueProbability);
+  assert.notStrictEqual(gradeForV1('NFL', homeLay.trueProbability), 'A+');
+}
+console.log('test-v1-lock 1019 caps and shrink: PASS');

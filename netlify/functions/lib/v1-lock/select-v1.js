@@ -2,10 +2,16 @@
 /**
  * V1 selection — Spec §§3,5,6,8,9,10 ONLY.
  * Mandatory passes first, then Filter 1 grading. B = parlay only.
- * No sheet, no anchor, no haircut, no stake-EV floor beyond Spec §9
+ * No sheet, no haircut, no stake-EV floor beyond Spec §9
  * (negative expected value at the confirmed price = pass).
+ * Heavy-favorite guard (config-v1): American odds shorter than -250
+ * cannot grade above A-, and lose the straight slot to the next
+ * qualifying price that is not that short.
+ * Straight EV is win probability times the confirmed decimal price, minus 1.
+ * Parlay joint probability is the product of the leg probabilities;
+ * parlay EV is that joint probability times the product of the leg decimals, minus 1.
  */
-const { gradeForV1, floorForV1, unitsForGradeV1, MODEL_VERSION_V1 } = require('./config-v1');
+const { gradeForV1, floorForV1, unitsForGradeV1, MODEL_VERSION_V1, capGradeForPriceV1, isHeavyFavoritePriceV1 } = require('./config-v1');
 function fmtPct(p){ return p==null||!Number.isFinite(p)?null:`${(p*100).toFixed(1)}%`; }
 function decFromAmerican(a){ return a>0?1+a/100:1+100/Math.abs(a); }
 function evFor(p, odds){ return odds==null?null:p*decFromAmerican(odds)-1; }
@@ -29,9 +35,12 @@ function receiptV1(c, grade, ev, unitOverride){
   const unit=unitOverride!=null?unitOverride:unitsForGradeV1(grade);
   const bookName=c.confirmedBook||'Hard Rock Bet';
   const method=c.formulaInputs&&c.formulaInputs.method;
+  const shrinkNote=(Number.isFinite(c.pPinnacle)&&c.shrinkWeight!=null)
+    ? ` Probability is ${Math.round(c.shrinkWeight*100)}% formula / de-vigged Pinnacle fair ${fmtPct(c.pPinnacle)} (raw formula ${fmtPct(c.pFormula)}), capped within 0.08 of that fair.`
+    : '';
   const core=c.fallback
     ? `Pinnacle de-vigged fair ${fmtPct(c.trueProbability)} versus the best DraftKings/Hard Rock price ${c.oddsStr} (${bookName}); edge ${fmtPct(c.edge)}.`
-    : `Formula line (expected margin ${c.formulaSpreadHome}, expected total ${c.formulaTotal}, inputs: ${method}) prices this at ${fmtPct(c.trueProbability)} against the confirmed Hard Rock Bet line; expected value at that price is ${ev!=null?(ev*100).toFixed(1)+'%':''}.`;
+    : `Formula line (expected margin ${c.formulaSpreadHome}, expected total ${c.formulaTotal}, inputs: ${method}) prices this at ${fmtPct(c.trueProbability)} against the confirmed Hard Rock Bet line; expected value at that price is ${ev!=null?(ev*100).toFixed(1)+'%':''}.${shrinkNote}`;
   return {
     game:`${c.awayTeam} vs ${c.homeTeam}`,
     pick:c.market==='Moneyline'?c.side:c.side,
@@ -98,7 +107,7 @@ function classifyV1(c){
   const trapRisk=c.market==='Spread'&&c.line!=null&&c.line<=-10&&sideLastMargin!=null&&sideLastMargin>=15;
   if(trapRisk){ flags.push('trap-game scrutiny (Filter 4)'); if(lineMoveAgainst) return { c, hard:'lock-filter4-trap-line-against', funnelKey:'filter4Trap', data, grade:null, ev:null }; }
   c.filterFlags=flags;
-  const grade=gradeForV1(c.sport,c.trueProbability);
+  const grade=capGradeForPriceV1(gradeForV1(c.sport,c.trueProbability), c.odds);
   const ev=evFor(c.trueProbability,c.odds);
   return { c, hard:null, data, flags, grade, ev };
 }
@@ -111,7 +120,14 @@ function qualifiesV1(row, soften){
 }
 function takeStraightsV1(pool){
   const picks=[]; const used=new Set();
-  const sorted=[...pool].sort((a,b)=>b.c.trueProbability-a.c.trueProbability||(b.ev||0)-(a.ev||0));
+  // Non-heavy prices first. A -425 at 80% must not outrank the next
+  // qualifying straight just because win-probability grading is high.
+  const sorted=[...pool].sort((a,b)=>{
+    const ha=isHeavyFavoritePriceV1(a.c.odds)?1:0;
+    const hb=isHeavyFavoritePriceV1(b.c.odds)?1:0;
+    if(ha!==hb) return ha-hb;
+    return b.c.trueProbability-a.c.trueProbability||(b.ev||0)-(a.ev||0);
+  });
   for(const q of sorted){
     if(picks.length>=3) break;
     if(used.has(q.c.matchup)) continue;
@@ -137,9 +153,11 @@ function parlayFromPicksV1(legs){
   for(const leg of three){
     const odds=Number(leg.odds); const prob=Number(leg.trueProbability);
     if(!Number.isFinite(odds)||!Number.isFinite(prob)) return [];
+    // Decimal of the confirmed American price, not the American number itself.
     dec*=decFromAmerican(odds); p*=prob;
   }
   if(!(dec>1)||!Number.isFinite(p)) return [];
+  // Joint p = product of leg probabilities. EV at the product of decimals.
   const ev=p*dec-1;
   const am=dec>=2?Math.round((dec-1)*100):Math.round(-100/(dec-1));
   return [{ type:'3-leg-parlay-v1-lock', units:'0.5u', combinedOdds:String(am>0?`+${am}`:`${am}`),

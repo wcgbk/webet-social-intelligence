@@ -8,9 +8,9 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
-const { optimizeParlay } = require('./parlay');
-const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
+const { selectStraights, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, samePublished } = require('./select');
+const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble');
+const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');
@@ -423,7 +423,7 @@ async function generateOmegaVnext(opts = {}) {
 
   const selected = selectStraights(yesPool, MAX_STRAIGHTS);
 
-  // QA hard-fails before narrate/store — drop + refill; empty OK
+  // QA hard-fails on gate-clearers. The never-block fill runs after, from DK/Hard Rock prices.
   let qaCtx = {};
   try {
     const sports = [...new Set(selected.map(c => c.sport).concat(yesPool.slice(0, 12).map(c => c.sport)))];
@@ -437,57 +437,108 @@ async function generateOmegaVnext(opts = {}) {
     maxN: MAX_STRAIGHTS,
     modelVersion: MODEL_VERSION,
   });
-  let picks = qa.picks;
   const hardFails = qa.hardFails || [];
   if (hardFails.length) {
     console.log(`[omega-vnext] QA hard-fails=${hardFails.length}: ${hardFails.map(h => h.reason).join('; ')}`);
   }
-  // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
-  picks = applyDailyCap(picks);
 
-  const poolForParlay = qa.yesPoolRemaining || yesPool;
-  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
+  const failKey = (matchup, side) => `${String(matchup || '').trim().toLowerCase()}|${String(side || '').trim().toLowerCase()}`;
+  const failKeys = new Set(hardFails.map(h => failKey(h.matchup, h.side)));
+  const open = (candidates || []).filter(c => !failKeys.has(failKey(c.matchup, c.side)));
+  const stillRaw = (qa.picks || []).map(p => (
+    open.find(c => samePublished(p, c)) || selected.find(c => samePublished(p, c)) || null
+  )).filter(Boolean);
 
-  let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
+  const publishFrom = (positions, qualified, pool, seed) => publishEdgeCard({
+    positions,
+    qualified,
+    yesPool: pool,
+    rejected,
+    miscalibrated: edgeDiagnostics.miscalibrated || [],
+    hardFails,
+    cardDate: dateISO,
+    modelVersion: MODEL_VERSION,
+    dateFormatted,
+    picksSeed: seed,
+  });
+
+  let built = publishFrom(open, stillRaw, qa.yesPoolRemaining || yesPool, qa.picks);
+  let picks = built.picks;
+  let parlayLegs = built.parlayLegs;
+  let narrRejections = [];
+
+  let narr = {
+    picks,
+    parlayLegs,
+    rejections: [],
+    edgeSummary: built.edgeSummary || '',
+    insights: '',
+    claudeVerified: false,
+  };
   if (!skipNarrate) {
+    // Caps already ran inside publishEdgeCard, so narration quotes final units.
     narr = await narrateAndVerify({
       picks,
       parlayLegs,
       dateFormatted,
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
+    narrRejections = narrRejections.concat(narr.rejections || []);
     picks = narr.picks;
     parlayLegs = narr.parlayLegs || parlayLegs;
     if (narr.rejections && narr.rejections.length) {
-      const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
-      const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
-      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
+      const veto = new Set(narr.rejections.map(r => String(r.side || r.pick || '').toLowerCase()).filter(Boolean));
+      const vetoed = (c) => {
+        const names = [c && c.side, c && c.pick, formatMoneylinePick(c && c.side, c && c.market)]
+          .map(s => String(s || '').toLowerCase());
+        return names.some(n => n && veto.has(n));
+      };
+      const narrPicks = (narr.picks || []).filter(p => !vetoed(p));
+      const qualified2 = stillRaw.filter(c => narrPicks.some(p => samePublished(p, c)));
+      built = publishFrom(
+        open.filter(c => !vetoed(c)),
+        qualified2,
+        (qa.yesPoolRemaining || yesPool).filter(c => !vetoed(c)),
+        narrPicks,
+      );
+      picks = built.picks;
       parlayLegs = await narrateParlayLegsOnly({
-        parlayLegs,
+        parlayLegs: built.parlayLegs,
         dateFormatted,
         apiKey: process.env.ANTHROPIC_API_KEY,
         straightPicks: picks,
       });
+      narr = await narrateAndVerify({
+        picks,
+        parlayLegs,
+        dateFormatted,
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+      narrRejections = narrRejections.concat(narr.rejections || []);
+      picks = narr.picks;
+      parlayLegs = narr.parlayLegs || parlayLegs;
     }
   } else {
     console.log('[omega-vnext] skipNarrate=true (replay/eval path)');
   }
 
-  picks = attachClvFields(picks, MODEL_VERSION, dateISO);
-  parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
-
-  // Final unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX. Sort grade then units.
+  // Narration may cut a stake. Re-apply the same caps, then quote whatever is left.
   {
     const capped = applyDailyUnitCap(picks, parlayLegs);
     const exposed = applyExposureCaps(capped.picks, capped.parlayLegs);
-    picks = exposed.picks;
+    picks = exposed.picks.filter(p => (parseFloat(String(p.units || '').replace(/[^0-9.]/g, '')) || 0) > 0);
     parlayLegs = exposed.parlayLegs;
   }
+  picks = attachClvFields(picks, MODEL_VERSION, dateISO);
+  parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
   picks = sortByGradeThenUnits(picks);
+  narr.edgeSummary = alignEdgeSummary(narr.edgeSummary, picks, parlayLegs, dateFormatted);
 
-  const parlayUnits = (parlayLegs || []).reduce((s, pl) => s + (parseFloat(pl.units) || 0), 0);
-  const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0) + parlayUnits;
-  const sportsCovered = [...new Set(picks.map(p => p.sport))];
+  const summary = summaryFrom(picks, parlayLegs, {
+    modelVersion: MODEL_VERSION,
+    aplusLocks: picks.filter(p => p.rating === 'aplus').length,
+    qaHardFails: hardFails.length,
+  });
 
   const candidateTable = orderedByScore(yesPool).slice(0, 15).map((c, i) => ({
     rank: i + 1,
@@ -518,20 +569,10 @@ async function generateOmegaVnext(opts = {}) {
     }),
   }));
 
-  const rejections = [
-    ...hardFails.map(h => ({
-      matchup: h.matchup,
-      side: h.side,
-      reason: `QA_HARDFAIL: ${h.reason}`,
-      hardFail: true,
-    })),
-    ...(narr.rejections || []),
-    ...rejected.slice(0, 40).map(r => ({
-      matchup: r.matchup,
-      side: r.side,
-      reason: r.rejectReason || 'gate',
-    })),
-  ];
+  const rejections = dedupeRejections([
+    ...(narrRejections || []),
+    ...(built.rejections || []),
+  ]);
 
   const empty = picks.length === 0;
   const picksData = {
@@ -542,17 +583,10 @@ async function generateOmegaVnext(opts = {}) {
     rejections,
     edgeSummary: narr.edgeSummary || '',
     insights: narr.insights || '',
-    summary: {
-      totalPicks: picks.length,
-      totalStraightBets: picks.length,
-      totalUnits: `${totalUnits.toFixed(1)}u`,
-      aplusLocks: picks.filter(p => p.rating === 'aplus').length,
-      sportsCovered,
-      modelVersion: MODEL_VERSION,
-      qaHardFails: hardFails.length,
-    },
+    summary,
     generatedAt: now.toISOString(),
     parlayLegs: empty ? [] : parlayLegs,
+    parlayPool: empty ? [] : (built.parlayPool || []),
     sgps: [],
     claudeVerified: !!narr.claudeVerified,
     fallback: false,

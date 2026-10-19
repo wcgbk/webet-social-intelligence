@@ -10,7 +10,8 @@
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
 // Verify may drop, flag, or resize inside the existing unit cap.
-// It does not add a straight and it does not rebuild a locked parlay.
+// It may refill a killed parlay leg from the stored pool when 3 legs remain.
+// It does not add a straight and it does not rebuild a parlay from the straight card.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -48,6 +49,7 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
+const { refillKilledParlay } = require('./lib/omega-vnext/parlay');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
@@ -155,9 +157,9 @@ function repriceLockedParlay(root, legs) {
 }
 
 /**
- * Drop or resize a generate-locked parlay. Never compose a new one from the
- * straight card. `straightCard` is accepted and ignored so a caller cannot
- * quietly refill by passing the remaining straights.
+ * Drop, resize, or refill a generate-locked parlay. Never compose a new one
+ * from the straight card. `straightCard` is accepted and ignored. A non-empty
+ * `pool` (the stored parlayPool) may replace a killed leg when 3 legs remain.
  */
 function resolveLockedParlay(parlayLegs, opts = {}) {
   // Remaining straights are not a parts bin. A caller that passes them cannot refill.
@@ -174,6 +176,12 @@ function resolveLockedParlay(parlayLegs, opts = {}) {
   const kept = legs.filter(leg => !removed.some(name => sameTicketName(name, leg.pick) || sameTicketName(name, leg.side)));
   if (kept.length === legs.length) {
     return { parlayLegs: existing, action: 'preserved', rebuilt: false };
+  }
+  if (kept.length < 3 && Array.isArray(opts.pool) && opts.pool.length) {
+    const ticket = refillKilledParlay(existing, { removedPicks: removed, pool: opts.pool });
+    if (ticket && Array.isArray(ticket.legs) && ticket.legs.length >= 3) {
+      return { parlayLegs: [ticket], action: 'refilled', rebuilt: false };
+    }
   }
   if (kept.length < 2) {
     return { parlayLegs: [], action: 'cleared', rebuilt: false };
@@ -1317,8 +1325,9 @@ Return ONLY valid JSON array:
         }
       }
 
-      // ── Parlay: preserve the generate-locked slip. Drop a leg steam or safety
-      // already removed. Do not compose a new parlay from the straight card.
+      // ── Parlay: preserve the generate-locked slip. A killed leg is refilled
+      // from the stored pool when 3 legs remain. Do not compose one from the
+      // straight card. Placeability soft-veto does not refill.
       const removedPicks = [
         ...removedSinceLock,
         ...allReplacements.map(r => r.removed).filter(Boolean),
@@ -1329,6 +1338,7 @@ Return ONLY valid JSON array:
       const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
         removedPicks,
         straightCard: picksData.picks,
+        pool: blockParlayRefill ? [] : (picksData.parlayPool || []),
       });
       if (resolvedParlay.rebuilt) {
         throw new Error('[verify] refused: parlay rebuild is not a verify action');
@@ -1337,11 +1347,18 @@ Return ONLY valid JSON array:
       if (resolvedParlay.action === 'preserved') {
         const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
         console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
+      } else if (resolvedParlay.action === 'refilled') {
+        delete picksData.parlayKilledReason;
+        finalFixCount++;
+        console.log(`[verify-final] Parlay refilled from the stored pool — legs: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
       } else if (resolvedParlay.action === 'resized') {
         finalFixCount++;
         console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
       } else if (resolvedParlay.action === 'cleared') {
         console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
+      }
+      if (resolvedParlay.action === 'refilled' || resolvedParlay.action === 'resized' || resolvedParlay.action === 'cleared') {
+        enforceOmegaDailyUnitCap(picksData);
       }
 
       // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──

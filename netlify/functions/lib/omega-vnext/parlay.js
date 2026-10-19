@@ -6,7 +6,7 @@ const {
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
-const { matchupKey } = require('./select');
+const { matchupKey, positionKey, dkHrPriced } = require('./select');
 
 function marketRank(m) {
   if (/total/i.test(m || '')) return 3;
@@ -148,17 +148,60 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
 
   const chosen = best3 || best2;
   if (!chosen) return [];
+  const ticket = ticketFromRawLegs(chosen.legs, straights, { candidatesScanned: search.length });
+  return ticket ? [ticket] : [];
+}
 
-  const independent = !parlayIsCardMirror(chosen.legs, straights);
+function parseAmerican(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.+-]/g, ''));
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
 
-  // v12.0.9: published parlay always fixed PARLAY_FIXED_UNITS (0.5u)
+function parseProb(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v > 1 && v <= 100 ? v / 100 : v;
+  if (v == null || v === '') return null;
+  const s = String(v).trim();
+  const n = parseFloat(s.replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  if (s.includes('%') || Math.abs(n) > 1) return n / 100;
+  return n;
+}
+
+function legToRaw(leg) {
+  if (!leg) return null;
+  const odds = parseAmerican(leg.odds);
+  const coverProb = parseProb(leg.coverProb != null ? leg.coverProb : leg.winProbability);
+  let ev = parseProb(leg.ev);
+  if (ev == null && coverProb != null && odds != null) {
+    const dec = americanToDecimal(odds);
+    if (dec) ev = coverProb * dec - 1;
+  }
+  if (odds == null || coverProb == null) return null;
+  const side = leg.side || leg.pick;
+  const market = leg.market || leg.betType;
+  return {
+    ...leg,
+    side,
+    market,
+    odds,
+    coverProb,
+    ev: ev == null ? 0 : ev,
+    matchup: leg.matchup || `${leg.awayTeam || ''} @ ${leg.homeTeam || ''}`,
+    sport: leg.sport,
+    commenceTime: leg.commenceTime || '',
+  };
+}
+
+/** Same ticket shape optimizeParlay publishes. */
+function ticketFromRawLegs(rawLegs, straights, meta = {}) {
+  if (!rawLegs || rawLegs.length < 2) return null;
+  const st = comboStats(rawLegs);
+  const independent = !parlayIsCardMirror(rawLegs, straights);
   const stake = PARLAY_FIXED_UNITS;
-
-  const combinedAmerican = decimalToAmerican(chosen.combinedDecimal);
+  const combinedAmerican = decimalToAmerican(st.combinedDecimal);
   const combinedOdds = combinedAmerican == null ? '' : formatAmerican(combinedAmerican);
-
-  const legs = sortByGradeThenUnits(chosen.legs.map(l => {
-    // Leg grade is edge-first quality, independent of the synthetic straight stake.
+  const legs = sortByGradeThenUnits(rawLegs.map(l => {
     const kFrac = kellyFraction(l.coverProb, l.odds, KELLY_FRACTION);
     const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25) || 0.25;
     const edgeFrac = parseEdgeFraction(l.edgePct != null ? l.edgePct : l.ev);
@@ -197,23 +240,145 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       ...(l.bestPlaceable ? { bestPlaceable: l.bestPlaceable } : {}),
     };
   }));
-
-  return [{
+  return {
     type: `${legs.length}-leg-parlay-${independent ? 'optimized' : 'straight'}`,
     legs,
     units: `${stake}u`,
     combinedOdds,
-    combinedDecimal: +chosen.combinedDecimal.toFixed(2),
-    combinedProb: `${(chosen.combinedProb * 100).toFixed(1)}%`,
-    ev: `${(chosen.ev * 100).toFixed(1)}%`,
-    uniqueGames: chosen.uniqueGames,
-    uniqueSports: chosen.uniqueSports,
+    combinedDecimal: +st.combinedDecimal.toFixed(2),
+    combinedProb: `${(st.combinedProb * 100).toFixed(1)}%`,
+    ev: `${(st.ev * 100).toFixed(1)}%`,
+    uniqueGames: st.uniqueGames,
+    uniqueSports: st.uniqueSports,
     independent,
-    legMarkets: chosen.legs.map(l => l.market),
-    correlationNote: `CLV-first de-correlated — ${legs.length} legs / ${chosen.uniqueGames} games`,
-    candidatesScanned: search.length,
+    legMarkets: rawLegs.map(l => l.market),
+    correlationNote: `CLV-first de-correlated — ${legs.length} legs / ${st.uniqueGames} games`,
+    candidatesScanned: meta.candidatesScanned != null ? meta.candidatesScanned : rawLegs.length,
     source: 'omega-vnext',
-  }];
+  };
 }
 
-module.exports = { optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror };
+function onCardDate(c, cardDate) {
+  if (!cardDate) return true;
+  if (!c || !c.commenceTime) return false;
+  return isSameEtDay(c.commenceTime, cardDate);
+}
+
+function takeParlayLegs(raw, n, allowSecond) {
+  const ranked = [...raw].sort((a, b) => (b.coverProb - a.coverProb) || ((b.ev || 0) - (a.ev || 0)));
+  const picked = [];
+  const usedGames = new Set();
+  const usedKeys = new Set();
+  const consider = (second) => {
+    for (const c of ranked) {
+      if (picked.length >= n) return;
+      const key = positionKey(c);
+      if (usedKeys.has(key)) continue;
+      const g = matchupKey(c);
+      if (usedGames.has(g) && !second) continue;
+      picked.push(c);
+      usedKeys.add(key);
+      usedGames.add(g);
+    }
+  };
+  consider(false);
+  if (picked.length < n && allowSecond) consider(true);
+  return picked;
+}
+
+/**
+ * Publish a 3-leg when the board has one. Gate-clear +EV search runs first
+ * (unchanged optimizeParlay). If that cannot fill 3 legs and the DK/Hard Rock
+ * board still has 3 games, the best remaining priced sides complete the slip.
+ */
+function ensureCardParlay(pool, straights, opts = {}) {
+  const primaryPool = opts.yesPool || pool;
+  const primary = optimizeParlay(primaryPool, straights, opts);
+  if (primary[0] && Array.isArray(primary[0].legs) && primary[0].legs.length >= 3) return primary;
+  const cardDate = opts.cardDate || opts.dateISO || null;
+  const raw = [];
+  const seen = new Set();
+  for (const c of pool || []) {
+    if (!onCardDate(c, cardDate)) continue;
+    if (!dkHrPriced(c)) continue;
+    const row = legToRaw(c);
+    if (!row) continue;
+    const key = positionKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    raw.push(row);
+  }
+  const games = new Set(raw.map(matchupKey));
+  if (games.size < 3 && raw.length < 3) return primary;
+  const picked = takeParlayLegs(raw, 3, games.size < 3);
+  if (picked.length < 3) return primary;
+  const ticket = ticketFromRawLegs(picked, straights, { candidatesScanned: raw.length });
+  return ticket ? [ticket] : primary;
+}
+
+/**
+ * Replace killed parlay legs from the remaining pool.
+ * Returns a 3-leg ticket when at least 3 legs are still available, else null.
+ */
+function refillKilledParlay(parlayLegs, opts = {}) {
+  const removed = new Set((opts.removedPicks || []).filter(Boolean).map(ticketName));
+  const root = Array.isArray(parlayLegs) ? parlayLegs[0] : null;
+  const legs = root && Array.isArray(root.legs) ? root.legs : [];
+  const kept = legs.filter(leg => !removed.has(ticketName(leg.pick || leg.side)));
+  if (kept.length >= 3 && kept.length === legs.length) return null;
+  const pool = (opts.pool || []).filter(c => !removed.has(ticketName(c.pick || c.side)));
+  const keptRaw = [];
+  const keptSeen = new Set();
+  for (const leg of kept) {
+    const row = legToRaw(leg);
+    if (!row) continue;
+    if (removed.has(ticketName(row.side))) continue;
+    const key = positionKey(row);
+    if (keptSeen.has(key)) continue;
+    keptSeen.add(key);
+    keptRaw.push(row);
+  }
+  const ranked = [];
+  const seen = new Set(keptSeen);
+  for (const c of pool) {
+    const row = legToRaw(c);
+    if (!row) continue;
+    if (removed.has(ticketName(row.side))) continue;
+    const key = positionKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ranked.push(row);
+  }
+  ranked.sort((a, b) => (b.coverProb - a.coverProb) || ((b.ev || 0) - (a.ev || 0)));
+  const games = new Set(keptRaw.concat(ranked).map(matchupKey));
+  const picked = [...keptRaw];
+  const usedGames = new Set(picked.map(matchupKey));
+  const usedKeys = new Set(picked.map(positionKey));
+  for (const c of ranked) {
+    if (picked.length >= 3) break;
+    if (usedGames.has(matchupKey(c))) continue;
+    picked.push(c);
+    usedGames.add(matchupKey(c));
+    usedKeys.add(positionKey(c));
+  }
+  if (picked.length < 3 && games.size < 3) {
+    for (const c of ranked) {
+      if (picked.length >= 3) break;
+      if (usedKeys.has(positionKey(c))) continue;
+      picked.push(c);
+      usedKeys.add(positionKey(c));
+    }
+  }
+  if (picked.length < 3) return null;
+  return ticketFromRawLegs(picked.slice(0, 3), opts.straights || [], { candidatesScanned: ranked.length + keptRaw.length });
+}
+
+module.exports = {
+  optimizeParlay,
+  ensureCardParlay,
+  refillKilledParlay,
+  comboStats,
+  enumerateCombos,
+  preferHit,
+  parlayIsCardMirror,
+};

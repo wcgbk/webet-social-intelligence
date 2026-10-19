@@ -216,7 +216,44 @@ function listLead(names) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
-function templateEdgeSummary(picks, dateFormatted) {
+function unitNumber(u) {
+  const n = parseFloat(String(u == null ? '' : u).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+function formatUnitToken(n) {
+  if (n == null || !Number.isFinite(n)) return '';
+  const q = Math.round(n * 100) / 100;
+  if (Math.abs(q - Math.round(q)) < 1e-9) return `${Math.round(q)}u`;
+  const quarters = Math.round(q * 4) / 4;
+  const shown = Math.abs(q - quarters) < 1e-9 ? quarters : q;
+  return `${(Math.round(shown * 100) / 100).toString()}u`;
+}
+
+function listUnitTokens(nums) {
+  const tokens = nums.map(formatUnitToken).filter(Boolean);
+  if (tokens.length <= 1) return tokens[0] || '';
+  if (tokens.length === 2) return `${tokens[0]} and ${tokens[1]}`;
+  return `${tokens.slice(0, -1).join(', ')}, and ${tokens[tokens.length - 1]}`;
+}
+
+/** Stake sentence uses the units already on the picks. No units → the old sentence. */
+function stakeSentence(picks, parlayLegs) {
+  const straightNums = (picks || []).map(p => unitNumber(p && p.units)).filter(n => n != null);
+  if (!straightNums.length) {
+    return 'Stakes stay inside the daily card because a good slate is a set of prices, not a pile of units.';
+  }
+  const parlayNums = (parlayLegs || []).map(pl => unitNumber(pl && pl.units)).filter(n => n != null);
+  const straightSum = straightNums.reduce((a, b) => a + b, 0);
+  const parlaySum = parlayNums.reduce((a, b) => a + b, 0);
+  const listed = listUnitTokens(straightNums);
+  if (parlayNums.length) {
+    return `Published stakes are ${listed} on the straights and ${formatUnitToken(parlaySum)} on the parlay, ${formatUnitToken(straightSum + parlaySum)} on the card.`;
+  }
+  return `Published stakes are ${listed}, ${formatUnitToken(straightSum)} on the card.`;
+}
+
+function templateEdgeSummary(picks, dateFormatted, parlayLegs) {
   const list = (picks || []).filter(Boolean);
   const names = list.map(p => p.pick || p.side).filter(Boolean);
   const sports = [...new Set(list.map(p => p.sport).filter(Boolean))];
@@ -239,7 +276,7 @@ function templateEdgeSummary(picks, dateFormatted) {
     `WeBetAI's Omega card${dateBit} covers ${sportBit}, built around ${listLead(names)}.`,
     'The thesis is that the posted prices still give the picked side a cleaner number than the matchup deserves.',
     where,
-    'Stakes stay inside the daily card because a good slate is a set of prices, not a pile of units.',
+    stakeSentence(list, parlayLegs),
     'Read each blurb for the why, then bet the side WeBetAI locked.',
   ]);
 }
@@ -271,13 +308,70 @@ function templateInsights(picks) {
   ]);
 }
 
-function buildCardFallbackCopy({ picks, dateFormatted } = {}) {
+function buildCardFallbackCopy({ picks, dateFormatted, parlayLegs } = {}) {
   if (!picks || !picks.length) {
     return { edgeSummary: emptyEdgeSummary(), insights: emptyInsights() };
   }
   return {
-    edgeSummary: templateEdgeSummary(picks, dateFormatted),
+    edgeSummary: templateEdgeSummary(picks, dateFormatted, parlayLegs),
     insights: templateInsights(picks),
+  };
+}
+
+/**
+ * Card prose must quote the published stakes. A "N units" figure that is not a
+ * pick stake, the parlay stake, the straight sum, or the card sum is replaced
+ * with the post-cap template. "0.5u" is not a units-word, so it is left alone.
+ */
+function alignEdgeSummary(text, picks, parlayLegs, dateFormatted) {
+  const prose = text == null ? '' : String(text);
+  const replacement = () => buildCardFallbackCopy({ picks, parlayLegs, dateFormatted }).edgeSummary;
+  if (!prose.trim()) return replacement();
+  const allowed = new Set();
+  const add = (n) => {
+    if (n == null || !Number.isFinite(n)) return;
+    allowed.add(Math.round(n * 100) / 100);
+  };
+  const straightNums = [];
+  for (const p of picks || []) {
+    const n = unitNumber(p && p.units);
+    add(n);
+    if (n != null) straightNums.push(n);
+  }
+  const parlayNums = [];
+  for (const pl of parlayLegs || []) {
+    const n = unitNumber(pl && pl.units);
+    add(n);
+    if (n != null) parlayNums.push(n);
+  }
+  const straightSum = straightNums.reduce((a, b) => a + b, 0);
+  const parlaySum = parlayNums.reduce((a, b) => a + b, 0);
+  add(Math.round(straightSum * 100) / 100);
+  add(Math.round(parlaySum * 100) / 100);
+  add(Math.round((straightSum + parlaySum) * 100) / 100);
+  const re = /(\d+(?:\.\d+)?)\s*-?\s*units?\b/gi;
+  let mismatch = false;
+  let match;
+  while ((match = re.exec(prose))) {
+    const n = Math.round(parseFloat(match[1]) * 100) / 100;
+    let ok = false;
+    for (const a of allowed) {
+      if (Math.abs(a - n) < 0.011) ok = true;
+    }
+    if (!ok) {
+      mismatch = true;
+      break;
+    }
+  }
+  return mismatch ? replacement() : prose;
+}
+
+function finishNarration(result, dateFormatted) {
+  const picks = (result && result.picks) || [];
+  const parlayLegs = (result && result.parlayLegs) || [];
+  return {
+    ...result,
+    edgeSummary: alignEdgeSummary(result && result.edgeSummary, picks, parlayLegs, dateFormatted),
   };
 }
 
@@ -567,15 +661,15 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
   const key = resolveAnthropicKey(apiKey);
 
   if (!picks || !picks.length) {
-    const copy = buildCardFallbackCopy({ picks: [], dateFormatted });
-    return {
+    const copy = buildCardFallbackCopy({ picks: [], parlayLegs, dateFormatted });
+    return finishNarration({
       picks: [],
       parlayLegs: parlayLegs || [],
       edgeSummary: copy.edgeSummary,
       insights: copy.insights,
       claudeVerified: true,
       rejections: [],
-    };
+    }, dateFormatted);
   }
 
   const templated = picks.map(ensureNarrative);
@@ -588,20 +682,20 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
     });
   });
 
-  const fallbackCopy = buildCardFallbackCopy({ picks: templated, dateFormatted });
+  const fallbackCopy = buildCardFallbackCopy({ picks: templated, parlayLegs, dateFormatted });
   const templateSummary = fallbackCopy.edgeSummary;
   const templateInsights = fallbackCopy.insights;
 
   if (!key) {
     console.error('[omega-vnext/narrate] ANTHROPIC_API_KEY missing — using sports-desk fallbacks');
-    return {
+    return finishNarration({
       picks: templated.map(ensureExtraFields),
       parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, flatLegs, legOwners)),
       edgeSummary: templateSummary,
       insights: templateInsights,
       claudeVerified: false,
       rejections: [],
-    };
+    }, dateFormatted);
   }
 
   try {
@@ -618,36 +712,36 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
     const narratedLegs = applyLegRows(flatLegs, parsed);
 
     if (!outPicks.length && !rejections.length) {
-      return {
+      return finishNarration({
         picks: templated.map(ensureExtraFields),
         parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, narratedLegs, legOwners)),
         edgeSummary: parsed.edgeSummary || templateSummary,
         insights: parsed.insights || templateInsights,
         claudeVerified: false,
         rejections: [],
-      };
+      }, dateFormatted);
     }
 
     const finals = (outPicks.length ? outPicks : templated).map(ensureExtraFields);
     const finalsLegs = narratedLegs.map(ensureExtraFields);
-    return {
+    return finishNarration({
       picks: finals,
       parlayLegs: mergeLegsBack(parlayLegs, finalsLegs, legOwners),
       edgeSummary: parsed.edgeSummary || templateSummary,
       insights: parsed.insights || templateInsights,
       claudeVerified: true,
       rejections,
-    };
+    }, dateFormatted);
   } catch (e) {
     console.error(`[omega-vnext/narrate] ${e.message}`);
-    return {
+    return finishNarration({
       picks: templated.map(ensureExtraFields),
       parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, flatLegs, legOwners)),
       edgeSummary: templateSummary,
       insights: templateInsights,
       claudeVerified: false,
       rejections: [{ matchup: 'Claude', side: 'verifier', reason: `Narrate failed: ${e.message}` }],
-    };
+    }, dateFormatted);
   }
 }
 
@@ -707,6 +801,7 @@ module.exports = {
   narrateParlayLegsOnly,
   buildFallbackNarrative,
   buildCardFallbackCopy,
+  alignEdgeSummary,
   ensureNarrative,
   ensureExtraFields,
   lockedRow,

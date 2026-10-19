@@ -219,6 +219,10 @@ function toPickObject(c, opts = {}) {
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
+  // Never-block fill: a gate miss published to complete the card is a 0.5u lean.
+  // The quality grade of a real selection is unchanged.
+  const lean = !!(c && c.leanFill);
+  if (lean) units = 0.5;
 
   // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
   // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.
@@ -226,7 +230,7 @@ function toPickObject(c, opts = {}) {
   const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
   const qualityClv = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
-  const rating = qualityToRating(edgeFrac, qualityClv, c.uncertainty);
+  const rating = lean ? 'b' : qualityToRating(edgeFrac, qualityClv, c.uncertainty);
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -286,7 +290,107 @@ function toPickObject(c, opts = {}) {
     ...(Array.isArray(c.placeableBooks) ? { placeableBooks: c.placeableBooks.slice() } : {}),
     ...(c.bestPlaceable ? { bestPlaceable: c.bestPlaceable } : {}),
     ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
+    ...(lean ? { lean: true, fallback: true } : {}),
   };
+}
+
+/** DraftKings or Hard Rock is on this side. bestDkHr wins; the posted book counts too. */
+function dkHrPriced(c) {
+  if (!c) return false;
+  const px = c.bestDkHr;
+  if (px && Number.isFinite(Number(px.american))) return true;
+  const book = String(c.book || '').toLowerCase();
+  return book === 'draftkings' || book === 'hardrockbet' || book === 'hardrock' || book === 'hardrockbet_oh';
+}
+
+function edgeWithinTen(c) {
+  const ef = edgeFractionOf(c);
+  return !(ef != null && ef > 0.10 + 1e-12);
+}
+
+/**
+ * Never-block fill. Seeds stay. When the priced board has enough DraftKings /
+ * Hard Rock games, top the card up to maxN. New games first. A second market
+ * from a game is allowed only when fewer than maxN distinct priced games exist.
+ * Fills are marked leanFill so toPickObject sizes them at 0.5u.
+ */
+function fillNeverBlock(selected, positions, maxN = MAX_STRAIGHTS) {
+  const picked = (selected || []).map(c => ({ ...c }));
+  const selectedKeys = new Set(picked.map(positionKey));
+  const usedKeys = new Set(selectedKeys);
+  const usedGames = new Set(picked.map(matchupKey));
+  const priced = (positions || []).filter(c => dkHrPriced(c) && edgeWithinTen(c));
+  const games = new Set(priced.map(matchupKey));
+  const ranked = [...priced].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+  const take = (allowSameGame) => {
+    for (const c of ranked) {
+      if (picked.length >= maxN) return;
+      const key = positionKey(c);
+      if (usedKeys.has(key)) continue;
+      const g = matchupKey(c);
+      if (usedGames.has(g) && !allowSameGame) continue;
+      picked.push({ ...c });
+      usedKeys.add(key);
+      usedGames.add(g);
+    }
+  };
+  take(false);
+  if (picked.length < maxN && games.size < maxN) take(true);
+  return picked.map(c => ({
+    ...c,
+    leanFill: !selectedKeys.has(positionKey(c)),
+  }));
+}
+
+function samePublished(pick, cand) {
+  if (!pick || !cand) return false;
+  const game = String(pick.matchup || '').trim().toLowerCase();
+  if (game && game !== matchupKey(cand)) return false;
+  const labeled = formatMoneylinePick(cand.side, cand.market);
+  const pickName = String(pick.pick || pick.side || '').trim().toLowerCase();
+  const side = String(cand.side || '').trim().toLowerCase();
+  const lab = String(labeled || '').trim().toLowerCase();
+  return pickName !== '' && (pickName === side || pickName === lab);
+}
+
+/**
+ * One reason for every candidate that did not make the card.
+ * Miscalibration (>10pp) is included; it never reaches the gate list.
+ */
+function droppedRejections(positions, selected, gateRejected, miscalibrated) {
+  const chosen = new Set((selected || []).map(positionKey));
+  const gateReason = new Map();
+  for (const r of gateRejected || []) {
+    const key = positionKey(r);
+    if (!gateReason.has(key)) gateReason.set(key, r.rejectReason || 'gate');
+  }
+  const out = [];
+  const seen = new Set();
+  for (const m of miscalibrated || []) {
+    const key = `mis|${m.matchup || ''}|${m.side || ''}|${m.market || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      matchup: m.matchup || null,
+      side: m.side || null,
+      market: m.market || null,
+      sport: m.sport || null,
+      reason: m.reason || 'edge-over-10pp',
+    });
+  }
+  for (const c of positions || []) {
+    const key = positionKey(c);
+    if (chosen.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      matchup: c.matchup || null,
+      side: c.side || null,
+      market: c.market || null,
+      sport: c.sport || null,
+      reason: gateReason.get(key) || 'not-selected',
+    });
+  }
+  return out;
 }
 
 /**
@@ -404,6 +508,10 @@ module.exports = {
   prepareEdgePositions,
   positionKey,
   matchupKey,
+  dkHrPriced,
+  fillNeverBlock,
+  droppedRejections,
+  samePublished,
   formatMoneylinePick,
   sortByGradeThenUnits,
   PER_GAME_EXPOSURE_U,

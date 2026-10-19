@@ -1,5 +1,9 @@
 // confirm-starters-mlb.js
 const { samePlayerName } = require('./lib/player-name');
+const { refillKilledParlay } = require('./lib/omega-vnext/parlay');
+const { applySummaryUnits } = require('./lib/omega-vnext/assemble');
+
+const SP_KILL_REASON = 'Parlay dropped — fewer than 2 live legs after SP kill';
 // 1:30pm ET re-check of ESPN probable starters against today's Alpha + Omega cards.
 // Flags SP changes; KILLS SP-dependent picks (MLB Total / Moneyline / F5 / Run Line)
 // when the starter used at generation time no longer matches ESPN.
@@ -109,6 +113,7 @@ function processPicks(picksData, currentStarters) {
   let killed = 0;
   const kept = [];
   const killedPicks = picksData.killedPicks || [];
+  const killedNow = [];
 
   for (const pick of picks) {
     if (String(pick.sport || "") !== "MLB") {
@@ -155,6 +160,7 @@ function processPicks(picksData, currentStarters) {
         pick.killed = true;
         pick.killReason = `SP-dependent ${pick.betType || pick.market || "pick"} voided after starter change`;
         killedPicks.push(pick);
+        killedNow.push(pick);
         continue;
       }
     } else if (origAway || origHome) {
@@ -170,20 +176,73 @@ function processPicks(picksData, currentStarters) {
 
   picksData.picks = kept;
   picksData.killedPicks = killedPicks;
-  if (picksData.summary) {
-    const totalUnits = kept.reduce((s, p) => s + (parseFloat(p.units) || 0), 0);
-    picksData.summary.totalPicks = kept.length;
-    picksData.summary.totalStraightBets = kept.length;
-    picksData.summary.totalUnits = `${totalUnits.toFixed(2)}u`;
-    picksData.summary.sportsCovered = [...new Set(kept.map(p => p.sport))];
+
+  // A short straight card is not a parlay kill. The slip is touched only when
+  // an SP change actually removed a leg, or when a prior pass wiped it and the
+  // stored pool can still build three legs.
+  const parlayRoot = Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs[0] : null;
+  const parlayLegsNow = parlayRoot && Array.isArray(parlayRoot.legs) ? parlayRoot.legs : [];
+  if (killed === 0) {
+    if (parlayLegsNow.length < 3 && Array.isArray(picksData.parlayPool) && picksData.parlayPool.length) {
+      const ticket = refillKilledParlay(picksData.parlayLegs, {
+        removedPicks: [],
+        pool: picksData.parlayPool,
+        straights: kept,
+      });
+      if (ticket && Array.isArray(ticket.legs) && ticket.legs.length >= 3) {
+        picksData.parlayLegs = [ticket];
+      }
+    }
+    if (picksData.parlayKilledReason === SP_KILL_REASON) delete picksData.parlayKilledReason;
+  } else if (Array.isArray(picksData.parlayLegs)) {
+    const removedNames = [];
+    const killedGames = new Set();
+    for (const p of killedNow) {
+      if (p.pick) removedNames.push(p.pick);
+      if (p.pickDisplay && p.pickDisplay !== p.pick) removedNames.push(p.pickDisplay);
+      if (p.matchup) killedGames.add(String(p.matchup).trim().toLowerCase());
+    }
+    for (const leg of parlayLegsNow) {
+      const game = String(leg.matchup || '').trim().toLowerCase();
+      if (!killedGames.has(game)) continue;
+      if (leg.pick) removedNames.push(leg.pick);
+      if (leg.side && leg.side !== leg.pick) removedNames.push(leg.side);
+    }
+    const ticket = refillKilledParlay(picksData.parlayLegs, {
+      removedPicks: removedNames,
+      pool: picksData.parlayPool || [],
+      straights: kept,
+    });
+    if (ticket && Array.isArray(ticket.legs) && ticket.legs.length >= 3) {
+      picksData.parlayLegs = [ticket];
+      delete picksData.parlayKilledReason;
+    } else {
+      const removedSet = new Set(removedNames.map(n => String(n || '').trim().toLowerCase()));
+      const remaining = parlayLegsNow.filter(leg => {
+        const name = String(leg.pick || leg.side || '').trim().toLowerCase();
+        const game = String(leg.matchup || '').trim().toLowerCase();
+        if (name && removedSet.has(name)) return false;
+        if (game && killedGames.has(game)) return false;
+        return true;
+      });
+      if (remaining.length === parlayLegsNow.length) {
+        if (picksData.parlayKilledReason === SP_KILL_REASON) delete picksData.parlayKilledReason;
+      } else if (remaining.length < 2) {
+        picksData.parlayLegs = [];
+        picksData.parlayKilledReason = SP_KILL_REASON;
+      } else {
+        const type = String(parlayRoot.type || '').replace(/^\d+(?=-leg-parlay-)/, String(remaining.length));
+        picksData.parlayLegs = [{ ...parlayRoot, legs: remaining, type: type || parlayRoot.type }];
+        delete picksData.parlayKilledReason;
+      }
+    }
   }
-  if (kept.length < 2 && Array.isArray(picksData.parlayLegs)) {
-    picksData.parlayLegs = [];
-    picksData.parlayKilledReason = "Parlay dropped — fewer than 2 live legs after SP kill";
-  }
+
+  if (picksData.summary) applySummaryUnits(picksData);
   return { scratches, killed, remaining: kept.length };
 }
 
+exports.processPicks = processPicks;
 exports.handler = async () => {
   try {
     const todayISO = todayET();

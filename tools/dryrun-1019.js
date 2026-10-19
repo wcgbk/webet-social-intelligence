@@ -37,7 +37,7 @@ const calibrate = require(path.join(root, 'netlify/functions/lib/omega-vnext/cal
 const edge = require(path.join(root, 'netlify/functions/lib/omega-vnext/edge'));
 const gates = require(path.join(root, 'netlify/functions/lib/omega-vnext/gates'));
 const select = require(path.join(root, 'netlify/functions/lib/omega-vnext/select'));
-const parlay = require(path.join(root, 'netlify/functions/lib/omega-vnext/parlay'));
+const { publishEdgeCard } = require(path.join(root, 'netlify/functions/lib/omega-vnext/assemble'));
 const nfl = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nfl'));
 const nhl = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nhl'));
 const mlb = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/mlb'));
@@ -174,12 +174,19 @@ function runEdge(bySport, cardDate, asOfMs) {
   const prepared = select.prepareEdgePositions(calibrated);
   const { yesPool, rejected } = gates.applyGates(prepared.positions, { cardDate, asOfMs });
   const chosen = select.selectStraights(yesPool, 3);
-  let picks = chosen.map(c => select.toPickObject(c, { modelVersion: 'dryrun-1019' }));
-  let parlayLegs = parlay.optimizeParlay(yesPool, picks, { cardDate });
-  const capped = select.applyDailyUnitCap(picks, parlayLegs);
-  const exposed = select.applyExposureCaps(capped.picks, capped.parlayLegs);
-  picks = exposed.picks;
-  parlayLegs = exposed.parlayLegs;
+  const built = publishEdgeCard({
+    positions: prepared.positions,
+    qualified: chosen,
+    yesPool,
+    rejected,
+    miscalibrated: (prepared.diagnostics && prepared.diagnostics.miscalibrated) || [],
+    hardFails: [],
+    cardDate,
+    modelVersion: 'dryrun-1019',
+    dateFormatted: cardDate,
+  });
+  const picks = built.picks;
+  const parlayLegs = built.parlayLegs;
   const mis = (prepared.diagnostics.miscalibrated || []).length;
   console.log(`\nEdge  raw=${raw.length} positions=${prepared.positions.length} miscalibrated=${mis} yesPool=${yesPool.length} rejected=${rejected.length} straights=${picks.length} parlayLegs=${(parlayLegs[0] && parlayLegs[0].legs || []).length}`);
   console.log('Edge straights');

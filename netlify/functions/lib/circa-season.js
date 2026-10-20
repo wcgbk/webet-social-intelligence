@@ -171,7 +171,13 @@ async function gradeFrozenWeek(io, frozen, { now = new Date(), fetchScores } = {
   if (needs) {
     try {
       const g = await gradeCircaPayload({ weekNum, picks: merged }, fetchScores ? { fetchScores } : {});
-      picks = g.picks;
+      // Settled results are immutable: a pick already graded win/loss/push with a
+      // score is never sent back to live/pending by a later (stale) ESPN poll.
+      picks = g.picks.map((gp, i) => {
+        const m = merged[i];
+        const settled = m && FINAL.has(String(m.result || "").toLowerCase()) && (m.awayScore != null || m.homeScore != null);
+        return settled ? m : gp;
+      });
     } catch (e) {
       console.error(`[circa-season] W${weekNum} ESPN regrade failed: ${e.message}`);
     }

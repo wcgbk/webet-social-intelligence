@@ -97,6 +97,16 @@
     "netlify/functions/lib/circa-card-health.js",
   ]
 
+[functions."get-circa-standings"]
+  # Standings row parser needs pdf-parse@1.1.1 from root node_modules. Deploy from a
+  # tree with node_modules installed (deploy-circa.sh checks this).
+  included_files = [
+    "node_modules/pdf-parse/**",
+    "node_modules/node-ensure/**",
+    "node_modules/debug/**",
+    "node_modules/ms/**",
+  ]
+
 [functions."check-circa-card-health"]
   # Follow-up ~5 min after each Circa generate slot (Thu/Fri/Sat + holiday Wed).
   # Persists circa-ops/card-health-* + alerts when card pending/empty/error/<5 picks.

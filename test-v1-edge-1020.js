@@ -70,7 +70,8 @@ function row(matchup, side, p, odds, extra = {}) {
   assert.ok((0.515 - 0.51) < 0.01);
   assert.notStrictEqual(thin.picks[0].grade, 'A+');
   assert.strictEqual(thin.picks[0].units, '0.5u');
-  assert.ok(thin.picks[0].rating === 'lean' || thin.picks[0].rating === 'no-edge');
+  assert.strictEqual(thin.picks[0].rating, 'no-edge');
+  assert.strictEqual(thin.picks[0].flag, 'no-edge-lean');
 }
 
 // 6pp versus fair but EV <= 0 at a short price does not keep an A-family grade.

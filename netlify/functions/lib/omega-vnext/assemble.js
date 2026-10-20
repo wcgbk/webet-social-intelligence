@@ -99,7 +99,14 @@ function finishPublication(args) {
     picks: seedPicks, chosen, positions, yesPool, rejected, miscalibrated, hardFails, cardDate, modelVersion, dateFormatted,
   } = args;
   let picks = seedPicks || [];
-  const parlayBuilt = ensureCardParlay(positions || [], picks, { cardDate, yesPool: yesPool || positions });
+  // The ticket is the published straights. The guard still drops an opposing
+  // leg and keeps one leg per game (a second market only when the card has
+  // fewer than 3 games).
+  const parlayBuilt = ensureCardParlay(positions || [], picks, {
+    cardDate,
+    yesPool: yesPool || positions,
+    fromPublishedStraights: true,
+  });
   const parlayExclusions = (parlayBuilt && parlayBuilt.parlayExclusions) || [];
   let parlayLegs = Array.isArray(parlayBuilt) ? parlayBuilt : [];
   const capped = applyDailyUnitCap(picks, parlayLegs);

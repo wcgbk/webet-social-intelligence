@@ -94,6 +94,9 @@ function priceAtBestDkHr(c) {
 const EDGE_MISCAL_CAP = 0.10;
 
 function miscalibrationRecord(c, edgePct, stage) {
+  const fairRaw = c && (c.fair_sharp_p != null ? c.fair_sharp_p : c.sharpFairP);
+  const fair = Number(fairRaw);
+  const rawP = Number(c && c.modelRawP);
   return {
     matchup: c.matchup || null,
     side: c.side || null,
@@ -101,6 +104,8 @@ function miscalibrationRecord(c, edgePct, stage) {
     sport: c.sport || null,
     line: c.line != null ? c.line : null,
     edgePct,
+    ...(Number.isFinite(rawP) ? { modelRawP: +rawP.toFixed(4) } : {}),
+    ...(Number.isFinite(fair) ? { fair: +fair.toFixed(4) } : {}),
     odds: c.odds != null ? c.odds : null,
     book: c.book || null,
     reason: 'edge-over-10pp',
@@ -219,12 +224,12 @@ function applyExposureCaps(picks, parlayLegs) {
 }
 
 /**
- * Greedy diversify: ≤1 per game, up to MAX_STRAIGHTS.
- * When the pool has at least maxN distinct games, the result length is maxN.
- * A shorter pool stays short. Never pads with leans.
+ * Greedy diversify: ≤1 per game, up to MAX_STRAIGHTS, EV first.
+ * Positive-EV sides fill before any negative-EV row. A shorter pool stays
+ * short. This does not pad; fillNeverBlock does.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
-  const pool = [...(yesPool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+  const pool = [...(yesPool || [])].sort((a, b) => compareForStraight(a, b));
   const picked = [];
   const usedGames = new Set();
   const sports = new Set();
@@ -239,11 +244,34 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
     sports.add(c.sport);
   }
 
-  picked.sort((a, b) => (b._score || 0) - (a._score || 0));
+  picked.sort((a, b) => compareForStraight(a, b, sports));
   return picked;
 }
 
-/** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
+function numericEv(c) {
+  const n = Number(c && c.ev);
+  return Number.isFinite(n) ? n : -Infinity;
+}
+
+/**
+ * Published straight order. Positive EV before any negative-EV lean, mains
+ * before alternates inside that group, then higher EV. Quality score only
+ * breaks an EV tie, so a plus-money dog does not jump a better price when
+ * the EV is the same, and an alternate does not jump a main of the same sign.
+ */
+function compareForStraight(a, b, selectedSports) {
+  const posA = numericEv(a) > 1e-12 ? 0 : 1;
+  const posB = numericEv(b) > 1e-12 ? 0 : 1;
+  if (posA !== posB) return posA - posB;
+  const altA = a && a.alternate ? 1 : 0;
+  const altB = b && b.alternate ? 1 : 0;
+  if (altA !== altB) return altA - altB;
+  const ev = numericEv(b) - numericEv(a);
+  if (Math.abs(ev) > 1e-12) return ev;
+  return scoreCandidate(b, selectedSports) - scoreCandidate(a, selectedSports);
+}
+
+/** Quality-score order. The published card uses compareForStraight, not this. */
 function orderedByScore(pool) {
   return [...(pool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
 }
@@ -274,6 +302,7 @@ function toPickObject(c, opts = {}) {
   const qualityClv = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
   const rating = lean ? 'b' : qualityToRating(edgeFrac, qualityClv, c.uncertainty);
+  const grade = rating;
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -291,6 +320,7 @@ function toPickObject(c, opts = {}) {
     betType: c.market,
     odds: c.oddsStr || formatAmerican(c.odds),
     rating,
+    grade,
     qualityGrade: rating,
     qualityScore: +pickQuality.toFixed(6),
     confidence: ratingToConfidence(rating),
@@ -356,6 +386,8 @@ function edgeWithinTen(c) {
  * Hard Rock games, top the card up to maxN. New games first. A second market
  * from a game is allowed only when fewer than maxN distinct priced games exist.
  * Fills are marked leanFill so toPickObject sizes them at 0.5u.
+ * Rank is EV: every positive-EV side (one per game) is taken before a
+ * negative-EV lean. Miscalibration is already out of `positions`.
  */
 function fillNeverBlock(selected, positions, maxN = MAX_STRAIGHTS) {
   const picked = (selected || []).map(c => ({ ...c }));
@@ -364,7 +396,7 @@ function fillNeverBlock(selected, positions, maxN = MAX_STRAIGHTS) {
   const usedGames = new Set(picked.map(matchupKey));
   const priced = (positions || []).filter(c => dkHrPriced(c) && edgeWithinTen(c));
   const games = new Set(priced.map(matchupKey));
-  const ranked = [...priced].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+  const ranked = [...priced].sort((a, b) => compareForStraight(a, b));
   const take = (allowSameGame) => {
     for (const c of ranked) {
       if (picked.length >= maxN) return;
@@ -542,6 +574,7 @@ function applyDailyUnitCap(picks, parlayLegs) {
 
 module.exports = {
   scoreCandidate,
+  compareForStraight,
   selectStraights,
   orderedByScore,
   toPickObject,

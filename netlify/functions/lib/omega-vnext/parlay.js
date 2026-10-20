@@ -328,6 +328,7 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
     const legQuality = qualityScore(edgeFrac, qualityClv, l.uncertainty);
     let rating = qualityToRating(edgeFrac, qualityClv, l.uncertainty);
     let qualityGrade = rating;
+    let grade = rating;
     let units = l.units || `${legUnits}u`;
     let quality = legQuality;
     // A leg that is already a published straight keeps that straight's grade and stake.
@@ -337,6 +338,7 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
       const reusedGrade = matched.qualityGrade || matched.rating;
       if (reusedRating) rating = reusedRating;
       if (reusedGrade) qualityGrade = reusedGrade;
+      if (matched.grade || reusedGrade) grade = matched.grade || reusedGrade;
       if (matched.units) units = matched.units;
       if (Number.isFinite(Number(matched.qualityScore))) quality = Number(matched.qualityScore);
     }
@@ -356,6 +358,7 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
         ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
         : undefined,
       rating,
+      grade,
       qualityGrade,
       qualityScore: +Number(quality).toFixed(6),
       confidence,
@@ -376,6 +379,20 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
   const lean = !!meta.lean;
   const qualifying = !lean && rawLegs.length >= 3 && rawLegs.every(l => (l.ev || 0) > 1e-12) && st.ev >= -1e-12;
   const kind = lean ? 'lean' : (independent ? 'optimized' : 'straight');
+  const n = legs.length;
+  const haircut = n > 1 ? `0.95^(${n}-1)` : null;
+  const formula = n > 1
+    ? `EV = product of leg cover probabilities × ${haircut} × product of leg decimals − 1.`
+    : 'EV = leg cover probability × leg decimal − 1.';
+  let correlationNote;
+  if (meta.fromStraights) {
+    const leanBit = lean ? 'Joint EV is below 0 after the correlation haircut, so this is a lean. ' : '';
+    correlationNote = `Parlay of the published straights. No opposing legs, one per game. ${leanBit}${formula}`;
+  } else if (lean) {
+    correlationNote = `Lean — best non-conflicting ${n}-leg by joint EV. Not a qualifying +EV parlay. ${formula}`;
+  } else {
+    correlationNote = `CLV-first de-correlated — ${n} legs / ${st.uniqueGames} games. ${formula}`;
+  }
   return {
     type: `${legs.length}-leg-parlay-${kind}`,
     legs,
@@ -390,10 +407,9 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
     qualifying,
     lean,
     ...(lean ? { flag: 'parlay-lean', label: 'lean' } : {}),
+    ...(haircut ? { correlationHaircut: haircut } : {}),
     legMarkets: rawLegs.map(l => l.market),
-    correlationNote: lean
-      ? `Lean — best non-conflicting ${legs.length}-leg by joint EV. Not a qualifying +EV parlay.`
-      : `CLV-first de-correlated — ${legs.length} legs / ${st.uniqueGames} games`,
+    correlationNote,
     candidatesScanned: meta.candidatesScanned != null ? meta.candidatesScanned : rawLegs.length,
     source: 'omega-vnext',
   };
@@ -424,6 +440,7 @@ function syncLegsToPublishedStraights(parlayLegs, straights) {
         next.confidence = ratingToConfidence(reusedRating);
       }
       if (reusedGrade) next.qualityGrade = reusedGrade;
+      if (matched.grade || reusedGrade) next.grade = matched.grade || reusedGrade;
       if (matched.units) next.units = matched.units;
       if (Number.isFinite(Number(matched.qualityScore))) {
         next.qualityScore = +Number(matched.qualityScore).toFixed(6);
@@ -529,10 +546,32 @@ function takeLegs(pool, n, allowSecond, straights) {
 }
 
 /**
- * Publish a 3-leg when the board has one. A qualifying slip is three
- * non-conflicting +EV legs whose joint EV is at least 0, preferring the
- * straights themselves. Otherwise the best non-conflicting 3-leg by joint
- * EV still publishes as a 0.5u lean (flag parlay-lean). Never blocks the card.
+ * Up to 3 published straights, no opposing legs. A second market on a game
+ * is allowed only when the straight card itself has fewer than 3 games.
+ */
+function takeStraightParlayLegs(rawStraights) {
+  const distinctGames = new Set((rawStraights || []).map(matchupKey)).size;
+  const allowSecond = distinctGames < 3;
+  const picked = [];
+  const gameCount = new Map();
+  for (const c of rawStraights || []) {
+    if (picked.length >= 3) break;
+    if (conflictsWithAnyStraight(c, picked)) continue;
+    const g = matchupKey(c);
+    const n = gameCount.get(g) || 0;
+    if (n >= (allowSecond ? 2 : 1)) continue;
+    picked.push(c);
+    gameCount.set(g, n + 1);
+  }
+  return picked;
+}
+
+/**
+ * Publish a 3-leg when the board has one. When the caller asks for the
+ * published straights, those rows are the ticket (guard: no opposing legs,
+ * one per game). Otherwise a qualifying slip is three non-conflicting +EV
+ * legs whose joint EV is at least 0. A missing qualifying 3-leg still
+ * publishes the best non-conflicting 3-leg by joint EV as a 0.5u lean.
  * Exclusions are hung on the returned array as parlayExclusions.
  */
 function ensureCardParlay(pool, straights, opts = {}) {
@@ -565,7 +604,27 @@ function ensureCardParlay(pool, straights, opts = {}) {
   const games = new Set(allowed.map(matchupKey));
   let ticket = null;
 
-  if (positive.length >= 2) {
+  if (opts.fromPublishedStraights) {
+    const straightRaw = [];
+    const straightSeen = new Set();
+    for (const s of straights || []) {
+      const row = legToRaw(s);
+      if (!row) continue;
+      if (row.commenceTime && !onCardDate(row, cardDate)) continue;
+      pushUnique(straightRaw, straightSeen, row);
+    }
+    straightRaw.sort((a, b) => (b.ev || 0) - (a.ev || 0) || (b.coverProb || 0) - (a.coverProb || 0));
+    const fromCard = takeStraightParlayLegs(straightRaw);
+    if (fromCard.length >= 2) {
+      ticket = ticketFromRawLegs(fromCard, straights, {
+        candidatesScanned: straightRaw.length,
+        lean: !legsQualify(fromCard),
+        fromStraights: true,
+      });
+    }
+  }
+
+  if (!ticket && positive.length >= 2) {
     const qualifying = bestSizedCombo(positive, straights, 3, 'hit');
     if (qualifying && legsQualify(qualifying.legs)) {
       ticket = ticketFromRawLegs(qualifying.legs, straights, { candidatesScanned: positive.length });

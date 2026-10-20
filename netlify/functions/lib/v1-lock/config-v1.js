@@ -7,9 +7,9 @@
  *
  * Stake caps (WeBet, 1u = $150). No straight tier is above 1.5u:
  *   A+ 1.5u, A / A- / B+ 1.0u, B 0.5u.
- * Fallback fills stay 0.5u and are labeled rating lean / grade B. They are
- * not A-family stakes. A straight with EV at or below 0 is never graded
- * above B. The 3-leg parlay stays its fixed 0.5u stake.
+ * Fallback fills stay 0.5u. An edge below 1pp, or EV that is not positive,
+ * is rating no-edge with flag no-edge-lean and grade B. Those are not
+ * A-family stakes. The 3-leg parlay stays its fixed 0.5u stake.
  *
  * Heavy-favorite guard: a straight priced shorter than -250 (American
  * odds < -250; -250 itself is not shorter) cannot be graded above A-.
@@ -23,8 +23,9 @@
  * remains the Spec §6 win-probability bands. gradeForV1(sport, edge, 'edge')
  * and gradeEdgeForV1 use the Edge bands: A+ ≥5pp, A 3.5–5, A- 2–3.5,
  * B 1–2 (0.5u). Below 1pp does not qualify. EV ≤ 0 does not qualify.
+ * Either one is published as rating no-edge, flag no-edge-lean, at 0.5u.
  */
-const MODEL_VERSION_V1 = 'v1-lock-2.0';
+const MODEL_VERSION_V1 = 'v1-lock-2.1';
 const ENGINE_V1 = 'v1-lock';
 const SPORTS_V1 = ['NFL','NCAAF','NHL','NBA','NCAAM','MLB'];
 const POINTS_SPORTS_V1 = ['NBA','NCAAM','NFL','NCAAF'];

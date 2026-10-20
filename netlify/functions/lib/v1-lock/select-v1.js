@@ -15,9 +15,9 @@
  * use the edge versus the price (or the row's edge). Bands: A+ ≥5pp,
  * A 3.5–5, A- 2–3.5, B 1–2 at 0.5u. Below 1pp or EV ≤ 0 does not qualify.
  * Fill still publishes 3 straights when the board has the games: EV>0
- * rows first, then the least-negative EV, labeled rating no-edge, flag
- * no-edge-lean, 0.5u. The parlay uses the same rows.
- * A positive-EV fill that missed the 1pp floor stays 0.5u rating lean.
+ * rows first, then the least-negative EV. Any pick whose edge is below 1pp
+ * or whose EV is not positive is rating no-edge, flag no-edge-lean, 0.5u.
+ * The parlay uses the same rows.
  * A straight with EV at or below 0 is never an A-family stake.
  */
 const { gradeForV1, unitsForGradeV1, MODEL_VERSION_V1, capGradeForPriceV1, isHeavyFavoritePriceV1, isGradeAboveBV1 } = require('./config-v1');
@@ -95,12 +95,20 @@ function mustUseLeanFillV1(grade, ev, opts){
     ||isGradeAboveBV1(canonGradeV1(opts&&opts.lockGrade))
     ||isGradeAboveBV1(canonGradeV1(opts&&opts.rating));
 }
+/** Below the 1pp edge floor, or EV that is not positive, is not a graded pick. */
+function belowQualifyingThresholdV1(c, ev){
+  if(typeof ev==='number'&&!(ev>0)) return true;
+  const edge=edgeForGradeV1(c);
+  if(edge==null||edge<0.01-1e-12) return true;
+  return false;
+}
 function toPickV1(c, grade, ev, opts={}){
   let unit=opts.units!=null?opts.units:unitsForGradeV1(grade);
   let outGrade=grade;
   let rating=opts.rating!=null?opts.rating:(grade?String(grade).toLowerCase():'fallback');
   let lockGrade=opts.lockGrade!==undefined?opts.lockGrade:grade;
-  if(opts.noEdge){
+  const noEdge=!!(opts.noEdge)||belowQualifyingThresholdV1(c, ev);
+  if(noEdge){
     outGrade='B'; lockGrade='B'; rating='no-edge'; unit=0.5;
   } else if(mustUseLeanFillV1(outGrade, ev, { ...opts, lockGrade, rating })){
     outGrade='B'; lockGrade='B'; rating='lean'; unit=0.5;
@@ -108,15 +116,16 @@ function toPickV1(c, grade, ev, opts={}){
   const receiptGrade=rating==='no-edge'?'no-edge':outGrade;
   const r=receiptV1(c,receiptGrade,ev,unit);
   const bookName=c.confirmedBook||'Hard Rock Bet';
+  const filterFlags=noEdge?Array.from(new Set([...(c.filterFlags||[]), 'no-edge-lean'])):(c.filterFlags||[]);
   return { sport:c.sport, matchup:c.matchup, homeTeam:c.homeTeam, awayTeam:c.awayTeam,
     pick:r.pick, pickDisplay:r.pick, betType:c.market, odds:c.oddsStr, units:`${unit}u`,
     rating, lockGrade, grade:outGrade, commenceTime:c.commenceTime,
-    winProbability:fmtPct(c.trueProbability), trueProbability:c.trueProbability, filterFlags:c.filterFlags||[],
+    winProbability:fmtPct(c.trueProbability), trueProbability:c.trueProbability, filterFlags,
     ev:ev!=null?fmtPct(ev):null, edge:Number.isFinite(c.edge)?c.edge:null,
     book:c.book||'hardrockbet', displayBook:bookName, executionBook:bookName,
     fallback:!!(c.fallback||opts.fallback),
     source:'v1-lock', model:MODEL_VERSION_V1, coreReasoning:r.coreReasoning, lockReceipt:r,
-    ...(opts.noEdge?{ flag:'no-edge-lean' }:{}),
+    ...(noEdge?{ flag:'no-edge-lean' }:{}),
     formula:{ spreadHome:c.formulaSpreadHome, total:c.formulaTotal, inputs:c.formulaInputs } };
 }
 function dataGapsV1(c){
@@ -202,7 +211,13 @@ function leanFillPickV1(row){
 }
 function noEdgeFillPickV1(row){
   const flags=Array.from(new Set([...(row.c.filterFlags||[]), 'no-edge-lean']));
-  const note='No-edge lean: expected value is not positive. Published at 0.5u to complete the card.';
+  const edge=edgeForGradeV1(row.c);
+  const lowEdge=edge==null||edge<0.01-1e-12;
+  const negEv=!(row.ev>0);
+  const why=negEv&&lowEdge
+    ? 'edge is below 1 percentage point and expected value is not positive'
+    : (negEv ? 'expected value is not positive' : 'edge is below 1 percentage point');
+  const note=`No-edge lean: ${why}. Published at 0.5u to complete the card.`;
   const pick=toPickV1({ ...row.c, fallback:true, filterFlags:flags }, 'B', row.ev, { fallback:true, units:0.5, rating:'no-edge', lockGrade:'B', noEdge:true });
   pick.coreReasoning=`${note} ${pick.coreReasoning||''}`.trim();
   pick.flag='no-edge-lean';
@@ -314,7 +329,8 @@ function selectV1(candidates, formulaPasses=[]){
     const used=new Set(picks.map(p=>p.matchup));
     for(const { row, ev } of rowsByEvV1(rows, used, r=>r.ev!=null&&r.ev>0)){
       if(picks.length>=3) break;
-      pushFill(row, ev, false); used.add(row.c.matchup);
+      // Positive EV under 1pp still missed the qualifying grade.
+      pushFill(row, ev, true); used.add(row.c.matchup);
     }
   }
   if(picks.length<3){
@@ -332,7 +348,7 @@ function selectV1(candidates, formulaPasses=[]){
     const negative=rowsByEvV1(rows, seen, r=>!(r.ev>0));
     for(const { row } of positive.concat(negative)){
       if(legPicks.length>=3) break;
-      legPicks.push(row.ev>0?leanFillPickV1(row):noEdgeFillPickV1(row));
+      legPicks.push(noEdgeFillPickV1(row));
       seen.add(row.c.matchup);
     }
   }

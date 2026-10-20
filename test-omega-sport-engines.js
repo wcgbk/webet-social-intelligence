@@ -18,7 +18,7 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);

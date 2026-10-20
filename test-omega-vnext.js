@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -116,7 +116,8 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// Rank is calibrated edge, not dog EV. A +180 with a fatter EV stays behind a -110.
+// Quality score still ranks the chalk ahead of the dog. Published straights
+// take the higher EV first, so the +180 dog is the straight.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
@@ -127,8 +128,9 @@ assert.ok(picked.length >= 1);
     odds: 180, ev: 0.09, edgePct: 0.02, predictedClv: 1.0, uncertainty: 0.12, coverProb: 0.40,
   };
   assert.ok(select.scoreCandidate(chalk) > select.scoreCandidate(dog));
+  assert.strictEqual(select.orderedByScore([dog, chalk])[0].matchup, 'A @ B');
   const ranked = select.selectStraights([dog, chalk], 1);
-  assert.strictEqual(ranked[0].matchup, 'A @ B');
+  assert.strictEqual(ranked[0].matchup, 'C @ D');
 }
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));

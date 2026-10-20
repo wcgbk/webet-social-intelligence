@@ -9,14 +9,14 @@
 const { isCfbSport, formatCfbPickDisplay, formatCfbMatchupDisplay } = require('./cfb-school-name');
 
 const PICK_KEEP = [
-  'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
+  'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'grade', 'qualityGrade', 'confidence',
   'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge', 'book', 'displayBook', 'executionBook', 'lockGrade', 'lockFormulaLine', 'lockReceiptLine', 'lockAvailability',
 ];
 
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
-  'uniqueGames', 'uniqueSports', 'independent', 'legMarkets', 'correlationNote',
+  'uniqueGames', 'uniqueSports', 'independent', 'legMarkets', 'correlationNote', 'correlationHaircut',
   'candidatesScanned', 'stake', 'source',
 ];
 

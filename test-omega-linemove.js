@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
 // Schedule intentionally changed 2026-10-18 (Ben: only 3AM + 10AM pulls).
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('1000'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0300', '1000']);

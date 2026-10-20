@@ -14,7 +14,7 @@ const edge = require(path.join(root, 'edge'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
 
 function evAt(p, american) {
   const dec = american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);

@@ -9,7 +9,7 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
-const { selectStraights, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, splitRawMiscalibrated, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, samePublished } = require('./select');
+const { selectStraights, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, splitRawMiscalibrated, sortByGradeThenUnits, compareForStraight, formatMoneylinePick, samePublished } = require('./select');
 const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble');
 const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
@@ -584,7 +584,7 @@ async function generateOmegaVnext(opts = {}) {
     qaHardFails: hardFails.length,
   });
 
-  const candidateTable = orderedByScore(yesPool).slice(0, 15).map((c, i) => ({
+  const candidateTable = [...yesPool].sort((a, b) => compareForStraight(a, b)).slice(0, 15).map((c, i) => ({
     rank: i + 1,
     sport: c.sport,
     side: c.side,

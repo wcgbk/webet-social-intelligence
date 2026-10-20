@@ -351,7 +351,7 @@ console.log('test-v1-lock 1019 fallback: PASS');
   assert.notStrictEqual(gradeForV1('NFL', homeLay.trueProbability), 'A+');
 }
 console.log('test-v1-lock 1019 caps and shrink: PASS');
-// --- 1019 v1: negative-EV and fallback fills are lean / B at 0.5u, never A ---
+// --- v1-lock-2.1: sub-1pp and non-positive EV are no-edge / B at 0.5u, never A ---
 {
   const { summaryTotalsV1 } = L('select-v1');
   const A_FAMILY = new Set(['A+', 'A', 'A-', 'a+', 'a', 'a-']);
@@ -413,9 +413,13 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
   assert.strictEqual(ravens.units, '1u');
   assert.ok(parseFloat(ravens.ev) > 0);
   const bills = sel.picks.find(p => p.pick === 'Buffalo Bills');
-  assert.strictEqual(bills.rating, 'lean');
+  assert.strictEqual(bills.rating, 'no-edge');
+  assert.strictEqual(bills.flag, 'no-edge-lean');
+  assert.ok(bills.filterFlags.includes('no-edge-lean'));
+  assert.strictEqual(bills.grade, 'B');
   assert.strictEqual(bills.units, '0.5u');
   assert.ok(parseFloat(bills.ev) > 0);
+  assert.ok(bills.edge == null || bills.edge < 0.01);
   const leg = sel.parlayLegs[0].legs.find(p => p.pick === 'Carolina Hurricanes');
   assertNoEdgeFill(leg);
   assert.strictEqual(sel.diagnostics.fallback.length, 2);
@@ -424,7 +428,7 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
   assert.strictEqual(totals.gradeUnits.A, '1u');
   assert.strictEqual(totals.gradeUnits['A+'], '0u');
   assert.strictEqual(totals.gradeUnits.B, '1u');
-  assert.strictEqual(totals.leanUnits, '0.5u');
+  assert.strictEqual(totals.leanUnits, '0u');
   assert.strictEqual(totals.straightUnits, '2u');
   assert.strictEqual(totals.totalUnits, '2.5u');
   const aFamilyUnits = ['A+', 'A', 'A-'].reduce((s, g) => s + parseFloat(totals.gradeUnits[g]), 0);

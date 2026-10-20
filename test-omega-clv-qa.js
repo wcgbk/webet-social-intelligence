@@ -9,7 +9,7 @@ const grade = require(path.join(root, 'clv_grade'));
 const clvLog = require(path.join(root, 'clv_log'));
 const qa = require(path.join(root, 'qa_hardfail'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
 assert.ok(config.QA_HARDFAIL);
 assert.strictEqual(config.QA_HARDFAIL.staleOddsCents, 15);
 assert.strictEqual(config.LEAN_PAD, false);

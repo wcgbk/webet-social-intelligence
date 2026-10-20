@@ -159,7 +159,8 @@ console.log('test-v1-lock QA additions: PASS');
   assert.strictEqual(sel.parlayLegs[0].type, '3-leg-parlay-v1-lock');
   assert.strictEqual(sel.parlayLegs[0].units, '0.5u');
   assert.strictEqual(sel.parlayLegs[0].legs.length, 3);
-  assert.strictEqual(sel.diagnostics.fallback.length, 3);
+  assert.strictEqual(sel.diagnostics.fallback.length, 1, 'only the negative-EV game is a fill');
+  assert.strictEqual(sel.diagnostics.fallback[0].rating, 'no-edge');
   assert.ok(sel.diagnostics.fallback.every(f => f.fill === true));
   assert.ok(sel.diagnostics.dataFlags.length >= 3);
   assert.ok(!sel.rejections.some(r => r.reason === 'lock-missing-last5'));
@@ -167,7 +168,12 @@ console.log('test-v1-lock QA additions: PASS');
   assert.ok(!sel.rejections.some(r => r.reason === 'lock-key-starter-unknown'));
   assert.ok(sel.rejections.some(r => r.reason === 'lock-road-favorite-75'));
   assert.ok(!sel.picks.some(p => p.matchup === 'G @ H'));
-  assert.ok(sel.picks.every(p => p.units === '0.5u'), 'ungraded fallback fills stay 0.5u');
+  assert.strictEqual(sel.picks.find(p => p.matchup === 'A @ B').grade, 'A');
+  assert.strictEqual(sel.picks.find(p => p.matchup === 'A @ B').units, '1u');
+  assert.strictEqual(sel.picks.find(p => p.matchup === 'C @ D').grade, 'B');
+  assert.strictEqual(sel.picks.find(p => p.matchup === 'C @ D').units, '0.5u');
+  assert.strictEqual(sel.picks.find(p => p.matchup === 'E @ F').rating, 'no-edge');
+  assert.strictEqual(sel.picks.find(p => p.matchup === 'E @ F').units, '0.5u');
 }
 console.log('test-v1-lock 1019 fallback: PASS');
 // --- 1019 v1: A+ cap, heavy-favorite guard, Pinnacle shrink, parlay EV ---
@@ -303,7 +309,8 @@ console.log('test-v1-lock 1019 fallback: PASS');
   assert.strictEqual(card.parlayLegs[0].legs.length, 3);
   assert.strictEqual(card.parlayLegs[0].units, '0.5u');
   assert.ok(card.picks.every(p => parseFloat(p.units) <= 1.5));
-  assert.ok(card.picks.every(p => p.units === '0.5u'), card.picks.map(p => `${p.pick} ${p.units} ${p.grade}`).join(' | '));
+  // Edge vs the de-vigged fair (capped at 8pp) grades A+ at 1.5u. The win-probability floor no longer forces a 0.5u fill.
+  assert.ok(card.picks.every(p => p.grade === 'A+' && p.units === '1.5u'), card.picks.map(p => `${p.pick} ${p.units} ${p.grade}`).join(' | '));
   const evNum = parseFloat(card.parlayLegs[0].ev);
   assert.ok(evNum < 60, `parlay EV ${card.parlayLegs[0].ev} should be under +60% for three near-even legs`);
   let dec = 1, jp = 1;
@@ -348,20 +355,23 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
 {
   const { summaryTotalsV1 } = L('select-v1');
   const A_FAMILY = new Set(['A+', 'A', 'A-', 'a+', 'a', 'a-']);
-  const assertLeanFill = (p) => {
+  const assertNoEdgeFill = (p) => {
     assert.ok(p, 'missing fill pick');
     assert.strictEqual(p.fallback, true);
-    assert.strictEqual(p.rating, 'lean');
+    assert.strictEqual(p.rating, 'no-edge');
+    assert.strictEqual(p.flag, 'no-edge-lean');
+    assert.ok(p.filterFlags.includes('no-edge-lean'));
     assert.strictEqual(p.grade, 'B');
     assert.strictEqual(p.lockGrade, 'B');
     assert.strictEqual(p.units, '0.5u');
-    assert.strictEqual(p.lockReceipt.rating, 'B');
+    assert.strictEqual(p.lockReceipt.rating, 'no-edge');
     assert.strictEqual(p.lockReceipt.unitSize, '0.5u');
+    assert.ok(/no-edge/i.test(p.coreReasoning));
     assert.ok(!A_FAMILY.has(p.grade) && !A_FAMILY.has(p.rating) && !A_FAMILY.has(p.lockGrade) && !A_FAMILY.has(p.lockReceipt.rating));
     assert.ok(parseFloat(p.ev) <= 0, p.ev);
   };
-  // NHL A-band fair (0.664) against -200 is about -0.3% EV. That price grade
-  // is A, and it must not survive onto a fill.
+  // NHL win-prob band would call 0.664 an A. The price edge is about -0.2pp
+  // and EV is about -0.3%, so the row is a no-edge fill, not that A.
   const pCanes = 0.664439;
   assert.strictEqual(gradeForV1('NHL', pCanes), 'A');
   assert.ok(evFor(pCanes, -200) < 0);
@@ -395,34 +405,40 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
   assert.strictEqual(sel.picks.length, 3);
   assert.strictEqual(sel.parlayLegs.length, 1);
   assert.strictEqual(sel.parlayLegs[0].legs.length, 3);
-  assert.strictEqual(sel.funnel.fallbackFill, 1);
+  assert.strictEqual(sel.funnel.fallbackFill, 2);
   const fill = sel.picks.find(p => p.pick === 'Carolina Hurricanes');
-  assertLeanFill(fill);
-  assert.ok(sel.picks.filter(p => p.pick !== 'Carolina Hurricanes').every(p => p.rating !== 'lean' && parseFloat(p.units) > 0.5));
+  assertNoEdgeFill(fill);
+  const ravens = sel.picks.find(p => p.pick === 'Baltimore Ravens');
+  assert.strictEqual(ravens.grade, 'A');
+  assert.strictEqual(ravens.units, '1u');
+  assert.ok(parseFloat(ravens.ev) > 0);
+  const bills = sel.picks.find(p => p.pick === 'Buffalo Bills');
+  assert.strictEqual(bills.rating, 'lean');
+  assert.strictEqual(bills.units, '0.5u');
+  assert.ok(parseFloat(bills.ev) > 0);
   const leg = sel.parlayLegs[0].legs.find(p => p.pick === 'Carolina Hurricanes');
-  assertLeanFill(leg);
-  assert.strictEqual(sel.diagnostics.fallback.length, 1);
-  assert.strictEqual(sel.diagnostics.fallback[0].grade, 'B');
-  assert.strictEqual(sel.diagnostics.fallback[0].rating, 'lean');
+  assertNoEdgeFill(leg);
+  assert.strictEqual(sel.diagnostics.fallback.length, 2);
+  assert.ok(sel.diagnostics.fallback.some(f => f.rating === 'no-edge' && /Hurricanes/.test(f.side || '')));
   const totals = summaryTotalsV1(sel.picks, sel.parlayLegs);
-  assert.strictEqual(totals.gradeUnits.A, '0u');
+  assert.strictEqual(totals.gradeUnits.A, '1u');
   assert.strictEqual(totals.gradeUnits['A+'], '0u');
-  assert.strictEqual(totals.gradeUnits.B, '0.5u');
+  assert.strictEqual(totals.gradeUnits.B, '1u');
   assert.strictEqual(totals.leanUnits, '0.5u');
-  assert.strictEqual(totals.straightUnits, '2.5u');
-  assert.strictEqual(totals.totalUnits, '3u');
+  assert.strictEqual(totals.straightUnits, '2u');
+  assert.strictEqual(totals.totalUnits, '2.5u');
   const aFamilyUnits = ['A+', 'A', 'A-'].reduce((s, g) => s + parseFloat(totals.gradeUnits[g]), 0);
   const nonLeanUnits = sel.picks.filter(p => p.rating !== 'lean').reduce((s, p) => s + parseFloat(p.units), 0);
-  assert.ok(Math.abs(aFamilyUnits - nonLeanUnits) < 1e-9 || aFamilyUnits <= nonLeanUnits);
-  assert.ok(aFamilyUnits + parseFloat(totals.gradeUnits['B+']) + parseFloat(totals.gradeUnits.B) === parseFloat(totals.straightUnits));
+  assert.ok(aFamilyUnits <= nonLeanUnits + 1e-9);
+  assert.ok(Math.abs(aFamilyUnits + parseFloat(totals.gradeUnits['B+']) + parseFloat(totals.gradeUnits.B) - parseFloat(totals.straightUnits)) < 1e-9);
 
-  // A straight with EV<=0 is not graded above B, even when the price cap
-  // would have left an A- on an 80% favorite at -425.
+  // A straight with EV<=0 is not graded above B. An 80% price at -425 is a
+  // negative price-edge, so the card labels it no-edge rather than A+.
   assert.strictEqual(gradeForV1('NFL', 0.80), 'A+');
   assert.ok(evFor(0.80, -425) <= 0);
   const chalk = selectV1([strict('Washington Commanders @ San Francisco 49ers', 'San Francisco 49ers', 0.80, -425)], []);
   assert.strictEqual(chalk.picks.length, 1);
-  assertLeanFill(chalk.picks[0]);
+  assertNoEdgeFill(chalk.picks[0]);
   assert.notStrictEqual(chalk.picks[0].grade, 'A-');
   assert.notStrictEqual(chalk.picks[0].grade, 'A+');
   const chalkTotals = summaryTotalsV1(chalk.picks, chalk.parlayLegs);
@@ -430,7 +446,7 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
   assert.strictEqual(chalkTotals.gradeUnits['A+'], '0u');
   assert.strictEqual(chalkTotals.gradeUnits.A, '0u');
   assert.strictEqual(chalkTotals.gradeUnits.B, '0.5u');
-  assert.strictEqual(chalkTotals.leanUnits, '0.5u');
+  assert.strictEqual(chalkTotals.leanUnits, '0u');
 
   // A fallback that clears the strict pass with EV>0 keeps its grade and stake.
   const plus = {

@@ -28,7 +28,7 @@ const CARD = '2026-10-20';
 const COMMENCE = '2026-10-20T23:30:00Z';
 const AS_OF = Date.parse('2026-10-20T16:00:00Z');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.0-nba');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
 assert.strictEqual(config.NBA_CARD_LIVE, true);
 assert.strictEqual(config.nbaCardEnabled(), true);
@@ -153,10 +153,9 @@ const games = [
   assert.ok(Math.abs(shadowMl.p_fair - shadowMl.p_pinnacle) < 1e-12, 'observer stays blend 0');
 
   const cal = calibrate.calibrateCandidate(ml);
-  const shrunk = calibrate.isotonicClip(
-    calibrate.shrinkTowardSharp(ml.modelRawP, ml.fair_sharp_p, ml.market, 'NBA')
-  );
-  assert.ok(Math.abs(cal.coverProb - shrunk) < 1e-12);
+  const shrunkP = calibrate.shrinkTowardSharp(ml.modelRawP, ml.fair_sharp_p, ml.market, 'NBA');
+  const expected = ml.fair_sharp_p + calibrate.compressEdge(shrunkP - ml.fair_sharp_p);
+  assert.ok(Math.abs(cal.coverProb - expected) < 1e-12, `${cal.coverProb} vs ${expected}`);
   assert.strictEqual(cal.calibK, config.SHRINK_K.Moneyline);
   assert.ok(Math.abs(cal.coverProb - ml.fair_sharp_p) < Math.abs(ml.modelRawP - ml.fair_sharp_p));
 }

@@ -91,28 +91,65 @@ function priceAtBestDkHr(c) {
   };
 }
 
+const EDGE_MISCAL_CAP = 0.10;
+
+function miscalibrationRecord(c, edgePct, stage) {
+  return {
+    matchup: c.matchup || null,
+    side: c.side || null,
+    market: c.market || null,
+    sport: c.sport || null,
+    line: c.line != null ? c.line : null,
+    edgePct,
+    odds: c.odds != null ? c.odds : null,
+    book: c.book || null,
+    reason: 'edge-over-10pp',
+    stage,
+  };
+}
+
+/** Raw model probability minus no-vig fair, before shrink. Null when either side is missing. */
+function rawModelEdge(c) {
+  const p = c && Number(c.modelRawP);
+  const fairRaw = c && (c.fair_sharp_p != null ? c.fair_sharp_p : c.sharpFairP);
+  const fair = Number(fairRaw);
+  if (!Number.isFinite(p) || !Number.isFinite(fair)) return null;
+  return p - fair;
+}
+
+/**
+ * Drop raw model-vs-fair edges above 10pp before shrink/clip.
+ * Shrink can hide a 12pp disagreement inside a 4pp calibrated edge.
+ * Those rows are miscalibration, not a bet. Callers merge `miscalibrated`
+ * into diagnostics and rejections alongside the post-calibration gate.
+ */
+function splitRawMiscalibrated(candidates) {
+  const miscalibrated = [];
+  const kept = [];
+  for (const c of candidates || []) {
+    const ef = rawModelEdge(c);
+    if (ef != null && ef > EDGE_MISCAL_CAP + 1e-12) {
+      miscalibrated.push(miscalibrationRecord(c, +ef.toFixed(4), 'pre-calibration'));
+      continue;
+    }
+    kept.push(c);
+  }
+  return { candidates: kept, miscalibrated };
+}
+
 /**
  * One position per game+market+side, priced at the best real DK/Hard Rock number.
- * Main line wins the collapse. Edge above 10 percentage points is miscalibration:
- * it leaves the ranked pool and is listed on diagnostics.miscalibrated.
+ * Main line wins the collapse. Calibrated edge above 10 percentage points is
+ * miscalibration: it leaves the ranked pool and is listed on diagnostics.miscalibrated.
+ * Raw modelRawP-vs-fair exclusions are splitRawMiscalibrated, run before this.
  */
 function prepareEdgePositions(candidates) {
   const miscalibrated = [];
   const groups = new Map();
   for (const c of candidates || []) {
     const ef = edgeFractionOf(c);
-    if (ef != null && ef > 0.10 + 1e-12) {
-      miscalibrated.push({
-        matchup: c.matchup || null,
-        side: c.side || null,
-        market: c.market || null,
-        sport: c.sport || null,
-        line: c.line != null ? c.line : null,
-        edgePct: c.edgePct,
-        odds: c.odds != null ? c.odds : null,
-        book: c.book || null,
-        reason: 'edge-over-10pp',
-      });
+    if (ef != null && ef > EDGE_MISCAL_CAP + 1e-12) {
+      miscalibrated.push(miscalibrationRecord(c, c.edgePct, 'post-calibration'));
       continue;
     }
     const key = positionKey(c);
@@ -135,7 +172,7 @@ function prepareEdgePositions(candidates) {
   return { positions, diagnostics: { miscalibrated } };
 }
 
-/** Per-game exposure ≤ 1u (straight + parlay stake on that game). Slate ≤ 6u. Grades stay. */
+/** Per-game straight exposure ≤ 1u. The fixed parlay stake is a separate ticket and is not charged here. Slate ≤ 6u, parlay included. Grades stay. */
 const PER_GAME_EXPOSURE_U = 1;
 const SLATE_EXPOSURE_U = 6;
 
@@ -149,8 +186,14 @@ function applyExposureCaps(picks, parlayLegs) {
   for (const pl of parlays) {
     for (const leg of pl.legs || []) parlayGames.add(matchupKey(leg));
   }
+  // PARLAY_FIXED_UNITS (0.5u) does not consume the 1u per-game straight cap.
+  // A non-fixed parlay stake still does. Slate exposure below still counts the parlay.
+  const chargeParlayOnGame = parlays.some(pl => {
+    const u = parseU(pl.units);
+    return u > 1e-9 && Math.abs(u - PARLAY_FIXED_UNITS) > 1e-9;
+  });
   for (const p of out) {
-    const extra = parlayGames.has(matchupKey(p)) ? parlayU : 0;
+    const extra = chargeParlayOnGame && parlayGames.has(matchupKey(p)) ? parlayU : 0;
     const room = PER_GAME_EXPOSURE_U - extra;
     let u = parseU(p.units);
     if (!(room > 0)) u = 0;
@@ -506,6 +549,8 @@ module.exports = {
   applyDailyUnitCap,
   applyExposureCaps,
   prepareEdgePositions,
+  splitRawMiscalibrated,
+  rawModelEdge,
   positionKey,
   matchupKey,
   dkHrPriced,

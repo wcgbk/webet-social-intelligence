@@ -326,7 +326,20 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
     const edgeFrac = parseEdgeFraction(l.edgePct != null ? l.edgePct : l.ev);
     const qualityClv = l.predictedResidualClv != null ? l.predictedResidualClv : l.predictedClv;
     const legQuality = qualityScore(edgeFrac, qualityClv, l.uncertainty);
-    const rating = qualityToRating(edgeFrac, qualityClv, l.uncertainty);
+    let rating = qualityToRating(edgeFrac, qualityClv, l.uncertainty);
+    let qualityGrade = rating;
+    let units = l.units || `${legUnits}u`;
+    let quality = legQuality;
+    // A leg that is already a published straight keeps that straight's grade and stake.
+    const matched = (straights || []).find(st => sameStraightLeg(l, st));
+    if (matched && (matched.rating || matched.qualityGrade || matched.units)) {
+      const reusedRating = matched.rating || matched.qualityGrade;
+      const reusedGrade = matched.qualityGrade || matched.rating;
+      if (reusedRating) rating = reusedRating;
+      if (reusedGrade) qualityGrade = reusedGrade;
+      if (matched.units) units = matched.units;
+      if (Number.isFinite(Number(matched.qualityScore))) quality = Number(matched.qualityScore);
+    }
     const confidence = ratingToConfidence(rating);
     return {
       pick: formatMoneylinePick(l.side, l.market),
@@ -343,10 +356,10 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
         ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
         : undefined,
       rating,
-      qualityGrade: rating,
-      qualityScore: +legQuality.toFixed(6),
+      qualityGrade,
+      qualityScore: +Number(quality).toFixed(6),
       confidence,
-      units: l.units || `${legUnits}u`,
+      units,
       coreReasoning: l.coreReasoning || '',
       homeTeam: l.homeTeam,
       awayTeam: l.awayTeam,
@@ -384,6 +397,41 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
     candidatesScanned: meta.candidatesScanned != null ? meta.candidatesScanned : rawLegs.length,
     source: 'omega-vnext',
   };
+}
+
+function publishedStake(units) {
+  const n = parseFloat(String(units == null ? '' : units).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Caps run after the ticket is built, so a copied stake can still be the
+ * pre-cap Kelly number. Once the straight is published, the matching leg
+ * (same game, market, side) takes that rating, quality grade, and units.
+ */
+function syncLegsToPublishedStraights(parlayLegs, straights) {
+  const published = (straights || []).filter(st => publishedStake(st && st.units) > 1e-9);
+  return (parlayLegs || []).map(pl => {
+    if (!pl || !Array.isArray(pl.legs)) return pl;
+    const legs = pl.legs.map(l => {
+      const matched = published.find(st => sameStraightLeg(l, st));
+      if (!matched || !(matched.rating || matched.qualityGrade || matched.units)) return l;
+      const reusedRating = matched.rating || matched.qualityGrade;
+      const reusedGrade = matched.qualityGrade || matched.rating;
+      const next = { ...l };
+      if (reusedRating) {
+        next.rating = reusedRating;
+        next.confidence = ratingToConfidence(reusedRating);
+      }
+      if (reusedGrade) next.qualityGrade = reusedGrade;
+      if (matched.units) next.units = matched.units;
+      if (Number.isFinite(Number(matched.qualityScore))) {
+        next.qualityScore = +Number(matched.qualityScore).toFixed(6);
+      }
+      return next;
+    });
+    return { ...pl, legs: sortByGradeThenUnits(legs) };
+  });
 }
 
 function onCardDate(c, cardDate) {
@@ -641,4 +689,5 @@ module.exports = {
   parlayIsCardMirror,
   conflictsWithStraight,
   sameStraightLeg,
+  syncLegsToPublishedStraights,
 };

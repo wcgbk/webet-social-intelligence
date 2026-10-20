@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.0-nba');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.1-omega-vnext');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -758,7 +758,7 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
     [{ matchup: 'A @ B', units: '1.25u', rating: 'aplus' }],
     [{ units: '0.5u', legs: [{ matchup: 'A @ B' }] }],
   );
-  assert.strictEqual(capHalf.picks[0].units, '0.5u');
+  assert.strictEqual(capHalf.picks[0].units, '1u');
   assert.strictEqual(capHalf.parlayLegs[0].units, '0.5u');
   const eight = [];
   for (let i = 0; i < 8; i++) eight.push({ matchup: `T${i} @ H${i}`, units: '1u', rating: 'a' });

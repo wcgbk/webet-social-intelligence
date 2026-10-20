@@ -38,6 +38,7 @@ const edge = require(path.join(root, 'netlify/functions/lib/omega-vnext/edge'));
 const gates = require(path.join(root, 'netlify/functions/lib/omega-vnext/gates'));
 const select = require(path.join(root, 'netlify/functions/lib/omega-vnext/select'));
 const { publishEdgeCard } = require(path.join(root, 'netlify/functions/lib/omega-vnext/assemble'));
+const parlay = require(path.join(root, 'netlify/functions/lib/omega-vnext/parlay'));
 const nfl = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nfl'));
 const nhl = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nhl'));
 const mlb = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/mlb'));
@@ -208,8 +209,10 @@ function runEdge(bySport, cardDate, asOfMs) {
     .concat(nhl.project({ oddsEvents: bySport.NHL || [], standings: {}, gameDay: {} }))
     .concat(mlb.project({ oddsEvents: bySport.MLB || [], standings: {}, gameDay: {} }))
     .concat(nba.project({ oddsEvents: bySport.NBA || [], standings: {}, gameDay: {}, forCard: true }));
-  const calibrated = calibrate.calibrateAll(raw).map(c => edge.attachEv(c));
+  const rawSplit = select.splitRawMiscalibrated(raw);
+  const calibrated = calibrate.calibrateAll(rawSplit.candidates).map(c => edge.attachEv(c));
   const prepared = select.prepareEdgePositions(calibrated);
+  const miscalibrated = rawSplit.miscalibrated.concat((prepared.diagnostics && prepared.diagnostics.miscalibrated) || []);
   const { yesPool, rejected } = gates.applyGates(prepared.positions, { cardDate, asOfMs });
   const chosen = select.selectStraights(yesPool, 3);
   const built = publishEdgeCard({
@@ -217,7 +220,7 @@ function runEdge(bySport, cardDate, asOfMs) {
     qualified: chosen,
     yesPool,
     rejected,
-    miscalibrated: (prepared.diagnostics && prepared.diagnostics.miscalibrated) || [],
+    miscalibrated,
     hardFails: [],
     cardDate,
     modelVersion: 'dryrun-1019',
@@ -225,8 +228,8 @@ function runEdge(bySport, cardDate, asOfMs) {
   });
   const picks = built.picks;
   const parlayLegs = built.parlayLegs;
-  const mis = (prepared.diagnostics.miscalibrated || []).length;
-  console.log(`\nEdge  raw=${raw.length} positions=${prepared.positions.length} miscalibrated=${mis} yesPool=${yesPool.length} rejected=${rejected.length} straights=${picks.length} parlayLegs=${(parlayLegs[0] && parlayLegs[0].legs || []).length}`);
+  const mis = miscalibrated.length;
+  console.log(`\nEdge  raw=${raw.length} positions=${prepared.positions.length} miscalibrated=${mis} pre=${rawSplit.miscalibrated.length} yesPool=${yesPool.length} rejected=${rejected.length} straights=${picks.length} parlayLegs=${(parlayLegs[0] && parlayLegs[0].legs || []).length}`);
   console.log('Edge straights');
   picks.slice(0, 3).forEach(printStraight);
   console.log('Edge parlay');
@@ -236,7 +239,30 @@ function runEdge(bySport, cardDate, asOfMs) {
     console.log(`  ${pl.type}  ${pl.units}  ${pl.combinedOdds}  ev ${pl.ev}`);
     printLegs(pl.legs);
   }
-  return { picks, parlayLegs };
+  return { picks, parlayLegs, miscalibrated };
+}
+
+function assertCard(name, picks, parlayLegs) {
+  const legs = parlayLegs && parlayLegs[0] && parlayLegs[0].legs;
+  if (!picks || picks.length !== 3) {
+    console.error(`${name} parlay guard FAIL: expected 3 straights, got ${picks ? picks.length : 0}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!legs || legs.length !== 3) {
+    console.error(`${name} parlay guard FAIL: expected a 3-leg parlay, got ${legs ? legs.length : 0}`);
+    process.exitCode = 1;
+    return;
+  }
+  for (const leg of legs) {
+    const hit = picks.find(s => parlay.conflictsWithStraight(leg, s));
+    if (hit) {
+      console.error(`${name} parlay guard FAIL: ${leg.pick || leg.side} conflicts with ${hit.pick || hit.side}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+  console.log(`${name} parlay guard: pass (3 straights + 3-leg)`);
 }
 
 function main() {
@@ -265,8 +291,11 @@ function main() {
   console.log(`games ${counts}`);
   console.log(`slate ET ${slate.date} counts ${JSON.stringify(slate.counts)}`);
   console.log(`asOf ${asOfMs != null ? new Date(asOfMs).toISOString() : 'none'} cardDate ${slate.date}`);
-  runV1(bySport);
-  runEdge(bySport, slate.date, asOfMs);
+  const v1 = runV1(bySport);
+  assertCard('V1', v1.picks, v1.parlayLegs);
+  const edgeCard = runEdge(bySport, slate.date, asOfMs);
+  assertCard('Edge', edgeCard.picks, edgeCard.parlayLegs);
+  if (process.exitCode) process.exit(process.exitCode);
 }
 
 main();

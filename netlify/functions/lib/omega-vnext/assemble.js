@@ -10,7 +10,7 @@ const {
   fillNeverBlock, toPickObject, samePublished, droppedRejections,
   applyDailyUnitCap, applyExposureCaps, sortByGradeThenUnits, positionKey, dkHrPriced,
 } = require('./select');
-const { ensureCardParlay } = require('./parlay');
+const { ensureCardParlay, syncLegsToPublishedStraights } = require('./parlay');
 const { buildCardFallbackCopy, alignEdgeSummary } = require('./narrate');
 
 function parseU(u) {
@@ -112,7 +112,7 @@ function finishPublication(args) {
     reason: 'exposure-cap',
   }));
   picks = exposed.picks.filter(p => parseU(p.units) > 0);
-  parlayLegs = exposed.parlayLegs || [];
+  parlayLegs = syncLegsToPublishedStraights(exposed.parlayLegs || [], picks);
   picks = sortByGradeThenUnits(picks);
 
   const hf = (hardFails || []).map(h => ({

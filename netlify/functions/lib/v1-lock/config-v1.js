@@ -18,6 +18,11 @@
  * prefers the next qualifying straight that is not shorter than -250 when
  * one exists. A heavy favorite fills a remaining straight slot only at
  * A- or lower.
+ *
+ * Selection grades the edge, not the raw win probability. gradeForV1(sport, p)
+ * remains the Spec §6 win-probability bands. gradeForV1(sport, edge, 'edge')
+ * and gradeEdgeForV1 use the Edge bands: A+ ≥5pp, A 3.5–5, A- 2–3.5,
+ * B 1–2 (0.5u). Below 1pp does not qualify. EV ≤ 0 does not qualify.
  */
 const MODEL_VERSION_V1 = 'v1-lock-2.0';
 const ENGINE_V1 = 'v1-lock';
@@ -30,13 +35,23 @@ const MAX_STRAIGHT_UNITS_V1 = 1.5;
 const HEAVY_FAVORITE_AMERICAN_V1 = -250;
 const GRADE_RANK_V1 = { 'B':1, 'B+':2, 'A-':3, 'A':4, 'A+':5 };
 
-function gradeForV1(sport, p) {
+function gradeForV1(sport, p, mode) {
+  if (mode === 'edge') return gradeEdgeForV1(p);
   if (p == null || !Number.isFinite(p)) return null;
   const low = LOW_SPORTS_V1.includes(String(sport||'').toUpperCase());
   const bands = low
     ? [['A+',0.70],['A',0.65],['A-',0.62],['B+',0.60],['B',0.58]]
     : [['A+',0.80],['A',0.75],['A-',0.70],['B+',0.65],['B',0.60]];
   for (const [g, floor] of bands) if (p >= floor) return g;
+  return null;
+}
+/** Edge vs de-vigged Pinnacle fair (or vs the price when p equals that fair). */
+function gradeEdgeForV1(edge) {
+  if (edge == null || !Number.isFinite(edge)) return null;
+  if (edge >= 0.05 - 1e-12) return 'A+';
+  if (edge >= 0.035 - 1e-12) return 'A';
+  if (edge >= 0.02 - 1e-12) return 'A-';
+  if (edge >= 0.01 - 1e-12) return 'B';
   return null;
 }
 function floorForV1(sport){ return LOW_SPORTS_V1.includes(String(sport||'').toUpperCase()) ? 0.58 : 0.60; }
@@ -63,5 +78,5 @@ function isGradeAboveBV1(grade){
 }
 module.exports = { MODEL_VERSION_V1, ENGINE_V1, SPORTS_V1, POINTS_SPORTS_V1, LOW_SPORTS_V1,
   BLOB_STORE_V1, OMEGA_BOARD_STORE, MAX_STRAIGHT_UNITS_V1, HEAVY_FAVORITE_AMERICAN_V1,
-  gradeForV1, floorForV1, unitsForGradeV1, isHeavyFavoritePriceV1, capGradeForPriceV1,
+  gradeForV1, gradeEdgeForV1, floorForV1, unitsForGradeV1, isHeavyFavoritePriceV1, capGradeForPriceV1,
   isGradeAboveBV1 };

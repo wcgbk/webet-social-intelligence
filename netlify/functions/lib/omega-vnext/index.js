@@ -9,8 +9,9 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
-const { selectStraights, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, samePublished } = require('./select');
+const { selectStraights, applyDailyUnitCap, applyExposureCaps, prepareEdgePositions, splitRawMiscalibrated, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, samePublished } = require('./select');
 const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble');
+const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
@@ -211,6 +212,7 @@ async function generateOmegaVnext(opts = {}) {
     : null;
   let snap;
   let candidates;
+  let preMiscalibrated = [];
   if (fixtureCandidates) {
     snap = { dateISO, oddsBySport: {}, espnBySport: {} };
     candidates = fixtureCandidates.map(c => ({ ...c }));
@@ -226,6 +228,11 @@ async function generateOmegaVnext(opts = {}) {
     candidates = projectAll(snap);
     console.log(`[omega-vnext] raw candidates=${candidates.length}`);
 
+    // Raw modelRawP vs fair above 10pp is miscalibration before shrink can hide it.
+    const rawSplit = splitRawMiscalibrated(candidates);
+    preMiscalibrated = rawSplit.miscalibrated;
+    candidates = rawSplit.candidates;
+    console.log(`[omega-vnext] pre-calibration miscalibrated=${preMiscalibrated.length}`);
     candidates = calibrateAll(candidates).map(attachEv);
     candidates = annotateMajorBooks(candidates, snap);
   }
@@ -424,8 +431,10 @@ async function generateOmegaVnext(opts = {}) {
   // One DK/Hard Rock price per game+market+side. Edges over 10pp are miscalibration.
   const prepared = prepareEdgePositions(candidates);
   candidates = prepared.positions;
-  const edgeDiagnostics = prepared.diagnostics || { miscalibrated: [] };
-  console.log(`[omega-vnext] positions=${candidates.length} miscalibrated=${(edgeDiagnostics.miscalibrated || []).length}`);
+  const edgeDiagnostics = {
+    miscalibrated: preMiscalibrated.concat((prepared.diagnostics && prepared.diagnostics.miscalibrated) || []),
+  };
+  console.log(`[omega-vnext] positions=${candidates.length} miscalibrated=${edgeDiagnostics.miscalibrated.length} pre=${preMiscalibrated.length}`);
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
@@ -562,7 +571,7 @@ async function generateOmegaVnext(opts = {}) {
       });
     }
     picks = exposed.picks.filter(p => (parseFloat(String(p.units || '').replace(/[^0-9.]/g, '')) || 0) > 0);
-    parlayLegs = exposed.parlayLegs;
+    parlayLegs = syncLegsToPublishedStraights(exposed.parlayLegs, picks);
   }
   picks = attachClvFields(picks, MODEL_VERSION, dateISO);
   parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);

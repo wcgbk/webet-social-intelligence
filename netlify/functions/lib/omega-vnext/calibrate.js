@@ -32,10 +32,12 @@ function shrinkTowardSharp(pModel, pSharp, market, sport) {
 }
 
 /**
- * Soft-compress calibrated probs toward [lo, hi].
+ * Soft-compress a number toward [lo, hi].
  * Excess above hi / below lo is retained at `keep` (default 25%; pull the rest back).
  * (Previous hi-branch used hi+(0.98-p)*f which inflated values just above hi.)
- * Every sport, including MLB, uses 0.42–0.58 @ 0.25 unless a caller passes a band.
+ * The band is 0.42–0.58 @ 0.25 unless a caller passes one. That band is centered
+ * on 0.50 (±8pp). Apply it to an edge via compressEdge, not to a longshot p:
+ * clipping p itself pulls a 0.30 dog up toward 0.42 and prints a fake edge.
  */
 function isotonicClip(p, lo = 0.42, hi = 0.58, keep = 0.25) {
   if (!Number.isFinite(p)) return p;
@@ -45,12 +47,26 @@ function isotonicClip(p, lo = 0.42, hi = 0.58, keep = 0.25) {
   return p;
 }
 
+/**
+ * Soft-compress an edge (p - fair) with the 0.50-centered band.
+ * Edges inside ±8pp are unchanged. Excess beyond that keeps `keep`.
+ * p_final = fair + compressEdge(p_shrunk - fair).
+ */
+function compressEdge(edge, lo = 0.42, hi = 0.58, keep = 0.25) {
+  if (!Number.isFinite(edge)) return edge;
+  const center = (Number(lo) + Number(hi)) / 2;
+  return isotonicClip(center + edge, lo, hi, keep) - center;
+}
+
 function calibrateCandidate(c) {
   const sport = c && c.sport;
   const pModel = c.modelRawP;
   const pSharp = c.fair_sharp_p != null ? c.fair_sharp_p : c.sharpFairP;
   let p = shrinkTowardSharp(pModel, pSharp, c.market, sport);
-  p = isotonicClip(p);
+  // No fair: plain shrink only. Do not pull a dog's probability toward 0.50.
+  if (Number.isFinite(p) && Number.isFinite(pSharp)) {
+    p = clamp(pSharp + compressEdge(p - pSharp), 0.02, 0.98);
+  }
   return {
     ...c,
     p_model: pModel,
@@ -68,6 +84,7 @@ module.exports = {
   shrinkKForMarket,
   shrinkTowardSharp,
   isotonicClip,
+  compressEdge,
   calibrateCandidate,
   calibrateAll,
 };

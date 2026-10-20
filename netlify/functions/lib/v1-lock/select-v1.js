@@ -10,12 +10,17 @@
  * Straight EV is win probability times the confirmed decimal price, minus 1.
  * Parlay joint probability is the product of the leg probabilities;
  * parlay EV is that joint probability times the product of the leg decimals, minus 1.
- * A fallback fill (it did not pass the strict pass) is 0.5u with rating
- * lean and grade B. It does not keep an A-family grade. A straight with
- * EV at or below 0 is never graded above B, and uses that same lean / B
- * label when the probability grade would have been higher.
+ * Grades are the edge versus the de-vigged Pinnacle fair
+ * (trueProbability - pPinnacle). Fallback rows where p equals that fair
+ * use the edge versus the price (or the row's edge). Bands: A+ ≥5pp,
+ * A 3.5–5, A- 2–3.5, B 1–2 at 0.5u. Below 1pp or EV ≤ 0 does not qualify.
+ * Fill still publishes 3 straights when the board has the games: EV>0
+ * rows first, then the least-negative EV, labeled rating no-edge, flag
+ * no-edge-lean, 0.5u. The parlay uses the same rows.
+ * A positive-EV fill that missed the 1pp floor stays 0.5u rating lean.
+ * A straight with EV at or below 0 is never an A-family stake.
  */
-const { gradeForV1, floorForV1, unitsForGradeV1, MODEL_VERSION_V1, capGradeForPriceV1, isHeavyFavoritePriceV1, isGradeAboveBV1 } = require('./config-v1');
+const { gradeForV1, unitsForGradeV1, MODEL_VERSION_V1, capGradeForPriceV1, isHeavyFavoritePriceV1, isGradeAboveBV1 } = require('./config-v1');
 function fmtPct(p){ return p==null||!Number.isFinite(p)?null:`${(p*100).toFixed(1)}%`; }
 function decFromAmerican(a){ return a>0?1+a/100:1+100/Math.abs(a); }
 function evFor(p, odds){ return odds==null?null:p*decFromAmerican(odds)-1; }
@@ -29,7 +34,24 @@ function impliedFromAmerican(a){
   if(!Number.isFinite(n)||n===0) return null;
   return n>0?100/(n+100):Math.abs(n)/(Math.abs(n)+100);
 }
+function pinnacleFairV1(c){
+  if(c&&Number.isFinite(c.pPinnacle)) return c.pPinnacle;
+  if(c&&Number.isFinite(c.fairProb)) return c.fairProb;
+  return null;
+}
+/** Grade input: p - pinnacle fair, or the price edge when p equals that fair. */
+function edgeForGradeV1(c){
+  const p=c&&Number(c.trueProbability);
+  const fair=pinnacleFairV1(c);
+  if(Number.isFinite(p)&&fair!=null&&Math.abs(p-fair)>1e-6) return p-fair;
+  if(c&&Number.isFinite(c.edge)) return c.edge;
+  const imp=impliedFromAmerican(c&&c.odds);
+  if(Number.isFinite(p)&&imp!=null) return p-imp;
+  return null;
+}
 function edgeOfV1(c){
+  const graded=edgeForGradeV1(c);
+  if(graded!=null) return graded;
   if(c&&Number.isFinite(c.edge)) return c.edge;
   const imp=impliedFromAmerican(c&&c.odds);
   if(c&&Number.isFinite(c.trueProbability)&&imp!=null) return c.trueProbability-imp;
@@ -78,10 +100,13 @@ function toPickV1(c, grade, ev, opts={}){
   let outGrade=grade;
   let rating=opts.rating!=null?opts.rating:(grade?String(grade).toLowerCase():'fallback');
   let lockGrade=opts.lockGrade!==undefined?opts.lockGrade:grade;
-  if(mustUseLeanFillV1(outGrade, ev, { ...opts, lockGrade, rating })){
+  if(opts.noEdge){
+    outGrade='B'; lockGrade='B'; rating='no-edge'; unit=0.5;
+  } else if(mustUseLeanFillV1(outGrade, ev, { ...opts, lockGrade, rating })){
     outGrade='B'; lockGrade='B'; rating='lean'; unit=0.5;
   }
-  const r=receiptV1(c,outGrade,ev,unit);
+  const receiptGrade=rating==='no-edge'?'no-edge':outGrade;
+  const r=receiptV1(c,receiptGrade,ev,unit);
   const bookName=c.confirmedBook||'Hard Rock Bet';
   return { sport:c.sport, matchup:c.matchup, homeTeam:c.homeTeam, awayTeam:c.awayTeam,
     pick:r.pick, pickDisplay:r.pick, betType:c.market, odds:c.oddsStr, units:`${unit}u`,
@@ -91,6 +116,7 @@ function toPickV1(c, grade, ev, opts={}){
     book:c.book||'hardrockbet', displayBook:bookName, executionBook:bookName,
     fallback:!!(c.fallback||opts.fallback),
     source:'v1-lock', model:MODEL_VERSION_V1, coreReasoning:r.coreReasoning, lockReceipt:r,
+    ...(opts.noEdge?{ flag:'no-edge-lean' }:{}),
     formula:{ spreadHome:c.formulaSpreadHome, total:c.formulaTotal, inputs:c.formulaInputs } };
 }
 function dataGapsV1(c){
@@ -130,14 +156,16 @@ function classifyV1(c){
   const trapRisk=c.market==='Spread'&&c.line!=null&&c.line<=-10&&sideLastMargin!=null&&sideLastMargin>=15;
   if(trapRisk){ flags.push('trap-game scrutiny (Filter 4)'); if(lineMoveAgainst) return { c, hard:'lock-filter4-trap-line-against', funnelKey:'filter4Trap', data, grade:null, ev:null }; }
   c.filterFlags=flags;
-  const grade=capGradeForPriceV1(gradeForV1(c.sport,c.trueProbability), c.odds);
+  const gradeEdge=edgeForGradeV1(c);
+  const grade=capGradeForPriceV1(gradeForV1(c.sport, gradeEdge, 'edge'), c.odds);
   const ev=evFor(c.trueProbability,c.odds);
-  return { c, hard:null, data, flags, grade, ev };
+  return { c, hard:null, data, flags, grade, ev, gradeEdge };
 }
 function qualifiesV1(row, soften){
   if(row.hard) return false;
   if(row.data.length&&!row.c.fallback&&!soften) return false;
-  if(!row.grade||row.grade==='B') return false;
+  // Below 1pp has no grade. B (1–2pp) qualifies at 0.5u. EV<=0 never qualifies.
+  if(!row.grade) return false;
   if(row.ev==null||row.ev<=0) return false;
   return true;
 }
@@ -171,6 +199,35 @@ function bestByGameV1(rows, skip){
 }
 function leanFillPickV1(row){
   return toPickV1({ ...row.c, fallback:true }, 'B', row.ev, { fallback:true, units:0.5, rating:'lean', lockGrade:'B', fillLabel:true });
+}
+function noEdgeFillPickV1(row){
+  const flags=Array.from(new Set([...(row.c.filterFlags||[]), 'no-edge-lean']));
+  const note='No-edge lean: expected value is not positive. Published at 0.5u to complete the card.';
+  const pick=toPickV1({ ...row.c, fallback:true, filterFlags:flags }, 'B', row.ev, { fallback:true, units:0.5, rating:'no-edge', lockGrade:'B', noEdge:true });
+  pick.coreReasoning=`${note} ${pick.coreReasoning||''}`.trim();
+  pick.flag='no-edge-lean';
+  pick.filterFlags=flags;
+  pick.rating='no-edge';
+  pick.grade='B';
+  pick.lockGrade='B';
+  pick.units='0.5u';
+  if(pick.lockReceipt){
+    pick.lockReceipt.coreReasoning=pick.coreReasoning;
+    pick.lockReceipt.rating='no-edge';
+    pick.lockReceipt.unitSize='0.5u';
+  }
+  return pick;
+}
+function rowsByEvV1(rows, used, pred){
+  const best=new Map();
+  for(const row of rows){
+    if(row.hard||used.has(row.c.matchup)) continue;
+    if(pred&&!pred(row)) continue;
+    const ev=Number.isFinite(row.ev)?row.ev:-Infinity;
+    const prev=best.get(row.c.matchup);
+    if(!prev||ev>prev.ev) best.set(row.c.matchup,{ row, ev });
+  }
+  return [...best.values()].sort((a,b)=>b.ev-a.ev);
 }
 function fmtUnitsV1(n){
   const r=Math.round((Number(n)||0)*100)/100;
@@ -242,33 +299,40 @@ function selectV1(candidates, formulaPasses=[]){
     else if(row.ev==null||row.ev<=0){ funnel.negativeEv++; if(!row.c.fallback) rejections.push({ matchup:row.c.matchup, sport:row.c.sport, side:row.c.side, reason:'lock-negative-ev' }); }
     else if(qualifiesV1(row,soften)) funnel.qualified++;
   }
-  const pushFill=(row, e)=>{
-    const pick=leanFillPickV1(row);
+  const pushFill=(row, e, noEdge)=>{
+    const pick=noEdge?noEdgeFillPickV1(row):leanFillPickV1(row);
     picks.push(pick);
-    diagnostics.fallback.push({ matchup:row.c.matchup, side:row.c.side, sport:row.c.sport, edge:e, grade:'B', rating:'lean', flags:row.data, fill:true });
+    diagnostics.fallback.push({
+      matchup:row.c.matchup, side:row.c.side, sport:row.c.sport, edge:e,
+      grade:'B', rating:noEdge?'no-edge':'lean', flag:noEdge?'no-edge-lean':null,
+      flags:row.data, fill:true,
+    });
     funnel.fallbackFill++;
   };
+  // Prefer any remaining EV>0 game. Only then pad with the least-negative EV.
   if(picks.length<3){
     const used=new Set(picks.map(p=>p.matchup));
-    for(const { row, e } of bestByGameV1(rows.filter(r=>r.c.fallback), used)){
+    for(const { row, ev } of rowsByEvV1(rows, used, r=>r.ev!=null&&r.ev>0)){
       if(picks.length>=3) break;
-      pushFill(row, e); used.add(row.c.matchup);
+      pushFill(row, ev, false); used.add(row.c.matchup);
     }
   }
   if(picks.length<3){
     const used=new Set(picks.map(p=>p.matchup));
-    for(const { row, e } of bestByGameV1(rows, used)){
+    for(const { row, ev } of rowsByEvV1(rows, used, r=>!(r.ev>0))){
       if(picks.length>=3) break;
-      pushFill(row, e); used.add(row.c.matchup);
+      pushFill(row, ev, true); used.add(row.c.matchup);
     }
   }
   funnel.straights=picks.length;
   let legPicks=picks.slice(0,3);
   if(legPicks.length<3){
     const seen=new Set(legPicks.map(p=>p.matchup));
-    for(const { row } of bestByGameV1(rows, seen)){
+    const positive=rowsByEvV1(rows, seen, r=>r.ev!=null&&r.ev>0);
+    const negative=rowsByEvV1(rows, seen, r=>!(r.ev>0));
+    for(const { row } of positive.concat(negative)){
       if(legPicks.length>=3) break;
-      legPicks.push(leanFillPickV1(row));
+      legPicks.push(row.ev>0?leanFillPickV1(row):noEdgeFillPickV1(row));
       seen.add(row.c.matchup);
     }
   }

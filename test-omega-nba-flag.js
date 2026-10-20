@@ -1,8 +1,7 @@
 'use strict';
 /**
- * The live card excludes NBA unless the code flag is on, and that flag
- * stays off. OMEGA_NBA unset does not put NBA on the card. The shadow
- * function loads. No network.
+ * NBA is on the live card by default. OMEGA_NBA=0 keeps it off.
+ * OMEGA_NBA=1 forces it on. The shadow function still loads. No network.
  */
 const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
@@ -10,10 +9,10 @@ const { projectAll } = require('./netlify/functions/lib/omega-vnext/index');
 const http = require('./netlify/functions/omega-nba-shadow');
 
 assert.strictEqual(typeof http.handler, 'function');
-assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-assert.strictEqual(config.NBA_CARD_LIVE, false);
+assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
+assert.strictEqual(config.NBA_CARD_LIVE, true);
+assert.strictEqual(config.nbaCardEnabled(), true);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
-assert.notStrictEqual(process.env.OMEGA_NBA, '1');
 
 function event(home, away) {
   return {
@@ -59,20 +58,27 @@ const snap = {
 const prev = process.env.OMEGA_NBA;
 try {
   delete process.env.OMEGA_NBA;
-  for (const value of [undefined, '', '0', 'off', 'false', 'true']) {
-    if (value == null) delete process.env.OMEGA_NBA;
+  assert.ok(projectAll(snap).some((c) => c.sport === 'NBA' && c.shadowOnly !== true), 'unset OMEGA_NBA publishes NBA');
+  for (const value of ['1', 'true', 'on', '']) {
+    if (value === '') delete process.env.OMEGA_NBA;
     else process.env.OMEGA_NBA = value;
-    const slate = projectAll(snap);
-    assert.ok(slate.length >= 0);
-    assert.ok(!slate.some((c) => c.sport === 'NBA'), `OMEGA_NBA=${value == null ? 'unset' : value}`);
+    assert.ok(projectAll(snap).some((c) => c.sport === 'NBA'), `OMEGA_NBA=${value === '' ? 'unset' : value}`);
   }
+  for (const value of ['0', 'false', 'off']) {
+    process.env.OMEGA_NBA = value;
+    assert.ok(!projectAll(snap).some((c) => c.sport === 'NBA'), `OMEGA_NBA=${value} keeps NBA off`);
+  }
+  delete process.env.OMEGA_NBA;
+  config.SPORTS_ENABLED.NBA = false;
+  assert.ok(!projectAll(snap).some((c) => c.sport === 'NBA'), 'SPORTS_ENABLED.NBA false');
   process.env.OMEGA_NBA = '1';
-  assert.ok(!projectAll(snap).some((c) => c.sport === 'NBA'), 'OMEGA_NBA=1 still does not publish NBA');
+  assert.ok(projectAll(snap).some((c) => c.sport === 'NBA'), 'OMEGA_NBA=1 forces the card on');
 } finally {
+  config.SPORTS_ENABLED.NBA = true;
   if (prev == null) delete process.env.OMEGA_NBA;
   else process.env.OMEGA_NBA = prev;
 }
 
-assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-assert.strictEqual(config.NBA_CARD_LIVE, false);
+assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
+assert.strictEqual(config.NBA_CARD_LIVE, true);
 console.log('test-omega-nba-flag ok');

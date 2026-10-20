@@ -2,6 +2,7 @@
 
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
+  nbaCardEnabled,
 } = require('./config');
 const { ingest } = require('./ingest');
 const { noPlaysFields, omegaReason } = require('../no-plays');
@@ -85,7 +86,16 @@ function projectAll(snap) {
       gameDay,
     }));
   }
-  if (SPORTS_ENABLED.NBA) raw.push(...nba.project({}));
+  // Preseason stays off the card. OMEGA_NBA=0 skips the board. The shadow
+  // observer is a different module and is not called here.
+  if (nbaCardEnabled()) {
+    raw.push(...nba.project({
+      oddsEvents: (snap.oddsBySport && snap.oddsBySport.NBA) || [],
+      standings: (snap.standingsBySport && snap.standingsBySport.NBA) || {},
+      gameDay,
+      forCard: true,
+    }).filter((c) => c && c.shadowOnly !== true && !c.preseason));
+  }
   if (SPORTS_ENABLED.NHL) {
     raw.push(...nhl.project({
       oddsEvents: snap.oddsBySport.NHL || [],

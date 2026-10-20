@@ -18,8 +18,8 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.4.2-omega-vnext-parlay-guard');
-assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.0-nba');
+assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NCAAF, true);
@@ -70,7 +70,7 @@ assert.deepStrictEqual(config.MLB_CALIBRATION, {
   shrinkK: { Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46 },
 });
 assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB keeps the global isotonic band');
-assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.ok(epa.SPORT_CFG.NFL.epaUncertainty >= 0.12 && epa.SPORT_CFG.NFL.epaUncertainty <= 0.14);
 assert.ok(epa.SPORT_CFG.NCAAF.epaUncertainty >= 0.16 && epa.SPORT_CFG.NCAAF.epaUncertainty <= 0.18);
@@ -974,7 +974,7 @@ function byMarket(cands, market) {
   assert.ok(slate.some(c => c.sport === 'NFL' && c.projMethod === 'nfl-normal-ml'));
   assert.ok(slate.some(c => c.sport === 'NCAAF' && c.projMethod === 'cfb-normal-ml'));
   assert.ok(slate.some(c => c.sport === 'MLB' && c.projMethod === 'mlb-pythag-lite+hfa'));
-  assert.ok(!slate.some(c => c.sport === 'NBA'));
+  assert.ok(slate.some(c => c.sport === 'NBA' && c.shadowOnly !== true), 'NBA enabled — candidates on projectAll slate');
   assert.ok(slate.some(c => c.sport === 'NHL'), 'NHL enabled — candidates on projectAll slate');
   assert.deepStrictEqual(nba.project({}), []);
   assert.deepStrictEqual(nhl.project({}), []);

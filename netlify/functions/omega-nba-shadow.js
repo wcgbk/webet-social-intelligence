@@ -2,8 +2,8 @@
 /**
  * omega-nba-shadow — NBA shadow HTTP entry. Not the daily card.
  *
- * SPORTS_ENABLED.NBA stays false. This function never calls
- * generate-picks-omega or selectStraights.
+ * This function never calls generate-picks-omega or selectStraights.
+ * The daily card reads SPORTS_ENABLED.NBA on its own path.
  *
  * The job is on because NBA_SHADOW.enabled is true in config.js. That
  * constant is independent of SPORTS_ENABLED.NBA. Server env

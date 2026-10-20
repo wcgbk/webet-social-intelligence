@@ -1,16 +1,18 @@
 'use strict';
 /**
- * NBA projection for the shadow observer. Not the daily card.
+ * NBA projection. The shadow observer and the daily card share this model.
  *
- * SPORTS_ENABLED.NBA stays false. projectAll calls project({}) only when
- * that flag is on, and an empty board emits nothing. The shadow runner is
- * the caller that passes events.
- *
- * Fair probability is de-vigged Pinnacle on the same line, combined with
- * the model. The 2025-10-21..2025-12-17 tune rejected every model weight
- * above 0, so BLEND is 0 on moneyline, spread, and total: when Pinnacle
- * posts that line, p_fair is the sharp price and p_model is only logged.
+ * Shadow (project without forCard): BLEND is 0, so p_fair is de-vigged
+ * Pinnacle on the same line and p_model is only logged. Rows are shadowOnly.
+ * The 2025-10-21..2025-12-17 tune rejected every observer weight above 0.
  * A Pinnacle number on a different point is not shifted onto this line.
+ *
+ * Card (forCard): modelRawP is that same model probability. The shared
+ * calibrate shrink (SHRINK_K, then the isotonic band) anchors it to the
+ * same-point de-vigged sharp fair. Pinnacle wins when it posts the point;
+ * the other sharp books are the fallback. The price is attached as
+ * bestDkHr and the card reprices to the better of DraftKings and Hard Rock.
+ * No shadow flag, no observer EV cap, no separate unit cap.
  *
  * The logged margin still includes a back-to-back note. That note does
  * not move p_model or p_fair. Pace stays in the logged total. Injuries
@@ -28,7 +30,7 @@ const { HFA, SPORT_SPREAD_STD } = require('../config');
 const {
   formatMatchup, gamesPlayed, LEAGUE_PPG, mapGamesSoft, spreadCoverProb, mlFromSpread,
 } = require('./_common');
-const { bestDkHrPrice } = require('../edge');
+const { bestDkHrPrice, enrichCandidateWithEdge, collectLinesForEdge } = require('../edge');
 
 const SPORT = 'NBA';
 const BLEND = { ml: 0, spread: 0, total: 0 };
@@ -508,6 +510,26 @@ function priceRow(base, bundle, bundles, modelP, blendW, fields) {
   };
 }
 
+/**
+ * Card row. modelRawP stays the model. enrichCandidateWithEdge sets
+ * fair_sharp_p from the same point (Pinnacle, then the other sharp books)
+ * and bestDkHr from DraftKings / Hard Rock. calibrate shrinks afterward.
+ */
+function cardRow(base, bundle, bundles, modelP, fields) {
+  const pModel = Number.isFinite(modelP) ? modelP : null;
+  const pPin = pinnacleFair(bundles, bundle);
+  return enrichCandidateWithEdge({
+    ...base,
+    ...fields,
+    shadowOnly: false,
+    shadowObserver: false,
+    modelRawP: pModel,
+    p_model: pModel,
+    p_pinnacle: pPin,
+    sharpAnchorBook: pPin != null ? 'pinnacle' : null,
+  }, bundle, bundles);
+}
+
 function projectGame(event, standings, gameDay, opts) {
   const home = event.home_team;
   const away = event.away_team;
@@ -580,13 +602,20 @@ function projectGame(event, standings, gameDay, opts) {
   const margin = priceBoard.modelMargin;
   const total = priceBoard.modelTotal;
   const loggedMargin = logBoard.modelMargin;
+  const forCard = !!(opts && opts.forCard);
+  const marketBundles = (key) => (forCard ? collectLinesForEdge(event, key) : collectBundles(event, key));
+  const emit = (bundle, bundles, modelP, blendW, fields) => {
+    out.push(forCard
+      ? cardRow(base, bundle, bundles, modelP, fields)
+      : priceRow(base, bundle, bundles, modelP, blendW, fields));
+  };
 
   {
-    const bundles = collectBundles(event, 'h2h');
+    const bundles = marketBundles('h2h');
     for (const b of bundles) {
       const isHome = sameClub(b.side, home);
       const p = isHome ? mlFromSpread(margin, SPORT) : 1 - mlFromSpread(margin, SPORT);
-      out.push(priceRow(base, b, bundles, p, BLEND.ml, {
+      emit(b, bundles, p, BLEND.ml, {
         market: 'Moneyline',
         side: b.side,
         line: null,
@@ -594,19 +623,19 @@ function projectGame(event, standings, gameDay, opts) {
         projMethod: tag('ml'),
         uncertainty,
         modelProjection: +loggedMargin.toFixed(2),
-      }));
+      });
     }
   }
 
   {
-    const bundles = collectBundles(event, 'spreads');
+    const bundles = marketBundles('spreads');
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
       const isHome = sameClub(b.side, home);
       const pCover = spreadCoverProb(isHome ? margin : -margin, line, SPORT);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
-      out.push(priceRow(base, b, bundles, pCover, BLEND.spread, {
+      emit(b, bundles, pCover, BLEND.spread, {
         market: 'Spread',
         side: sideLabel,
         line,
@@ -614,18 +643,18 @@ function projectGame(event, standings, gameDay, opts) {
         projMethod: tag('spread'),
         uncertainty,
         modelProjection: +loggedMargin.toFixed(2),
-      }));
+      });
     }
   }
 
   {
-    const bundles = collectBundles(event, 'totals');
+    const bundles = marketBundles('totals');
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
       const over = /over/i.test(b.side);
       const p = totalCoverProb(total, line, b.side);
-      out.push(priceRow(base, b, bundles, p, BLEND.total, {
+      emit(b, bundles, p, BLEND.total, {
         market: 'Total',
         side: `${b.side} ${line}`,
         line,
@@ -633,7 +662,7 @@ function projectGame(event, standings, gameDay, opts) {
         projMethod: tag('total'),
         uncertainty: uncertainty + 0.05,
         modelProjection: +total.toFixed(2),
-      }));
+      });
     }
   }
 
@@ -645,7 +674,7 @@ function projectGame(event, standings, gameDay, opts) {
  * The daily card does not pass allowPreseason.
  */
 function project({
-  oddsEvents, standings, gameDay, prior, allowPreseason, preseason,
+  oddsEvents, standings, gameDay, prior, allowPreseason, preseason, forCard,
 } = {}) {
   const table = prior ? centerNbaSeed(prior) : null;
   return mapGamesSoft(oddsEvents, (ev) => {
@@ -654,6 +683,7 @@ function project({
     return projectGame(ev, standings || {}, gameDay || {}, {
       prior: table || loadPrior(),
       preseason: isPre,
+      forCard: !!forCard,
     });
   });
 }

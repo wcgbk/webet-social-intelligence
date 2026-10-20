@@ -2,7 +2,7 @@
 /**
  * NBA shadow observer. Not the daily card.
  *
- * SPORTS_ENABLED.NBA stays false. projectAll never calls this module.
+ * projectAll never calls this module. The daily card is nba.project({ forCard }).
  * selectStraights is not called. Nothing is written to picks-{date},
  * latest-date, or omega-shadow/picks-{date}.
  *

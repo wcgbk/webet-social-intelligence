@@ -6,7 +6,7 @@
  * omega-nba-shadow-results-{date}. Separate from the 21:30 UTC project
  * wrapper because a Netlify schedule cannot pass a body.
  *
- * A naked POST is 403. SPORTS_ENABLED.NBA stays false.
+ * A naked POST is 403. This trigger does not publish the daily card.
  */
 const { handleShadow } = require('./omega-nba-shadow');
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');

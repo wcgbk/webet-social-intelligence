@@ -7,7 +7,7 @@
  * at 12:00 UTC (previous ET date).
  *
  * Odds run only for a real schedule event or the internal PICKS_SECRET_KEY.
- * A naked POST is 403 and spends 0 credits. SPORTS_ENABLED.NBA stays false.
+ * A naked POST is 403 and spends 0 credits. This trigger does not publish the daily card.
  * Writes omega-nba-shadow-{ET date} only. Does not write the daily card.
  */
 const { handleShadow, mayFetchOrWrite } = require('./omega-nba-shadow');

@@ -42,6 +42,7 @@ const nfl = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nf
 const nhl = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nhl'));
 const mlb = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/mlb'));
 const cfb = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/cfb'));
+const nba = require(path.join(root, 'netlify/functions/lib/omega-vnext/sports/nba'));
 
 const DEFAULT_BOARD = '/workspace/fix-1017/board-fresh-1018/board-fresh-1018.json';
 
@@ -130,16 +131,52 @@ function printStraight(p, i) {
   const odds = p.odds != null ? p.odds : '';
   const units = p.units || '';
   const book = p.book || p.executionBook || '';
+  const ev = p.ev != null ? p.ev : '';
   const rating = p.rating || p.grade || '';
   const tag = p.fallback ? ' fallback' : '';
-  console.log(`  ${i + 1}. ${p.sport || ''}  ${p.matchup || ''}  ${pick}  ${odds}  ${units}  ${book}  ${rating}${tag}`);
+  console.log(`  ${i + 1}. ${p.sport || ''}  ${p.matchup || ''}  ${pick}  ${odds}  ${book}  ${units}  ev ${ev}  ${rating}${tag}`);
 }
 
 function printLegs(legs) {
   (legs || []).forEach((leg, i) => {
     const pick = leg.pick || leg.pickDisplay || leg.side;
-    console.log(`  L${i + 1}. ${leg.sport || ''}  ${leg.matchup || ''}  ${pick}  ${leg.odds || ''}  ${leg.units || ''}`);
+    const ev = leg.ev != null ? leg.ev : '';
+    console.log(`  L${i + 1}. ${leg.sport || ''}  ${leg.matchup || ''}  ${pick}  ${leg.odds || ''}  ${leg.book || ''}  ${leg.units || ''}  ev ${ev}`);
   });
+}
+
+/** Three regular-season games when the stored board has no basketball_nba rows. */
+function syntheticNbaEvents(cardDate) {
+  const commence = `${cardDate || '2026-10-20'}T23:30:00Z`;
+  const pairs = [
+    ['Boston Celtics', 'New York Knicks'],
+    ['Golden State Warriors', 'Los Angeles Lakers'],
+    ['Milwaukee Bucks', 'Miami Heat'],
+  ];
+  return pairs.map(([home, away]) => ({
+    id: `synthetic-nba-${home}`,
+    sport: 'NBA',
+    home_team: home,
+    away_team: away,
+    commence_time: commence,
+    bookmakers: ['pinnacle', 'draftkings', 'hardrockbet'].map((key) => ({
+      key,
+      markets: [
+        { key: 'h2h', outcomes: [
+          { name: home, price: key === 'pinnacle' ? -130 : (key === 'draftkings' ? 110 : 105) },
+          { name: away, price: key === 'pinnacle' ? 110 : (key === 'draftkings' ? -130 : -125) },
+        ] },
+        { key: 'spreads', outcomes: [
+          { name: home, price: -110, point: -2.5 },
+          { name: away, price: -110, point: 2.5 },
+        ] },
+        { key: 'totals', outcomes: [
+          { name: 'Over', price: -110, point: 220.5 },
+          { name: 'Under', price: -110, point: 220.5 },
+        ] },
+      ],
+    })),
+  }));
 }
 
 function runV1(bySport) {
@@ -169,7 +206,8 @@ function runEdge(bySport, cardDate, asOfMs) {
     .concat(nfl.project({ oddsEvents: bySport.NFL || [], standings: {}, efficiency: seeds.NFL || {}, gameDay: {} }))
     .concat(cfb.project({ oddsEvents: bySport.NCAAF || [], standings: {}, efficiency: seeds.NCAAF || {}, gameDay: {} }))
     .concat(nhl.project({ oddsEvents: bySport.NHL || [], standings: {}, gameDay: {} }))
-    .concat(mlb.project({ oddsEvents: bySport.MLB || [], standings: {}, gameDay: {} }));
+    .concat(mlb.project({ oddsEvents: bySport.MLB || [], standings: {}, gameDay: {} }))
+    .concat(nba.project({ oddsEvents: bySport.NBA || [], standings: {}, gameDay: {}, forCard: true }));
   const calibrated = calibrate.calibrateAll(raw).map(c => edge.attachEv(c));
   const prepared = select.prepareEdgePositions(calibrated);
   const { yesPool, rejected } = gates.applyGates(prepared.positions, { cardDate, asOfMs });
@@ -209,9 +247,18 @@ function main() {
   }
   const doc = loadBoard(file);
   const bySport = eventsBySport(doc);
+  if (Array.isArray(bySport.basketball_nba) && bySport.basketball_nba.length && !(bySport.NBA || []).length) {
+    bySport.NBA = bySport.basketball_nba.map((ev) => ({ ...ev, sport: 'NBA' }));
+  }
   const flat = Object.values(bySport).flat();
   const slate = majorityEtDate(flat);
   const asOfMs = boardAsOfMs(doc);
+  if (!(bySport.NBA || []).length) {
+    bySport.NBA = syntheticNbaEvents(slate.date);
+    console.log(`NBA events: synthetic ${bySport.NBA.length} (no basketball_nba games on this board)`);
+  } else {
+    console.log(`NBA events: board ${bySport.NBA.length}`);
+  }
   const counts = Object.entries(bySport).map(([s, evs]) => `${s}:${evs.length}`).join(' ');
   console.log(`board ${file}`);
   console.log(`source ${doc.source || ''} ${doc.generated || ''}`);

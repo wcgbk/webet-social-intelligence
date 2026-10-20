@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.4.2-omega-vnext-parlay-guard';
+const MODEL_VERSION = 'v12.5.0-nba';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -29,15 +29,27 @@ const SPORTS_ENABLED = {
   MLB: true,
   NFL: true,
   NCAAF: true,
-  NBA: false, // hooks ready; no preseason
+  NBA: true, // basketball_nba on the daily card. OMEGA_NBA=0 turns it off.
   NHL: true, // WeBet voice order 2026-09-30 — v12.3.13 NHL engine live
 };
 
 /**
- * Daily-card switch for NBA. Stays false. The card does not read OMEGA_NBA.
- * Unset OMEGA_NBA is off. This flag does not change any other sport.
+ * Daily-card switch for NBA. Default on.
+ * nbaCardEnabled() reads OMEGA_NBA at project time:
+ *   unset keeps SPORTS_ENABLED.NBA (on)
+ *   1 / true / on forces the card on
+ *   0 / false / off keeps NBA off the card
+ * The shadow observer does not read this flag.
  */
-const NBA_CARD_LIVE = false;
+const NBA_CARD_LIVE = true;
+
+function nbaCardEnabled(env) {
+  const e = env == null ? process.env : env;
+  const flag = e && e.OMEGA_NBA;
+  if (flag === '0' || flag === 'false' || flag === 'off') return false;
+  if (flag === '1' || flag === 'true' || flag === 'on') return true;
+  return SPORTS_ENABLED.NBA === true;
+}
 
 /**
  * NBA shadow observer switch. Independent of SPORTS_ENABLED.NBA.
@@ -311,6 +323,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.5.0 omega-vnext: NBA on the daily card (basketball_nba). The probability is the NBA model shrunk with the shared SHRINK_K and isotonic band toward the same-point de-vigged Pinnacle fair, and the other sharp books on that point when Pinnacle does not post it. The bet price is the better of DraftKings and Hard Rock. Moneyline, spread, and total use the same gates, Kelly sizing, grades, and unit caps as the other sports. OMEGA_NBA=0 keeps NBA off the card. The shadow observer stays a separate log. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.4.2 omega-vnext: parlay guard. A parlay leg cannot take the opposite side of a same-day straight, or any outcome negatively correlated with that straight in the same game (opposite-team moneyline or spread, or the other side of a total). Prefer the straight itself at the same price, otherwise a distinct non-conflicting game, one leg per game. Qualifying parlays need every leg EV above 0 and joint EV at least 0: joint probability is the product of the leg probabilities used for straights (correlation haircut unchanged) and the decimal is the product of the best DraftKings or Hard Rock decimals. When that 3-leg does not exist, the best non-conflicting 3-leg by joint EV still publishes at 0.5u with flag parlay-lean. Rejections list every dropped candidate. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.4.1 omega-vnext: never-block card. When at least 3 distinct games have a DraftKings or Hard Rock price, publish 3 straights and a 3-leg parlay. Open slots are the best remaining priced sides at 0.5u, one game each, and a second market only when fewer than 3 games exist. An edge over 10 percentage points stays off the card and is listed in rejections with every other dropped candidate. A killed parlay leg is refilled from the stored pool when 3 legs remain available. Narration and the summary use the post-cap units on the published picks. Grades, prices, and the 3 AM / 10 AM schedule are unchanged. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.3.13 omega-vnext: NHL projector ENABLED (WeBet 2026-09-30). Moneyline, puck line (Spread), and total come from per-game goals for/against plus HFA.NHL ${HFA.NHL} (FiveThirtyEight home ice is about 50 Elo, already this goal HFA). Season totals divide by games, counting OT losses when games is absent. Missing or unclean GF/GA stays on the 6.2 / HFA baseline. A winPct residual runs only on that unclean path. Shot efficiency runs only when both clubs have shots and savePct; a goalie residual runs only when both save rates are present. v1 does not require a goalie confirmation feed. Both residuals sit under ENGINE_SOFT.NHL HARD CAP ±${ENGINE_SOFT.NHL.maxAbsMarginAdj} goals margin / ±${ENGINE_SOFT.NHL.maxAbsTotalAdj} total (goalie alone ±${ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj} / ±${ENGINE_SOFT.NHL.goalieMaxAbsTotalAdj}) and soft-fail to 0. Game-day B2B uses SHORT_REST_DAYS.NHL = 1 with a goal-scale HFA_ADJ (max 0.10). Projections soft-clamp at |margin| 6 and total 12 and still emit a candidate. Blend matches MLB: ML 0.50 / spread 0.50 / total 0.45, no-vig Pinnacle/Circa. SPORTS_ENABLED.NHL = true. Plug-in only on existing select path with MLB/NFL/NCAAF. No Omega core routing change. FIT off. No TSP. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, SELECT_WEIGHTS, or isotonic change. FIT off. No TSP. NBA off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
@@ -371,6 +384,7 @@ module.exports = {
   DAY_SCOPE_STRICT,
   SPORTS_ENABLED,
   NBA_CARD_LIVE,
+  nbaCardEnabled,
   NBA_SHADOW,
   ODDS_SPORT_KEYS,
   ESPN_LEAGUES,

@@ -16,10 +16,9 @@ const { noVigTwoWay } = require(path.join(root, 'odds_math'));
 const ids = require(path.join(root, 'sports/data/nba-team-ids.json'));
 const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
 
-assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-assert.strictEqual(config.NBA_CARD_LIVE, false);
+assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
+assert.strictEqual(config.NBA_CARD_LIVE, true);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
-assert.notStrictEqual(process.env.OMEGA_NBA, '1');
 assert.strictEqual(config.SPORT_SPREAD_STD.NBA, 12);
 assert.strictEqual(config.SPORT_TOTAL_STD.NBA, 14);
 assert.strictEqual(nba.NBA_TOTAL_SD, 18);
@@ -48,12 +47,12 @@ async function main() {
   const deniedBody = JSON.parse(denied.body);
   assert.strictEqual(deniedBody.oddsCalls, 0);
   assert.strictEqual(deniedBody.wrote, false);
-  assert.strictEqual(deniedBody.sportsEnabledNba, false);
+  assert.strictEqual(deniedBody.sportsEnabledNba, true);
   const read = await http.handler({ httpMethod: 'GET', headers: {} }, {});
   const readBody = JSON.parse(read.body);
   assert.strictEqual(read.statusCode, 200);
   assert.strictEqual(readBody.readOnly, true);
-  assert.strictEqual(readBody.sportsEnabledNba, false);
+  assert.strictEqual(readBody.sportsEnabledNba, true);
   assert.strictEqual(readBody.oddsCalls, 0);
 }
 
@@ -280,17 +279,18 @@ function byMarket(rows, market, sideIncludes) {
   delete process.env.OMEGA_NBA;
   try {
     const slate = projectAll(snap);
-    assert.ok(!slate.some((c) => c.sport === 'NBA'));
-    config.SPORTS_ENABLED.NBA = true;
-    const flagged = projectAll(snap);
-    assert.ok(!flagged.some((c) => c.sport === 'NBA'), 'card wiring does not pass the NBA board');
-  } finally {
+    assert.ok(slate.some((c) => c.sport === 'NBA' && c.shadowOnly !== true), 'card wiring passes the NBA board');
     config.SPORTS_ENABLED.NBA = false;
+    delete process.env.OMEGA_NBA;
+    const off = projectAll(snap);
+    assert.ok(!off.some((c) => c.sport === 'NBA'), 'SPORTS_ENABLED.NBA false keeps the board off');
+  } finally {
+    config.SPORTS_ENABLED.NBA = true;
     if (prev == null) delete process.env.OMEGA_NBA;
     else process.env.OMEGA_NBA = prev;
   }
-  assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-  assert.strictEqual(config.NBA_CARD_LIVE, false);
+  assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
+  assert.strictEqual(config.NBA_CARD_LIVE, true);
 }
 
 {
@@ -321,7 +321,7 @@ function byMarket(rows, market, sideIncludes) {
     assert.strictEqual(dry.wrote, false);
     assert.strictEqual(dry.key, 'omega-nba-shadow-2026-10-20');
     assert.strictEqual(dry.payload.shadowOnly, true);
-    assert.strictEqual(dry.payload.sportsEnabledNba, false);
+    assert.strictEqual(dry.payload.sportsEnabledNba, true);
     assert.strictEqual(dry.payload.gates.minEV, 0.02);
     assert.strictEqual(dry.payload.gates.maxEV, 0.12);
     assert.ok(dry.candidateCount >= 6);
@@ -370,7 +370,7 @@ function byMarket(rows, market, sideIncludes) {
     assert.strictEqual(on.oddsCalls, 0);
     assert.strictEqual(on.wrote, true);
     assert.strictEqual(writes[0].key, 'omega-nba-shadow-2026-10-20');
-    assert.strictEqual(writes[0].data.sportsEnabledNba, false);
+    assert.strictEqual(writes[0].data.sportsEnabledNba, true);
     delete process.env.OMEGA_NBA_GENERATE_SHADOW;
 
     const finals = [{

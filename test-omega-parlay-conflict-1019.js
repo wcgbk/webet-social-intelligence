@@ -14,7 +14,7 @@ const parlay = require('./netlify/functions/lib/omega-vnext/parlay');
 const { americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');
 const { ensureCardParlay } = parlay;
 
-assert.strictEqual(MODEL_VERSION, 'v12.4.2-omega-vnext-parlay-guard');
+assert.strictEqual(MODEL_VERSION, 'v12.5.0-nba');
 
 const CARD_DATE = '2026-10-19';
 const AS_OF = Date.parse('2026-10-19T16:00:00Z');

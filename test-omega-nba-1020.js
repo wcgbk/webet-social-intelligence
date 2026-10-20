@@ -28,7 +28,7 @@ const CARD = '2026-10-20';
 const COMMENCE = '2026-10-20T23:30:00Z';
 const AS_OF = Date.parse('2026-10-20T16:00:00Z');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.3-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.4-omega-vnext');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
 assert.strictEqual(config.NBA_CARD_LIVE, true);
 assert.strictEqual(config.nbaCardEnabled(), true);
@@ -173,8 +173,10 @@ assert.ok(homeMl.ev > shadow.OBSERVER.maxEV, `card ev ${homeMl.ev} is outside th
 {
   const pick = select.toPickObject(homeMl);
   const twin = select.toPickObject({ ...homeMl, sport: 'NHL' });
-  assert.strictEqual(pick.units, twin.units, 'NBA Kelly units match the other sports');
-  assert.ok(parseU(pick.units) > 0.5, `no 0.5u NBA cap, got ${pick.units}`);
+  assert.strictEqual(pick.units, twin.units, 'NBA units match the other sports');
+  assert.strictEqual(pick.rating, twin.rating, 'NBA grade matches the other sports');
+  if (pick.rating === 'b') assert.strictEqual(pick.units, '0.5u');
+  else assert.ok(parseU(pick.units) > 0.5, `no sport-wide 0.5u NBA cap, got ${pick.units}`);
   assert.ok(parseU(pick.units) <= config.MAX_STRAIGHT_UNITS_PER_PICK + 1e-9);
   const wide = {
     ...homeMl,

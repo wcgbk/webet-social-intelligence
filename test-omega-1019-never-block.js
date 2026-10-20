@@ -160,7 +160,7 @@ function publishSlate() {
   return { prepared, yesPool, rejected, qualified, built };
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.3-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.4-omega-vnext');
 assert.strictEqual(config.LEAN_PAD, false);
 
 {
@@ -348,8 +348,7 @@ assert.strictEqual(config.LEAN_PAD, false);
   assert.strictEqual(thin.picks.length, 3, 'two priced games still fill a third straight from a second market');
   assert.strictEqual(new Set(thin.picks.map(p => p.matchup)).size, 2);
   assert.strictEqual(thin.parlayLegs[0].legs.length, 3);
-  assert.ok(thin.picks.every(p => p.flag !== 'no-edge-lean' && p.rating !== 'no-edge'));
-  assert.ok(thin.picks.every(p => parseFloat(p.units) !== 0.5));
+  assert.ok(thin.picks.every(p => p.flag !== 'no-edge-lean' && p.rating === 'b' && p.units === '0.5u'));
 }
 
 {

@@ -225,6 +225,26 @@ function pickQualityScore(pick) {
   return qualityScore(edge, clv, pick && pick.uncertainty);
 }
 
+/** Edge letter B only. A-, B+, and no-edge are not this grade. */
+const EDGE_B_UNIT_CAP = 0.5;
+
+function isEdgeGradeB(rating) {
+  return String(rating || '').trim().toLowerCase() === 'b';
+}
+
+/**
+ * Grade B stake ceiling is 0.5u. A number stays a number; a unit string stays
+ * a string. Every other rating, including no-edge, is returned unchanged.
+ */
+function capEdgeBUnits(units, rating) {
+  if (!isEdgeGradeB(rating)) return units;
+  const n = typeof units === 'number'
+    ? units
+    : (parseFloat(String(units == null ? '' : units).replace(/[^0-9.]/g, '')) || 0);
+  if (!(n > EDGE_B_UNIT_CAP)) return units;
+  return typeof units === 'number' ? EDGE_B_UNIT_CAP : `${EDGE_B_UNIT_CAP}u`;
+}
+
 /** Grade rank: lower = higher confidence (A+ first). */
 function ratingRank(rating) {
   const r = String(rating || '').toLowerCase().replace(/\s+/g, '');
@@ -292,6 +312,9 @@ module.exports = {
   formatEdgePct,
   formatMoneylinePick,
   ratingRank,
+  EDGE_B_UNIT_CAP,
+  isEdgeGradeB,
+  capEdgeBUnits,
   parseEdgeFraction,
   qualityScore,
   qualityToRating,

@@ -26,7 +26,7 @@ const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 const { selectV1, evFor } = require('./netlify/functions/lib/v1-lock/select-v1');
 const { MODEL_VERSION_V1 } = require('./netlify/functions/lib/v1-lock/config-v1');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.3-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.4-omega-vnext');
 assert.strictEqual(MODEL_VERSION_V1, 'v1-lock-2.2');
 
 function pos(overrides) {

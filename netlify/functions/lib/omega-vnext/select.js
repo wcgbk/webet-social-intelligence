@@ -9,6 +9,7 @@ const {
   kellyFraction, kellyToUnits, ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore, evAtOdds,
+  EDGE_B_UNIT_CAP, isEdgeGradeB,
 } = require('./odds_math');
 
 function matchupKey(c) {
@@ -297,8 +298,8 @@ function toPickObject(c, opts = {}) {
   let units = kellyToUnits(kFrac, perPickCap);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
   // Never-block fill: edge > 0 and EV > 0 keep qualityToRating and this Kelly
-  // size (then the normal per-pick, exposure, and daily caps). Edge <= 0 or
-  // EV <= 0 is a 0.5u no-edge lean.
+  // size (then the B-grade ceiling, the per-pick cap, and the exposure and
+  // daily caps). Edge <= 0 or EV <= 0 is a 0.5u no-edge lean.
   const noEdgeFill = !!(c && (c.noEdgeFill || (c.leanFill && !fillKeepsRealGrade(c))));
   if (noEdgeFill) units = 0.5;
 
@@ -310,6 +311,9 @@ function toPickObject(c, opts = {}) {
   const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
   const rating = noEdgeFill ? 'no-edge' : qualityToRating(edgeFrac, qualityClv, c.uncertainty);
   const grade = rating;
+  // Edge grade B is capped at 0.5u after Kelly. A+, A, and A- are unchanged.
+  // No-edge is not this grade and already sits at 0.5u.
+  if (isEdgeGradeB(rating) && units > EDGE_B_UNIT_CAP) units = EDGE_B_UNIT_CAP;
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -563,7 +567,10 @@ function applyDailyUnitCap(picks, parlayLegs) {
       if (hiUnits >= loUnits) continue;
 
       const headroom = Math.max(0, finalStraightBudget - straightTotal);
-      const lift = Math.floor(Math.min(loUnits - hiUnits, headroom, Math.max(0, MAX_STRAIGHT_UNITS_PER_PICK - hiUnits)) * 4 + 1e-9) / 4;
+      // Grade B cannot be lifted above its 0.5u ceiling. A higher letter still can.
+      const bStraight = isEdgeGradeB(hi.rating) || isEdgeGradeB(hi.grade) || isEdgeGradeB(hi.qualityGrade);
+      const hiCeiling = bStraight ? EDGE_B_UNIT_CAP : MAX_STRAIGHT_UNITS_PER_PICK;
+      const lift = Math.floor(Math.min(loUnits - hiUnits, headroom, Math.max(0, hiCeiling - hiUnits)) * 4 + 1e-9) / 4;
       if (lift > 0) {
         hiUnits += lift;
         hi.units = fmtU(hiUnits);

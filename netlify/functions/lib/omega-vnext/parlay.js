@@ -5,6 +5,7 @@ const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyFraction, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence, evAtOdds,
   isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
+  isEdgeGradeB, capEdgeBUnits,
 } = require('./odds_math');
 const { matchupKey, positionKey, dkHrPriced } = require('./select');
 
@@ -377,6 +378,10 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
       if (matched.grade || reusedGrade) grade = matched.grade || reusedGrade;
       if (matched.units) units = matched.units;
       if (Number.isFinite(Number(matched.qualityScore))) quality = Number(matched.qualityScore);
+      // Reuse copies the straight stake, and a B copy cannot exceed 0.5u.
+      if (isEdgeGradeB(rating) || isEdgeGradeB(grade) || isEdgeGradeB(qualityGrade)) {
+        units = capEdgeBUnits(units, 'b');
+      }
     }
     const confidence = ratingToConfidence(rating);
     return {
@@ -487,6 +492,10 @@ function syncLegsToPublishedStraights(parlayLegs, straights) {
       if (matched.units) next.units = matched.units;
       if (Number.isFinite(Number(matched.qualityScore))) {
         next.qualityScore = +Number(matched.qualityScore).toFixed(6);
+      }
+      // A published B stake above 0.5u must not be copied onto the leg.
+      if (isEdgeGradeB(next.rating) || isEdgeGradeB(next.grade) || isEdgeGradeB(next.qualityGrade)) {
+        next.units = capEdgeBUnits(next.units, 'b');
       }
       return next;
     });

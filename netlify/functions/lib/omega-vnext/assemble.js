@@ -161,7 +161,7 @@ function finishPublication(args) {
 /**
  * Seeds are the gate-clear / QA-kept sides. Open slots fill from DK/Hard Rock
  * prices on `positions`. Positive-edge fills keep their grade and Kelly size.
- * No-edge fills are 0.5u. A second market is used only when the priced board
+ * Grade B is then capped at 0.5u. No-edge fills are 0.5u. A second market is used only when the priced board
  * has fewer than 3 games.
  */
 function publishEdgeCard(opts = {}) {

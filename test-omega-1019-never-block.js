@@ -160,7 +160,7 @@ function publishSlate() {
   return { prepared, yesPool, rejected, qualified, built };
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.3-omega-vnext');
 assert.strictEqual(config.LEAN_PAD, false);
 
 {
@@ -330,9 +330,9 @@ assert.strictEqual(config.LEAN_PAD, false);
   });
   const four = [
     priced('A @ B', 'B', 'A', 'A ML', 'Moneyline', 0.55),
-    priced('A @ B', 'B', 'A', 'Over 6', 'Total', 0.5),
+    priced('A @ B', 'B', 'A', 'Over 6', 'Total', 0.56),
     priced('C @ D', 'D', 'C', 'C ML', 'Moneyline', 0.54),
-    priced('C @ D', 'D', 'C', 'D +1.5', 'Spread', 0.5),
+    priced('C @ D', 'D', 'C', 'D +1.5', 'Spread', 0.56),
   ];
   const thin = publishEdgeCard({
     positions: four,
@@ -348,7 +348,8 @@ assert.strictEqual(config.LEAN_PAD, false);
   assert.strictEqual(thin.picks.length, 3, 'two priced games still fill a third straight from a second market');
   assert.strictEqual(new Set(thin.picks.map(p => p.matchup)).size, 2);
   assert.strictEqual(thin.parlayLegs[0].legs.length, 3);
-  assert.ok(thin.picks.filter(p => p.lean).every(p => p.units === '0.5u' && p.rating === 'b'));
+  assert.ok(thin.picks.every(p => p.flag !== 'no-edge-lean' && p.rating !== 'no-edge'));
+  assert.ok(thin.picks.every(p => parseFloat(p.units) !== 0.5));
 }
 
 {

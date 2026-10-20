@@ -23,8 +23,10 @@ assert.strictEqual(gateReason({ sport: 'NFL', market: 'Spread', side: 'X +3', od
 // Non-football unaffected
 assert.notStrictEqual(gateReason({ sport: 'MLB', market: 'Moneyline', side: 'X', odds: -110, ev: 0.05, edgePct: 0.03, liquid: true, lockPass: 'lock-missing-data', commenceTime: new Date(Date.now() + 86400000).toISOString() }, { cardDate: '2026-10-18' }), 'lock-missing-data');
 
-// Parlay haircut: 2 legs of 0.5 at -110 each -> combined 0.25*0.95
+// Distinct games: no haircut, combined prob stays 0.25. Same game: 0.25*0.95.
 const parlay = require(R + 'parlay');
 const stats = parlay.comboStats ? parlay.comboStats([{ odds: -110, coverProb: 0.5, matchup: 'A @ B', sport: 'NFL' }, { odds: -110, coverProb: 0.5, matchup: 'C @ D', sport: 'NFL' }]) : null;
-if (stats) assert.ok(Math.abs(stats.combinedProb - 0.2375) < 1e-9, `haircut ${stats.combinedProb}`);
+if (stats) assert.ok(Math.abs(stats.combinedProb - 0.25) < 1e-9, `distinct ${stats.combinedProb}`);
+const sameGame = parlay.comboStats ? parlay.comboStats([{ odds: -110, coverProb: 0.5, matchup: 'A @ B', sport: 'NFL' }, { odds: -110, coverProb: 0.5, matchup: 'A @ B', sport: 'NFL' }]) : null;
+if (sameGame) assert.ok(Math.abs(sameGame.combinedProb - 0.2375) < 1e-9, `same-game ${sameGame.combinedProb}`);
 console.log('lock-compliance tests PASS');

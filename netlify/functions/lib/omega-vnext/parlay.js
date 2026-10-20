@@ -14,6 +14,32 @@ function marketRank(m) {
   return 1; // ML
 }
 
+/** Named game only. Legs with no matchup do not share a game with anyone. */
+function namedGameKey(leg) {
+  if (!leg || (!leg.matchup && !leg.homeTeam && !leg.awayTeam)) return null;
+  const key = matchupKey(leg);
+  if (!key || key === 'undefined @ undefined') return null;
+  return key;
+}
+
+/** Extra legs beyond the first in each game. Distinct games contribute 0. */
+function sameGameExtraCount(legs) {
+  const counts = new Map();
+  for (const leg of legs || []) {
+    const key = namedGameKey(leg);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let extra = 0;
+  for (const n of counts.values()) if (n > 1) extra += n - 1;
+  return extra;
+}
+
+function correlationLabel(extra) {
+  if (!extra) return '1';
+  return `0.95^(${extra})`;
+}
+
 function comboStats(legs) {
   let combinedDecimal = 1;
   let combinedProb = 1;
@@ -21,13 +47,23 @@ function comboStats(legs) {
     combinedDecimal *= americanToDecimal(l.odds);
     combinedProb *= l.coverProb;
   }
-  // Lock (2026-10-18): correlation haircut — raw independence overstates
-  // combined probability. combinedProb *= 0.95^(legs-1) before EV.
-  if (legs.length > 1) combinedProb *= Math.pow(0.95, legs.length - 1);
+  // 0.95 per extra leg that shares a game. Distinct games get factor 1.
+  const sameGameExtras = sameGameExtraCount(legs);
+  const correlationFactor = sameGameExtras > 0 ? Math.pow(0.95, sameGameExtras) : 1;
+  if (sameGameExtras > 0) combinedProb *= correlationFactor;
   const ev = combinedProb * combinedDecimal - 1;
   const games = new Set(legs.map(matchupKey)).size;
   const sports = new Set(legs.map(l => l.sport)).size;
-  return { combinedDecimal, combinedProb, ev, uniqueGames: games, uniqueSports: sports };
+  return {
+    combinedDecimal,
+    combinedProb,
+    ev,
+    uniqueGames: games,
+    uniqueSports: sports,
+    sameGameExtras,
+    correlationFactor,
+    correlationHaircut: correlationLabel(sameGameExtras),
+  };
 }
 
 function conflicts(a, b) {
@@ -380,13 +416,20 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
   const qualifying = !lean && rawLegs.length >= 3 && rawLegs.every(l => (l.ev || 0) > 1e-12) && st.ev >= -1e-12;
   const kind = lean ? 'lean' : (independent ? 'optimized' : 'straight');
   const n = legs.length;
-  const haircut = n > 1 ? `0.95^(${n}-1)` : null;
-  const formula = n > 1
+  const applied = st.sameGameExtras > 0;
+  const haircut = n > 1 ? (st.correlationHaircut || '1') : null;
+  const formula = applied
     ? `EV = product of leg cover probabilities × ${haircut} × product of leg decimals − 1.`
-    : 'EV = leg cover probability × leg decimal − 1.';
+    : (n > 1
+      ? 'EV = product of leg cover probabilities × product of leg decimals − 1.'
+      : 'EV = leg cover probability × leg decimal − 1.');
   let correlationNote;
   if (meta.fromStraights) {
-    const leanBit = lean ? 'Joint EV is below 0 after the correlation haircut, so this is a lean. ' : '';
+    const leanBit = !lean
+      ? ''
+      : (applied
+        ? 'Joint EV is below 0 after the correlation haircut, so this is a lean. '
+        : 'Joint EV is below 0, so this is a lean. ');
     correlationNote = `Parlay of the published straights. No opposing legs, one per game. ${leanBit}${formula}`;
   } else if (lean) {
     correlationNote = `Lean — best non-conflicting ${n}-leg by joint EV. Not a qualifying +EV parlay. ${formula}`;

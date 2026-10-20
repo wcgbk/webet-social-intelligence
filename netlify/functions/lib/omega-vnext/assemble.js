@@ -2,12 +2,14 @@
 
 /**
  * Final Edge card: never-block fill, 3-leg parlay, post-cap units, rejections.
- * Grades, prices, and the gate floors stay where select / gates left them.
+ * A fill with edge > 0 and EV > 0 keeps qualityToRating and Kelly units.
+ * A fill with edge <= 0 or EV <= 0 is 0.5u, rating and grade no-edge.
+ * Gate-clear seeds keep the grade select already stamped.
  */
 
 const { MODEL_VERSION, MAX_STRAIGHTS } = require('./config');
 const {
-  fillNeverBlock, toPickObject, samePublished, droppedRejections,
+  fillNeverBlock, fillKeepsRealGrade, toPickObject, samePublished, droppedRejections,
   applyDailyUnitCap, applyExposureCaps, sortByGradeThenUnits, positionKey, dkHrPriced,
 } = require('./select');
 const { ensureCardParlay, syncLegsToPublishedStraights } = require('./parlay');
@@ -158,8 +160,9 @@ function finishPublication(args) {
 
 /**
  * Seeds are the gate-clear / QA-kept sides. Open slots fill from DK/Hard Rock
- * prices on `positions` (0.5u leans). A second market is used only when the
- * priced board has fewer than 3 games.
+ * prices on `positions`. Positive-edge fills keep their grade and Kelly size.
+ * No-edge fills are 0.5u. A second market is used only when the priced board
+ * has fewer than 3 games.
  */
 function publishEdgeCard(opts = {}) {
   const positions = opts.positions || [];
@@ -172,7 +175,9 @@ function publishEdgeCard(opts = {}) {
       const existing = seed.find(p => samePublished(p, c));
       if (existing) return { ...existing };
     }
-    return toPickObject(c, { modelVersion: version });
+    const noEdgeFill = !!(c && c.leanFill && !fillKeepsRealGrade(c));
+    const cand = noEdgeFill ? { ...c, noEdgeFill: true } : c;
+    return toPickObject(cand, { modelVersion: version });
   });
   return finishPublication({
     picks,

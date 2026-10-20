@@ -253,6 +253,12 @@ function numericEv(c) {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
+/** A never-block fill keeps qualityToRating and Kelly only when both are positive. */
+function fillKeepsRealGrade(c) {
+  const edge = parseEdgeFraction(c && c.edgePct);
+  return Number.isFinite(edge) && edge > 0 && numericEv(c) > 0;
+}
+
 /**
  * Published straight order. Positive EV before any negative-EV lean, mains
  * before alternates inside that group, then higher EV. Quality score only
@@ -290,10 +296,11 @@ function toPickObject(c, opts = {}) {
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
-  // Never-block fill: a gate miss published to complete the card is a 0.5u lean.
-  // The quality grade of a real selection is unchanged.
-  const lean = !!(c && c.leanFill);
-  if (lean) units = 0.5;
+  // Never-block fill: edge > 0 and EV > 0 keep qualityToRating and this Kelly
+  // size (then the normal per-pick, exposure, and daily caps). Edge <= 0 or
+  // EV <= 0 is a 0.5u no-edge lean.
+  const noEdgeFill = !!(c && (c.noEdgeFill || (c.leanFill && !fillKeepsRealGrade(c))));
+  if (noEdgeFill) units = 0.5;
 
   // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
   // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.
@@ -301,7 +308,7 @@ function toPickObject(c, opts = {}) {
   const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
   const qualityClv = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
-  const rating = lean ? 'b' : qualityToRating(edgeFrac, qualityClv, c.uncertainty);
+  const rating = noEdgeFill ? 'no-edge' : qualityToRating(edgeFrac, qualityClv, c.uncertainty);
   const grade = rating;
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
@@ -363,7 +370,7 @@ function toPickObject(c, opts = {}) {
     ...(Array.isArray(c.placeableBooks) ? { placeableBooks: c.placeableBooks.slice() } : {}),
     ...(c.bestPlaceable ? { bestPlaceable: c.bestPlaceable } : {}),
     ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
-    ...(lean ? { lean: true, fallback: true } : {}),
+    ...(noEdgeFill ? { lean: true, fallback: true, flag: 'no-edge-lean' } : {}),
   };
 }
 
@@ -385,7 +392,8 @@ function edgeWithinTen(c) {
  * Never-block fill. Seeds stay. When the priced board has enough DraftKings /
  * Hard Rock games, top the card up to maxN. New games first. A second market
  * from a game is allowed only when fewer than maxN distinct priced games exist.
- * Fills are marked leanFill so toPickObject sizes them at 0.5u.
+ * Fills are marked leanFill. Positive edge and EV keep their grade and Kelly
+ * size. No-edge fills (edge <= 0 or EV <= 0) are 0.5u, rating no-edge.
  * Rank is EV: every positive-EV side (one per game) is taken before a
  * negative-EV lean. Miscalibration is already out of `positions`.
  */
@@ -588,6 +596,7 @@ module.exports = {
   matchupKey,
   dkHrPriced,
   fillNeverBlock,
+  fillKeepsRealGrade,
   droppedRejections,
   samePublished,
   formatMoneylinePick,

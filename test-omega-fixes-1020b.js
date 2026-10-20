@@ -1,13 +1,14 @@
 'use strict';
 /**
  * v12.5.2: EV-first straights, parlay built from those straights,
- * parlay EV = haircut product of the shown leg cover probs × product of
- * leg decimals − 1, V1 no-edge label, grade fields on stored straights.
+ * parlay EV = joint probability × product of leg decimals − 1.
+ * Distinct games take no correlation haircut. V1 no-edge grade, grade fields
+ * on stored straights.
  * No network, no blobs.
  *
  * The 10/20 v12.5.1 card printed straights at negative EV and a parlay of
- * three different positive-EV sides at -3.6%. That -3.6% is the 0.95^(n-1)
- * haircut on those parlay legs' full-precision cover probabilities. The
+ * three different positive-EV sides. The retired 0.95^(n-1) haircut on those
+ * distinct games printed -3.6%. Distinct games now keep the independent EV. The
  * saved Pistons diagnostic stores the raw gap as edgePct and does not store
  * modelRawP or fair separately; this file checks the new record shape with
  * synthetic inputs.
@@ -25,8 +26,8 @@ const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 const { selectV1, evFor } = require('./netlify/functions/lib/v1-lock/select-v1');
 const { MODEL_VERSION_V1 } = require('./netlify/functions/lib/v1-lock/config-v1');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
-assert.strictEqual(MODEL_VERSION_V1, 'v1-lock-2.1');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.3-omega-vnext');
+assert.strictEqual(MODEL_VERSION_V1, 'v1-lock-2.2');
 
 function pos(overrides) {
   const odds = overrides.odds;
@@ -123,8 +124,8 @@ function parsePct(v) {
   assert.deepStrictEqual(short.map(c => c.side), ['Over 5.5', 'Colorado Avalanche', 'Vancouver Canucks']);
 }
 
-// 10/20 parlay legs, full precision. Independent EV is positive.
-// 0.95^(3-1) is what prints -3.6%.
+// 10/20 parlay legs, full precision, three distinct games. No haircut.
+// The retired 0.95^(3-1) haircut is what printed -3.6%.
 {
   const raw = [
     { sport: 'NHL', matchup: 'Winnipeg Jets @ St Louis Blues', side: 'Over 5.5', market: 'Total', odds: -120, coverProb: 0.5616895689658767, ev: 0.0298 },
@@ -134,18 +135,19 @@ function parsePct(v) {
   const dec = raw.reduce((s, l) => s * americanToDecimal(l.odds), 1);
   const p = raw.reduce((s, l) => s * l.coverProb, 1);
   const independent = p * dec - 1;
-  const haircutEv = p * Math.pow(0.95, 2) * dec - 1;
+  const retired = p * Math.pow(0.95, 2) * dec - 1;
   assert.ok(independent > 0.06 && independent < 0.07, independent);
-  assert.strictEqual(`${(haircutEv * 100).toFixed(1)}%`, '-3.6%');
+  assert.strictEqual(`${(retired * 100).toFixed(1)}%`, '-3.6%');
   const stats = parlay.comboStats(raw);
-  assert.ok(Math.abs(stats.ev - haircutEv) < 1e-12);
-  assert.strictEqual(`${(stats.ev * 100).toFixed(1)}%`, '-3.6%');
+  assert.strictEqual(stats.correlationHaircut, '1');
+  assert.strictEqual(stats.sameGameExtras, 0);
+  assert.ok(Math.abs(stats.ev - independent) < 1e-12);
+  assert.notStrictEqual(`${(stats.ev * 100).toFixed(1)}%`, '-3.6%');
   assert.ok(stats.combinedDecimal > 4.7 && stats.combinedDecimal < 4.8);
 }
 
 // Published card: those +EV sides are the straights. The parlay is those
-// straights. EV uses the cover probabilities on the legs (tenths) with the
-// same haircut, and the ticket says so.
+// straights. Distinct games get factor 1, so joint EV stays the product.
 {
   const over = pos({
     sport: 'NHL', matchup: 'Winnipeg Jets @ St Louis Blues',
@@ -217,22 +219,26 @@ function parsePct(v) {
     assert.ok(straight, leg.pick);
     assert.strictEqual(parlay.conflictsWithStraight(leg, straight), false);
   }
-  assert.strictEqual(ticket.correlationHaircut, '0.95^(3-1)');
+  assert.strictEqual(ticket.correlationHaircut, '1');
   assert.ok(/published straights/i.test(ticket.correlationNote), ticket.correlationNote);
-  assert.ok(/0\.95\^\(3-1\)/.test(ticket.correlationNote), ticket.correlationNote);
-  assert.ok(/correlation haircut/i.test(ticket.correlationNote), ticket.correlationNote);
-  const shown = ticket.legs.map(l => ({ odds: parseFloat(String(l.odds).replace(/[^0-9.+-]/g, '')), coverProb: parsePct(l.coverProb) }));
+  assert.ok(!/0\.95\^/.test(ticket.correlationNote), ticket.correlationNote);
+  assert.ok(/product of leg decimals/i.test(ticket.correlationNote), ticket.correlationNote);
+  const shown = ticket.legs.map(l => ({
+    odds: parseFloat(String(l.odds).replace(/[^0-9.+-]/g, '')),
+    coverProb: parsePct(l.coverProb),
+    matchup: l.matchup,
+    sport: l.sport,
+  }));
   const shownP = shown.reduce((s, l) => s * l.coverProb, 1);
   const shownDec = shown.reduce((s, l) => s * americanToDecimal(l.odds), 1);
   const shownIndependent = shownP * shownDec - 1;
-  const shownHair = shownP * Math.pow(0.95, 2) * shownDec - 1;
   assert.ok(shownIndependent > 0, shownIndependent);
-  assert.ok(shownHair < 0, shownHair);
   const stats = parlay.comboStats(shown);
-  assert.ok(Math.abs(stats.ev - shownHair) < 1e-12);
+  assert.strictEqual(stats.correlationHaircut, '1');
+  assert.ok(Math.abs(stats.ev - shownIndependent) < 1e-12);
   assert.strictEqual(ticket.ev, `${(stats.ev * 100).toFixed(1)}%`);
-  assert.strictEqual(ticket.lean, true);
-  assert.strictEqual(ticket.flag, 'parlay-lean');
+  assert.strictEqual(ticket.lean, false);
+  assert.notStrictEqual(ticket.flag, 'parlay-lean');
   assert.ok(card.rejections.some(r => r.reason === 'conflict-with-straight' && /Kings/.test(r.side || '')));
   assert.ok(card.rejections.some(r => r.reason === 'conflict-with-straight' && /Under 5\.5/.test(r.side || '')));
 
@@ -254,8 +260,8 @@ function parsePct(v) {
   assert.strictEqual(stored.rejections.length, 0);
   assert.ok(stored.picks.every(p => p.rating && p.grade && p.qualityGrade));
   assert.ok(stored.picks.some(p => p.rating === 'a' && p.grade === 'a' && p.qualityGrade === 'a'));
-  assert.strictEqual(stored.parlayLegs[0].correlationHaircut, '0.95^(3-1)');
-  assert.ok(/0\.95\^\(3-1\)/.test(stored.parlayLegs[0].correlationNote));
+  assert.strictEqual(stored.parlayLegs[0].correlationHaircut, '1');
+  assert.ok(!/0\.95\^/.test(stored.parlayLegs[0].correlationNote));
 }
 
 // Pre-calibration gate keeps modelRawP and fair on the record. Synthetic gap, not the 10/20 card.
@@ -302,9 +308,9 @@ function parsePct(v) {
   assert.strictEqual(thin.picks[0].rating, 'no-edge');
   assert.strictEqual(thin.picks[0].flag, 'no-edge-lean');
   assert.ok(thin.picks[0].filterFlags.includes('no-edge-lean'));
-  assert.strictEqual(thin.picks[0].grade, 'B');
+  assert.strictEqual(thin.picks[0].grade, 'no-edge');
   assert.strictEqual(thin.picks[0].units, '0.5u');
-  assert.strictEqual(thin.picks[0].model, 'v1-lock-2.1');
+  assert.strictEqual(thin.picks[0].model, 'v1-lock-2.2');
   assert.ok(parseFloat(thin.picks[0].ev) > 0);
 
   const neg = selectV1([{

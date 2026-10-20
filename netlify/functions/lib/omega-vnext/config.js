@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.5.2-omega-vnext';
+const MODEL_VERSION = 'v12.5.3-omega-vnext';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -323,6 +323,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.5.3 omega-vnext: a never-block fill with edge above 0 and EV above 0 keeps qualityToRating and quarter-Kelly units, then the per-pick cap ${MAX_STRAIGHT_UNITS_PER_PICK}u and the exposure and daily caps. A fill with edge at or below 0, or EV at or below 0, is 0.5u with rating and grade no-edge and flag no-edge-lean. The parlay haircut 0.95 applies once per extra leg that shares a game. Legs from distinct games use factor 1. correlationHaircut is that factor. Parlay EV is the joint probability times the product of the leg decimals, minus 1. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.5.2 omega-vnext: straights rank by EV. Every positive-EV side, one per game, is a straight before any negative-EV lean. Miscalibration above 10pp stays off the card. The parlay is those published straights: no opposing leg, one per game, and a second market only when the card has fewer than 3 games. Parlay EV is the product of the leg cover probabilities times 0.95^(n-1), times the product of the leg decimals, minus 1. The haircut is on the ticket as correlationHaircut. Straight picks carry rating, grade, and qualityGrade through get-picks-omega. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.5.1 omega-vnext: edge-space calibration. The 0.42–0.58 soft band compresses the edge (p_shrunk - fair), not the probability, so a longshot is not pulled up toward 0.42 and a favorite is not pulled down toward 0.58. Missing fair skips the clip and keeps the plain shrink. A raw modelRawP-versus-fair edge above 10 percentage points is miscalibration before shrink, and a calibrated edge above 10pp is still dropped after; both land on diagnostics.miscalibrated and rejections. A parlay leg that matches a published straight (same game, market, side) reuses that straight's rating, quality grade, and units. The fixed ${PARLAY_FIXED_UNITS}u parlay stake does not count against the 1u per-game straight cap. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.5.0 omega-vnext: NBA on the daily card (basketball_nba). The probability is the NBA model shrunk with the shared SHRINK_K and isotonic band toward the same-point de-vigged Pinnacle fair, and the other sharp books on that point when Pinnacle does not post it. The bet price is the better of DraftKings and Hard Rock. Moneyline, spread, and total use the same gates, Kelly sizing, grades, and unit caps as the other sports. OMEGA_NBA=0 keeps NBA off the card. The shadow observer stays a separate log. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,

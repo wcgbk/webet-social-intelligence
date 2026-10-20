@@ -28,7 +28,7 @@ const CARD = '2026-10-20';
 const COMMENCE = '2026-10-20T23:30:00Z';
 const AS_OF = Date.parse('2026-10-20T16:00:00Z');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.5.2-omega-vnext');
+assert.strictEqual(config.MODEL_VERSION, 'v12.5.3-omega-vnext');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, true);
 assert.strictEqual(config.NBA_CARD_LIVE, true);
 assert.strictEqual(config.nbaCardEnabled(), true);

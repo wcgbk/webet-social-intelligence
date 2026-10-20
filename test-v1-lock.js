@@ -351,7 +351,7 @@ console.log('test-v1-lock 1019 fallback: PASS');
   assert.notStrictEqual(gradeForV1('NFL', homeLay.trueProbability), 'A+');
 }
 console.log('test-v1-lock 1019 caps and shrink: PASS');
-// --- v1-lock-2.1: sub-1pp and non-positive EV are no-edge / B at 0.5u, never A ---
+// --- v1-lock-2.2: sub-1pp and non-positive EV are grade no-edge at 0.5u, never A ---
 {
   const { summaryTotalsV1 } = L('select-v1');
   const A_FAMILY = new Set(['A+', 'A', 'A-', 'a+', 'a', 'a-']);
@@ -361,7 +361,7 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
     assert.strictEqual(p.rating, 'no-edge');
     assert.strictEqual(p.flag, 'no-edge-lean');
     assert.ok(p.filterFlags.includes('no-edge-lean'));
-    assert.strictEqual(p.grade, 'B');
+    assert.strictEqual(p.grade, 'no-edge');
     assert.strictEqual(p.lockGrade, 'B');
     assert.strictEqual(p.units, '0.5u');
     assert.strictEqual(p.lockReceipt.rating, 'no-edge');
@@ -416,7 +416,7 @@ console.log('test-v1-lock 1019 caps and shrink: PASS');
   assert.strictEqual(bills.rating, 'no-edge');
   assert.strictEqual(bills.flag, 'no-edge-lean');
   assert.ok(bills.filterFlags.includes('no-edge-lean'));
-  assert.strictEqual(bills.grade, 'B');
+  assert.strictEqual(bills.grade, 'no-edge');
   assert.strictEqual(bills.units, '0.5u');
   assert.ok(parseFloat(bills.ev) > 0);
   assert.ok(bills.edge == null || bills.edge < 0.01);

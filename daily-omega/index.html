@@ -134,7 +134,7 @@
     .badge-aminus { background: #1abc9c; }
     .badge-bplus { background: #f39c12; }
     .badge-b { background: #f9a825; }
-    .badge-lean { background: #5b6b7a; }
+    .badge-lean, .badge-no-edge { background: #5b6b7a; }
 
     .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pick-matchup-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .375rem; min-width: 0; }
@@ -828,8 +828,8 @@
     return matchup.replace(/\s+@\s+/, ' vs ').replace(/\s+vs\.\s+/i, ' vs ');
   }
 
-  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
-  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
+  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean', 'no-edge':'badge-no-edge' };
+  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean', 'no-edge':'No edge' };
 
   /* Round UP to whole dollars — no cents anywhere (37.5 -> 38); -1e-9 keeps wholes whole. */
   function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
@@ -1487,6 +1487,7 @@
       'B+': 'bplus', 'b+': 'bplus', bplus: 'bplus',
       'B': 'b', b: 'b',
       'Lean': 'lean', lean: 'lean',
+      'No edge': 'no-edge', 'no-edge': 'no-edge',
     };
     if (typeof p.rating === 'string' && map[p.rating] != null) return map[p.rating];
     if (typeof p.confidence === 'string' && badgeClass[p.confidence]) return p.confidence;
@@ -1517,13 +1518,13 @@
     const isLiveOrDone = game && (game.state === 'in' || game.state === 'post');
     let gameTimeStr = '';
     if (isPreGame && game && game.startTimeEST) {
-      gameTimeStr = game.startTimeEST + ' EST';
+      gameTimeStr = game.startTimeEST + ' ET';
     } else if (isPreGame && game && game.detail) {
       gameTimeStr = game.detail;
     } else if (isPreGame && p.commenceTime) {
       try {
         const ct = new Date(p.commenceTime);
-        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST';
+        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
       } catch (e) {}
     }
 
@@ -1635,7 +1636,7 @@
   }
 
   function renderPicks(data) {
-    const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5, 'A+': 0, 'A': 1, 'A-': 2, 'B+': 3, 'B': 4, 'Lean': 5 };
+    const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5, 'no-edge': 6, 'A+': 0, 'A': 1, 'A-': 2, 'B+': 3, 'B': 4, 'Lean': 5, 'No edge': 6 };
     const picks = (data.picks || []).slice(0, 3).sort((a, b) => {
       const keyA = (typeof a.rating === 'string' && ratingOrder[a.rating] != null) ? a.rating
         : (typeof a.confidence === 'string' ? a.confidence : a.rating);
@@ -2088,7 +2089,7 @@
           let t = '';
           if (game && game.startTimeEST) t = game.startTimeEST;
           else if (p.commenceTime) { try { t = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
-          if (t) { const tz = t.includes('EST') || t.includes('EDT') ? t : t + ' EST'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
+          if (t) { const tz = /\bE[DS]?T\b/.test(t) ? t : t + ' ET'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
         } else if (isLiveGame) {
           const scoreStr = game ? `(${game.awayScore}-${game.homeScore})` : '';
           rightSide = `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">${scoreStr}</span><span class="result-badge result-pending">LIVE</span>`;

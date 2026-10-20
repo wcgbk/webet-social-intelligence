@@ -8,15 +8,17 @@
  * cannot grade above A-, and lose the straight slot to the next
  * qualifying price that is not that short.
  * Straight EV is win probability times the confirmed decimal price, minus 1.
- * Parlay joint probability is the product of the leg probabilities;
- * parlay EV is that joint probability times the product of the leg decimals, minus 1.
+ * Parlay joint probability is the product of the leg probabilities, times
+ * 0.95 for each extra leg that shares a game (distinct games get factor 1).
+ * Parlay EV is that joint probability times the product of the leg decimals, minus 1.
+ * correlationHaircut is the factor actually applied.
  * Grades are the edge versus the de-vigged Pinnacle fair
  * (trueProbability - pPinnacle). Fallback rows where p equals that fair
  * use the edge versus the price (or the row's edge). Bands: A+ ≥5pp,
  * A 3.5–5, A- 2–3.5, B 1–2 at 0.5u. Below 1pp or EV ≤ 0 does not qualify.
  * Fill still publishes 3 straights when the board has the games: EV>0
  * rows first, then the least-negative EV. Any pick whose edge is below 1pp
- * or whose EV is not positive is rating no-edge, flag no-edge-lean, 0.5u.
+ * or whose EV is not positive is rating no-edge, grade no-edge, flag no-edge-lean, 0.5u.
  * The parlay uses the same rows.
  * A straight with EV at or below 0 is never an A-family stake.
  */
@@ -109,7 +111,7 @@ function toPickV1(c, grade, ev, opts={}){
   let lockGrade=opts.lockGrade!==undefined?opts.lockGrade:grade;
   const noEdge=!!(opts.noEdge)||belowQualifyingThresholdV1(c, ev);
   if(noEdge){
-    outGrade='B'; lockGrade='B'; rating='no-edge'; unit=0.5;
+    outGrade='no-edge'; lockGrade='B'; rating='no-edge'; unit=0.5;
   } else if(mustUseLeanFillV1(outGrade, ev, { ...opts, lockGrade, rating })){
     outGrade='B'; lockGrade='B'; rating='lean'; unit=0.5;
   }
@@ -223,7 +225,7 @@ function noEdgeFillPickV1(row){
   pick.flag='no-edge-lean';
   pick.filterFlags=flags;
   pick.rating='no-edge';
-  pick.grade='B';
+  pick.grade='no-edge';
   pick.lockGrade='B';
   pick.units='0.5u';
   if(pick.lockReceipt){
@@ -272,6 +274,17 @@ function summaryTotalsV1(picks, parlayLegs){
     leanUnits:fmtUnitsV1(leanUnits),
   };
 }
+function sameGameExtrasV1(legs){
+  const counts=new Map();
+  for(const leg of legs||[]){
+    const key=String(leg&&leg.matchup||'').trim().toLowerCase();
+    if(!key) continue;
+    counts.set(key,(counts.get(key)||0)+1);
+  }
+  let extra=0;
+  for(const n of counts.values()) if(n>1) extra+=n-1;
+  return extra;
+}
 function parlayFromPicksV1(legs){
   if(!legs||legs.length<3) return [];
   const three=legs.slice(0,3);
@@ -283,11 +296,15 @@ function parlayFromPicksV1(legs){
     dec*=decFromAmerican(odds); p*=prob;
   }
   if(!(dec>1)||!Number.isFinite(p)) return [];
-  // Joint p = product of leg probabilities. EV at the product of decimals.
-  const ev=p*dec-1;
+  // 0.95 once per extra same-game leg. Distinct games stay at factor 1.
+  const extra=sameGameExtrasV1(three);
+  const factor=extra>0?Math.pow(0.95, extra):1;
+  const joint=p*factor;
+  const ev=joint*dec-1;
   const am=dec>=2?Math.round((dec-1)*100):Math.round(-100/(dec-1));
+  const correlationHaircut=extra>0?`0.95^(${extra})`:'1';
   return [{ type:'3-leg-parlay-v1-lock', units:'0.5u', combinedOdds:String(am>0?`+${am}`:`${am}`),
-    combinedProb:fmtPct(p), ev:fmtPct(ev), uniqueGames:3, source:'v1-lock', legs:three }];
+    combinedProb:fmtPct(joint), ev:fmtPct(ev), uniqueGames:3, correlationHaircut, source:'v1-lock', legs:three }];
 }
 function selectV1(candidates, formulaPasses=[]){
   const funnel={ candidates:(candidates||[]).length, formulaPassGames:formulaPasses.length,
@@ -319,7 +336,7 @@ function selectV1(candidates, formulaPasses=[]){
     picks.push(pick);
     diagnostics.fallback.push({
       matchup:row.c.matchup, side:row.c.side, sport:row.c.sport, edge:e,
-      grade:'B', rating:noEdge?'no-edge':'lean', flag:noEdge?'no-edge-lean':null,
+      grade:noEdge?'no-edge':'B', rating:noEdge?'no-edge':'lean', flag:noEdge?'no-edge-lean':null,
       flags:row.data, fill:true,
     });
     funnel.fallbackFill++;
@@ -356,4 +373,4 @@ function selectV1(candidates, formulaPasses=[]){
   funnel.parlayLegPool=legPicks.length;
   return { picks, parlayLegs, funnel, rejections, diagnostics, qualifiedPoolSize:qualified.length };
 }
-module.exports={ selectV1, receiptV1, evFor, decFromAmerican, summaryTotalsV1 };
+module.exports={ selectV1, receiptV1, evFor, decFromAmerican, summaryTotalsV1, parlayFromPicksV1 };

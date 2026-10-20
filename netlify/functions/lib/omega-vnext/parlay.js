@@ -335,6 +335,7 @@ function ticketFromRawLegs(rawLegs, straights, meta = {}) {
       matchup: l.matchup,
       betType: l.market,
       odds: formatAmerican(l.odds),
+      book: l.book || (l.bestPlaceable && l.bestPlaceable.book) || null,
       commenceTime: l.commenceTime || '',
       coverProb: `${(l.coverProb * 100).toFixed(1)}%`,
       ev: `${((l.ev || 0) * 100).toFixed(1)}%`,

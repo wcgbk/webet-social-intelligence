@@ -10,9 +10,9 @@ const S = require('./lib/omega-v1ab/sharp');
 function todayET() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 }
+const { store } = require('./lib/omega-v1ab/blob');
 async function stores() {
-  const { getStore } = await import('@netlify/blobs');
-  return { omega: getStore('edge-picks-omega'), ab: getStore(S.V1AB_STORE) };
+  return { omega: store('edge-picks-omega'), ab: store(S.V1AB_STORE) }; // omega: read-only (getJSON only)
 }
 
 async function buildCard(omegaCard, { dateISO, nowMs = Date.now() } = {}) {
@@ -57,7 +57,7 @@ exports.handler = async (event) => {
   const dryRun = !!(body.dryRun || qs.dryRun === 'true');
   try {
     const { omega, ab } = await stores();
-    const omegaCard = await omega.get(`picks-${dateISO}`, { type: 'json' });
+    const omegaCard = await omega.getJSON(`picks-${dateISO}`);
     if (!omegaCard || !Array.isArray(omegaCard.parlayPool)) {
       return { statusCode: 503, body: JSON.stringify({ ok: false, error: `Omega card picks-${dateISO} not ready` }) };
     }
@@ -65,8 +65,8 @@ exports.handler = async (event) => {
     const card = await buildCard(omegaCard, { dateISO, nowMs });
     if (!dryRun) {
       await ab.setJSON(`picks-${dateISO}`, card);
-      await ab.set('latest-date', dateISO);
-      let dates = (await ab.get('picks-dates', { type: 'json' })) || [];
+      await ab.setJSON('latest-date', dateISO);
+      let dates = (await ab.getJSON('picks-dates')) || [];
       if (!dates.includes(dateISO)) { dates.push(dateISO); dates.sort(); await ab.setJSON('picks-dates', dates); }
     }
     return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun, date: dateISO, picks: card.picks.length, parlay: card.parlayLegs.length }) };

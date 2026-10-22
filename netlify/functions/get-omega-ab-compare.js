@@ -24,10 +24,10 @@ exports.handler = async (event) => {
   const qs = (event && event.queryStringParameters) || {};
   const base = process.env.URL || 'https://webetsocial.com';
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const omega = getStore('edge-picks-omega');
-    const ab = getStore(S.V1AB_STORE);
-    const abDates = ((await ab.get('picks-dates', { type: 'json' })) || []).filter(d => d >= S.V1AB_KPI_START);
+    const { store } = require('./lib/omega-v1ab/blob');
+    const omega = store('edge-picks-omega'); // read-only
+    const ab = store(S.V1AB_STORE);          // read-only here
+    const abDates = ((await ab.getJSON('picks-dates')) || []).filter(d => d >= S.V1AB_KPI_START);
     const [rO, rV] = await Promise.all([
       fetch(`${base}/api/get-results-omega?range=30`).then(r => r.json()).catch(() => null),
       fetch(`${base}/api/get-results-omega-v1?range=30`).then(r => r.json()).catch(() => null),
@@ -37,7 +37,7 @@ exports.handler = async (event) => {
     const days = [];
     for (const d of abDates.slice().reverse()) {
       const [oc, vc, clv] = await Promise.all([
-        omega.get(`picks-${d}`, { type: 'json' }), ab.get(`picks-${d}`, { type: 'json' }), omega.get(`clv-${d}`, { type: 'json' }),
+        omega.getJSON(`picks-${d}`), ab.getJSON(`picks-${d}`), omega.getJSON(`clv-${d}`),
       ]);
       const cm = clvMap(clv);
       const oDay = dayOf(rO, d), vDay = dayOf(rV, d);

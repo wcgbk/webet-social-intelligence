@@ -17,6 +17,11 @@
 /api/grok-beta-picks  /.netlify/functions/grok-beta-get-picks  200
 /api/grok-beta-run    /.netlify/functions/grok-beta-run        200
 /api/grok-beta-status /.netlify/functions/grok-beta-status     200
+/daily-omega-v1  /daily-omega-v1/index.html  200
+/daily-omega-v1/ /daily-omega-v1/index.html  200
+/api/get-picks-omega-v1   /.netlify/functions/get-picks-omega-v1   200
+/api/get-results-omega-v1 /.netlify/functions/get-results-omega-v1 200
+/api/get-omega-ab-compare /.netlify/functions/get-omega-ab-compare 200
 /daily-omega  /daily-omega/index.html  200
 /daily-omega/ /daily-omega/index.html  200
 /omega        /daily-omega             301

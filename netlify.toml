@@ -28,6 +28,9 @@
 [functions."generate-picks-alpha-background"]
   # Background function — 15min timeout for Alpha pick generation
 
+[functions."trigger-picks-omega-v1"]
+  schedule = "45 14 * * *"  # 10:45am ET EDT (EST from Nov 1: "45 15"). Omega V1 A/B: after Omega 10:15 generate; reads edge-picks-omega read-only, writes edge-picks-omega-v1ab.
+
 [functions."trigger-picks-omega"]
   schedule = "15 14 * * *"  # 10:15am ET EDT, after 10AM pull (was "30 13 * * *")
   # OMEGA vNext (v12 CLV-first) — 9:30am ET (13:30 UTC in EDT). Generate early enough for QA;

@@ -26,19 +26,36 @@ function blobAuth() {
   };
 }
 
+async function putBlobViaStore(key, body) {
+  try {
+    const { getStore } = require("@netlify/blobs");
+    const store = getStore(STORE_NAME);
+    await store.set(key, JSON.stringify(body));
+    return true;
+  } catch (e) {
+    console.error(`[circa-health] getStore fallback failed for ${key}: ${e.message}`);
+    return false;
+  }
+}
+
 async function putBlob(key, body) {
   const b = blobAuth();
-  if (!b) return false;
+  if (!b) {
+    console.error(`[circa-health] NETLIFY_AUTH_TOKEN missing — cannot PUT ${key}`);
+    return putBlobViaStore(key, body);
+  }
   try {
     const resp = await fetch(`${b.storeUrl}/${key}`, {
       method: "PUT",
       headers: { ...b.auth, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    return resp.ok;
+    if (resp.ok) return true;
+    console.error(`[circa-health] Blob PUT ${key} failed HTTP ${resp.status}`);
   } catch (e) {
-    return false;
+    console.error(`[circa-health] Blob PUT ${key} failed: ${e.message}`);
   }
+  return putBlobViaStore(key, body);
 }
 
 async function readBlob(key) {
@@ -71,17 +88,24 @@ async function writeCircaCardHealth(snap) {
     checkedAt: now.toISOString(),
     opsOnly: true,
   };
-  await putBlob(HEALTH_LATEST, payload);
-  await putBlob(healthDateKey(now), payload);
+  const latest = await putBlob(HEALTH_LATEST, payload);
+  const dated = await putBlob(healthDateKey(now), payload);
+  let alert = false;
   if (payload.status !== "ok") {
-    await putBlob(HEALTH_ALERT, payload);
+    alert = await putBlob(HEALTH_ALERT, payload);
   }
-  return payload;
+  return {
+    ...payload,
+    persisted: { latest: !!latest, dated: !!dated, alert: !!alert },
+  };
 }
 
 /**
  * Health-check cron windows: ~5 minutes after each Circa generate slot
  * (Thu/Fri/Sat + holiday Wed) so the background generate has time to finish.
+ * Also returns the generate slot name from circaCronSlot (first / refresh /
+ * final / holiday-first) when `now` is inside that window, so every generate
+ * slot has a matching health slot. Follow-up names (*-check) win on overlap.
  */
 function circaHealthCronSlot(now = new Date(), slackMin = 8) {
   const day = now.getUTCDay();
@@ -95,6 +119,9 @@ function circaHealthCronSlot(now = new Date(), slackMin = 8) {
   if (day === 6 && near(20, 5)) return "final-check";
   // Holiday Wed 17:15 → check 17:20
   if (day === 3 && near(17, 20)) return "holiday-check";
+  // Same windows as trigger-picks-circa (circaCronSlot default slack).
+  const gen = circaCronSlot(now);
+  if (gen) return gen;
   return null;
 }
 

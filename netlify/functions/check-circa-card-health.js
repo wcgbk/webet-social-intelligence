@@ -1,5 +1,7 @@
 // check-circa-card-health.js
 // Follow-up checker after Circa generate cron slots (Thu/Fri/Sat + holiday).
+// Outside a health window (and not force), still read the current week card
+// and write an off-window snapshot. Out-of-season stays a no-op with no write.
 // If the week card is pending/empty/error or has fewer than 5 picks, persist
 // alert blob (errorCode); WeBet Circa Grok Bot polls the circa-ops health blobs.
 
@@ -40,10 +42,6 @@ exports.handler = async (event) => {
   } catch (e) {}
   const now = new Date();
   const slot = circaHealthCronSlot(now);
-  if (!body.force && !slot) {
-    console.log(`[circa-health] Outside health-check window (${now.toISOString()}) — no-op.`);
-    return { statusCode: 200, body: "Circa health check no-op" };
-  }
 
   const resolved = resolveContestWeek(now);
   const weekNum = resolved.weekNum;
@@ -52,8 +50,14 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "outside NFL season", week }) };
   }
 
+  // Read the card whether or not this invocation is inside a health window.
   const card = await readCard(week);
   const evald = evaluateCardHealth(card, { weekNum, week });
+  const offWindow = !body.force && !slot;
+  if (offWindow) {
+    console.log(`[circa-health] Outside health-check window (${now.toISOString()}) — writing off-window snapshot.`);
+  }
+  const healthSlot = offWindow ? "off-window" : (slot || body.slot || "manual");
   const health = await writeCircaCardHealth({
     weekNum,
     week,
@@ -61,7 +65,7 @@ exports.handler = async (event) => {
     errorCode: evald.errorCode,
     errorMessage: evald.errorMessage,
     picksCount: evald.picksCount,
-    slot: slot || body.slot || "manual",
+    slot: healthSlot,
     source: "health-check",
     lineSource: card && card.lineSource,
     fromFixture: card && card.fromFixture,
@@ -73,7 +77,7 @@ exports.handler = async (event) => {
       `[circa-health] ALERT week=${week} errorCode=${health.errorCode} picks=${health.picksCount}`
     );
   } else {
-    console.log(`[circa-health] OK week=${week} picks=${health.picksCount}`);
+    console.log(`[circa-health] OK week=${week} picks=${health.picksCount} slot=${healthSlot}`);
   }
 
   return {
@@ -81,7 +85,7 @@ exports.handler = async (event) => {
     body: JSON.stringify({
       ok: health.status === "ok",
       health,
-      slot: slot || "force",
+      slot: offWindow ? "off-window" : (slot || "force"),
       store: STORE_NAME,
     }),
   };

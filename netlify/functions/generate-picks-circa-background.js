@@ -16,9 +16,16 @@
 // Default-avoid kickoffs before Sat 4pm PT unless coverProb gap ≥ 4pp.
 // Never include a game that already started. Skip/no-op outside NFL season.
 //
-// POST body: { scheduled?: bool, force?: bool, dryRun?: bool, week?: "2026-W01" }
-//   force  — override the existing-picks overwrite guard
-//   dryRun — compute + log everything, write nothing
+// POST body: { scheduled?: bool, force?: bool, dryRun?: bool, week?: "2026-W01",
+//   sourceUrl?: string, skipOdds?: bool }
+//   force     — override the existing-picks overwrite guard
+//   dryRun    — compute + log everything, write nothing (no card-health blob)
+//   sourceUrl — optional official Contest Point Spreads PDF. Accepted only when
+//     it matches
+//     https://www.circasports.com/wp-content/uploads/YYYY/MM/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-N.pdf
+//     Anything else is ignored and never passed to the loader.
+//   skipOdds  — when true, do not call the Odds API at all; rate the Circa PDF
+//     from team ratings only. A sportsbook number is never the contest line.
 // Scheduled refresh is allowed until Sat 4:00 PM PT; after the deadline the
 // card is locked unless force:true.
 //
@@ -60,6 +67,22 @@ const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = CONTEST.storeName;
 const MODEL_VERSION = CONTEST.modelVersion;
 const NFL_ODDS_SPORT = "americanfootball_nfl";
+
+// Official Circa Million VIII weekly sheet only. Never an arbitrary URL.
+const CIRCA_PDF_SOURCE_RE =
+  /^https:\/\/www\.circasports\.com\/wp-content\/uploads\/\d{4}\/\d{2}\/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-\d+\.pdf$/;
+
+function officialContestSourceUrl(raw) {
+  if (typeof raw !== "string") {
+    if (raw != null) console.log("[circa] ignoring sourceUrl (expected string)");
+    return null;
+  }
+  const s = raw.trim();
+  if (!s) return null;
+  if (CIRCA_PDF_SOURCE_RE.test(s)) return s;
+  console.log(`[circa] ignoring sourceUrl (not an official Circa contest spreads PDF): ${s.slice(0, 180)}`);
+  return null;
+}
 
 const PHASE_CONFIG = {
   sigmaMargin: 13.2,
@@ -868,6 +891,16 @@ function contestPdfUnavailablePayload(weekInfo, err) {
   return pending;
 }
 
+async function persistGenerateHealth(dryRun, snap) {
+  if (dryRun) return;
+  try {
+    const { writeCircaCardHealth } = require("./lib/circa-card-health");
+    await writeCircaCardHealth(snap);
+  } catch (healthErr) {
+    console.log(`[circa] card-health persist skip: ${healthErr.message}`);
+  }
+}
+
 exports.handler = async (event) => {
   const started = Date.now();
   let body = {};
@@ -875,13 +908,14 @@ exports.handler = async (event) => {
   const force = !!body.force;
   const dryRun = !!body.dryRun;
   const scheduled = !!body.scheduled;
+  const skipOdds = !!body.skipOdds;
   const now = new Date();
 
   const parsed = parseWeekQuery(body.week);
   const resolved = parsed || resolveContestWeek(now);
   const weekNum = resolved.weekNum;
   const week = resolved.week || weekKey(weekNum);
-  console.log(`[circa] ${MODEL_VERSION} run for ${week} (scheduled:${scheduled} force:${force} dryRun:${dryRun} slot:${body.slot || "-"})`);
+  console.log(`[circa] ${MODEL_VERSION} run for ${week} (scheduled:${scheduled} force:${force} dryRun:${dryRun} skipOdds:${skipOdds} slot:${body.slot || "-"})`);
 
   if (resolved.preSeason || resolved.postSeason || weekNum < 1 || weekNum > CONTEST.totalWeeks) {
     console.log(`[circa] Outside NFL regular season (week=${weekNum}, pre=${resolved.preSeason}, post=${resolved.postSeason}) — no-op.`);
@@ -893,8 +927,11 @@ exports.handler = async (event) => {
   console.log(`[circa] ${espnGames.length} ESPN game(s) for ${week}`);
 
   let board;
+  const loadOpts = { now, slate: espnGames };
+  const contestSourceUrl = officialContestSourceUrl(body.sourceUrl);
+  if (contestSourceUrl) loadOpts.sourceUrl = contestSourceUrl;
   try {
-    board = await loadContestLines(weekNum, { now, slate: espnGames });
+    board = await loadContestLines(weekNum, loadOpts);
   } catch (e) {
     const cached = await readBlobJson(contestLinesBlobKey(week));
     if (
@@ -910,23 +947,18 @@ exports.handler = async (event) => {
       console.error(`[circa] ${msg}`);
       const pending = contestPdfUnavailablePayload({ weekNum, week }, e);
       const reason = pending.errorCode || "contest-pdf-unavailable";
-      if (!dryRun) {
-        try {
-          const { writeCircaCardHealth } = require("./lib/circa-card-health");
-          await writeCircaCardHealth({
-            weekNum,
-            week,
-            status: "error",
-            errorCode: reason,
-            errorMessage: msg,
-            picksCount: 0,
-            slot: body.slot || null,
-            source: "generate",
-          });
-        } catch (healthErr) {
-          console.log(`[circa] card-health persist skip: ${healthErr.message}`);
-        }
-      }
+      await persistGenerateHealth(dryRun, {
+        weekNum,
+        week,
+        status: "error",
+        errorCode: reason,
+        errorMessage: msg,
+        picksCount: 0,
+        slot: body.slot || null,
+        source: "generate",
+        lineSource: CONTEST_LINE_SOURCE,
+        sourceUrl: pending.sourceUrl || null,
+      });
       if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, error: true, picksData: pending }) };
       const stored = await storeCard(week, pending, force, scheduled, now);
       return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, error: true, stored, reason }) };
@@ -949,11 +981,19 @@ exports.handler = async (event) => {
     }
   }
 
-  const [ratingOverlay, qbAdj, oddsGames] = await Promise.all([
-    fetchLiveRatingOverlay(),
-    fetchQbAdjustments(),
-    fetchNFLSpreadOdds(),
+  const ratingPromise = fetchLiveRatingOverlay();
+  const qbPromise = fetchQbAdjustments();
+  let oddsGames;
+  if (skipOdds) {
+    console.log("[circa] skipOdds — no Odds API call; ratings-only vs Circa PDF");
+    oddsGames = [];
+  }
+  const [ratingOverlay, qbAdj, oddsFetched] = await Promise.all([
+    ratingPromise,
+    qbPromise,
+    skipOdds ? Promise.resolve([]) : fetchNFLSpreadOdds(),
   ]);
+  if (!skipOdds) oddsGames = oddsFetched;
   if (!oddsGames.length) {
     console.log("[circa] No Odds API market — covering Circa PDF numbers from ratings only.");
   }
@@ -988,6 +1028,19 @@ exports.handler = async (event) => {
     pending.sourceUrl = board.sourceUrl;
     if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, picksData: pending }) };
     const stored = await storeCard(week, pending, force, scheduled, now);
+    await persistGenerateHealth(dryRun, {
+      weekNum,
+      week,
+      status: "error",
+      errorCode: pending.errorCode || "circa-card-pending",
+      errorMessage: pending.pendingMessage || pending.noPlays || "No remaining unplayed contest spreads",
+      picksCount: 0,
+      slot: body.slot || null,
+      source: "generate",
+      lineSource: board.lineSource || CONTEST_LINE_SOURCE,
+      fromFixture: !!board.fromFixture,
+      sourceUrl: board.sourceUrl || null,
+    });
     return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, stored, picks: 0 }) };
   }
 
@@ -1007,24 +1060,19 @@ exports.handler = async (event) => {
   }
 
   const stored = await storeCard(week, picksData, force, scheduled, now);
-  try {
-    const { writeCircaCardHealth } = require("./lib/circa-card-health");
-    await writeCircaCardHealth({
-      weekNum,
-      week,
-      status: picks.length >= 5 ? "ok" : "error",
-      errorCode: picks.length >= 5 ? null : "circa-card-incomplete",
-      errorMessage: picks.length >= 5 ? null : `Expected 5 picks, got ${picks.length}`,
-      picksCount: picks.length,
-      slot: body.slot || null,
-      source: "generate",
-      lineSource: board.lineSource || CONTEST_LINE_SOURCE,
-      fromFixture: !!board.fromFixture,
-      sourceUrl: board.sourceUrl || null,
-    });
-  } catch (healthErr) {
-    console.log(`[circa] card-health persist skip: ${healthErr.message}`);
-  }
+  await persistGenerateHealth(dryRun, {
+    weekNum,
+    week,
+    status: picks.length >= 5 ? "ok" : "error",
+    errorCode: picks.length >= 5 ? null : "circa-card-incomplete",
+    errorMessage: picks.length >= 5 ? null : `Expected 5 picks, got ${picks.length}`,
+    picksCount: picks.length,
+    slot: body.slot || null,
+    source: "generate",
+    lineSource: board.lineSource || CONTEST_LINE_SOURCE,
+    fromFixture: !!board.fromFixture,
+    sourceUrl: board.sourceUrl || null,
+  });
   console.log(`[circa] Done in ${((Date.now() - started) / 1000).toFixed(1)}s (stored: ${stored})`);
   return { statusCode: 200, body: JSON.stringify({ ok: true, picks: picks.length, stored, week }) };
 };

@@ -95,13 +95,24 @@ function isQuarterTitle(blob) {
   return /\b(1st|2nd|3rd|4th|first|second|third|fourth)[\s-]+quarter\b/i.test(blob) || /quarter/i.test(blob);
 }
 
+// Circa renamed the main card from "Full Season Standings After Week N" to
+// "Week N Standings Update" / "Standings Update" (no "Full Season" token).
+// Hyphenated filenames ("Standings-Update") count. Quarter sheets do not,
+// even when they also say "Standings Update".
+function isStandingsUpdate(blob) {
+  return /standings[\s_-]+update/i.test(String(blob || ""));
+}
+
 function isFullSeason(blob) {
-  return /full[\s-]+season/i.test(blob);
+  const s = String(blob || "");
+  if (/full[\s-]+season/i.test(s)) return true;
+  if (isQuarterTitle(s)) return false;
+  return isStandingsUpdate(s);
 }
 
 // Returns "season" | "lastPlace" | "quarterSeason" | "quarterLastPlace" | null.
-// Main links are ONLY Full Season Standings / Full Season Last Place; quarter
-// PDFs are classified separately and surfaced as optional extras.
+// Main links are Full Season sheets and Circa's "Week N Standings Update"
+// rename. Quarter PDFs are classified separately and surfaced as extras.
 function classifyMedia(item) {
   const title = String((item.title && item.title.rendered) || "");
   const url = String(item.source_url || "");
@@ -122,7 +133,9 @@ function classifyMedia(item) {
   return quarter ? "quarterSeason" : "season";
 }
 
-// Rank for main-link choice: explicit "Full Season" beats untagged.
+// Rank for main-link choice on the same week: explicit "Full Season" and
+// "Week N Standings Update" both beat untagged standings. Quarter sheets
+// are a different bucket (see classifyMedia) and never win this rank.
 function fullSeasonRank(meta) {
   return isFullSeason((meta && meta.title) + " " + (meta && meta.url)) ? 1 : 0;
 }
@@ -247,9 +260,11 @@ async function resolveStandingsPdfs({ readBlob, writeBlob, discover, verify } = 
   for (const kind of ["season", "lastPlace"]) {
     const cand = found && found[kind];
     let prev = lastGood && lastGood[kind];
-    // Old last-good blobs may hold a quarter PDF; never reuse one as a main link.
-    if (prev && isQuarterTitle(String(prev.title || "") + " " + String(prev.url || "")) &&
-        !isFullSeason(String(prev.title || "") + " " + String(prev.url || ""))) {
+    // Old last-good blobs may hold a quarter PDF. Never reuse one as a main
+    // link — a Week N Standings Update / Full Season candidate replaces it
+    // even when the quarter file's week number or upload date is newer.
+    const prevBlob = String((prev && prev.title) || "") + " " + String((prev && prev.url) || "");
+    if (prev && isQuarterTitle(prevBlob) && !isFullSeason(prevBlob)) {
       prev = null;
     }
     if (cand && prev && cand.url === prev.url) {
@@ -496,8 +511,13 @@ function lookupAliasEntries(parsed, aliases, webetaiAlias) {
 }
 
 async function extractPdfText(buffer) {
-  // Classic pdf-parse@1.1.1: require('pdf-parse')(buffer) -> { text, ... }
-  // Keep require inside the function so cold-loading this module never hits DOMMatrix.
+  // Classic pdf-parse@1.1.1: require("pdf-parse")(buffer) -> { text, ... }
+  // Keep the require inside this function so cold-loading circa-standings never
+  // pulls pdf.js (DOMMatrix). The specifier is a static string so NFT traces
+  // node_modules/pdf-parse. netlify.toml included_files copies that same tree
+  // plus debug/ms/node-ensure — pdf-parse loads `./pdf.js/${version}/build/pdf.js`
+  // (v1.10.100) through a template literal NFT does not follow. Both paths need
+  // root node_modules present at deploy; deploy-circa.sh refuses otherwise.
   const pdf = require("pdf-parse");
   const result = await pdf(buffer);
   return (result && result.text) || "";

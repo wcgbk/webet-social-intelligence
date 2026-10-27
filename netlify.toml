@@ -101,8 +101,13 @@
   ]
 
 [functions."get-circa-standings"]
-  # Standings row parser needs pdf-parse@1.1.1 from root node_modules. Deploy from a
-  # tree with node_modules installed (deploy-circa.sh checks this).
+  # Standings row parser needs pdf-parse@1.1.1 from root node_modules.
+  # node_bundler nft traces require("pdf-parse") in lib/circa-standings.js.
+  # included_files is the backup copy of that package: pdf-parse loads
+  # ./pdf.js/${version}/build/pdf.js (v1.10.100) via a template literal NFT
+  # skips, and needs debug, ms, and node-ensure at runtime. Both paths read
+  # root node_modules — deploy-circa.sh exits if node_modules/pdf-parse is
+  # missing (2026-10-20/27 Cannot find module 'pdf-parse' when it was absent).
   included_files = [
     "node_modules/pdf-parse/**",
     "node_modules/node-ensure/**",

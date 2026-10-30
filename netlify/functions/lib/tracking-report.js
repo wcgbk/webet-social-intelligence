@@ -13,12 +13,10 @@
  *   date, separately for Edge and for Omega.
  *
  * kpi
- *   The track-record fields get-results-omega already publishes
- *   (aggregateDays, then the percentile page):
- *     record    straight wins-losses-pushes
- *     accuracy  straight accuracy (pushes excluded)
- *     roi       all bets, straights plus the parlay
- *     profit    that same all-bet profit, in units and in dollars at $150
+ *   The track-record fields get-results-omega publishes. Record, accuracy,
+ *   ROI, and profit on the top-level kpi are one bet set (all-in: straights
+ *   plus parlays). straightsOnly repeats that for straights alone.
+ *   Dollars are whole, rounded away from zero, at $150 a unit.
  *
  * clv
  *   Ledger totals: average CLV in percentage points, percent of closes that
@@ -169,35 +167,92 @@ function parsePct(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Map one aggregateDays() result, or the matching slice of a
- * get-results-omega body, onto the track-record metrics.
- * Straight wins, losses, and accuracy. Pushes from cumulative.
- * ROI and profit from cumulative (straights + parlay) at $150.
- */
-function kpiFromAggregate(block) {
-  const cum = (block && block.cumulative) || {};
-  const str = (block && block.straight) || {};
-  const wins = Number(str.wins) || 0;
-  const losses = Number(str.losses) || 0;
-  const pushes = Number(cum.pushes) || 0;
-  // Whole dollars, rounded up (tracking rule; matches stakeDollars ceil).
-  const profitDollars = Math.ceil((Number(cum.totalProfit) || 0) - 1e-9);
-  const accuracyPct = parsePct(str.accuracy);
-  const roiPct = parsePct(cum.roi);
+function wholeDollars(n) {
+  const x = Number(n) || 0;
+  if (x < 0) return -Math.ceil(Math.abs(x) - 1e-9);
+  return Math.ceil(x - 1e-9);
+}
+
+function kpiFromScope(scope, name) {
+  if (!scope) return null;
+  const wins = Number(scope.wins) || 0;
+  const losses = Number(scope.losses) || 0;
+  const pushes = Number(scope.pushes) || 0;
+  const profitRaw = scope.totalProfit != null ? scope.totalProfit : scope.profit;
+  const profitDollars = wholeDollars(profitRaw);
+  const accuracyPct = parsePct(scope.accuracy);
+  const roiPct = parsePct(scope.roi);
   return {
+    kpiScope: name,
+    recordScope: name,
+    roiScope: name,
     wins,
     losses,
     pushes,
-    record: `${wins}-${losses}-${pushes}`,
+    record: scope.record || `${wins}-${losses}-${pushes}`,
     accuracyPct,
-    accuracy: str.accuracy == null ? null : String(str.accuracy),
+    accuracy: scope.accuracy == null ? null : String(scope.accuracy),
     roiPct,
-    roi: cum.roi == null ? null : String(cum.roi),
+    roi: scope.roi == null ? null : String(scope.roi),
     profitDollars,
     profitUnits: round2(profitDollars / DOLLAR_PER_UNIT),
-    pending: Number(cum.pending) || 0,
+    pending: Number(scope.pending) || 0,
   };
+}
+
+/**
+ * Map one aggregateDays() result, or the matching slice of a
+ * get-results-omega body, onto the track-record metrics.
+ * The returned record and ROI are the same bets. Prefer allIn / straightsOnly.
+ * An older block with no scopes is rebuilt from the straight and parlay
+ * components so a straight record is not paired with all-in ROI.
+ */
+function kpiFromAggregate(block) {
+  const all = block && (block.allIn || (block.cumulative && block.cumulative.kpiScope === 'allIn' ? block.cumulative : null));
+  const straightScope = block && (block.straightsOnly || (block.straight && block.straight.kpiScope === 'straightsOnly' ? block.straight : null));
+  if (all) {
+    const kpi = kpiFromScope(all, 'allIn');
+    const straightsOnly = kpiFromScope(straightScope, 'straightsOnly');
+    if (straightsOnly) kpi.straightsOnly = straightsOnly;
+    return kpi;
+  }
+  const str = (block && block.straight) || {};
+  const par = (block && block.parlay) || {};
+  const cum = (block && block.cumulative) || {};
+  const wins = (Number(str.wins) || 0) + (Number(par.wins) || 0);
+  const losses = (Number(str.losses) || 0) + (Number(par.losses) || 0);
+  const pushes = (Number(str.pushes) || 0) + (Number(par.pushes) || 0) || (Number(cum.pushes) || 0);
+  const profit = (Number(str.totalProfit) || 0) + (Number(par.totalProfit) || 0);
+  const wagered = (Number(str.totalWagered) || 0) + (Number(par.totalWagered) || 0);
+  const decided = wins + losses;
+  const built = {
+    kpiScope: 'allIn',
+    wins,
+    losses,
+    pushes,
+    pending: Number(cum.pending) || 0,
+    record: `${wins}-${losses}-${pushes}`,
+    accuracy: decided > 0 ? ((wins / decided) * 100).toFixed(1) + '%' : '0%',
+    roi: wagered > 0 ? ((profit / wagered) * 100).toFixed(1) + '%' : '0%',
+    totalProfit: profit,
+    profit,
+  };
+  const kpi = kpiFromScope(built, 'allIn');
+  const sProfit = Number(str.totalProfit) || 0;
+  const sWager = Number(str.totalWagered) || 0;
+  const sWins = Number(str.wins) || 0;
+  const sLosses = Number(str.losses) || 0;
+  const sDecided = sWins + sLosses;
+  kpi.straightsOnly = kpiFromScope({
+    wins: sWins,
+    losses: sLosses,
+    pushes: Number(cum.pushes) || 0,
+    pending: Number(cum.pending) || 0,
+    accuracy: str.accuracy || (sDecided > 0 ? ((sWins / sDecided) * 100).toFixed(1) + '%' : '0%'),
+    roi: sWager > 0 ? ((sProfit / sWager) * 100).toFixed(1) + '%' : '0%',
+    totalProfit: sProfit,
+  }, 'straightsOnly');
+  return kpi;
 }
 
 function kpiSidesFromResults(results) {

@@ -7,6 +7,7 @@
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
+const { canonicalSchool, schoolsEqual } = require('./lib/ncaaf-names');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +15,8 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v8-allver';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v9-kpi1030';
+const DOLLAR_PER_UNIT = 150;
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -36,29 +38,45 @@ function getAllDatesInRange(startDate, endDate) {
 }
 
 function normalizeTeam(name) {
-  return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function schoolKey(name) {
-  const parts = normalizeTeam(name).split(' ');
-  return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
+// Positive stake in units. Missing, blank, and zero are missing — never 1.
+function parseStakeUnits(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  return n > 0 ? n : null;
 }
 
 function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
   if (!p || !e) return false;
+  if (sport === 'NCAAF') {
+    if (schoolsEqual(pickTeam, espnTeam)) return true;
+    if (espnAbbr && String(espnAbbr).length >= 2) {
+      const a = String(espnAbbr).toLowerCase();
+      if (p.split(' ').includes(a)) return true;
+    }
+    return false;
+  }
   if (p === e) return true;
   if (p.includes(e) || e.includes(p)) return true;
   if (espnAbbr && espnAbbr.length >= 2) {
     const a = espnAbbr.toLowerCase();
     const pWords = p.split(' ');
     if (pWords.includes(a)) return true;
-  }
-  if (sport === 'NCAAF') {
-    const pS = schoolKey(pickTeam), eS = schoolKey(espnTeam);
-    if (pS.length > 2 && pS === eS) return true;
-    return false;
   }
   const pLast = p.split(' ').pop();
   const eLast = e.split(' ').pop();
@@ -76,28 +94,39 @@ function findGame(pick, games) {
   const ncaaf = sport === 'NCAAF';
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  const looseKey = (team) => {
+    if (ncaaf) return canonicalSchool(team);
+    return normalizeTeam(team).split(' ').pop();
+  };
+  const keyInMatchup = (key) => {
+    if (!key) return false;
+    if (ncaaf) return matchupParts.some(part => schoolsEqual(part, key) || canonicalSchool(part) === key);
+    return key.length > 3 && matchup.includes(key);
+  };
   const primary = [];
   for (const g of games) {
-    const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
-    const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
+    const awayKey = looseKey(g.awayTeam);
+    const homeKey = looseKey(g.homeTeam);
     const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport)) ||
-                       (awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
+                       keyInMatchup(awayKey);
     const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport)) ||
-                       (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
+                       keyInMatchup(homeKey);
     if (awayMatch && homeMatch) primary.push(g);
   }
   if (primary.length) return disambiguateDoubleheader(primary, pick);
   const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  if (pickTeam) {
+  if (pickTeam && !/^\d/.test(pickTeam)) {
     const secondary = [];
     for (const g of games) {
       const awayHit = teamsMatch(pickTeam, g.awayTeam, g.awayAbbr, sport);
       const homeHit = teamsMatch(pickTeam, g.homeTeam, g.homeAbbr, sport);
       if (awayHit || homeHit) {
-        const otherKey = ncaaf
-          ? schoolKey(awayHit ? g.homeTeam : g.awayTeam)
-          : normalizeTeam(awayHit ? g.homeTeam : g.awayTeam).split(' ').pop();
-        if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
+        const otherTeam = awayHit ? g.homeTeam : g.awayTeam;
+        const otherAbbr = awayHit ? g.homeAbbr : g.awayAbbr;
+        const otherOk = ncaaf
+          ? matchupParts.some(part => teamsMatch(part, otherTeam, otherAbbr, sport))
+          : keyInMatchup(looseKey(otherTeam));
+        if (otherOk) secondary.push(g);
       }
     }
     if (secondary.length) return disambiguateDoubleheader(secondary, pick);
@@ -105,14 +134,19 @@ function findGame(pick, games) {
   if (matchupParts.length >= 2) {
     const tertiary = [];
     for (const g of games) {
-      const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
-      const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
-      const part0 = ncaaf ? schoolKey(matchupParts[0]) : normalizeTeam(matchupParts[0]);
-      const part1 = ncaaf ? schoolKey(matchupParts[1]) : normalizeTeam(matchupParts[1]);
-      if ((part0.includes(awayKey) || awayKey.includes(part0)) &&
-          (part1.includes(homeKey) || homeKey.includes(part1))) tertiary.push(g);
-      else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
-          (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
+      const awayHit = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport));
+      const homeHit = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport));
+      if (awayHit && homeHit) tertiary.push(g);
+      else if (!ncaaf) {
+        const awayKey = looseKey(g.awayTeam);
+        const homeKey = looseKey(g.homeTeam);
+        const part0 = normalizeTeam(matchupParts[0]);
+        const part1 = normalizeTeam(matchupParts[1]);
+        if ((part0.includes(awayKey) || awayKey.includes(part0)) &&
+            (part1.includes(homeKey) || homeKey.includes(part1))) tertiary.push(g);
+        else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
+            (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
+      }
     }
     if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
   }
@@ -200,8 +234,18 @@ function calcParlayWinnings(risk, legsOdds) {
 }
 
 // Whole-dollar display: round UP to the next dollar so no cents show (37.5 -> 38). The -1e-9
-// keeps an already-whole amount whole (avoids 75 -> 76 on float dust).
-function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
+// keeps an already-whole amount whole (avoids 75 -> 76 on float dust). A zero magnitude stays
+// +0: ceil(0 - 1e-9) is -0, and a push profit must display as 0.
+// Losses use the same magnitude, so a 37.5 stake lost shows as -38, not -37.
+function wholeUp(n) {
+  const v = Math.ceil((Number(n) || 0) - 1e-9);
+  return v === 0 ? 0 : v;
+}
+function wholeUpSigned(n) {
+  const x = Number(n) || 0;
+  if (x < 0) return -wholeUp(Math.abs(x));
+  return wholeUp(x);
+}
 
 function gradeParlay(pickResults, parlayRisk) {
   // v10.4.3: parlays can now be 2-leg (totals-first construction drops -CLV ML legs), so grade
@@ -239,97 +283,212 @@ async function getDatesFromStore(storeUrl, authHeaders) {
   return Array.isArray(dates) ? dates : [];
 }
 
-async function gradeDay(dateISO, picksData) {
+function scoreLine(pick, game, result) {
+  if (!game || game.state !== 'post') return null;
+  if (result === 'push' && (/POSTPONED|CANCELL?ED/i.test(game.statusName) || !game.completed)) return 'PPD';
+  const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
+  if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {
+    return `${game.awayLine.slice(0, 5).reduce((a, b) => a + b, 0)}-${game.homeLine.slice(0, 5).reduce((a, b) => a + b, 0)} (F5)`;
+  }
+  return `${game.awayScore}-${game.homeScore}`;
+}
+
+function priceStraight(units, odds, result) {
+  const risk = wholeUp(units * DOLLAR_PER_UNIT);
+  if (result === 'win') return { risk, profit: wholeUp(calcWinnings(risk, odds || '-110')) };
+  if (result === 'loss') return { risk, profit: -risk };
+  return { risk, profit: 0 };
+}
+
+function emptyCounts() {
+  return { wins: 0, losses: 0, pushes: 0, pending: 0, bets: 0, wagered: 0, profit: 0 };
+}
+
+function addCount(scope, bet) {
+  if (!bet) return;
+  if (bet.result === 'win' || bet.result === 'loss') {
+    if (bet.result === 'win') scope.wins++;
+    else scope.losses++;
+    scope.bets++;
+    scope.wagered += bet.risk;
+    scope.profit += bet.profit;
+  } else if (bet.result === 'push') {
+    scope.pushes++;
+    scope.bets++;
+  } else if (bet.result === 'pending') {
+    scope.pending++;
+  }
+}
+
+// Record W-L-P and ROI describe the same bets. Pushes stay in the record and
+// out of wagered. Pending is counted and not in either. Dollars are whole, rounded up.
+function finalizeScope(scope, name) {
+  const profit = wholeUpSigned(scope.profit);
+  const wagered = wholeUp(scope.wagered);
+  const decided = scope.wins + scope.losses;
+  return {
+    scope: name,
+    kpiScope: name,
+    record: `${scope.wins}-${scope.losses}-${scope.pushes}`,
+    wins: scope.wins,
+    losses: scope.losses,
+    pushes: scope.pushes,
+    pending: scope.pending,
+    bets: scope.bets,
+    wagered,
+    profit,
+    totalWagered: wagered,
+    totalProfit: profit,
+    roi: wagered > 0 ? ((profit / wagered) * 100).toFixed(1) + '%' : '0%',
+    accuracy: pct(scope.wins, decided),
+  };
+}
+
+function scopesFromPicks(picks, date) {
+  const straight = emptyCounts();
+  const parlay = emptyCounts();
+  const flags = [];
+  const unitsMissing = [];
+  for (const pick of picks || []) consumePick(straight, parlay, flags, unitsMissing, pick, date);
+  return scopesFromCounts(straight, parlay, flags, unitsMissing);
+}
+
+function stampDay(base, scopes, parlayMeta) {
+  const all = scopes.allIn;
+  const decided = all.wins + all.losses;
+  return Object.assign({}, base, {
+    wins: all.wins,
+    losses: all.losses,
+    pushes: all.pushes,
+    pending: all.pending,
+    accuracy: decided > 0 ? ((all.wins / decided) * 100).toFixed(0) : '0',
+    wagered: all.wagered,
+    profit: all.profit,
+    roi: all.wagered > 0 ? ((all.profit / all.wagered) * 100).toFixed(1) : '--',
+    kpiScope: 'allIn',
+    recordScope: 'allIn',
+    roiScope: 'allIn',
+    record: all.record,
+    bets: all.bets,
+    straightsOnly: scopes.straightsOnly,
+    allIn: scopes.allIn,
+    parlay: scopes.parlay,
+    flags: scopes.flags,
+    unitsMissing: scopes.unitsMissing,
+    parlayResult: parlayMeta.result,
+    parlayProfit: parlayMeta.profit,
+    parlayRisk: parlayMeta.risk,
+  });
+}
+
+async function gradeDay(dateISO, picksData, opts) {
   const picks = (picksData.picks || []).slice(0, 3);
   if (picks.length === 0) return null;
 
   const apiParlay = (picksData.parlayLegs && picksData.parlayLegs.length > 0) ? picksData.parlayLegs[0] : null;
   const optimizedLegs = (apiParlay && apiParlay.legs) ? apiParlay.legs : null;
+  const ticketLegs = optimizedLegs && optimizedLegs.length >= 2 ? optimizedLegs : null;
 
-  const sports = [...new Set([
-    ...picks.map(p => p.sport),
-    ...(optimizedLegs ? optimizedLegs.map(l => l.sport) : []),
-  ].filter(Boolean))];
+  let scoresByGames;
+  if (opts && Array.isArray(opts.games)) {
+    scoresByGames = opts.games.map(g => ({ ...g, _sport: g._sport || null }));
+  } else {
+    const sports = [...new Set([
+      ...picks.map(p => p.sport),
+      ...(ticketLegs ? ticketLegs.map(l => l.sport) : []),
+    ].filter(Boolean))];
+    const sportResults = await Promise.all(sports.map(async sport => {
+      const games = await fetchESPNScores(dateISO, sport);
+      games.forEach(g => { g._sport = sport; });
+      return games;
+    }));
+    scoresByGames = sportResults.flat();
+  }
+  const gamesFor = (sport) => scoresByGames.filter(g => !g._sport || g._sport === sport);
 
-  const sportResults = await Promise.all(sports.map(async sport => {
-    const games = await fetchESPNScores(dateISO, sport);
-    games.forEach(g => { g._sport = sport; });
-    return games;
-  }));
-  const scoresByGames = sportResults.flat();
-
-  const dollarPerUnit = 150;
-  let dayWins = 0, dayLosses = 0, dayPushes = 0, dayPending = 0;
-  let dayWagered = 0, dayProfit = 0;
   const gradedPicks = [];
-
   for (const pick of picks) {
-    const sportGames = scoresByGames.filter(g => g._sport === pick.sport);
-    const game = findGame(pick, sportGames);
+    const game = findGame(pick, gamesFor(pick.sport));
     const result = gradePick(pick, game);
-    const units = parseFloat(pick.units) || 1;
-    const risk = wholeUp(units * dollarPerUnit);
-    const winAmount = wholeUp(calcWinnings(risk, pick.odds || '-110'));
-    let profit = 0;
-    if (result === 'win') { dayWins++; profit = winAmount; }
-    else if (result === 'loss') { dayLosses++; profit = -risk; }
-    else if (result === 'push') { dayPushes++; profit = 0; }
-    else { dayPending++; }
-    // Pushes return the stake (no action) — exclude from wagered so ROI isn't diluted.
-    // (profit is already 0 for push/pending, so dayProfit is unaffected either way.)
-    if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
-    const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
-    let scoreStr = null;
-    if (game && game.state === 'post' && result === 'push' && (/POSTPONED|CANCELL?ED/i.test(game.statusName) || !game.completed)) {
-      scoreStr = 'PPD';
-    } else if (game && game.state === 'post') {
-      if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {
-        scoreStr = `${game.awayLine.slice(0, 5).reduce((a, b) => a + b, 0)}-${game.homeLine.slice(0, 5).reduce((a, b) => a + b, 0)} (F5)`;
-      } else {
-        scoreStr = `${game.awayScore}-${game.homeScore}`;
-      }
-    }
-    gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: scoreStr });
+    const units = parseStakeUnits(pick.units);
+    const missing = units == null;
+    const priced = missing ? { risk: 0, profit: 0 } : priceStraight(units, pick.odds, result);
+    gradedPicks.push({
+      sport: pick.sport,
+      matchup: pick.matchup,
+      pick: pick.pick,
+      odds: pick.odds,
+      units: pick.units,
+      rating: pick.rating,
+      result,
+      profit: priced.profit,
+      score: scoreLine(pick, game, result),
+      unitsMissing: missing,
+      stakeDollars: missing ? null : priced.risk,
+    });
   }
 
-  let parlayInput;
-  if (optimizedLegs) {
-    parlayInput = optimizedLegs.map(leg => {
+  let parlayInput = null;
+  let parlayLabelSource = null;
+  if (ticketLegs) {
+    parlayInput = ticketLegs.map(leg => {
       const eleg = withLegCommenceTime(leg, picks);
-      const sportGames = scoresByGames.filter(g => g._sport === eleg.sport);
-      const game = findGame(eleg, sportGames);
+      const game = findGame(eleg, gamesFor(eleg.sport));
       return { result: gradePick(eleg, game), odds: eleg.odds || '-110' };
     });
-  } else {
+    parlayLabelSource = ticketLegs;
+  } else if (!apiParlay) {
     parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
+    parlayLabelSource = picks;
   }
-  // Parlay stake drops to 0.25u whenever a lean pick is on the card, else 0.5u.
-  const anyLean = picks.some(p => p.thinSlate);
-  const parlayUnits = anyLean ? 0.25 : 0.5;
-  const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
-  const parlayResult = gradeParlay(parlayInput, parlayRisk);
-  if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip') {
-    dayWagered += parlayRisk;
-    dayProfit += parlayResult.profit;
-  }
-  if (parlayResult.result !== 'skip') {
-    const parlayLegsSource = optimizedLegs || picks;
-    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: `${parlayInput.length}-Team Parlay${optimizedLegs ? ' (Optimized)' : ''}`, odds: '', units: `${parlayUnits}u`, rating: 'P', result: parlayResult.result, profit: parlayResult.profit, score: null });
+  let parlayMeta = { result: 'skip', profit: 0, risk: null };
+  if (parlayInput && parlayInput.length >= 2) {
+    const preview = gradeParlay(parlayInput, 0);
+    const units = parseStakeUnits(apiParlay && apiParlay.units);
+    const missing = units == null;
+    if (!missing && preview.result !== 'skip') {
+      const risk = wholeUp(units * DOLLAR_PER_UNIT);
+      const priced = gradeParlay(parlayInput, risk);
+      parlayMeta = { result: priced.result, profit: priced.profit, risk: (priced.result === 'win' || priced.result === 'loss') ? risk : null };
+      gradedPicks.push({
+        sport: 'PARLAY',
+        matchup: parlayLabelSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '),
+        pick: `${parlayInput.length}-Team Parlay${ticketLegs ? ' (Optimized)' : ''}`,
+        odds: (apiParlay && apiParlay.combinedOdds) || '',
+        units: apiParlay.units,
+        rating: 'P',
+        result: priced.result,
+        profit: priced.profit,
+        score: null,
+        unitsMissing: false,
+        stakeDollars: risk,
+      });
+    } else if (preview.result !== 'skip') {
+      parlayMeta = { result: preview.result, profit: 0, risk: null };
+      gradedPicks.push({
+        sport: 'PARLAY',
+        matchup: parlayLabelSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '),
+        pick: `${parlayInput.length}-Team Parlay${ticketLegs ? ' (Optimized)' : ''}`,
+        odds: (apiParlay && apiParlay.combinedOdds) || '',
+        units: (apiParlay && apiParlay.units) || null,
+        rating: 'P',
+        result: preview.result,
+        profit: 0,
+        score: null,
+        unitsMissing: true,
+        stakeDollars: null,
+      });
+    }
   }
 
-  const decided = dayWins + dayLosses;
-  return {
+  const scopes = scopesFromPicks(gradedPicks, dateISO);
+  return stampDay({
     date: dateISO,
     dateFormatted: picksData.dateFormatted || dateISO,
     source: picksData._source || 'omega',
     noPlays: false,
     picks: gradedPicks,
-    wins: dayWins, losses: dayLosses, pushes: dayPushes, pending: dayPending,
-    accuracy: decided > 0 ? ((dayWins / decided) * 100).toFixed(0) : '0',
-    wagered: Math.round(dayWagered), profit: Math.round(dayProfit),
-    roi: dayWagered > 0 ? ((dayProfit / dayWagered) * 100).toFixed(1) : '--',
-    parlayResult: parlayResult.result, parlayProfit: parlayResult.profit, parlayRisk,
-  };
+  }, scopes, parlayMeta);
 }
 
 // ── All-versions KPI helpers (2026-09-26) ──
@@ -343,46 +502,275 @@ function legacyDaysBefore(floor) {
 
 function pct(n, d) { return d > 0 ? ((n / d) * 100).toFixed(1) + '%' : '0%'; }
 
-// Same rules the Omega page has always used: Record/Accuracy = straight picks (pushes excluded);
-// P/L + ROI = all bets (straights + parlay).
-function aggregateDays(list) {
-  let cw = 0, cl = 0, cp = 0, cpe = 0, cwag = 0, cpr = 0;
-  let sw = 0, sl = 0, swag = 0, spr = 0;
-  let pw = 0, pl = 0, pwag = 0, ppr = 0;
-  for (const day of list) {
-    cw += day.wins || 0; cl += day.losses || 0; cp += day.pushes || 0; cpe += day.pending || 0;
-    cwag += day.wagered || 0; cpr += day.profit || 0;
-    for (const p of (day.picks || [])) {
-      if (p.sport === 'PARLAY' || p.result === 'pending' || p.result === 'push') continue;
-      swag += wholeUp((parseFloat(p.units) || 1) * 150);
-      spr += p.profit || 0;
-      if (p.result === 'win') sw++; else if (p.result === 'loss') sl++;
+function addCounts(into, from) {
+  for (const key of Object.keys(into)) into[key] += from[key] || 0;
+}
+
+// Record and ROI for a scope are the same bets. A missing stake is not 1u:
+// that bet stays out of both the record and the money, and is flagged.
+function consumePick(straight, parlay, flags, unitsMissing, pick, date) {
+  if (!pick || pick.result === 'skip') return;
+  const isParlay = pick.sport === 'PARLAY';
+  const units = pick.unitsMissing ? null : parseStakeUnits(pick.units);
+  if (units == null) {
+    flags.push({
+      issue: 'units_missing',
+      date: date || null,
+      pick: pick.pick || null,
+      sport: pick.sport || null,
+      result: pick.result || null,
+    });
+    if (pick.result === 'win' || pick.result === 'loss' || pick.result === 'push') {
+      unitsMissing.push({
+        date: date || null,
+        pick: pick.pick || null,
+        sport: pick.sport || null,
+        result: pick.result,
+      });
     }
-    if (day.parlayResult && day.parlayResult !== 'skip' && day.parlayResult !== 'pending') {
-      pwag += (day.parlayRisk || 75); ppr += day.parlayProfit || 0;
-      if (day.parlayResult === 'win') pw++; else if (day.parlayResult === 'loss') pl++;
-    }
+    return;
   }
+  const risk = Number.isFinite(pick.stakeDollars) ? pick.stakeDollars : wholeUp(units * DOLLAR_PER_UNIT);
+  addCount(isParlay ? parlay : straight, {
+    result: pick.result,
+    risk,
+    profit: (pick.result === 'push' || pick.result === 'pending') ? 0 : (Number(pick.profit) || 0),
+  });
+}
+
+function scopesFromCounts(straight, parlay, flags, unitsMissing) {
+  const all = emptyCounts();
+  addCounts(all, straight);
+  addCounts(all, parlay);
   return {
-    cumulative: {
-      wins: cw, losses: cl, pushes: cp, pending: cpe,
-      accuracy: pct(cw, cw + cl),
-      roi: cwag > 0 ? ((cpr / cwag) * 100).toFixed(1) + '%' : '0%',
-      totalWagered: Math.round(cwag), totalProfit: Math.round(cpr),
-    },
-    straight: { wins: sw, losses: sl, accuracy: pct(sw, sw + sl), totalWagered: Math.round(swag), totalProfit: Math.round(spr) },
-    parlay: { wins: pw, losses: pl, accuracy: pct(pw, pw + pl), totalWagered: Math.round(pwag), totalProfit: Math.round(ppr) },
+    straightsOnly: finalizeScope(straight, 'straightsOnly'),
+    allIn: finalizeScope(all, 'allIn'),
+    parlay: finalizeScope(parlay, 'parlay'),
+    flags,
+    unitsMissing,
+  };
+}
+
+// Sum each scope from the picks on the rows. Day-level wagered/wins are not
+// reused: those older fields paired a straight record with all-in dollars.
+function aggregateDays(list) {
+  const straight = emptyCounts();
+  const parlay = emptyCounts();
+  const flags = [];
+  const unitsMissing = [];
+  for (const day of list || []) {
+    for (const pick of day.picks || []) consumePick(straight, parlay, flags, unitsMissing, pick, day.date);
+  }
+  const scopes = scopesFromCounts(straight, parlay, flags, unitsMissing);
+  return {
+    cumulative: Object.assign({}, scopes.allIn, { kpiScope: 'allIn', recordScope: 'allIn', roiScope: 'allIn' }),
+    straight: Object.assign({}, scopes.straightsOnly, { kpiScope: 'straightsOnly', recordScope: 'straightsOnly', roiScope: 'straightsOnly' }),
+    parlay: scopes.parlay,
+    straightsOnly: scopes.straightsOnly,
+    allIn: scopes.allIn,
+    flags: scopes.flags,
+    unitsMissing: scopes.unitsMissing,
+    kpiScope: 'allIn',
+    recordScope: 'allIn',
+    roiScope: 'allIn',
   };
 }
 
 function flatSummary(list) {
   const a = aggregateDays(list);
+  const all = a.allIn;
   return {
     days: list.length,
-    wins: a.straight.wins, losses: a.straight.losses, pushes: a.cumulative.pushes, pending: a.cumulative.pending,
-    accuracy: a.straight.accuracy, profit: a.cumulative.totalProfit, wagered: a.cumulative.totalWagered, roi: a.cumulative.roi,
-    parlayWins: a.parlay.wins, parlayLosses: a.parlay.losses,
+    wins: all.wins,
+    losses: all.losses,
+    pushes: all.pushes,
+    pending: all.pending,
+    accuracy: all.accuracy,
+    profit: all.profit,
+    wagered: all.wagered,
+    roi: all.roi,
+    record: all.record,
+    bets: all.bets,
+    parlayWins: a.parlay.wins,
+    parlayLosses: a.parlay.losses,
+    kpiScope: 'allIn',
+    recordScope: 'allIn',
+    roiScope: 'allIn',
+    straightsOnly: a.straightsOnly,
+    allIn: a.allIn,
   };
+}
+
+function normPickText(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function findCardStraight(card, ledgerPick) {
+  if (!card || !Array.isArray(card.picks) || !ledgerPick) return null;
+  const want = normPickText(ledgerPick.pick);
+  const matchup = normPickText(ledgerPick.matchup);
+  const hits = card.picks.filter((p) => normPickText(p.pick) === want || normPickText(p.side) === want);
+  if (!hits.length) return null;
+  if (hits.length === 1) return hits[0];
+  return hits.find((p) => normPickText(p.matchup) === matchup) || null;
+}
+
+function parlayTicket(card) {
+  const ticket = card && Array.isArray(card.parlayLegs) ? card.parlayLegs[0] : null;
+  if (!ticket || ticket.type === 'no-qualifying-parlay') return null;
+  if (!Array.isArray(ticket.legs) || ticket.legs.length < 2) return null;
+  return ticket;
+}
+
+function storedParlayRisk(day, pick) {
+  const result = pick && pick.result;
+  const settled = result === 'win' || result === 'loss';
+  if (!settled) return 0;
+  if (day && day.parlayRisk != null && Number(day.parlayRisk) > 0) return Number(day.parlayRisk);
+  if (pick && Number.isFinite(pick.stakeDollars) && pick.stakeDollars > 0) return pick.stakeDollars;
+  const units = parseStakeUnits(pick && pick.units);
+  return units == null ? 0 : wholeUp(units * DOLLAR_PER_UNIT);
+}
+
+// Restake a stored parlay from the card ticket. Straight results are kept.
+// A missing ticket stake is flagged and removed from the dollars. It is not 1u or 0.5u.
+function recomputeParlayFields(day, card) {
+  const next = JSON.parse(JSON.stringify(day || {}));
+  const ticket = parlayTicket(card);
+  const parlayPick = (next.picks || []).find((p) => p && p.sport === 'PARLAY') || null;
+  if (!parlayPick) return next;
+  const units = ticket ? parseStakeUnits(ticket.units) : parseStakeUnits(parlayPick.units);
+  const missing = units == null;
+  const result = parlayPick.result;
+  const settled = result === 'win' || result === 'loss';
+  const oldProfit = Number(parlayPick.profit) || 0;
+  const oldRisk = storedParlayRisk(day, parlayPick);
+  let newProfit = oldProfit;
+  let newRisk = missing ? 0 : wholeUp(units * DOLLAR_PER_UNIT);
+  if (missing) {
+    newProfit = 0;
+    newRisk = 0;
+  } else if (settled && newRisk !== oldRisk) {
+    if (result === 'loss') newProfit = -newRisk;
+    else if (oldRisk > 0 && oldProfit) newProfit = wholeUpSigned(oldProfit * newRisk / oldRisk);
+    else if (ticket && ticket.combinedOdds) newProfit = wholeUp(calcWinnings(newRisk, ticket.combinedOdds));
+  } else if (!settled) {
+    newProfit = 0;
+  }
+  parlayPick.unitsMissing = missing;
+  parlayPick.profit = newProfit;
+  parlayPick.stakeDollars = missing ? null : newRisk;
+  if (ticket && !missing && ticket.units != null) parlayPick.units = ticket.units;
+  next.parlayResult = result || next.parlayResult || 'skip';
+  next.parlayProfit = newProfit;
+  next.parlayRisk = (!missing && settled) ? newRisk : null;
+  const wageredDelta = (missing || !settled ? 0 : newRisk) - oldRisk;
+  next.wagered = (Number(day && day.wagered) || 0) + wageredDelta;
+  next.profit = (Number(day && day.profit) || 0) - oldProfit + newProfit;
+  if (missing) {
+    next.flags = (next.flags || []).concat([{
+      issue: 'units_missing',
+      date: next.date || null,
+      pick: parlayPick.pick || null,
+      sport: 'PARLAY',
+      result: result || null,
+    }]);
+  }
+  return next;
+}
+
+// Settled straight results stay. Pending NCAAF is graded when `games` has the
+// final. Stakes come from the card when the card has that bet, otherwise from
+// the stored pick. Neither source defaults a blank stake to 1u.
+function replayDay(day, card, games) {
+  const next = JSON.parse(JSON.stringify(day || {}));
+  const board = Array.isArray(games) ? games : [];
+  for (const pick of next.picks || []) {
+    if (!pick || pick.sport === 'PARLAY') continue;
+    const cardPick = findCardStraight(card, pick);
+    const originalUnits = parseStakeUnits(pick.units);
+    const units = cardPick ? parseStakeUnits(cardPick.units) : originalUnits;
+    const before = pick.result;
+    if (pick.sport === 'NCAAF' && pick.result === 'pending' && board.length) {
+      const game = findGame(pick, board.filter((g) => !g._sport || g._sport === 'NCAAF'));
+      const result = gradePick(pick, game);
+      if (result !== 'pending') {
+        pick.result = result;
+        pick.score = scoreLine(pick, game, result);
+      }
+    }
+    if (units == null) {
+      pick.unitsMissing = true;
+      pick.profit = 0;
+      pick.stakeDollars = null;
+      continue;
+    }
+    pick.unitsMissing = false;
+    if (cardPick && cardPick.units != null) pick.units = cardPick.units;
+    const graded = before === 'pending' && pick.result !== 'pending';
+    const unitsChanged = originalUnits !== units;
+    if (graded || unitsChanged) {
+      const priced = priceStraight(units, pick.odds, pick.result);
+      pick.profit = priced.profit;
+      pick.stakeDollars = priced.risk;
+    } else {
+      pick.stakeDollars = wholeUp(units * DOLLAR_PER_UNIT);
+    }
+  }
+  const restaked = recomputeParlayFields(next, card);
+  const scopes = scopesFromPicks(restaked.picks, restaked.date);
+  return stampDay(restaked, scopes, {
+    result: restaked.parlayResult || 'skip',
+    profit: restaked.parlayProfit || 0,
+    risk: restaked.parlayRisk == null ? null : restaked.parlayRisk,
+  });
+}
+
+function cardsToMap(cards) {
+  if (!cards) return new Map();
+  if (cards instanceof Map) return cards;
+  if (Array.isArray(cards)) {
+    const map = new Map();
+    for (const card of cards) if (card && card.date) map.set(card.date, card);
+    return map;
+  }
+  return new Map(Object.entries(cards));
+}
+
+function replayKpis(days, cards, games) {
+  const map = cardsToMap(cards);
+  const board = Array.isArray(games) ? games : [];
+  const replayed = (days || []).map((day) => replayDay(day, map.get(day && day.date) || null, board));
+  const agg = aggregateDays(replayed);
+  agg.days = replayed;
+  agg.defaultedTo1u = countDefaultedTo1u(days);
+  return agg;
+}
+
+// How many settled straights the old `parseFloat(units) || 1` path would have
+// invented. Parlay `|| 75` is half a unit, so it is not counted here.
+function countDefaultedTo1u(days) {
+  let n = 0;
+  for (const day of days || []) {
+    for (const pick of day.picks || []) {
+      if (!pick || pick.sport === 'PARLAY') continue;
+      if (pick.result !== 'win' && pick.result !== 'loss') continue;
+      if (parseStakeUnits(pick.units) == null) n += 1;
+    }
+  }
+  return n;
+}
+
+function annotateStoredDay(day) {
+  if (!day) return day;
+  if (day.kpiScope === 'allIn' && day.straightsOnly && day.allIn) return day;
+  if (!Array.isArray(day.picks) || day.picks.length === 0) return day;
+  const scopes = scopesFromPicks(day.picks, day.date);
+  return stampDay(day, scopes, {
+    result: day.parlayResult == null ? 'skip' : day.parlayResult,
+    profit: day.parlayProfit || 0,
+    risk: day.parlayRisk == null ? null : day.parlayRisk,
+  });
 }
 
 function shiftDate(iso, deltaDays) {
@@ -503,10 +891,11 @@ exports.handler = async (event) => {
     // ALL VERSIONS (founder, 2026-09-26): the public track record is one cumulative line for the
     // algo — Beta + Alpha history frozen through the day before the Omega KPI epoch, then Omega.
     // Legacy rows come from lib/kpi-legacy-alpha.json (scripts/build-kpi-legacy.js), never regraded.
-    const legacyDays = legacyDaysBefore(OMEGA_KPI_START); // oldest first
-    const allDays = legacyDays.concat(omegaDays);
+    const legacyDays = legacyDaysBefore(OMEGA_KPI_START).map(annotateStoredDay); // oldest first
+    const omegaPresented = omegaDays.map(annotateStoredDay);
+    const allDays = legacyDays.concat(omegaPresented);
     const all = aggregateDays(allDays);
-    const omegaOnly = aggregateDays(omegaDays);
+    const omegaOnly = aggregateDays(omegaPresented);
     const legacy = aggregateDays(legacyDays);
 
     const result = {
@@ -514,11 +903,18 @@ exports.handler = async (event) => {
       cumulative: all.cumulative,
       straight: all.straight,
       parlay: all.parlay,
+      straightsOnly: all.straightsOnly,
+      allIn: all.allIn,
+      flags: all.flags,
+      unitsMissing: all.unitsMissing,
       scope: {
         label: 'All model versions',
         from: allDays.length ? allDays[0].date : null,
         omegaStart: OMEGA_KPI_START,
         legacyThrough: LEGACY.through || null,
+        kpiScope: 'allIn',
+        recordScope: 'allIn',
+        roiScope: 'allIn',
       },
       omegaOnly,
       legacy,
@@ -555,4 +951,22 @@ exports.handler = async (event) => {
     console.error('[get-results-omega] Error:', err.message);
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to compute results' }) };
   }
+};
+
+exports._test = {
+  aggregateDays,
+  gradeDay,
+  gradePick,
+  findGame,
+  teamsMatch,
+  wholeUp,
+  wholeUpSigned,
+  parseStakeUnits,
+  scopesFromPicks,
+  recomputeParlayFields,
+  replayDay,
+  replayKpis,
+  countDefaultedTo1u,
+  annotateStoredDay,
+  DOLLAR_PER_UNIT,
 };

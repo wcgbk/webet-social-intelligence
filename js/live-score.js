@@ -155,35 +155,110 @@
     return { result: 'pending', profit: 0 };
   }
 
+  function scopePack(name, wins, losses, pushes, pending, profit, wagered) {
+    var decided = wins + losses;
+    var roiNum = wagered > 0 ? (profit / wagered) * 100 : 0;
+    var roundedProfit = Math.round(profit);
+    var roundedWagered = Math.round(wagered);
+    return {
+      scope: name,
+      kpiScope: name,
+      record: wins + '-' + losses + '-' + pushes,
+      wins: wins,
+      losses: losses,
+      pushes: pushes,
+      pending: pending,
+      bets: wins + losses + pushes,
+      profit: roundedProfit,
+      wagered: roundedWagered,
+      totalProfit: roundedProfit,
+      totalWagered: roundedWagered,
+      roi: wagered > 0 ? roiNum.toFixed(1) + '%' : '0%',
+      roiNum: roiNum,
+      accuracy: decided > 0 ? ((wins / decided) * 100).toFixed(1) + '%' : '0%',
+    };
+  }
+
+  // Straight W-L stays on the top-level fields (existing callers). Money includes
+  // a staked parlay. unitsMissing bets are flagged and left out of both.
   function ledgerTotals(straights, parlay) {
-    var wins = 0, losses = 0, pushes = 0, pending = 0, profit = 0, wagered = 0;
+    var wins = 0, losses = 0, pushes = 0, pending = 0;
+    var profit = 0, wagered = 0, sProfit = 0, sWagered = 0;
+    var flagged = [];
     (straights || []).forEach(function (s) {
-      if (s.status === 'win') { wins++; profit += s.winAmt; wagered += s.risk; }
-      else if (s.status === 'loss') { losses++; profit -= s.risk; wagered += s.risk; }
+      if (s.unitsMissing) {
+        flagged.push({ issue: 'units_missing', pick: s.pick || null, result: s.status || null });
+        return;
+      }
+      if (s.status === 'win') { wins++; profit += s.winAmt; wagered += s.risk; sProfit += s.winAmt; sWagered += s.risk; }
+      else if (s.status === 'loss') { losses++; profit -= s.risk; wagered += s.risk; sProfit -= s.risk; sWagered += s.risk; }
       else if (s.status === 'push') pushes++;
       else pending++;
     });
     var parlayResult = 'skip';
     var parlayProfit = 0;
+    var parlayCounts = false;
     if (parlay && parlay.legs && parlay.legs.length >= 2) {
       var statuses = parlay.legs.map(function (l) { return l.status; });
-      var outcome = parlayOutcome(statuses, parlay.risk, parlay.legs.map(function (l) { return l.odds; }));
+      var outcome = parlayOutcome(statuses, parlay.unitsMissing ? 0 : parlay.risk, parlay.legs.map(function (l) { return l.odds; }));
       parlayResult = outcome.result;
-      parlayProfit = outcome.profit;
-      if (parlayResult !== 'pending' && parlayResult !== 'skip') {
-        profit += parlayProfit;
-        wagered += parlay.risk;
+      if (parlay.unitsMissing) {
+        if (parlayResult !== 'pending' && parlayResult !== 'skip') {
+          flagged.push({ issue: 'units_missing', pick: parlay.pick || 'parlay', result: parlayResult });
+        }
+      } else {
+        parlayProfit = outcome.profit;
+        parlayCounts = true;
+        if (parlayResult === 'win' || parlayResult === 'loss') {
+          profit += parlayProfit;
+          wagered += parlay.risk;
+        }
       }
     }
     return {
       wins: wins, losses: losses, pushes: pushes, pending: pending,
       profit: Math.round(profit), wagered: Math.round(wagered),
-      parlayResult: parlayResult, parlayProfit: parlayProfit,
+      parlayResult: parlayResult, parlayProfit: parlayCounts ? parlayProfit : 0,
+      straightsOnly: scopePack('straightsOnly', wins, losses, pushes, pending, sProfit, sWagered),
+      allIn: scopePack('allIn',
+        wins + (parlayCounts && parlayResult === 'win' ? 1 : 0),
+        losses + (parlayCounts && parlayResult === 'loss' ? 1 : 0),
+        pushes + (parlayCounts && parlayResult === 'push' ? 1 : 0),
+        pending + (parlayCounts && parlayResult === 'pending' ? 1 : 0),
+        profit, wagered),
+      unitsMissing: flagged,
+      flags: flagged,
     };
   }
 
   // Replace the server's copy of today with the card's graded today.
   // Historical days stay on the snapshot.
+  function scopeMoney(scope) {
+    if (!scope) return { wins: 0, losses: 0, pushes: 0, pending: 0, profit: 0, wagered: 0 };
+    return {
+      wins: scope.wins || 0,
+      losses: scope.losses || 0,
+      pushes: scope.pushes || 0,
+      pending: scope.pending || 0,
+      profit: scope.totalProfit != null ? Number(scope.totalProfit) : Number(scope.profit || 0),
+      wagered: scope.totalWagered != null ? Number(scope.totalWagered) : Number(scope.wagered || 0),
+    };
+  }
+
+  function subtractScope(base, dayScope, todayScope) {
+    var b = scopeMoney(base);
+    var d = scopeMoney(dayScope);
+    var t = scopeMoney(todayScope);
+    var wins = b.wins - d.wins + t.wins;
+    var losses = b.losses - d.losses + t.losses;
+    var pushes = b.pushes - d.pushes + t.pushes;
+    var pending = b.pending - d.pending + t.pending;
+    var profit = Math.round(b.profit - d.profit + t.profit);
+    var wagered = Math.round(b.wagered - d.wagered + t.wagered);
+    var name = (base && (base.kpiScope || base.scope)) || null;
+    return scopePack(name, wins, losses, pushes, pending, profit, wagered);
+  }
+
   function mergeTodayKpi(snapshot, today) {
     if (!today) return null;
     var straight = (snapshot && snapshot.straight) || { wins: 0, losses: 0 };
@@ -194,42 +269,66 @@
         if (snapshot.days[i].date === today.date) { day = snapshot.days[i]; break; }
       }
     }
-    var wins = (straight.wins || 0) - (day ? (day.wins || 0) : 0) + (today.wins || 0);
-    var losses = (straight.losses || 0) - (day ? (day.losses || 0) : 0) + (today.losses || 0);
+    // Older day rows stored straight wins in day.wins. Scoped rows store all-in
+    // there and keep the straight count on day.straightsOnly.
+    var dayStraight = day && day.straightsOnly ? day.straightsOnly : null;
+    var dayStraightWins = dayStraight ? (dayStraight.wins || 0) : (day ? (day.wins || 0) : 0);
+    var dayStraightLosses = dayStraight ? (dayStraight.losses || 0) : (day ? (day.losses || 0) : 0);
+    var wins = (straight.wins || 0) - dayStraightWins + (today.wins || 0);
+    var losses = (straight.losses || 0) - dayStraightLosses + (today.losses || 0);
     var profit = Math.round((cum.totalProfit || 0) - (day ? (day.profit || 0) : 0) + (today.profit || 0));
     var wagered = Math.round((cum.totalWagered || 0) - (day ? (day.wagered || 0) : 0) + (today.wagered || 0));
     var decided = wins + losses;
     var accuracy = decided > 0 ? ((wins / decided) * 100).toFixed(1) + '%' : '0%';
     var roiNum = wagered > 0 ? (profit / wagered) * 100 : 0;
     var roi = wagered > 0 ? roiNum.toFixed(1) + '%' : '0%';
-    var tDecided = (today.wins || 0) + (today.losses || 0);
-    return {
+    var todayAll = today.allIn || null;
+    var todayStr = today.straightsOnly || null;
+    var tWins = todayAll ? todayAll.wins : (today.wins || 0);
+    var tLosses = todayAll ? todayAll.losses : (today.losses || 0);
+    var tPushes = todayAll ? todayAll.pushes : (today.pushes || 0);
+    var tProfit = todayAll ? todayAll.profit : (today.profit || 0);
+    var tDecided = tWins + tLosses;
+    var view = {
       wins: wins, losses: losses, profit: profit, wagered: wagered,
       accuracy: accuracy, roi: roi, roiNum: roiNum,
-      todayWins: today.wins || 0, todayLosses: today.losses || 0, todayPushes: today.pushes || 0,
-      todayProfit: today.profit || 0,
-      todayAcc: tDecided > 0 ? Math.round((today.wins / tDecided) * 100) : 0,
+      todayWins: tWins, todayLosses: tLosses, todayPushes: tPushes,
+      todayProfit: tProfit,
+      todayAcc: tDecided > 0 ? Math.round((tWins / tDecided) * 100) : 0,
     };
+    var baseAll = snapshot && (snapshot.allIn || (snapshot.cumulative && snapshot.cumulative.kpiScope === 'allIn' ? snapshot.cumulative : null));
+    var baseStr = snapshot && (snapshot.straightsOnly || (snapshot.straight && snapshot.straight.kpiScope === 'straightsOnly' ? snapshot.straight : null));
+    if (baseAll && baseStr && todayAll && todayStr) {
+      var dayAll = day && (day.allIn || (day.kpiScope === 'allIn' ? day : null));
+      view.allIn = subtractScope(baseAll, dayAll, todayAll);
+      view.straightsOnly = subtractScope(baseStr, day && day.straightsOnly, todayStr);
+      view.allIn.kpiScope = 'allIn';
+      view.straightsOnly.kpiScope = 'straightsOnly';
+    }
+    return view;
   }
 
   function paintKpi(view) {
     if (typeof document === 'undefined' || !view) return;
+    // When the snapshot carries both scopes, the headline is all-in for record and ROI.
+    var src = view.allIn || view;
     var rec = document.getElementById('cum-record');
-    if (rec) rec.textContent = view.wins + '-' + view.losses;
+    if (rec) rec.textContent = src.record ? String(src.record) : (src.wins + '-' + src.losses);
     var acc = document.getElementById('cum-accuracy');
-    if (acc) acc.textContent = view.accuracy;
+    if (acc) acc.textContent = src.accuracy || view.accuracy;
     var hero = document.getElementById('hero-accuracy');
-    if (hero) { hero.textContent = view.accuracy + ' Accuracy'; hero._set = true; }
+    if (hero) { hero.textContent = (src.accuracy || view.accuracy) + ' Accuracy'; hero._set = true; }
     var profitEl = document.getElementById('cum-profit');
     if (profitEl) {
-      var profit = view.profit || 0;
+      var profit = src.profit != null ? src.profit : (view.profit || 0);
       profitEl.textContent = (profit >= 0 ? '+$' : '-$') + Math.abs(profit).toLocaleString();
       profitEl.className = 'cum-value ' + (profit >= 0 ? 'positive' : 'negative');
     }
     var roiEl = document.getElementById('cum-roi');
     if (roiEl) {
-      roiEl.textContent = view.roi;
-      roiEl.className = 'cum-value ' + ((view.roiNum || 0) >= 0 ? 'positive' : 'negative');
+      roiEl.textContent = src.roi || view.roi;
+      var roiNum = src.roiNum != null ? src.roiNum : (view.roiNum || 0);
+      roiEl.className = 'cum-value ' + (roiNum >= 0 ? 'positive' : 'negative');
     }
     var tRec = document.getElementById('today-kpi-record');
     if (tRec) {

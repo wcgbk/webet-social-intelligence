@@ -1,0 +1,65 @@
+{
+  "note": "ESPN college-football finals verified 2026-10-30 from site.api.espn.com scoreboard groups=80. Away-home scores: McNeese 14-63, Southern Miss at Troy 34-55, Wyoming at San Jose State 16-13, Miami (OH) at UMass 20-19. Decoys are real finals from the same slates so a loose Miami or Wyoming match fails the test.",
+  "events": [
+    {
+      "date": "2026-10-03T23:45Z",
+      "competitions": [{
+        "competitors": [
+          {"homeAway": "away", "score": "14", "team": {"displayName": "McNeese Cowboys", "abbreviation": "MCN"}},
+          {"homeAway": "home", "score": "63", "team": {"displayName": "LSU Tigers", "abbreviation": "LSU"}}
+        ],
+        "status": {"type": {"state": "post", "completed": true, "name": "STATUS_FINAL", "shortDetail": "Final"}}
+      }]
+    },
+    {
+      "date": "2026-10-03T23:30Z",
+      "competitions": [{
+        "competitors": [
+          {"homeAway": "away", "score": "41", "team": {"displayName": "Miami Hurricanes", "abbreviation": "MIA"}},
+          {"homeAway": "home", "score": "13", "team": {"displayName": "Clemson Tigers", "abbreviation": "CLEM"}}
+        ],
+        "status": {"type": {"state": "post", "completed": true, "name": "STATUS_FINAL", "shortDetail": "Final"}}
+      }]
+    },
+    {
+      "date": "2026-10-03T19:30Z",
+      "competitions": [{
+        "competitors": [
+          {"homeAway": "away", "score": "0", "team": {"displayName": "Wyoming Cowboys", "abbreviation": "WYO"}},
+          {"homeAway": "home", "score": "28", "team": {"displayName": "North Dakota State Bison", "abbreviation": "NDSU"}}
+        ],
+        "status": {"type": {"state": "post", "completed": true, "name": "STATUS_FINAL", "shortDetail": "Final"}}
+      }]
+    },
+    {
+      "date": "2026-10-07T00:00Z",
+      "competitions": [{
+        "competitors": [
+          {"homeAway": "away", "score": "34", "team": {"displayName": "Southern Miss Golden Eagles", "abbreviation": "USM"}},
+          {"homeAway": "home", "score": "55", "team": {"displayName": "Troy Trojans", "abbreviation": "TROY"}}
+        ],
+        "status": {"type": {"state": "post", "completed": true, "name": "STATUS_FINAL", "shortDetail": "Final"}}
+      }]
+    },
+    {
+      "date": "2026-10-10T01:00Z",
+      "competitions": [{
+        "competitors": [
+          {"homeAway": "away", "score": "16", "team": {"displayName": "Wyoming Cowboys", "abbreviation": "WYO"}},
+          {"homeAway": "home", "score": "13", "team": {"displayName": "San José State Spartans", "abbreviation": "SJSU"}}
+        ],
+        "status": {"type": {"state": "post", "completed": true, "name": "STATUS_FINAL", "shortDetail": "Final"}}
+      }]
+    },
+    {
+      "date": "2026-10-10T18:00Z",
+      "competitions": [{
+        "competitors": [
+          {"homeAway": "away", "score": "20", "team": {"displayName": "Miami (OH) RedHawks", "abbreviation": "M-OH"}},
+          {"homeAway": "home", "score": "19", "team": {"displayName": "Massachusetts Minutemen", "abbreviation": "MASS"}}
+        ],
+        "status": {"type": {"state": "post", "completed": true, "name": "STATUS_FINAL", "shortDetail": "Final"}}
+      }]
+    }
+  ]
+}

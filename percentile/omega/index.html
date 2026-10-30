@@ -693,17 +693,25 @@
         const profitDays = days.filter(d => Number(d.profit) > 0).length;
 
         const PREVIEW = 10;
+        const dayView = d => d.allIn || (d.kpiScope === 'allIn' ? d : (d.straightsOnly || null));
         function renderRows(slice) {
           return slice.map(d => {
-            const plClass = tone(d.profit);
-            const roi = (d.roi == null || d.roi === '--') ? '--' : accText(d.roi);
-            const roiClass = tone(d.profit);
+            const view = dayView(d);
+            const profit = view ? (view.profit != null ? view.profit : view.totalProfit) : null;
+            const wagered = view ? (view.wagered != null ? view.wagered : view.totalWagered) : null;
+            const wins = view ? (view.wins || 0) : 0;
+            const losses = view ? (view.losses || 0) : 0;
+            const plClass = tone(profit);
+            const roiRaw = view ? view.roi : null;
+            const roi = (roiRaw == null || roiRaw === '--') ? '--' : accText(roiRaw);
+            const roiClass = tone(profit);
+            const acc = view ? accText(view.accuracy) : '--';
             return `<tr>
               <td>${fmt(d.date)}</td>
-              <td class="right">${d.wins || 0}W-${d.losses || 0}L</td>
-              <td class="right">${dayAcc(d)}</td>
-              <td class="right">$${Number(d.wagered || 0).toLocaleString()}</td>
-              <td class="right ${plClass}">${money(d.profit)}</td>
+              <td class="right">${wins}W-${losses}L</td>
+              <td class="right">${acc}</td>
+              <td class="right">${wagered == null ? '--' : ('$' + Number(wagered).toLocaleString())}</td>
+              <td class="right ${plClass}">${profit == null ? '--' : money(profit)}</td>
               <td class="right ${roiClass}">${roi}</td>
             </tr>`;
           }).join('');
@@ -712,35 +720,54 @@
         const olderDays = days.slice(0, -PREVIEW).reverse();
         const first = days.length ? days[0].date : floor;
         const last = days.length ? days[days.length - 1].date : floor;
-        const profitClass = tone(cum.totalProfit);
-        const roiClass = tone(parseFloat(cum.roi));
-        const strRoi = roiOf(str.totalProfit, str.totalWagered);
-        const parRoi = roiOf(par.totalProfit, par.totalWagered);
+        const allMarked = cum && cum.kpiScope === 'allIn';
+        const headline = allMarked ? cum : {
+          wins: (str.wins || 0) + (par.wins || 0),
+          losses: (str.losses || 0) + (par.losses || 0),
+          pushes: (Number(str.pushes) || 0) + (Number(par.pushes) || 0) || (cum.pushes || 0),
+          roi: roiOf((Number(str.totalProfit) || 0) + (Number(par.totalProfit) || 0), (Number(str.totalWagered) || 0) + (Number(par.totalWagered) || 0)),
+          totalProfit: (Number(str.totalProfit) || 0) + (Number(par.totalProfit) || 0),
+          totalWagered: (Number(str.totalWagered) || 0) + (Number(par.totalWagered) || 0),
+        };
+        if (!headline.record) headline.record = `${headline.wins || 0}-${headline.losses || 0}-${headline.pushes || 0}`;
+        if (!headline.accuracy) {
+          const decided = (headline.wins || 0) + (headline.losses || 0);
+          headline.accuracy = decided ? ((headline.wins / decided) * 100).toFixed(1) + '%' : '--';
+        }
+        const headProfit = headline.totalProfit != null ? headline.totalProfit : headline.profit;
+        const headWagered = headline.totalWagered != null ? headline.totalWagered : headline.wagered;
+        const allLabel = allMarked ? 'All-in' : 'Straights + parlay';
+        const profitClass = tone(headProfit);
+        const roiClass = tone(parseFloat(headline.roi));
+        const strRoi = (str.kpiScope === 'straightsOnly' && str.roi) ? str.roi : roiOf(str.totalProfit, str.totalWagered);
+        const parRoi = (par.kpiScope === 'parlay' && par.roi) ? par.roi : roiOf(par.totalProfit, par.totalWagered);
+        const strRecord = (str.kpiScope === 'straightsOnly' && str.record) ? str.record : `${str.wins || 0}-${str.losses || 0}`;
 
         let html = `
           <div class="stats-date-range">${fmt(first)} – ${fmt(last)} &nbsp;·&nbsp; Omega only since ${fmt(floor)} &nbsp;·&nbsp; ${days.length} card days</div>
           <div class="kpi-grid">
             <div class="kpi-card">
-              <div class="kpi-value">${str.wins || 0}W-${str.losses || 0}L</div>
-              <div class="kpi-label">Straight record</div>
+              <div class="kpi-value">${headline.record}</div>
+              <div class="kpi-label">${allLabel} record</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-value">${str.accuracy || '--'}</div>
-              <div class="kpi-label">Straight accuracy</div>
+              <div class="kpi-value">${headline.accuracy || '--'}</div>
+              <div class="kpi-label">${allLabel} accuracy</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-value ${profitClass === 'pos' ? 'positive' : profitClass === 'neg' ? 'negative' : ''}">${money(cum.totalProfit)}</div>
-              <div class="kpi-label">Profit</div>
+              <div class="kpi-value ${profitClass === 'pos' ? 'positive' : profitClass === 'neg' ? 'negative' : ''}">${money(headProfit)}</div>
+              <div class="kpi-label">${allLabel} P/L</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-value ${roiClass === 'pos' ? 'positive' : roiClass === 'neg' ? 'negative' : ''}">${cum.roi || '--'}</div>
-              <div class="kpi-label">ROI</div>
+              <div class="kpi-value ${roiClass === 'pos' ? 'positive' : roiClass === 'neg' ? 'negative' : ''}">${headline.roi || '--'}</div>
+              <div class="kpi-label">${allLabel} ROI</div>
             </div>
           </div>
+          <div style="font-size:.75rem;color:var(--txt-m);margin:.15rem 0 .7rem;">Headline record and ROI are the same ${allLabel.toLowerCase()} bets. Straights only ${strRecord} · ROI ${strRoi}.</div>
           <div class="split-row">
             <div class="split-card">
               <div class="split-card-title">Straights</div>
-              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${str.wins || 0}W-${str.losses || 0}L</span></div>
+              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${strRecord}</span></div>
               <div class="split-row-item"><span class="split-row-label">Accuracy</span><span class="split-row-val">${str.accuracy || '--'}</span></div>
               <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${str.totalWagered != null ? '$' + Number(str.totalWagered).toLocaleString() : '--'}</span></div>
               <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val ${tone(str.totalProfit)}">${str.totalProfit != null ? money(str.totalProfit) : '--'}</span></div>
@@ -757,18 +784,18 @@
           </div>
           <table class="daily-mini-table">
             <thead><tr>
-              <th>Date</th><th style="text-align:right">Record</th><th style="text-align:right">Acc</th>
+              <th>Date</th><th style="text-align:right">Record (all-in)</th><th style="text-align:right">Acc</th>
               <th style="text-align:right">Wagered</th><th style="text-align:right">P/L</th><th style="text-align:right">ROI</th>
             </tr></thead>
             <tbody id="daily-rows-preview">${renderRows(recentDays)}</tbody>
             <tbody id="daily-rows-older" style="display:none">${renderRows(olderDays)}</tbody>
             <tr class="totals-row">
               <td>Total</td>
-              <td class="right">${str.wins || 0}W-${str.losses || 0}L</td>
-              <td class="right">${str.accuracy || '--'}</td>
-              <td class="right">${cum.totalWagered != null ? '$' + Number(cum.totalWagered).toLocaleString() : '--'}</td>
-              <td class="right ${profitClass}">${money(cum.totalProfit)}</td>
-              <td class="right ${roiClass}">${cum.roi || '--'}</td>
+              <td class="right">${headline.record}</td>
+              <td class="right">${headline.accuracy || '--'}</td>
+              <td class="right">${headWagered != null ? '$' + Number(headWagered).toLocaleString() : '--'}</td>
+              <td class="right ${profitClass}">${money(headProfit)}</td>
+              <td class="right ${roiClass}">${headline.roi || '--'}</td>
             </tr>
           </table>
           ${olderDays.length ? `<button class="show-all-btn" id="show-all-btn" onclick="toggleOlderDays(this)">Show all ${days.length} days</button>` : ''}

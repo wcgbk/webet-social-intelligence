@@ -133,10 +133,15 @@ async function fetchESPNScores(dateISO, sport) {
   return mergeGames(lists);
 }
 
+function gamesFromScoreboard(data) {
+  return ((data && data.events) || []).map(mapEvent).filter(Boolean);
+}
+
 module.exports = {
   ESPN_ENDPOINTS,
   fetchESPNScores,
   scoreboardUrls,
   scoreboardDates,
   shiftIsoDate,
+  gamesFromScoreboard,
 };

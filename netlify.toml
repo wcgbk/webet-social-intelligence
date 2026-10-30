@@ -1026,3 +1026,9 @@
 
 [functions."capture-omega-pinnacle-lines-background"]
   included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
+
+[functions."check-supabase-freshness"]
+  schedule = "45 13,14 * * *"
+  # 13:45 UTC = 9:45am ET (EDT). 14:45 UTC = 9:45am ET (EST). etGuard keeps 09:45 ET only.
+  # Read-only: flags (HTTP 500 + console.error + supabase-sync/freshness/<date> blob) when the
+  # latest clv.odds_snapshots.created_at is older than yesterday ET or SUPABASE_SERVICE_ROLE_KEY is missing.

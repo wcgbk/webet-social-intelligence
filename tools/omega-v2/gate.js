@@ -86,7 +86,9 @@ function weak(i) {
 async function main() {
   const savedFlag = process.env.OMEGA_PIPELINE_V2;
   delete process.env.OMEGA_PIPELINE_V2;
-  assert.strictEqual(v2.pipelineV2Enabled({}), false, 'flag defaults off');
+  assert.strictEqual(v2.pipelineV2Enabled({}), true, 'flag defaults on');
+  process.env.OMEGA_PIPELINE_V2 = '0';
+  assert.strictEqual(v2.pipelineV2Enabled({}), false, '0 falls back to v1');
   process.env.OMEGA_PIPELINE_V2 = '1';
   assert.strictEqual(v2.pipelineV2Enabled({}), true, 'env flag on');
   assert.strictEqual(v2.pipelineV2Enabled({ pipelineV2: false }), false, 'explicit off wins');
@@ -199,7 +201,7 @@ async function main() {
   });
   assert.strictEqual(prior.calibration.trainN, 0);
   assert.strictEqual(prior.leakageChecked, true);
-  assert.strictEqual(prior.modelVersion, 'omega-pipeline-v2.0');
+  assert.strictEqual(prior.modelVersion, 'omega-v2-sharp-2026-10-30');
 
   const next = await v2.buildCard({
     date: '2026-10-02',
@@ -227,7 +229,7 @@ async function main() {
   assert.strictEqual(one.picks[0].odds, '-110');
   assert.strictEqual(one.picks[0].commenceTime, '2026-10-20T17:00:00Z');
   const units = one.picks[0].unitsNum;
-  assert.ok(units > 0 && units <= 1.25);
+  assert.ok(units > 0 && units <= 2, `stake ${units} outside quarter-Kelly cap`);
   assert.strictEqual(Math.round(units * 4) / 4, units);
 
   const sameGame = await v2.buildCard({
@@ -242,7 +244,7 @@ async function main() {
   assert.ok(sameGame.picks.length <= 1);
 
   const ticket = await v2.buildCard({
-    date: '2026-10-03',
+    date: '2026-10-20',
     candidates: [
       strong('NFL', 'Buffalo Bills @ Kansas City Chiefs', 'Buffalo Bills ML', 'Moneyline'),
       strong('NFL', 'Dallas Cowboys @ Philadelphia Eagles', 'Over 45.5', 'Total'),
@@ -250,12 +252,12 @@ async function main() {
     ],
     history: [],
   });
-  assert.ok(ticket.parlayLegs.length === 1, 'ML+total parlay should publish');
+  assert.ok(ticket.parlayLegs.length === 1, 'historical parlay should publish');
   const parlay = ticket.parlayLegs[0];
   assert.ok(parlay.legs.length === 2 || parlay.legs.length === 3);
   assert.ok(parlay.legMarkets.includes('Moneyline') && parlay.legMarkets.includes('Total'));
-  assert.ok(Number(parlay.correlationFactor) < 1, 'same-sport parlay needs a haircut below 1');
-  assert.ok(parlay.evRaw >= 0.03);
+  assert.strictEqual(Number(parlay.correlationFactor), 1, 'distinct games are not haircut');
+  assert.ok(parseFloat(parlay.units) >= 0.25);
   const games = new Set(parlay.legs.map((leg) => leg.matchup.toLowerCase()));
   assert.strictEqual(games.size, parlay.legs.length);
 

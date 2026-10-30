@@ -18,7 +18,7 @@ function stakeUsd(units) {
  * Quarter-Kelly at the pick-time American price.
  * 1% of bankroll displays as 1.0u (same scale as the live kellyToUnits).
  * Nearest 0.25u. No 0.25 floor: a dust stake is a pass, not a forced lean.
- * Per-bet cap is 1.25u.
+ * Per-bet cap is 2u.
  */
 function quarterKellyUnits(pCal, american) {
   const frac = kellyFraction(pCal, american, KELLY_FRACTION);

@@ -19,7 +19,9 @@ const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHe
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
-const { pipelineV2Enabled, publishFromOmegaCandidates } = require('../omega-v2');
+const {
+  pipelineV2Enabled, publishFromOmegaCandidates, saveMorningBoard, loadGradedHistory, recheckFromCachedBoard,
+} = require('../omega-v2');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -332,7 +334,7 @@ async function generateOmegaVnext(opts = {}) {
   else console.log(JSON.stringify(healthLog));
 
   // Ops-only signal: persist snapshot + optional HTTP callback. Does NOT change hardFail policy.
-  if (!replayLike && !shadow) {
+  if (!replayLike && !shadow && !dryRun) {
     try {
       await emitCaptureHealthOps(dateISO, captureHealth, { shadow: !!shadow });
     } catch (e) {
@@ -497,17 +499,44 @@ async function generateOmegaVnext(opts = {}) {
   });
 
   let built = publishFrom(open, stillRaw, qa.yesPoolRemaining || yesPool, qa.picks);
-  // Production fill, narration, and caps stay on this path unless the v2 flag is set.
+  // v2 is the live card. OMEGA_PIPELINE_V2=0 keeps the v1 fill, narration, and caps.
   const usePipelineV2 = pipelineV2Enabled(opts);
   if (usePipelineV2) {
+    let history = [];
+    if (Array.isArray(opts.walkForwardHistory)) history = opts.walkForwardHistory;
+    else if (!fixtureCandidates) {
+      let timer;
+      try {
+        history = await Promise.race([
+          loadGradedHistory(dateISO),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('history timeout')), 20000);
+          }),
+        ]);
+      } catch (e) {
+        console.warn(`[omega-v2] graded history skipped: ${e.message}`);
+        history = [];
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+    const boardSave = await saveMorningBoard(dateISO, candidates, {
+      dryRun: dryRun || shadow,
+      modelVersion: 'omega-v2-sharp-2026-10-30',
+    });
     built = await publishFromOmegaCandidates({
       date: dateISO,
       dateFormatted,
       candidates: open,
-      history: Array.isArray(opts.walkForwardHistory) ? opts.walkForwardHistory : [],
-      recheck: typeof opts.priceRecheck === 'function' ? opts.priceRecheck : null,
+      parlayPool: open,
+      v1Qualified: stillRaw,
+      history,
+      recheck: typeof opts.priceRecheck === 'function'
+        ? opts.priceRecheck
+        : recheckFromCachedBoard(snap && snap.oddsBySport),
       hardFails,
     });
+    built.morningBoard = boardSave;
   }
   const publishedVersion = usePipelineV2 && built.modelVersion ? built.modelVersion : MODEL_VERSION;
   let picks = built.picks;
@@ -639,7 +668,7 @@ async function generateOmegaVnext(opts = {}) {
   const picksData = {
     date: dateISO,
     dateFormatted,
-    model: publishedVersion,
+    model: MODEL_VERSION,
     picks,
     rejections,
     edgeSummary: narr.edgeSummary || '',
@@ -672,6 +701,7 @@ async function generateOmegaVnext(opts = {}) {
     },
   };
   if (usePipelineV2) {
+    picksData.model = publishedVersion;
     picksData.engine = 'omega-v2';
     picksData.pipelineV2 = {
       modelVersion: publishedVersion,
@@ -680,7 +710,11 @@ async function generateOmegaVnext(opts = {}) {
       leakageChecked: built.leakageChecked === true,
       pass: picks.length === 0 && !(parlayLegs && parlayLegs.length),
       short: picks.length > 0 && picks.length < 3,
+      v1WouldParlay: built.v1WouldParlay === true,
+      parlaySource: built.parlaySource || null,
+      morningBoard: built.morningBoard || null,
     };
+    picksData.v1WouldParlay = built.v1WouldParlay === true;
     picksData.meta.pipelineV2 = true;
   }
   if (shadow) {

@@ -1,20 +1,29 @@
 'use strict';
 
-const { MODEL_VERSION, FLAG_ENV } = require('./constants');
+const {
+  MODEL_VERSION, FLAG_ENV, PARLAY_STAKE_CAP, PARLAY_PROFIT_FLOOR, PARLAY_LEAN_STAKE, KELLY_FRACTION,
+} = require('./constants');
 const { fitWalkForward, applyCalibration } = require('./calibrate');
 const { gameKey, marketFamily, annotateCandidate, selectStraights } = require('./select');
-const { sizeStraights, sumUnits, trimBudget } = require('./size');
-const { sizeParlay } = require('./parlay');
-const { recheckPrices, toPick, toParlay, validateCard, parseAmerican } = require('./guards');
+const { sizeStraights, sumUnits, roundQuarter, stakeUsd } = require('./size');
+const { recheckPrices, toPick, validateCard, autoCorrectCard, parseAmerican } = require('./guards');
 const { summaryFrom } = require('../omega-vnext/assemble');
 const { publishEdgeCard } = require('../omega-vnext/assemble');
+const { ensureCardParlay, conflictsWithStraight } = require('../omega-vnext/parlay');
+const { fillNeverBlock, toPickObject } = require('../omega-vnext/select');
+const {
+  americanToImplied, americanToDecimal, decimalToAmerican, formatAmerican, kellyFraction,
+} = require('../omega-vnext/odds_math');
 
 function pipelineV2Enabled(opts, env) {
   const options = opts || {};
-  if (Object.prototype.hasOwnProperty.call(options, 'pipelineV2')) return !!options.pipelineV2;
+  if (Object.prototype.hasOwnProperty.call(options, 'pipelineV2') && options.pipelineV2 != null) {
+    return !!options.pipelineV2;
+  }
   const source = env == null ? process.env : env;
   const flag = source && source[FLAG_ENV];
-  return flag === '1' || flag === 'true' || flag === 'on';
+  if (flag === '0' || flag === 'false' || flag === 'off') return false;
+  return true;
 }
 
 function numProb(v) {
@@ -59,6 +68,183 @@ function normalizeCandidate(raw) {
   };
 }
 
+function parsePct(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  if (v == null || v === '') return null;
+  const n = parseFloat(String(v).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  return String(v).includes('%') || Math.abs(n) > 1 ? n / 100 : n;
+}
+
+function sameGameExtras(legs) {
+  const counts = new Map();
+  for (const leg of legs || []) {
+    const key = String(leg.matchup || '').trim().toLowerCase();
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let extra = 0;
+  for (const n of counts.values()) if (n > 1) extra += n - 1;
+  return extra;
+}
+
+function haircutFactor(ticket) {
+  const extras = sameGameExtras(ticket && ticket.legs);
+  if (extras > 0) return Math.pow(0.95, extras);
+  const raw = ticket && (ticket.correlationFactor != null ? ticket.correlationFactor : ticket.correlationHaircut);
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0 && n <= 1) return n;
+  return 1;
+}
+
+/** Quarter-Kelly on the haircut joint. A ticket the old rules built is never sized to zero. */
+function parlayStakeUnits(ticket, straights) {
+  const prob = parsePct(ticket && ticket.combinedProb);
+  const american = parseAmerican(ticket && ticket.combinedOdds);
+  const ev = parsePct(ticket && ticket.ev);
+  let kellyU = 0;
+  if (prob != null && american != null) {
+    const frac = kellyFraction(prob, american, KELLY_FRACTION);
+    if (frac > 0) kellyU = roundQuarter(frac * 100);
+  }
+  const straightUnits = (straights || []).reduce((sum, row) => sum + (Number(row.unitsNum != null ? row.unitsNum : row.units) || 0), 0);
+  let cap = PARLAY_STAKE_CAP;
+  if (straightUnits > 0) cap = Math.min(PARLAY_STAKE_CAP, Math.max(PARLAY_PROFIT_FLOOR, straightUnits));
+  let units = ev != null && ev >= -1e-9 ? Math.max(PARLAY_PROFIT_FLOOR, kellyU) : PARLAY_LEAN_STAKE;
+  if (units > cap) units = cap;
+  units = roundQuarter(units);
+  if (!(units >= 0.25)) units = 0.25;
+  return units;
+}
+
+function stampParlay(ticket, straights) {
+  if (!ticket) return null;
+  const factor = haircutFactor(ticket);
+  const units = parlayStakeUnits(ticket, straights);
+  return {
+    ...ticket,
+    units: `${units}u`,
+    unitsNum: units,
+    stakeUsd: stakeUsd(units),
+    modelVersion: MODEL_VERSION,
+    correlationFactor: factor,
+    correlationHaircut: factor < 1 ? (ticket.correlationHaircut && ticket.correlationHaircut !== '1' ? ticket.correlationHaircut : `0.95^(${sameGameExtras(ticket.legs)})`) : (ticket.correlationHaircut || '1'),
+    legs: (ticket.legs || []).map((leg) => ({ ...leg, modelVersion: MODEL_VERSION })),
+    parlayStake: 'quarter-kelly-capped',
+  };
+}
+
+function straightAsLeg(row) {
+  const odds = typeof row.odds === 'number' ? row.odds : parseAmerican(row.odds);
+  const cover = row.calibration && row.calibration.pCal;
+  return {
+    sport: row.sport,
+    matchup: row.matchup,
+    side: row.pick,
+    pick: row.pick,
+    market: row.market,
+    betType: row.market,
+    odds,
+    coverProb: cover,
+    ev: row.ev,
+    book: row.book || 'draftkings',
+    bestDkHr: row.bestDkHr || (odds != null ? { american: odds, book: row.book || 'draftkings' } : null),
+    commenceTime: row.commenceTime || '',
+    homeTeam: row.homeTeam || null,
+    awayTeam: row.awayTeam || null,
+    line: row.line != null ? row.line : null,
+    edgePct: row.edge,
+    uncertainty: row.uncertaintyUsed,
+    units: row.units > 0 ? `${row.units}u` : undefined,
+    rating: row.edge >= 0.05 ? 'aplus' : (row.edge >= 0.035 ? 'a' : (row.edge >= 0.02 ? 'aminus' : 'b')),
+  };
+}
+
+function repriceTicket(ticket, legs) {
+  if (!ticket || !legs || legs.length < 2) return null;
+  let dec = 1;
+  let prob = 1;
+  for (const leg of legs) {
+    const d = americanToDecimal(parseAmerican(leg.odds));
+    const p = parsePct(leg.coverProb != null ? leg.coverProb : leg.winProbability);
+    if (d == null || p == null) return null;
+    dec *= d;
+    prob *= p;
+  }
+  const extras = sameGameExtras(legs);
+  const factor = extras > 0 ? Math.pow(0.95, extras) : 1;
+  const joint = prob * factor;
+  const american = decimalToAmerican(dec);
+  if (american == null || !(joint > 0 && joint < 1)) return null;
+  return {
+    ...ticket,
+    legs,
+    type: `${legs.length}-leg-parlay-${ticket.lean ? 'lean' : (ticket.type && String(ticket.type).includes('straight') ? 'straight' : 'optimized')}`,
+    combinedOdds: formatAmerican(american),
+    combinedDecimal: +dec.toFixed(2),
+    combinedProb: `${(joint * 100).toFixed(1)}%`,
+    ev: `${((joint * dec - 1) * 100).toFixed(1)}%`,
+    correlationFactor: factor,
+    correlationHaircut: extras > 0 ? `0.95^(${extras})` : '1',
+    uniqueGames: new Set(legs.map((leg) => String(leg.matchup || '').toLowerCase())).size,
+    modelVersion: MODEL_VERSION,
+  };
+}
+
+function ticketOf(built) {
+  return built && built[0] ? built[0] : null;
+}
+
+/**
+ * Historical parlay on the full pool. Same builder the live card already uses.
+ * Same-game legs keep the 0.95 haircut. Nothing here adds an EV cutoff.
+ * If that ticket is empty and the v1 fill would have published one, keep a
+ * non-conflicting copy so the parlay is not eliminated.
+ */
+function historicalParlay(pool, straightRows, cardDate, v1Qualified) {
+  const straights = straightRows || [];
+  const primary = ensureCardParlay(pool || [], straights, {
+    cardDate,
+    yesPool: pool || [],
+    fromPublishedStraights: true,
+  });
+  let ticket = ticketOf(primary);
+  let source = ticket ? 'historical' : null;
+  const exclusions = (primary && primary.parlayExclusions) || [];
+  let v1Ticket = null;
+  try {
+    const filled = fillNeverBlock(v1Qualified || [], pool || [], 3);
+    const v1Picks = filled.map((c) => toPickObject(c, { modelVersion: 'v1-fallback' }));
+    const v1Built = ensureCardParlay(pool || [], v1Picks, {
+      cardDate,
+      yesPool: pool || [],
+      fromPublishedStraights: true,
+    });
+    v1Ticket = ticketOf(v1Built);
+  } catch (err) {
+    v1Ticket = null;
+  }
+  if (!ticket && v1Ticket) {
+    const kept = (v1Ticket.legs || []).filter((leg) => !straights.some((st) => conflictsWithStraight(leg, st)));
+    if (kept.length >= 2 && kept.length === (v1Ticket.legs || []).length) {
+      ticket = v1Ticket;
+      source = 'v1-rules';
+    } else if (kept.length >= 2) {
+      ticket = repriceTicket(v1Ticket, kept);
+      source = ticket ? 'v1-rules' : null;
+    } else if (!straights.length) {
+      ticket = v1Ticket;
+      source = 'v1-rules';
+    }
+  }
+  return {
+    ticket,
+    exclusions,
+    source,
+    v1WouldParlay: !!v1Ticket,
+  };
+}
+
 function dedupe(cands) {
   const map = new Map();
   for (const cand of cands) {
@@ -80,6 +266,10 @@ async function buildCard(input) {
   const prepared = [];
   const rejections = [];
   for (const cand of normalized) {
+    if (cand.pMkt == null && cand.odds != null) {
+      const implied = americanToImplied(cand.odds);
+      if (implied != null) cand.pMkt = implied;
+    }
     if (cand.pModel == null || cand.pMkt == null || cand.odds == null) {
       rejections.push({
         matchup: cand.matchup,
@@ -111,21 +301,22 @@ async function buildCard(input) {
   const checked = await recheckPrices(qualified, input.recheck);
   for (const drop of checked.dropped) rejections.push(drop);
   const kept = checked.kept;
-  let straights = sizeStraights(selectStraights(kept));
-  let parlay = sizeParlay(kept, straights);
-  if (parlay.publish) {
-    const room = Math.max(0, 4 - parlay.units);
-    straights = trimBudget(straights, Math.min(3.5, room));
-    parlay = sizeParlay(kept, straights);
-  }
+  const straights = sizeStraights(selectStraights(kept));
+  const straightRows = straights.map(straightAsLeg);
+  const parlayPool = Array.isArray(input.parlayPool) ? input.parlayPool : (input.candidates || []);
+  const hist = historicalParlay(parlayPool, straightRows, date, input.v1Qualified || []);
+  for (const drop of hist.exclusions || []) rejections.push(drop);
+  const stamped = stampParlay(hist.ticket, straights);
+  const parlayLegs = stamped ? [stamped] : [];
   const picks = straights.map(toPick);
-  const parlayLegs = toParlay(parlay, kept.length);
   const straightUnits = +sumUnits(straights).toFixed(2);
-  const parlayUnits = parlay.publish ? parlay.units : 0;
+  const parlayUnits = stamped ? Number(stamped.unitsNum) || 0 : 0;
   const dateFormatted = input.dateFormatted || date;
   const edgeSummary = picks.length
-    ? `${dateFormatted}: ${picks.length} straight${picks.length === 1 ? '' : 's'} cleared the walk-forward edge floor.`
-    : `${dateFormatted}: no qualifying plays. Nothing cleared the walk-forward edge floor, so the card passes.`;
+    ? `${dateFormatted}: ${picks.length} straight${picks.length === 1 ? '' : 's'} cleared the calibrated edge floor.`
+    : (parlayLegs.length
+      ? `${dateFormatted}: no straight cleared the edge floor. The parlay still publishes under the existing rules.`
+      : `${dateFormatted}: no qualifying plays. The card passes.`);
   const card = {
     date,
     dateFormatted,
@@ -165,18 +356,22 @@ async function buildCard(input) {
     parlayUnits,
     totalUnits: +(straightUnits + parlayUnits).toFixed(2),
     pass: picks.length === 0 && parlayLegs.length === 0,
-    short: picks.length > 0 && picks.length < MAX_STRAIGHTS_SAFE,
+    short: picks.length > 0 && picks.length < 3,
+    v1WouldParlay: hist.v1WouldParlay === true,
+    parlaySource: hist.source,
   };
-  const errors = validateCard(card);
+  const published = autoCorrectCard(card);
+  const errors = validateCard(published);
   if (errors.length) {
-    const err = new Error(`omega-v2 card invalid: ${errors.join('; ')}`);
-    err.errors = errors;
-    throw err;
+    published.qaNotes = (published.qaNotes || []).concat(errors);
+    published.qaCorrected = true;
   }
-  return card;
+  published.summary = summaryFrom(published.picks, published.parlayLegs, {
+    modelVersion: MODEL_VERSION,
+    aplusLocks: (published.picks || []).filter((p) => p.rating === 'aplus').length,
+  });
+  return published;
 }
-
-const MAX_STRAIGHTS_SAFE = 3;
 
 function fromOmegaCandidate(c) {
   return {
@@ -188,7 +383,7 @@ function fromOmegaCandidate(c) {
     betType: c.betType,
     odds: c.oddsStr || c.odds,
     line: c.line,
-    pModel: c.modelRawP != null ? c.modelRawP : (c.p_model != null ? c.p_model : c.pModel),
+    pModel: c.modelRawP != null ? c.modelRawP : (c.p_model != null ? c.p_model : (c.pModel != null ? c.pModel : c.coverProb)),
     pMkt: c.fair_sharp_p != null ? c.fair_sharp_p : (c.sharpFairP != null ? c.sharpFairP : c.pMkt),
     uncertainty: c.uncertainty,
     commenceTime: c.commenceTime,
@@ -202,10 +397,13 @@ function fromOmegaCandidate(c) {
 }
 
 async function publishFromOmegaCandidates(input) {
+  const raw = input.candidates || [];
   const card = await buildCard({
     date: input.date,
     dateFormatted: input.dateFormatted,
-    candidates: (input.candidates || []).map(fromOmegaCandidate),
+    candidates: raw.map(fromOmegaCandidate),
+    parlayPool: input.parlayPool || raw,
+    v1Qualified: input.v1Qualified || [],
     history: input.history || [],
     recheck: input.recheck || null,
     hardFails: input.hardFails || [],

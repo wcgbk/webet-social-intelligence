@@ -31,8 +31,17 @@ function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g
 
 // Omega v12.0.9: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX (not a fill target).
 // Trim order matches generate (quality, then units). Grades are not rewritten.
+function isPipelineV2Card(picksData) {
+  if (!picksData) return false;
+  if (picksData.pipelineV2 || (picksData.meta && picksData.meta.pipelineV2)) return true;
+  const model = String(picksData.model || (picksData.summary && picksData.summary.modelVersion) || '');
+  return model.indexOf('omega-v2') === 0;
+}
+
 function enforceOmegaDailyUnitCap(picksData) {
   if (!picksData || !Array.isArray(picksData.picks)) return;
+  // v2 already sized quarter-Kelly and a capped parlay stake. Do not force 0.5u.
+  if (isPipelineV2Card(picksData)) return;
   // Same quality-then-units trim as generate. Grades are not rewritten from stake.
   const capped = applyDailyUnitCap(picksData.picks, picksData.parlayLegs);
   picksData.picks = capped.picks;

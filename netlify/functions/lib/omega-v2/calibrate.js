@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  PRIOR_SHRINK_K, SHRINK_GRID, MIN_POOLED, MIN_SPORT, ISOTONIC_MIN,
+  PRIOR_SHRINK_K, SPORT_PRIOR_K, SHRINK_GRID, MIN_POOLED, MIN_SPORT, ISOTONIC_MIN,
   SHRINK_PRIOR_PENALTY, PLATT_LAMBDA,
 } = require('./constants');
 
@@ -292,6 +292,14 @@ function fitWalkForward(history, cardDate) {
   };
 }
 
+function priorKFor(sport) {
+  const key = String(sport || '').toUpperCase();
+  if (SPORT_PRIOR_K && Object.prototype.hasOwnProperty.call(SPORT_PRIOR_K, key)) {
+    return SPORT_PRIOR_K[key];
+  }
+  return PRIOR_SHRINK_K;
+}
+
 function modelFor(fit, sport) {
   const key = String(sport || '').toUpperCase();
   if (fit && fit.bySport && fit.bySport[key]) return fit.bySport[key];
@@ -320,7 +328,8 @@ function applyCalibration(candidate, fit) {
   const pModel = Number(candidate && candidate.pModel);
   const pMkt = Number(candidate && candidate.pMkt);
   if (!Number.isFinite(pModel) || !Number.isFinite(pMkt)) return null;
-  const pShrink = shrinkP(pModel, pMkt, model.k);
+  const k = model.method === 'prior' ? priorKFor(candidate && candidate.sport) : model.k;
+  const pShrink = shrinkP(pModel, pMkt, k);
   const pPlatt = applyPlatt(pShrink, model.platt);
   let pCal = pPlatt;
   if (model.isotonic) {
@@ -331,7 +340,7 @@ function applyCalibration(candidate, fit) {
     pMkt: clipP(pMkt),
     pShrink,
     pCal,
-    shrinkK: model.k,
+    shrinkK: k,
     method: model.method,
     trainN: model.n,
   };
@@ -348,4 +357,5 @@ module.exports = {
   uncertaintyFor,
   shrinkP,
   modelFor,
+  priorKFor,
 };

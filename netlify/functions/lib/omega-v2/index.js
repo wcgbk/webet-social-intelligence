@@ -7,6 +7,7 @@ const size = require('./size');
 const parlay = require('./parlay');
 const guards = require('./guards');
 const pipeline = require('./pipeline');
+const board = require('./board');
 
 module.exports = {
   ...constants,
@@ -16,4 +17,5 @@ module.exports = {
   ...parlay,
   ...guards,
   ...pipeline,
+  ...board,
 };

@@ -1,14 +1,18 @@
 'use strict';
 
-/** Omega daily-card pipeline v2. Off unless OMEGA_PIPELINE_V2 or opts.pipelineV2. */
-const MODEL_VERSION = 'omega-pipeline-v2.0';
+/** Live Omega card. OMEGA_PIPELINE_V2=0 (or opts.pipelineV2 false) falls back to v1. */
+const MODEL_VERSION = 'omega-v2-sharp-2026-10-30';
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
-const PER_BET_CAP = 1.25;
+const PER_BET_CAP = 2;
 const STRAIGHT_BUDGET = 3.5;
-const CARD_BUDGET = 4.0;
+const CARD_BUDGET = 4.5;
 const PARLAY_CAP = 0.5;
+const PARLAY_STAKE_CAP = 1;
+/** Minimum parlay stake when the historical ticket's joint EV is not negative. */
+const PARLAY_PROFIT_FLOOR = 0.5;
+const PARLAY_LEAN_STAKE = 0.25;
 const PARLAY_MIN_EV = 0.03;
 /** Probability-point edge versus the pick-time price, before price and uncertainty scales. */
 const EDGE_FLOOR = 0.01;
@@ -16,6 +20,18 @@ const EDGE_FLOOR = 0.01;
 const MAX_EDGE = 0.10;
 /** Prior shrink toward the no-vig price. Matches the known ~54% forecast vs ~50% hits. */
 const PRIOR_SHRINK_K = 0.70;
+/**
+ * Sport priors used until a walk-forward fit has its own holdout.
+ * Higher k trusts the no-vig price more. MLB stays looser so a real
+ * starter miss is not shrunk under the edge floor.
+ */
+const SPORT_PRIOR_K = {
+  MLB: 0.46,
+  NFL: 0.70,
+  NCAAF: 0.72,
+  NBA: 0.75,
+  NHL: 0.68,
+};
 const SHRINK_GRID = [0.40, 0.55, 0.70, 0.85, 0.95];
 const MIN_POOLED = 8;
 const MIN_SPORT = 24;
@@ -39,10 +55,14 @@ module.exports = {
   STRAIGHT_BUDGET,
   CARD_BUDGET,
   PARLAY_CAP,
+  PARLAY_STAKE_CAP,
+  PARLAY_PROFIT_FLOOR,
+  PARLAY_LEAN_STAKE,
   PARLAY_MIN_EV,
   EDGE_FLOOR,
   MAX_EDGE,
   PRIOR_SHRINK_K,
+  SPORT_PRIOR_K,
   SHRINK_GRID,
   MIN_POOLED,
   MIN_SPORT,

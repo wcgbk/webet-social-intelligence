@@ -150,6 +150,7 @@ function parsePct(v) {
     date: CARD_DATE,
     dryRun: true,
     skipNarrate: true,
+    pipelineV2: false,
     fixtureCandidates: slate1019(),
     historicalSnapshot: '2026-10-19T16:00:00Z',
     pregameAsOfMs: AS_OF,
@@ -243,6 +244,40 @@ function parsePct(v) {
   assert.strictEqual(leanBuilt[0].label, 'lean');
   assert.strictEqual(parseFloat(leanBuilt[0].units), 0.5);
   assert.ok(leanBuilt.parlayExclusions && leanBuilt.parlayExclusions.length >= 0);
+
+  const sharp = await generateOmegaVnext({
+    date: CARD_DATE,
+    dryRun: true,
+    skipNarrate: true,
+    pipelineV2: true,
+    fixtureCandidates: slate1019(),
+    historicalSnapshot: '2026-10-19T16:00:00Z',
+    pregameAsOfMs: AS_OF,
+    walkForwardHistory: [],
+  });
+  assert.ok(String(sharp.model).startsWith('omega-v2-sharp-'));
+  assert.ok(sharp.picks.length <= 3);
+  const sharpGames = sharp.picks.map(p => String(p.matchup || '').toLowerCase());
+  assert.strictEqual(new Set(sharpGames).size, sharpGames.length);
+  for (const p of sharp.picks) {
+    const u = parseFloat(p.units);
+    assert.ok(u >= 0.25 && u <= 2);
+    assert.strictEqual(Math.round(u * 4) / 4, u);
+  }
+  if (card.parlayLegs.length) {
+    assert.strictEqual(sharp.parlayLegs.length, 1, 'v2 keeps a parlay when v1 rules produced one');
+  }
+  const sharpTicket = sharp.parlayLegs[0];
+  if (sharpTicket) {
+    assert.ok(sharpTicket.legs.length === 2 || sharpTicket.legs.length === 3);
+    const stake = parseFloat(sharpTicket.units);
+    assert.ok(stake >= 0.25 && stake <= 1);
+    for (const leg of sharpTicket.legs) {
+      for (const straight of sharp.picks) {
+        assert.strictEqual(parlay.conflictsWithStraight(leg, straight), false, `${leg.pick} conflicts with ${straight.pick}`);
+      }
+    }
+  }
 
   console.log('PASS test-omega-parlay-conflict-1019', {
     straights: card.picks.map(p => `${p.pick} ${p.odds} ${p.units}`),

@@ -66,19 +66,23 @@ await check('record and ROI for each scope come from the same bets', async () =>
   assert.strictEqual(day.allIn.profit, 31);
   assert.strictEqual(day.allIn.roi, '27.4%');
   assert.notStrictEqual(day.straightsOnly.roi, day.allIn.roi);
-  assert.strictEqual(day.kpiScope, 'allIn');
-  assert.strictEqual(day.wins, day.allIn.wins);
-  assert.strictEqual(day.losses, day.allIn.losses);
+  // Published day shape (WeBet 10/30): record = straights, money/ROI = all-in.
+  assert.strictEqual(day.recordScope, 'straightsOnly');
+  assert.strictEqual(day.roiScope, 'allIn');
+  assert.strictEqual(day.wins, day.straightsOnly.wins);
+  assert.strictEqual(day.losses, day.straightsOnly.losses);
   assert.strictEqual(day.profit, day.allIn.profit);
   assert.strictEqual(day.wagered, day.allIn.wagered);
   const agg = grader.aggregateDays([day]);
   assert.strictEqual(agg.straight.kpiScope, 'straightsOnly');
-  assert.strictEqual(agg.cumulative.kpiScope, 'allIn');
+  assert.strictEqual(agg.cumulative.recordScope, 'straightsOnly');
+  assert.strictEqual(agg.cumulative.roiScope, 'allIn');
   assert.strictEqual(agg.straight.record, agg.straightsOnly.record);
   assert.strictEqual(agg.straight.roi, agg.straightsOnly.roi);
-  assert.strictEqual(agg.cumulative.record, agg.allIn.record);
   assert.strictEqual(agg.cumulative.roi, agg.allIn.roi);
-  assert.strictEqual(agg.cumulative.wins, agg.allIn.wins);
+  assert.strictEqual(agg.cumulative.totalProfit, agg.allIn.profit);
+  assert.strictEqual(agg.cumulative.wins, agg.straightsOnly.wins);
+  assert.strictEqual(agg.cumulative.accuracy, agg.straightsOnly.accuracy);
   assert.notStrictEqual(agg.straight.roi, agg.cumulative.roi);
   const roiOf = (scope) => ((scope.profit / scope.wagered) * 100).toFixed(1) + '%';
   assert.strictEqual(agg.straightsOnly.roi, roiOf(agg.straightsOnly));
@@ -283,7 +287,7 @@ await check('grader source does not default a stake to 1u or call the odds API',
   assert.ok(!src.includes('parlayRisk || 75'));
   assert.ok(!src.includes('site.api.espn.com'));
   assert.ok(!src.includes('the-odds-api.com'));
-  assert.ok(src.includes("kpiScope: 'allIn'"));
+  assert.ok(src.includes("roiScope: 'allIn'"));
   assert.ok(src.includes('units_missing'));
 });
 

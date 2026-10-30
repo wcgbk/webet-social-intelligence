@@ -354,19 +354,22 @@ function scopesFromPicks(picks, date) {
 }
 
 function stampDay(base, scopes, parlayMeta) {
+  // Published shape is unchanged (WeBet 2026-10-30): record/accuracy = straight
+  // picks only; wagered/profit/ROI = all bets (straights + parlay).
   const all = scopes.allIn;
-  const decided = all.wins + all.losses;
+  const st = scopes.straightsOnly;
+  const decided = st.wins + st.losses;
   return Object.assign({}, base, {
-    wins: all.wins,
-    losses: all.losses,
-    pushes: all.pushes,
-    pending: all.pending,
-    accuracy: decided > 0 ? ((all.wins / decided) * 100).toFixed(0) : '0',
+    wins: st.wins,
+    losses: st.losses,
+    pushes: st.pushes,
+    pending: st.pending,
+    accuracy: decided > 0 ? ((st.wins / decided) * 100).toFixed(0) : '0',
     wagered: all.wagered,
     profit: all.profit,
     roi: all.wagered > 0 ? ((all.profit / all.wagered) * 100).toFixed(1) : '--',
-    kpiScope: 'allIn',
-    recordScope: 'allIn',
+    kpiScope: 'record=straightsOnly,roi=allIn',
+    recordScope: 'straightsOnly',
     roiScope: 'allIn',
     record: all.record,
     bets: all.bets,
@@ -563,7 +566,14 @@ function aggregateDays(list) {
   }
   const scopes = scopesFromCounts(straight, parlay, flags, unitsMissing);
   return {
-    cumulative: Object.assign({}, scopes.allIn, { kpiScope: 'allIn', recordScope: 'allIn', roiScope: 'allIn' }),
+    cumulative: {
+      wins: scopes.straightsOnly.wins, losses: scopes.straightsOnly.losses,
+      pushes: scopes.straightsOnly.pushes, pending: scopes.straightsOnly.pending,
+      accuracy: scopes.straightsOnly.accuracy,
+      roi: scopes.allIn.roi,
+      totalWagered: scopes.allIn.wagered, totalProfit: scopes.allIn.profit,
+      kpiScope: 'record=straightsOnly,roi=allIn', recordScope: 'straightsOnly', roiScope: 'allIn',
+    },
     straight: Object.assign({}, scopes.straightsOnly, { kpiScope: 'straightsOnly', recordScope: 'straightsOnly', roiScope: 'straightsOnly' }),
     parlay: scopes.parlay,
     straightsOnly: scopes.straightsOnly,
@@ -578,26 +588,16 @@ function aggregateDays(list) {
 
 function flatSummary(list) {
   const a = aggregateDays(list);
+  const st = a.straightsOnly;
   const all = a.allIn;
   return {
     days: list.length,
-    wins: all.wins,
-    losses: all.losses,
-    pushes: all.pushes,
-    pending: all.pending,
-    accuracy: all.accuracy,
-    profit: all.profit,
-    wagered: all.wagered,
-    roi: all.roi,
-    record: all.record,
-    bets: all.bets,
-    parlayWins: a.parlay.wins,
-    parlayLosses: a.parlay.losses,
-    kpiScope: 'allIn',
-    recordScope: 'allIn',
-    roiScope: 'allIn',
-    straightsOnly: a.straightsOnly,
-    allIn: a.allIn,
+    wins: st.wins, losses: st.losses, pushes: st.pushes, pending: st.pending,
+    accuracy: st.accuracy, profit: all.profit, wagered: all.wagered, roi: all.roi,
+    parlayWins: a.parlay.wins, parlayLosses: a.parlay.losses,
+    recordScope: 'straightsOnly', roiScope: 'allIn',
+    straightsOnly: st,
+    allIn: all,
   };
 }
 

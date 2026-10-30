@@ -40,3 +40,6 @@ The four finals, checked on the ESPN scoreboard for those dates: 10/03 McNeese S
 ## Rollout
 
 Local commit only. No Netlify deploy, no push, no Supabase or blob write, no Odds API call. After WeBet deploys, the v9 cache key misses the old mixed payload. Legacy days before 2026-09-22 are not regraded.
+
+## Update 2026-10-30 (WeBet decision)
+The page display is unchanged. Record and accuracy show straight picks only; profit and ROI are the single overall (all-in) figure, with the same labels. The legacy fields (`wins`, `losses`, `accuracy`, `cumulative.*`, `flatSummary`) keep that production meaning (`recordScope: straightsOnly`, `roiScope: allIn`). `straightsOnly`, `allIn`, and `parlay` stay in the API as extra fields, and the pages do not show them. The page files (dashboard, tracking, percentile x2), `js/live-score.js`, `lib/tracking-report.js`, and the v1/daily-omega pages are all reverted to production. The backend fixes are kept: the 4 NCAAF grades, no 1u stake default, and the 10/13 parlay at its 0.25u card stake.

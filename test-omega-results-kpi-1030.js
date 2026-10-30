@@ -72,15 +72,17 @@ await check('record and ROI for each scope come from the same bets', async () =>
   assert.strictEqual(day.wins, day.straightsOnly.wins);
   assert.strictEqual(day.losses, day.straightsOnly.losses);
   assert.strictEqual(day.profit, day.allIn.profit);
-  assert.strictEqual(day.wagered, day.allIn.wagered);
+  // published wagered keeps push stakes (production convention)
+  assert.strictEqual(day.wagered, day.allIn.wagered + day.allIn.pushWagered);
   const agg = grader.aggregateDays([day]);
   assert.strictEqual(agg.straight.kpiScope, 'straightsOnly');
   assert.strictEqual(agg.cumulative.recordScope, 'straightsOnly');
   assert.strictEqual(agg.cumulative.roiScope, 'allIn');
   assert.strictEqual(agg.straight.record, agg.straightsOnly.record);
   assert.strictEqual(agg.straight.roi, agg.straightsOnly.roi);
-  assert.strictEqual(agg.cumulative.roi, agg.allIn.roi);
   assert.strictEqual(agg.cumulative.totalProfit, agg.allIn.profit);
+  assert.strictEqual(agg.cumulative.totalWagered, agg.allIn.wagered + agg.allIn.pushWagered);
+  assert.strictEqual(agg.cumulative.roi, ((agg.cumulative.totalProfit / agg.cumulative.totalWagered) * 100).toFixed(1) + '%');
   assert.strictEqual(agg.cumulative.wins, agg.straightsOnly.wins);
   assert.strictEqual(agg.cumulative.accuracy, agg.straightsOnly.accuracy);
   assert.notStrictEqual(agg.straight.roi, agg.cumulative.roi);

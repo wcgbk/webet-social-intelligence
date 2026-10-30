@@ -301,7 +301,7 @@ function priceStraight(units, odds, result) {
 }
 
 function emptyCounts() {
-  return { wins: 0, losses: 0, pushes: 0, pending: 0, bets: 0, wagered: 0, profit: 0 };
+  return { wins: 0, losses: 0, pushes: 0, pending: 0, bets: 0, wagered: 0, profit: 0, pushWagered: 0 };
 }
 
 function addCount(scope, bet) {
@@ -315,6 +315,7 @@ function addCount(scope, bet) {
   } else if (bet.result === 'push') {
     scope.pushes++;
     scope.bets++;
+    scope.pushWagered += Number(bet.risk) || 0;
   } else if (bet.result === 'pending') {
     scope.pending++;
   }
@@ -341,6 +342,7 @@ function finalizeScope(scope, name) {
     totalProfit: profit,
     roi: wagered > 0 ? ((profit / wagered) * 100).toFixed(1) + '%' : '0%',
     accuracy: pct(scope.wins, decided),
+    pushWagered: wholeUp(scope.pushWagered || 0),
   };
 }
 
@@ -351,6 +353,13 @@ function scopesFromPicks(picks, date) {
   const unitsMissing = [];
   for (const pick of picks || []) consumePick(straight, parlay, flags, unitsMissing, pick, date);
   return scopesFromCounts(straight, parlay, flags, unitsMissing);
+}
+
+// Production convention for the published overall ROI: push stakes stay in
+// wagered (profit 0). Scope blocks (straightsOnly/allIn) exclude them.
+function publishedMoney(all) {
+  const wagered = all.wagered + (all.pushWagered || 0);
+  return { wagered, profit: all.profit, roiNum: wagered > 0 ? (all.profit / wagered) * 100 : null };
 }
 
 function stampDay(base, scopes, parlayMeta) {
@@ -365,9 +374,9 @@ function stampDay(base, scopes, parlayMeta) {
     pushes: st.pushes,
     pending: st.pending,
     accuracy: decided > 0 ? ((st.wins / decided) * 100).toFixed(0) : '0',
-    wagered: all.wagered,
+    wagered: publishedMoney(all).wagered,
     profit: all.profit,
-    roi: all.wagered > 0 ? ((all.profit / all.wagered) * 100).toFixed(1) : '--',
+    roi: publishedMoney(all).roiNum != null ? publishedMoney(all).roiNum.toFixed(1) : '--',
     kpiScope: 'record=straightsOnly,roi=allIn',
     recordScope: 'straightsOnly',
     roiScope: 'allIn',
@@ -570,8 +579,8 @@ function aggregateDays(list) {
       wins: scopes.straightsOnly.wins, losses: scopes.straightsOnly.losses,
       pushes: scopes.straightsOnly.pushes, pending: scopes.straightsOnly.pending,
       accuracy: scopes.straightsOnly.accuracy,
-      roi: scopes.allIn.roi,
-      totalWagered: scopes.allIn.wagered, totalProfit: scopes.allIn.profit,
+      roi: publishedMoney(scopes.allIn).roiNum != null ? publishedMoney(scopes.allIn).roiNum.toFixed(1) + '%' : '0%',
+      totalWagered: publishedMoney(scopes.allIn).wagered, totalProfit: scopes.allIn.profit,
       kpiScope: 'record=straightsOnly,roi=allIn', recordScope: 'straightsOnly', roiScope: 'allIn',
     },
     straight: Object.assign({}, scopes.straightsOnly, { kpiScope: 'straightsOnly', recordScope: 'straightsOnly', roiScope: 'straightsOnly' }),
@@ -593,7 +602,8 @@ function flatSummary(list) {
   return {
     days: list.length,
     wins: st.wins, losses: st.losses, pushes: st.pushes, pending: st.pending,
-    accuracy: st.accuracy, profit: all.profit, wagered: all.wagered, roi: all.roi,
+    accuracy: st.accuracy, profit: all.profit, wagered: publishedMoney(all).wagered,
+    roi: publishedMoney(all).roiNum != null ? publishedMoney(all).roiNum.toFixed(1) + '%' : '0%',
     parlayWins: a.parlay.wins, parlayLosses: a.parlay.losses,
     recordScope: 'straightsOnly', roiScope: 'allIn',
     straightsOnly: st,

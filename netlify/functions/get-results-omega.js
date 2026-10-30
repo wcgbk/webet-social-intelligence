@@ -580,8 +580,8 @@ function aggregateDays(list) {
     allIn: scopes.allIn,
     flags: scopes.flags,
     unitsMissing: scopes.unitsMissing,
-    kpiScope: 'allIn',
-    recordScope: 'allIn',
+    kpiScope: 'record=straightsOnly,roi=allIn',
+    recordScope: 'straightsOnly',
     roiScope: 'allIn',
   };
 }
@@ -912,8 +912,8 @@ exports.handler = async (event) => {
         from: allDays.length ? allDays[0].date : null,
         omegaStart: OMEGA_KPI_START,
         legacyThrough: LEGACY.through || null,
-        kpiScope: 'allIn',
-        recordScope: 'allIn',
+        kpiScope: 'record=straightsOnly,roi=allIn',
+        recordScope: 'straightsOnly',
         roiScope: 'allIn',
       },
       omegaOnly,

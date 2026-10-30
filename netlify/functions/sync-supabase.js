@@ -1,41 +1,41 @@
 'use strict';
-
 /**
- * sync-supabase — daily Netlify blob copy into Supabase.
- *
- * Schedule (netlify.toml): "25 13,14 * * *"
- *   13:25 UTC = 9:25am ET (EDT). 14:25 UTC = 9:25am ET (EST).
- *   etGuard keeps 09:25 ET only, after report-clv-omega and
- *   report-tracking-omega (09:15 ET).
- *
- * Default slate is yesterday ET. ?date=YYYY-MM-DD overrides it.
- * ?dryRun=1 builds every row and does not call Supabase.
- * A manual invoke needs the existing admin auth: PICKS_SECRET_KEY
- * (Authorization Bearer, x-picks-secret, or ?key=) or an admin-auth
- * token. Scheduler invocations are allowed through etGuard.
- *
- * Read-only on the card and picks blobs. Optional log blob is the
- * supabase-sync store keyed by the slate date. No Odds API call.
- * No 10:30 lock capture exists; the snapshot line is the 10:00 ET pull.
+ * sync-supabase — daily trigger for the standalone Supabase CLV mirror (rewritten 2026-10-30).
+ * Schedule "25 13,14 * * *"; etGuard keeps 09:25 ET only. Kicks sync-supabase-background
+ * for yesterday (ET). Manual: ?date=YYYY-MM-DD[&dryRun=1] with PICKS_SECRET_KEY auth.
+ * Fails loudly (HTTP 500 + console.error) when a required env var is missing.
+ * No Odds API call. Does not read or write picks, grading or card code.
  */
+const { isSchedulerEvent, rejectUnlessEtSlot } = require('./lib/et-schedule');
+const S = require('./lib/clv-supabase');
 
-const sync = require('./lib/supabase-sync');
+const REQUIRED_ENV = ['SUPABASE_SERVICE_ROLE_KEY', 'NETLIFY_AUTH_TOKEN', 'PICKS_SECRET_KEY'];
 
-function contextNow(context) {
-  if (context && context.now instanceof Date) return context.now;
-  return new Date();
+async function handle(event, now, deps = {}) {
+  const when = now instanceof Date ? now : new Date();
+  const skip = rejectUnlessEtSlot('sync-supabase', event, when);
+  if (skip) return skip;
+  const env = deps.env || process.env;
+  const scheduled = isSchedulerEvent(event);
+  if (!scheduled && !S.isAuthorized(event, env)) return S.json(401, { ok: false, error: 'unauthorized' });
+  try { S.requireEnv(env, REQUIRED_ENV); } catch (e) {
+    console.error(`[sync-supabase] FATAL ${e.message}; nothing synced`);
+    return S.json(500, { ok: false, error: e.message, missingEnv: e.missing });
+  }
+  const q = (event && event.queryStringParameters) || {};
+  const date = q.date || S.addDays(S.etYmd(when), -1);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return S.json(400, { ok: false, error: 'bad date', date });
+  const dryRun = q.dryRun === '1' || q.dryRun === 'true';
+  const base = env.URL || 'https://webetsocial.com';
+  const url = `${base}/.netlify/functions/sync-supabase-background?date=${date}${dryRun ? '&dryRun=1' : ''}`;
+  const resp = await (deps.fetch || fetch)(url, { method: 'POST', headers: { 'x-picks-secret': env.PICKS_SECRET_KEY } });
+  if (resp.status !== 202 && !resp.ok) {
+    console.error(`[sync-supabase] background trigger HTTP ${resp.status} for ${date}`);
+    return S.json(500, { ok: false, error: `background trigger HTTP ${resp.status}`, date });
+  }
+  return S.json(202, { ok: true, queued: true, date, dryRun, log: `supabase-sync/run/${date}${dryRun ? '-dry' : ''}` });
 }
 
-function contextDeps(context) {
-  if (!context || typeof context !== 'object') return null;
-  if (context.deps && typeof context.deps === 'object') return context.deps;
-  return null;
-}
-
-exports.handler = (event, context) => sync.handle(event, contextNow(context), contextDeps(context));
-exports.handle = sync.handle;
-exports.buildSync = sync.buildSync;
-exports.postRows = sync.postRows;
-exports.isAuthorized = sync.isAuthorized;
-exports.LOCK_NOTE = sync.LOCK_NOTE;
-exports.BATCH_LIMIT = sync.BATCH_LIMIT;
+exports.handler = (event, context) => handle(event, new Date());
+exports.handle = handle;
+exports.REQUIRED_ENV = REQUIRED_ENV;

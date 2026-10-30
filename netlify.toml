@@ -1032,3 +1032,11 @@
   # 13:45 UTC = 9:45am ET (EDT). 14:45 UTC = 9:45am ET (EST). etGuard keeps 09:45 ET only.
   # Read-only: flags (HTTP 500 + console.error + supabase-sync/freshness/<date> blob) when the
   # latest clv.odds_snapshots.created_at is older than yesterday ET or SUPABASE_SERVICE_ROLE_KEY is missing.
+
+# Standalone Supabase CLV mirror (2026-10-30). 09:25 ET via etGuard; worker is sync-supabase-background.
+[functions."sync-supabase"]
+  schedule = "25 13,14 * * *"
+
+# Pick-only true-close capture (WeBet approved 2026-10-30). Every 5 min; pulls only when a pick kicks off in 2-8 min. Cap 100 credits/day.
+[functions."capture-pick-closes"]
+  schedule = "*/5 * * * *"

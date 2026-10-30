@@ -19,6 +19,7 @@ const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHe
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
+const { pipelineV2Enabled, publishFromOmegaCandidates } = require('../omega-v2');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -496,6 +497,19 @@ async function generateOmegaVnext(opts = {}) {
   });
 
   let built = publishFrom(open, stillRaw, qa.yesPoolRemaining || yesPool, qa.picks);
+  // Production fill, narration, and caps stay on this path unless the v2 flag is set.
+  const usePipelineV2 = pipelineV2Enabled(opts);
+  if (usePipelineV2) {
+    built = await publishFromOmegaCandidates({
+      date: dateISO,
+      dateFormatted,
+      candidates: open,
+      history: Array.isArray(opts.walkForwardHistory) ? opts.walkForwardHistory : [],
+      recheck: typeof opts.priceRecheck === 'function' ? opts.priceRecheck : null,
+      hardFails,
+    });
+  }
+  const publishedVersion = usePipelineV2 && built.modelVersion ? built.modelVersion : MODEL_VERSION;
   let picks = built.picks;
   let parlayLegs = built.parlayLegs;
   let narrRejections = [];
@@ -508,7 +522,9 @@ async function generateOmegaVnext(opts = {}) {
     insights: '',
     claudeVerified: false,
   };
-  if (!skipNarrate) {
+  if (usePipelineV2) {
+    console.log(`[omega-v2] ${publishedVersion} date=${dateISO} straights=${picks.length} parlays=${(parlayLegs || []).length} trainN=${built.calibration ? built.calibration.trainN : 0}`);
+  } else if (!skipNarrate) {
     // Caps already ran inside publishEdgeCard, so narration quotes final units.
     narr = await narrateAndVerify({
       picks,
@@ -556,7 +572,8 @@ async function generateOmegaVnext(opts = {}) {
   }
 
   // Narration may cut a stake. Re-apply the same caps, then quote whatever is left.
-  {
+  // v2 already sized and capped. Do not force-fill or sync parlay legs back onto straights.
+  if (!usePipelineV2) {
     const capped = applyDailyUnitCap(picks, parlayLegs);
     const exposed = applyExposureCaps(capped.picks, capped.parlayLegs);
     for (const p of exposed.picks || []) {
@@ -573,13 +590,13 @@ async function generateOmegaVnext(opts = {}) {
     picks = exposed.picks.filter(p => (parseFloat(String(p.units || '').replace(/[^0-9.]/g, '')) || 0) > 0);
     parlayLegs = syncLegsToPublishedStraights(exposed.parlayLegs, picks);
   }
-  picks = attachClvFields(picks, MODEL_VERSION, dateISO);
-  parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
+  picks = attachClvFields(picks, publishedVersion, dateISO);
+  parlayLegs = attachClvToParlay(parlayLegs, publishedVersion, dateISO);
   picks = sortByGradeThenUnits(picks);
   narr.edgeSummary = alignEdgeSummary(narr.edgeSummary, picks, parlayLegs, dateFormatted);
 
   const summary = summaryFrom(picks, parlayLegs, {
-    modelVersion: MODEL_VERSION,
+    modelVersion: publishedVersion,
     aplusLocks: picks.filter(p => p.rating === 'aplus').length,
     qaHardFails: hardFails.length,
   });
@@ -618,18 +635,18 @@ async function generateOmegaVnext(opts = {}) {
     ...(built.rejections || []),
   ]);
 
-  const empty = picks.length === 0;
+  const empty = picks.length === 0 && !(usePipelineV2 && parlayLegs && parlayLegs.length);
   const picksData = {
     date: dateISO,
     dateFormatted,
-    model: MODEL_VERSION,
+    model: publishedVersion,
     picks,
     rejections,
     edgeSummary: narr.edgeSummary || '',
     insights: narr.insights || '',
     summary,
     generatedAt: now.toISOString(),
-    parlayLegs: empty ? [] : parlayLegs,
+    parlayLegs: (empty && !usePipelineV2) ? [] : parlayLegs,
     parlayPool: empty ? [] : (built.parlayPool || []),
     sgps: [],
     claudeVerified: !!narr.claudeVerified,
@@ -654,6 +671,18 @@ async function generateOmegaVnext(opts = {}) {
       storeKey: shadow ? `omega-shadow/picks-${dateISO}` : null,
     },
   };
+  if (usePipelineV2) {
+    picksData.engine = 'omega-v2';
+    picksData.pipelineV2 = {
+      modelVersion: publishedVersion,
+      calibration: built.calibration || null,
+      priceRecheck: built.priceRecheck || null,
+      leakageChecked: built.leakageChecked === true,
+      pass: picks.length === 0 && !(parlayLegs && parlayLegs.length),
+      short: picks.length > 0 && picks.length < 3,
+    };
+    picksData.meta.pipelineV2 = true;
+  }
   if (shadow) {
     picksData.shadow = true;
     picksData.storeKey = `omega-shadow/picks-${dateISO}`;
@@ -705,7 +734,7 @@ async function generateOmegaVnext(opts = {}) {
       ];
       pmObserver = await runPmObserver({
         dateISO, candidates: pool, picks: picks.map(p => ({ ...p })),
-        modelVersion: MODEL_VERSION,
+        modelVersion: publishedVersion,
         polyMarkets: pmAuditMarkets.polyMarkets,
         kalshiMarkets: pmAuditMarkets.kalshiMarkets,
       });
@@ -733,7 +762,7 @@ async function generateOmegaVnext(opts = {}) {
       ];
       pmObserver = await runPmObserver({
         dateISO, candidates: pool, picks: picks.map(p => ({ ...p })),
-        modelVersion: MODEL_VERSION,
+        modelVersion: publishedVersion,
         polyMarkets: pmAuditMarkets.polyMarkets,
         kalshiMarkets: pmAuditMarkets.kalshiMarkets,
       });

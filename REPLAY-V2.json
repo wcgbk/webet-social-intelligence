@@ -1,0 +1,1299 @@
+{
+  "generatedAt": "2026-10-30T22:48:48.672Z",
+  "window": [
+    "2026-09-30",
+    "2026-10-29"
+  ],
+  "days": 30,
+  "unitDollars": 150,
+  "modelVersion": "omega-pipeline-v2.0",
+  "pool": "Published straights plus parlay legs on each stored card. Not the full morning board.",
+  "live": {
+    "name": "live",
+    "straights": {
+      "wl": "37-38-0",
+      "bets": 75,
+      "profitUsd": -648,
+      "units": -5,
+      "roiPct": -7,
+      "rawProfitUsd": -648,
+      "rawUnits": -4.32,
+      "rawRoi": -0.062277751081210954
+    },
+    "parlays": {
+      "wl": "5-22-0",
+      "bets": 27,
+      "profitUsd": 803,
+      "units": 6,
+      "roiPct": 40,
+      "rawProfitUsd": 803,
+      "rawUnits": 5.35,
+      "rawRoi": 0.39654320987654323,
+      "hitRate": 0.18518518518518517
+    },
+    "overall": {
+      "wl": "42-60-0",
+      "bets": 102,
+      "profitUsd": 155,
+      "units": 2,
+      "roiPct": 2,
+      "rawProfitUsd": 155,
+      "rawUnits": 1.03,
+      "rawRoi": 0.01246983105390185
+    },
+    "clv": {
+      "n": 68,
+      "cents": 0.81,
+      "beatClose": 0.6470588235294118
+    },
+    "brier": 0.256,
+    "logLoss": 0.7057,
+    "probN": 75,
+    "maxDrawdownUsd": 2747,
+    "maxDrawdownUnits": 19,
+    "passDays": 0,
+    "shortDays": 12,
+    "days": 30
+  },
+  "v2": {
+    "name": "v2",
+    "straights": {
+      "wl": "1-6-0",
+      "bets": 7,
+      "profitUsd": -870,
+      "units": -6,
+      "roiPct": -80,
+      "rawProfitUsd": -870,
+      "rawUnits": -5.8,
+      "rawRoi": -0.7974335472043996
+    },
+    "parlays": {
+      "wl": "0-0-0",
+      "bets": 0,
+      "profitUsd": 0,
+      "units": 0,
+      "roiPct": null,
+      "rawProfitUsd": 0,
+      "rawUnits": 0,
+      "rawRoi": null,
+      "hitRate": null
+    },
+    "overall": {
+      "wl": "1-6-0",
+      "bets": 7,
+      "profitUsd": -870,
+      "units": -6,
+      "roiPct": -80,
+      "rawProfitUsd": -870,
+      "rawUnits": -5.8,
+      "rawRoi": -0.7974335472043996
+    },
+    "clv": {
+      "n": 7,
+      "cents": 2.46,
+      "beatClose": 1
+    },
+    "brier": 0.2727,
+    "logLoss": 0.7386,
+    "probN": 7,
+    "maxDrawdownUsd": 870,
+    "maxDrawdownUnits": 6,
+    "passDays": 25,
+    "shortDays": 4,
+    "days": 30
+  },
+  "calibration": {
+    "live": {
+      "n": 75,
+      "brier": 0.256,
+      "logLoss": 0.7057
+    },
+    "v2": {
+      "n": 75,
+      "brier": 0.2561,
+      "logLoss": 0.706
+    },
+    "market": {
+      "n": 75,
+      "brier": 0.2546,
+      "logLoss": 0.703
+    }
+  },
+  "bootstrap": {
+    "n": 10000,
+    "seed": 1030,
+    "observedProfit": -1025,
+    "profit": {
+      "lo": -5750,
+      "hi": 3193,
+      "p": 0.676,
+      "sig": false
+    },
+    "roi": {
+      "lo": -1.3199,
+      "hi": 0.0411,
+      "p": 0.056,
+      "sig": false
+    }
+  },
+  "recommendation": {
+    "ship": false,
+    "text": "The profit gap is not significant. v2 is the cleaner process (no forced fill, walk-forward calibration, ML+total parlays only), but this 30-day pool does not justify replacing the live card. Leave OMEGA_PIPELINE_V2 off and keep the shadow.",
+    "brierBetter": false
+  },
+  "errors": {
+    "unmatched": [
+      {
+        "date": "2026-10-18",
+        "pick": "Baltimore Ravens -3",
+        "matchup": "Baltimore Ravens @ Cleveland Browns",
+        "sport": "NFL"
+      },
+      {
+        "date": "2026-10-18",
+        "pick": "New York Jets +7.5",
+        "matchup": "New York Jets @ New England Patriots",
+        "sport": "NFL"
+      },
+      {
+        "date": "2026-10-21",
+        "pick": "Ottawa Senators -1.5",
+        "matchup": "Florida Panthers @ Ottawa Senators",
+        "sport": "NHL"
+      },
+      {
+        "date": "2026-10-26",
+        "pick": "Boston Celtics ML",
+        "matchup": "Chicago Bulls @ Boston Celtics",
+        "sport": "NBA"
+      },
+      {
+        "date": "2026-10-27",
+        "pick": "Sacramento Kings ML",
+        "matchup": "Sacramento Kings @ San Antonio Spurs",
+        "sport": "NBA"
+      }
+    ],
+    "altLine": [
+      {
+        "date": "2026-10-02",
+        "pick": "Over 45.5",
+        "matchup": "Penn State Nittany Lions @ Northwestern Wildcats",
+        "sport": "NCAAF",
+        "betPoint": 45.5,
+        "closePoint": 47,
+        "clvPp": 4.64,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-03",
+        "pick": "Over 49.5",
+        "matchup": "Texas Tech Red Raiders @ Colorado Buffaloes",
+        "sport": "NCAAF",
+        "betPoint": 49.5,
+        "closePoint": 50.5,
+        "clvPp": 3.63,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-03",
+        "pick": "Over 47.5",
+        "matchup": "Army Black Knights @ Louisiana Tech Bulldogs",
+        "sport": "NCAAF",
+        "betPoint": 47.5,
+        "closePoint": 46.5,
+        "clvPp": -2.27,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-03",
+        "pick": "McNeese State Cowboys +53.5",
+        "matchup": "McNeese State Cowboys @ LSU Tigers",
+        "sport": "NCAAF",
+        "betPoint": 53.5,
+        "closePoint": 54,
+        "clvPp": -0.4,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-03",
+        "pick": "Over 52.5",
+        "matchup": "California Golden Bears @ UNLV Rebels",
+        "sport": "NCAAF",
+        "betPoint": 52.5,
+        "closePoint": 52,
+        "clvPp": -1.9,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-04",
+        "pick": "Over 38.5",
+        "matchup": "Green Bay Packers @ Tampa Bay Buccaneers",
+        "sport": "NFL",
+        "betPoint": 38.5,
+        "closePoint": 39.5,
+        "clvPp": 0.86,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-04",
+        "pick": "Over 46.5",
+        "matchup": "Indianapolis Colts @ Washington Commanders",
+        "sport": "NFL",
+        "betPoint": 46.5,
+        "closePoint": 47,
+        "clvPp": 2.13,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-06",
+        "pick": "Troy Trojans -10",
+        "matchup": "Southern Mississippi Golden Eagles @ Troy Trojans",
+        "sport": "NCAAF",
+        "betPoint": -10,
+        "closePoint": -9.5,
+        "clvPp": -1.7,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-08",
+        "pick": "Missouri State Bears +1.5",
+        "matchup": "Missouri State Bears @ Western Kentucky Hilltoppers",
+        "sport": "NCAAF",
+        "betPoint": 1.5,
+        "closePoint": -2,
+        "clvPp": 8.43,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-08",
+        "pick": "Vancouver Canucks +1.5",
+        "matchup": "Vancouver Canucks @ Carolina Hurricanes",
+        "sport": "NHL",
+        "betPoint": 1.5,
+        "closePoint": 2.5,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-08",
+        "pick": "South Florida Bulls +6.5",
+        "matchup": "South Florida Bulls @ UTSA Roadrunners",
+        "sport": "NCAAF",
+        "betPoint": 6.5,
+        "closePoint": 6,
+        "clvPp": 3.79,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-08",
+        "pick": "South Florida Bulls +7",
+        "matchup": "South Florida Bulls @ UTSA Roadrunners",
+        "sport": "NCAAF",
+        "betPoint": 7,
+        "closePoint": 6,
+        "clvPp": 1.85,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-10",
+        "pick": "UMass Minutemen +6.5",
+        "matchup": "Miami (OH) RedHawks @ UMass Minutemen",
+        "sport": "NCAAF",
+        "betPoint": 6.5,
+        "closePoint": 5.5,
+        "clvPp": 0.41,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-11",
+        "pick": "Over 41.5",
+        "matchup": "New York Giants @ Washington Commanders",
+        "sport": "NFL",
+        "betPoint": 41.5,
+        "closePoint": 42,
+        "clvPp": 0.12,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-11",
+        "pick": "Under 45.5",
+        "matchup": "Las Vegas Raiders @ New England Patriots",
+        "sport": "NFL",
+        "betPoint": 45.5,
+        "closePoint": 45,
+        "clvPp": -0.29,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-13",
+        "pick": "Over 6.5",
+        "matchup": "Edmonton Oilers @ Los Angeles Kings",
+        "sport": "NHL",
+        "betPoint": 6.5,
+        "closePoint": 6,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-13",
+        "pick": "Over 6.5",
+        "matchup": "Vancouver Canucks @ New York Islanders",
+        "sport": "NHL",
+        "betPoint": 6.5,
+        "closePoint": 6,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Under 7.5",
+        "matchup": "Milwaukee Brewers @ Los Angeles Dodgers",
+        "sport": "MLB",
+        "betPoint": 7.5,
+        "closePoint": 7,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Over 5.5",
+        "matchup": "Dallas Stars @ Colorado Avalanche",
+        "sport": "NHL",
+        "betPoint": 5.5,
+        "closePoint": 6,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Over 52.5",
+        "matchup": "Western Kentucky Hilltoppers @ Sam Houston State Bearkats",
+        "sport": "NCAAF",
+        "betPoint": 52.5,
+        "closePoint": 53.5,
+        "clvPp": 2.29,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-15",
+        "pick": "Over 69.5",
+        "matchup": "Colorado State Rams @ Texas State Bobcats",
+        "sport": "NCAAF",
+        "betPoint": 69.5,
+        "closePoint": 70.5,
+        "clvPp": 1.78,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-17",
+        "pick": "Over 42.5",
+        "matchup": "Wisconsin Badgers @ UCLA Bruins",
+        "sport": "NCAAF",
+        "betPoint": 42.5,
+        "closePoint": 43,
+        "clvPp": -0.93,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-17",
+        "pick": "Arkansas Razorbacks +6.5",
+        "matchup": "Arkansas Razorbacks @ Vanderbilt Commodores",
+        "sport": "NCAAF",
+        "betPoint": 6.5,
+        "closePoint": 5.5,
+        "clvPp": 1.78,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-17",
+        "pick": "Under 55",
+        "matchup": "Navy Midshipmen @ UTSA Roadrunners",
+        "sport": "NCAAF",
+        "betPoint": 55,
+        "closePoint": 54,
+        "clvPp": 4.93,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-19",
+        "pick": "Over 6.5",
+        "matchup": "Cleveland Guardians @ Tampa Bay Rays",
+        "sport": "MLB",
+        "betPoint": 6.5,
+        "closePoint": 7,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-21",
+        "pick": "Over 45.5",
+        "matchup": "New Mexico State Aggies @ Sam Houston State Bearkats",
+        "sport": "NCAAF",
+        "betPoint": 45.5,
+        "closePoint": 47,
+        "clvPp": 5.35,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-22",
+        "pick": "New York Islanders -1.5",
+        "matchup": "Los Angeles Kings @ New York Islanders",
+        "sport": "NHL",
+        "betPoint": -1.5,
+        "closePoint": 1.5,
+        "clvPp": null,
+        "clvMethod": "skipped-line-moved"
+      },
+      {
+        "date": "2026-10-23",
+        "pick": "Under 236.5",
+        "matchup": "Toronto Raptors @ Washington Wizards",
+        "sport": "NBA",
+        "betPoint": 236.5,
+        "closePoint": 237,
+        "clvPp": -0.24,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-23",
+        "pick": "Over 44.5",
+        "matchup": "Air Force Falcons @ Wyoming Cowboys",
+        "sport": "NCAAF",
+        "betPoint": 44.5,
+        "closePoint": 46.5,
+        "clvPp": 4.38,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-24",
+        "pick": "Over 51.5",
+        "matchup": "Sacramento State Hornets @ Ball State Cardinals",
+        "sport": "NCAAF",
+        "betPoint": 51.5,
+        "closePoint": 51,
+        "clvPp": 0.77,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-24",
+        "pick": "Over 44.5",
+        "matchup": "Old Dominion Monarchs @ Louisiana Tech Bulldogs",
+        "sport": "NCAAF",
+        "betPoint": 44.5,
+        "closePoint": 44,
+        "clvPp": -3.53,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-25",
+        "pick": "Over 55",
+        "matchup": "Green Bay Packers @ Detroit Lions",
+        "sport": "NFL",
+        "betPoint": 55,
+        "closePoint": 55.5,
+        "clvPp": -1.16,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-25",
+        "pick": "Over 42.5",
+        "matchup": "New York Giants @ Houston Texans",
+        "sport": "NFL",
+        "betPoint": 42.5,
+        "closePoint": 43.5,
+        "clvPp": 0.81,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-26",
+        "pick": "Dallas Mavericks +8.5",
+        "matchup": "Dallas Mavericks @ Miami Heat",
+        "sport": "NBA",
+        "betPoint": 8.5,
+        "closePoint": 7.5,
+        "clvPp": 1.24,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-28",
+        "pick": "Under 238.5",
+        "matchup": "Washington Wizards @ Cleveland Cavaliers",
+        "sport": "NBA",
+        "betPoint": 238.5,
+        "closePoint": 240.5,
+        "clvPp": -3.08,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-28",
+        "pick": "Under 236.5",
+        "matchup": "Philadelphia 76ers @ Indiana Pacers",
+        "sport": "NBA",
+        "betPoint": 236.5,
+        "closePoint": 233.5,
+        "clvPp": 4.52,
+        "clvMethod": "point-normal"
+      },
+      {
+        "date": "2026-10-28",
+        "pick": "New Mexico State Aggies +3.5",
+        "matchup": "Jacksonville State Gamecocks @ New Mexico State Aggies",
+        "sport": "NCAAF",
+        "betPoint": 3.5,
+        "closePoint": 3,
+        "clvPp": 0.12,
+        "clvMethod": "point-normal"
+      }
+    ],
+    "missingClose": [
+      {
+        "date": "2026-10-08",
+        "pick": "Vancouver Canucks +1.5",
+        "matchup": "Vancouver Canucks @ Carolina Hurricanes",
+        "sport": "NHL",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-13",
+        "pick": "Over 6.5",
+        "matchup": "Edmonton Oilers @ Los Angeles Kings",
+        "sport": "NHL",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-13",
+        "pick": "Over 6.5",
+        "matchup": "Vancouver Canucks @ New York Islanders",
+        "sport": "NHL",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Under 7.5",
+        "matchup": "Milwaukee Brewers @ Los Angeles Dodgers",
+        "sport": "MLB",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Over 5.5",
+        "matchup": "Dallas Stars @ Colorado Avalanche",
+        "sport": "NHL",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-18",
+        "pick": "Baltimore Ravens -3",
+        "matchup": "Baltimore Ravens @ Cleveland Browns",
+        "sport": "NFL",
+        "clvMethod": null,
+        "pMktSource": "reconstructed-edge"
+      },
+      {
+        "date": "2026-10-18",
+        "pick": "New York Jets +7.5",
+        "matchup": "New York Jets @ New England Patriots",
+        "sport": "NFL",
+        "clvMethod": null,
+        "pMktSource": "reconstructed-edge"
+      },
+      {
+        "date": "2026-10-19",
+        "pick": "Over 6.5",
+        "matchup": "Cleveland Guardians @ Tampa Bay Rays",
+        "sport": "MLB",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-21",
+        "pick": "Ottawa Senators -1.5",
+        "matchup": "Florida Panthers @ Ottawa Senators",
+        "sport": "NHL",
+        "clvMethod": null,
+        "pMktSource": "reconstructed-edge"
+      },
+      {
+        "date": "2026-10-22",
+        "pick": "New York Islanders -1.5",
+        "matchup": "Los Angeles Kings @ New York Islanders",
+        "sport": "NHL",
+        "clvMethod": "skipped-line-moved",
+        "pMktSource": "pinnacle-close"
+      },
+      {
+        "date": "2026-10-26",
+        "pick": "Boston Celtics ML",
+        "matchup": "Chicago Bulls @ Boston Celtics",
+        "sport": "NBA",
+        "clvMethod": null,
+        "pMktSource": "reconstructed-edge"
+      },
+      {
+        "date": "2026-10-27",
+        "pick": "Sacramento Kings ML",
+        "matchup": "Sacramento Kings @ San Antonio Spurs",
+        "sport": "NBA",
+        "clvMethod": null,
+        "pMktSource": "reconstructed-edge"
+      }
+    ],
+    "duplicateSnapshots": {
+      "games": 45,
+      "droppedRows": 57,
+      "examples": [
+        {
+          "game": "b9d4f3cf4a46b1fd55b2020f0a70783a",
+          "dropped": 2
+        },
+        {
+          "game": "e06b043ca7e5c58f3a5786e5c7479520",
+          "dropped": 2
+        },
+        {
+          "game": "1fa1e7fd3028995ab8ffb6b498e4899d",
+          "dropped": 2
+        },
+        {
+          "game": "9604eeafec33b8980e6565c617f04fc6",
+          "dropped": 2
+        },
+        {
+          "game": "622fd31d2c8178b025455656e0d2fb89",
+          "dropped": 2
+        },
+        {
+          "game": "e6769c813dd625b622df94c14a562ce2",
+          "dropped": 1
+        },
+        {
+          "game": "55f376873e3cd0c2bb7cc9aa26e47235",
+          "dropped": 2
+        },
+        {
+          "game": "c8d71abe9d49ca6ea219b84923b9a48c",
+          "dropped": 1
+        },
+        {
+          "game": "99c9d6d714b90f72a5fd2a1c5011170d",
+          "dropped": 1
+        },
+        {
+          "game": "2bbbf3488a5d57c9c13ae578bad17a9d",
+          "dropped": 2
+        },
+        {
+          "game": "f00195614a0c305207222ba2044a9c24",
+          "dropped": 2
+        },
+        {
+          "game": "343be4cf732ddd9fd0a058953456d811",
+          "dropped": 2
+        }
+      ]
+    },
+    "reconstructedPrice": [
+      {
+        "date": "2026-10-03",
+        "pick": "McNeese State Cowboys +53.5",
+        "matchup": "McNeese State Cowboys @ LSU Tigers",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-03",
+        "pick": "Over 52.5",
+        "matchup": "California Golden Bears @ UNLV Rebels",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-06",
+        "pick": "Over 6.5",
+        "matchup": "Los Angeles Dodgers @ Atlanta Braves",
+        "sport": "MLB",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-08",
+        "pick": "Missouri State Bears +1.5",
+        "matchup": "Missouri State Bears @ Western Kentucky Hilltoppers",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-08",
+        "pick": "South Florida Bulls +6.5",
+        "matchup": "South Florida Bulls @ UTSA Roadrunners",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-10",
+        "pick": "Over 40.5",
+        "matchup": "Texas Longhorns @ Oklahoma Sooners",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-10",
+        "pick": "Sacramento State Hornets +9.5",
+        "matchup": "Sacramento State Hornets @ Bowling Green Falcons",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-10",
+        "pick": "UMass Minutemen +6.5",
+        "matchup": "Miami (OH) RedHawks @ UMass Minutemen",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-11",
+        "pick": "Over 41.5",
+        "matchup": "New York Giants @ Washington Commanders",
+        "sport": "NFL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-11",
+        "pick": "Under 45.5",
+        "matchup": "Las Vegas Raiders @ New England Patriots",
+        "sport": "NFL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-13",
+        "pick": "Over 6.5",
+        "matchup": "Edmonton Oilers @ Los Angeles Kings",
+        "sport": "NHL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-13",
+        "pick": "Over 6.5",
+        "matchup": "Vancouver Canucks @ New York Islanders",
+        "sport": "NHL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Under 7.5",
+        "matchup": "Milwaukee Brewers @ Los Angeles Dodgers",
+        "sport": "MLB",
+        "pMktSizingSource": "reconstructed-edge (no_snapshot_before_pick)"
+      },
+      {
+        "date": "2026-10-14",
+        "pick": "Over 5.5",
+        "matchup": "Dallas Stars @ Colorado Avalanche",
+        "sport": "NHL",
+        "pMktSizingSource": "reconstructed-edge (no_snapshot_before_pick)"
+      },
+      {
+        "date": "2026-10-17",
+        "pick": "Over 42.5",
+        "matchup": "Wisconsin Badgers @ UCLA Bruins",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-20",
+        "pick": "Over 5.5",
+        "matchup": "Winnipeg Jets @ St Louis Blues",
+        "sport": "NHL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-21",
+        "pick": "Over 45.5",
+        "matchup": "New Mexico State Aggies @ Sam Houston State Bearkats",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-21",
+        "pick": "Ottawa Senators -1.5",
+        "matchup": "Florida Panthers @ Ottawa Senators",
+        "sport": "NHL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-23",
+        "pick": "Under 236.5",
+        "matchup": "Toronto Raptors @ Washington Wizards",
+        "sport": "NBA",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-23",
+        "pick": "Over 44.5",
+        "matchup": "Air Force Falcons @ Wyoming Cowboys",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-24",
+        "pick": "Over 51.5",
+        "matchup": "Sacramento State Hornets @ Ball State Cardinals",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-25",
+        "pick": "Over 55",
+        "matchup": "Green Bay Packers @ Detroit Lions",
+        "sport": "NFL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-25",
+        "pick": "Over 42.5",
+        "matchup": "New York Giants @ Houston Texans",
+        "sport": "NFL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-26",
+        "pick": "Over 43.5",
+        "matchup": "Dallas Cowboys @ Philadelphia Eagles",
+        "sport": "NFL",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-27",
+        "pick": "Over 7.5",
+        "matchup": "Milwaukee Brewers @ Tampa Bay Rays",
+        "sport": "MLB",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      },
+      {
+        "date": "2026-10-28",
+        "pick": "New Mexico State Aggies +3.5",
+        "matchup": "Jacksonville State Gamecocks @ New Mexico State Aggies",
+        "sport": "NCAAF",
+        "pMktSizingSource": "reconstructed-edge (no_pair_at_bet_point_before_pick)"
+      }
+    ],
+    "name": [],
+    "other": [
+      {
+        "date": "2026-10-13",
+        "pick": "parlay",
+        "issue": "units_drift",
+        "cardUnits": 0.25,
+        "settledUnits": 0.5,
+        "note": "current rule keeps the settled parlay risk"
+      },
+      {
+        "date": "2026-10-15",
+        "pick": "parlay",
+        "issue": "parlay_skip_with_risk",
+        "settledRiskUsd": 75,
+        "note": "empty or non-qualifying ticket; not counted as a bet"
+      }
+    ]
+  },
+  "cards": [
+    {
+      "date": "2026-09-30",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 0,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-01",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 2,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-02",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 6,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-03",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 7,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-04",
+      "straights": 3,
+      "parlay": 0,
+      "pass": false,
+      "short": false,
+      "trainN": 13,
+      "method": "shrink",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-05",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 17,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-06",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 19,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-07",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 21,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-08",
+      "straights": 1,
+      "parlay": 0,
+      "pass": false,
+      "short": true,
+      "trainN": 23,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-09",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 27,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-10",
+      "straights": 1,
+      "parlay": 0,
+      "pass": false,
+      "short": true,
+      "trainN": 29,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-11",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 32,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-12",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 35,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-13",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 36,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-14",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 39,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-15",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 42,
+      "method": "platt",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-16",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 43,
+      "method": "platt",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-17",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 45,
+      "method": "platt",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-18",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 48,
+      "method": "platt",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-19",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 53,
+      "method": "platt",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-20",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 56,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-21",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 59,
+      "method": "platt",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-22",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 62,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-23",
+      "straights": 1,
+      "parlay": 0,
+      "pass": false,
+      "short": true,
+      "trainN": 65,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-24",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 68,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-25",
+      "straights": 1,
+      "parlay": 0,
+      "pass": false,
+      "short": true,
+      "trainN": 71,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-26",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 74,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-27",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 77,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-28",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 80,
+      "method": "prior",
+      "parlayResult": null
+    },
+    {
+      "date": "2026-10-29",
+      "straights": 0,
+      "parlay": 0,
+      "pass": true,
+      "short": false,
+      "trainN": 83,
+      "method": "prior",
+      "parlayResult": null
+    }
+  ],
+  "v2Bets": [
+    {
+      "date": "2026-10-04",
+      "kind": "straight",
+      "pick": "Over 46.5",
+      "matchup": "Indianapolis Colts @ Washington Commanders",
+      "sport": "NFL",
+      "odds": "-108",
+      "result": "loss",
+      "profitUsd": -188,
+      "riskUsd": 188,
+      "clvPp": 2.13,
+      "commenceTime": "2026-10-04T13:30:00Z"
+    },
+    {
+      "date": "2026-10-04",
+      "kind": "straight",
+      "pick": "Philadelphia Eagles +3.5",
+      "matchup": "Los Angeles Rams @ Philadelphia Eagles",
+      "sport": "NFL",
+      "odds": "-105",
+      "result": "loss",
+      "profitUsd": -188,
+      "riskUsd": 188,
+      "clvPp": 0.69,
+      "commenceTime": "2026-10-04T17:00:00Z"
+    },
+    {
+      "date": "2026-10-04",
+      "kind": "straight",
+      "pick": "Over 38.5",
+      "matchup": "Green Bay Packers @ Tampa Bay Buccaneers",
+      "sport": "NFL",
+      "odds": "-114",
+      "result": "loss",
+      "profitUsd": -113,
+      "riskUsd": 113,
+      "clvPp": 0.86,
+      "commenceTime": "2026-10-04T17:00:00Z"
+    },
+    {
+      "date": "2026-10-08",
+      "kind": "straight",
+      "pick": "Calgary Flames +1.5",
+      "matchup": "Colorado Avalanche @ Calgary Flames",
+      "sport": "NHL",
+      "odds": "-120",
+      "result": "loss",
+      "profitUsd": -113,
+      "riskUsd": 113,
+      "clvPp": 0.79,
+      "commenceTime": "2026-10-09T01:10:00Z"
+    },
+    {
+      "date": "2026-10-10",
+      "kind": "straight",
+      "pick": "Over 40.5",
+      "matchup": "Texas Longhorns @ Oklahoma Sooners",
+      "sport": "NCAAF",
+      "odds": "-105",
+      "result": "win",
+      "profitUsd": 108,
+      "riskUsd": 113,
+      "clvPp": 2.39,
+      "commenceTime": "2026-10-10T19:30:00Z"
+    },
+    {
+      "date": "2026-10-23",
+      "kind": "straight",
+      "pick": "Over 44.5",
+      "matchup": "Air Force Falcons @ Wyoming Cowboys",
+      "sport": "NCAAF",
+      "odds": "-115",
+      "result": "loss",
+      "profitUsd": -188,
+      "riskUsd": 188,
+      "clvPp": 4.38,
+      "commenceTime": "2026-10-24T01:00:00Z"
+    },
+    {
+      "date": "2026-10-25",
+      "kind": "straight",
+      "pick": "New Orleans Saints ML",
+      "matchup": "Pittsburgh Steelers @ New Orleans Saints",
+      "sport": "NFL",
+      "odds": "+180",
+      "result": "loss",
+      "profitUsd": -188,
+      "riskUsd": 188,
+      "clvPp": 5.97,
+      "commenceTime": "2026-10-25T13:32:50Z"
+    }
+  ]
+}

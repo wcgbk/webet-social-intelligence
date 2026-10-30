@@ -1,6 +1,10 @@
 {
   "name": "webet-social-intelligence",
   "private": true,
+  "scripts": {
+    "omega-v2:gate": "node tools/omega-v2/gate.js",
+    "omega-v2:replay": "node tools/omega-v2/replay.js"
+  },
   "dependencies": {
     "@hyzyla/pdfium": "^2.1.13",
     "@netlify/blobs": "^8.1.0",

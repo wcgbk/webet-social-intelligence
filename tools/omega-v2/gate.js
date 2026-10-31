@@ -243,12 +243,26 @@ async function main() {
   assert.strictEqual(sameGame.parlayLegs.length, 0, 'same-game parlay must not publish');
   assert.ok(sameGame.picks.length <= 1);
 
+  const priced = (row) => {
+    const american = Number(String(row.odds).replace(/[^0-9.+-]/g, ''));
+    return {
+      ...row,
+      side: row.pick,
+      odds: american,
+      oddsStr: String(row.odds),
+      book: 'draftkings',
+      bestDkHr: { american, book: 'draftkings' },
+      coverProb: 0.57,
+      ev: 0.05,
+      edgePct: 0.03,
+    };
+  };
   const ticket = await v2.buildCard({
     date: '2026-10-20',
     candidates: [
-      strong('NFL', 'Buffalo Bills @ Kansas City Chiefs', 'Buffalo Bills ML', 'Moneyline'),
-      strong('NFL', 'Dallas Cowboys @ Philadelphia Eagles', 'Over 45.5', 'Total'),
-      strong('NFL', 'Green Bay Packers @ Chicago Bears', 'Green Bay Packers ML', 'Moneyline'),
+      priced(strong('NFL', 'Buffalo Bills @ Kansas City Chiefs', 'Buffalo Bills ML', 'Moneyline')),
+      priced(strong('NFL', 'Dallas Cowboys @ Philadelphia Eagles', 'Over 45.5', 'Total')),
+      priced(strong('NFL', 'Green Bay Packers @ Chicago Bears', 'Green Bay Packers ML', 'Moneyline')),
     ],
     history: [],
   });

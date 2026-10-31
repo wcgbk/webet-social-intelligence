@@ -9,10 +9,10 @@ const { sizeStraights, sumUnits, roundQuarter, stakeUsd } = require('./size');
 const { recheckPrices, toPick, validateCard, autoCorrectCard, parseAmerican } = require('./guards');
 const { summaryFrom } = require('../omega-vnext/assemble');
 const { publishEdgeCard } = require('../omega-vnext/assemble');
-const { ensureCardParlay, conflictsWithStraight } = require('../omega-vnext/parlay');
+const { ensureCardParlay } = require('../omega-vnext/parlay');
 const { fillNeverBlock, toPickObject } = require('../omega-vnext/select');
 const {
-  americanToImplied, americanToDecimal, decimalToAmerican, formatAmerican, kellyFraction,
+  americanToImplied, kellyFraction,
 } = require('../omega-vnext/odds_math');
 
 function pipelineV2Enabled(opts, env) {
@@ -160,88 +160,40 @@ function straightAsLeg(row) {
   };
 }
 
-function repriceTicket(ticket, legs) {
-  if (!ticket || !legs || legs.length < 2) return null;
-  let dec = 1;
-  let prob = 1;
-  for (const leg of legs) {
-    const d = americanToDecimal(parseAmerican(leg.odds));
-    const p = parsePct(leg.coverProb != null ? leg.coverProb : leg.winProbability);
-    if (d == null || p == null) return null;
-    dec *= d;
-    prob *= p;
-  }
-  const extras = sameGameExtras(legs);
-  const factor = extras > 0 ? Math.pow(0.95, extras) : 1;
-  const joint = prob * factor;
-  const american = decimalToAmerican(dec);
-  if (american == null || !(joint > 0 && joint < 1)) return null;
-  return {
-    ...ticket,
-    legs,
-    type: `${legs.length}-leg-parlay-${ticket.lean ? 'lean' : (ticket.type && String(ticket.type).includes('straight') ? 'straight' : 'optimized')}`,
-    combinedOdds: formatAmerican(american),
-    combinedDecimal: +dec.toFixed(2),
-    combinedProb: `${(joint * 100).toFixed(1)}%`,
-    ev: `${((joint * dec - 1) * 100).toFixed(1)}%`,
-    correlationFactor: factor,
-    correlationHaircut: extras > 0 ? `0.95^(${extras})` : '1',
-    uniqueGames: new Set(legs.map((leg) => String(leg.matchup || '').toLowerCase())).size,
-    modelVersion: MODEL_VERSION,
-  };
-}
-
 function ticketOf(built) {
   return built && built[0] ? built[0] : null;
 }
 
 /**
- * Historical parlay on the full pool. Same builder the live card already uses.
- * Same-game legs keep the 0.95 haircut. Nothing here adds an EV cutoff.
- * If that ticket is empty and the v1 fill would have published one, keep a
- * non-conflicting copy so the parlay is not eliminated.
+ * Parlay legs are the v1 historical slip on the full candidate pool.
+ * The seed is the v1 card (qualified straights, then the never-block fill),
+ * not the v2 straights. A leg that opposes a v2 straight stays on the ticket.
+ * Stake and the same-game haircut are applied by the caller.
+ * `straightRows` is unused on purpose: it must not seed or veto this slip.
  */
 function historicalParlay(pool, straightRows, cardDate, v1Qualified) {
-  const straights = straightRows || [];
-  const primary = ensureCardParlay(pool || [], straights, {
-    cardDate,
-    yesPool: pool || [],
-    fromPublishedStraights: true,
-  });
-  let ticket = ticketOf(primary);
-  let source = ticket ? 'historical' : null;
-  const exclusions = (primary && primary.parlayExclusions) || [];
-  let v1Ticket = null;
+  void straightRows;
+  let ticket = null;
+  let exclusions = [];
   try {
     const filled = fillNeverBlock(v1Qualified || [], pool || [], 3);
     const v1Picks = filled.map((c) => toPickObject(c, { modelVersion: 'v1-fallback' }));
-    const v1Built = ensureCardParlay(pool || [], v1Picks, {
+    const built = ensureCardParlay(pool || [], v1Picks, {
       cardDate,
       yesPool: pool || [],
       fromPublishedStraights: true,
     });
-    v1Ticket = ticketOf(v1Built);
+    ticket = ticketOf(built);
+    exclusions = (built && built.parlayExclusions) || [];
   } catch (err) {
-    v1Ticket = null;
-  }
-  if (!ticket && v1Ticket) {
-    const kept = (v1Ticket.legs || []).filter((leg) => !straights.some((st) => conflictsWithStraight(leg, st)));
-    if (kept.length >= 2 && kept.length === (v1Ticket.legs || []).length) {
-      ticket = v1Ticket;
-      source = 'v1-rules';
-    } else if (kept.length >= 2) {
-      ticket = repriceTicket(v1Ticket, kept);
-      source = ticket ? 'v1-rules' : null;
-    } else if (!straights.length) {
-      ticket = v1Ticket;
-      source = 'v1-rules';
-    }
+    ticket = null;
+    exclusions = [];
   }
   return {
     ticket,
     exclusions,
-    source,
-    v1WouldParlay: !!v1Ticket,
+    source: ticket ? 'v1-rules' : null,
+    v1WouldParlay: !!ticket,
   };
 }
 

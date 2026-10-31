@@ -7,6 +7,7 @@
 
 const assert = require('assert');
 const v2 = require('./netlify/functions/lib/omega-v2');
+const { publishEdgeCard } = require('./netlify/functions/lib/omega-vnext/assemble');
 
 const DATE = '2026-10-30';
 const COMMENCE = '2026-10-30T23:00:00Z';
@@ -145,6 +146,123 @@ function assertQuarter(units, cap) {
   });
   assert.strictEqual(history.length, 1);
   assert.strictEqual(history[0].date, '2026-10-29');
+
+  function legKey(leg) {
+    return [
+      String(leg.matchup || '').trim().toLowerCase(),
+      String(leg.pick || leg.side || '').trim().toLowerCase(),
+      String(leg.betType || leg.market || '').trim().toLowerCase(),
+      String(leg.odds).replace(/\s/g, ''),
+    ].join('|');
+  }
+
+  // Two v2 favorites, and a v1 card that keeps the other side of one of them.
+  // The parlay must be the v1 3-leg, not the two v2 straights.
+  const fav = (over) => side({
+    pModel: 0.64,
+    pMkt: 0.524,
+    coverProb: 0.56,
+    ev: 0.06,
+    edgePct: 0.03,
+    ...over,
+  });
+  const dog = (over) => side({
+    pModel: 0.14,
+    pMkt: 0.133,
+    coverProb: 0.22,
+    ev: 0.04,
+    edgePct: 0.01,
+    odds: 650,
+    oddsStr: '+650',
+    bestDkHr: { american: 650, book: 'draftkings' },
+    ...over,
+  });
+  const chiefsGame = 'Buffalo Bills @ Kansas City Chiefs';
+  const eaglesGame = 'Dallas Cowboys @ Philadelphia Eagles';
+  const bullsGame = 'Orlando Magic @ Chicago Bulls';
+  const warriorsGame = 'Houston Rockets @ Golden State Warriors';
+  const v1Dogs = [
+    dog({
+      sport: 'NBA',
+      matchup: chiefsGame,
+      awayTeam: 'Buffalo Bills',
+      homeTeam: 'Kansas City Chiefs',
+      side: 'Buffalo Bills',
+      pick: 'Buffalo Bills',
+      market: 'Moneyline',
+    }),
+    dog({
+      sport: 'NBA',
+      matchup: bullsGame,
+      awayTeam: 'Orlando Magic',
+      homeTeam: 'Chicago Bulls',
+      side: 'Chicago Bulls',
+      pick: 'Chicago Bulls',
+      market: 'Moneyline',
+    }),
+    dog({
+      sport: 'NBA',
+      matchup: warriorsGame,
+      awayTeam: 'Houston Rockets',
+      homeTeam: 'Golden State Warriors',
+      side: 'Golden State Warriors +2.5',
+      pick: 'Golden State Warriors +2.5',
+      market: 'Spread',
+      line: 2.5,
+      odds: -110,
+      oddsStr: '-110',
+      bestDkHr: { american: -110, book: 'draftkings' },
+      pModel: 0.53,
+      pMkt: 0.524,
+      coverProb: 0.52,
+    }),
+  ];
+  const v2Favorites = [
+    fav({
+      matchup: chiefsGame,
+      awayTeam: 'Buffalo Bills',
+      homeTeam: 'Kansas City Chiefs',
+      side: 'Kansas City Chiefs ML',
+      pick: 'Kansas City Chiefs ML',
+    }),
+    fav({
+      matchup: eaglesGame,
+      awayTeam: 'Dallas Cowboys',
+      homeTeam: 'Philadelphia Eagles',
+      side: 'Philadelphia Eagles ML',
+      pick: 'Philadelphia Eagles ML',
+    }),
+  ];
+  const boardPool = v1Dogs.concat(v2Favorites);
+  const v1Card = publishEdgeCard({
+    positions: boardPool,
+    qualified: v1Dogs,
+    yesPool: boardPool,
+    cardDate: DATE,
+    dateFormatted: DATE,
+  });
+  const matched = await v2.buildCard({
+    date: DATE,
+    candidates: boardPool,
+    parlayPool: boardPool,
+    v1Qualified: v1Dogs,
+    history: [],
+  });
+  const v1Keys = (v1Card.parlayLegs[0].legs || []).map(legKey).sort();
+  const v2Keys = (matched.parlayLegs[0].legs || []).map(legKey).sort();
+  assert.deepStrictEqual(v2Keys, v1Keys, 'v2 parlay legs must equal the v1 historical legs');
+  assert.strictEqual(v1Keys.length, 3);
+  const picks = v2Keys.map((key) => key.split('|')[1]);
+  assert.ok(picks.some((pick) => pick.includes('chicago bulls')));
+  assert.ok(picks.some((pick) => pick.includes('warriors +2.5')));
+  assert.ok(picks.some((pick) => pick.includes('buffalo bills')));
+  assert.ok(!picks.some((pick) => pick.includes('kansas city chiefs')));
+  assert.ok(matched.picks.some((p) => /kansas city chiefs/i.test(p.pick)));
+  assert.ok(matched.picks.some((p) => /philadelphia eagles/i.test(p.pick)));
+  assertQuarter(matched.parlayLegs[0].unitsNum, 1);
+  const jointEv = parseFloat(String(matched.parlayLegs[0].ev).replace('%', ''));
+  if (jointEv >= 0) assert.ok(matched.parlayLegs[0].unitsNum >= 0.5);
+  else assert.strictEqual(matched.parlayLegs[0].unitsNum, 0.25);
 
   let leaked = false;
   try {

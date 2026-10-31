@@ -3,7 +3,7 @@
 const {
   PAIR_PHI, PARLAY_STAKE_CAP, CARD_BUDGET,
 } = require('./constants');
-const { marketFamily, gameKey } = require('./select');
+const { marketFamily, gameKey, pastPregameCutoff, pregameClockMs } = require('./select');
 const { roundQuarter, stakeUsd, sumUnits, quarterKellyFromDecimal } = require('./size');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican,
@@ -197,8 +197,10 @@ function betterTicket(a, b) {
   return a.scored.ev - b.scored.ev;
 }
 
-function usableLegs(pool) {
+function usableLegs(pool, opts) {
+  const asOfMs = pregameClockMs(opts);
   return (pool || []).filter((leg) => {
+    if (pastPregameCutoff(leg.commenceTime, asOfMs)) return false;
     if (leg.parlayQualified === false) return false;
     const p = Number(leg.calibration && leg.calibration.pCal);
     return p > 0 && p < 1 && americanToDecimal(leg.odds) != null && (leg.edgeNovig > 0);
@@ -211,8 +213,8 @@ function usableLegs(pool) {
  * The next ticket is, so a 3-leg that cannot be staked falls through
  * to a 2-leg that can. 3 legs still rank ahead of 2.
  */
-function rankedTickets(pool) {
-  const usable = usableLegs(pool);
+function rankedTickets(pool, opts) {
+  const usable = usableLegs(pool, opts);
   const out = [];
   let positiveEv = 0;
   if (usable.length < 2) return { usable: usable.length, positiveEv, tickets: out };
@@ -231,8 +233,8 @@ function rankedTickets(pool) {
   return { usable: usable.length, positiveEv, tickets: out };
 }
 
-function chooseTicket(pool) {
-  const ranked = rankedTickets(pool);
+function chooseTicket(pool, opts) {
+  const ranked = rankedTickets(pool, opts);
   return ranked.tickets[0] || null;
 }
 
@@ -241,13 +243,15 @@ function chooseTicket(pool) {
  * A result under 0.25u does not publish. There is no 0.5u floor.
  * Room left under the card budget can shrink the stake. It cannot raise it.
  */
-function sizeParlay(pool, straights) {
-  const filtered = (pool || []).filter((leg) => !conflictsWithAnyStraight(leg, straights));
-  const ranked = rankedTickets(filtered);
+function sizeParlay(pool, straights, opts) {
+  const asOfMs = pregameClockMs(opts);
+  const pregame = (pool || []).filter((leg) => !pastPregameCutoff(leg.commenceTime, asOfMs));
+  const filtered = pregame.filter((leg) => !conflictsWithAnyStraight(leg, straights));
+  const ranked = rankedTickets(filtered, opts);
   if (!ranked.tickets.length) {
-    const hadPair = (pool || []).length >= 2;
+    const hadPair = pregame.length >= 2;
     let skipReason = 'no ticket with positive joint EV';
-    if ((pool || []).length < 2) skipReason = 'fewer than 2 qualifying legs';
+    if (pregame.length < 2) skipReason = 'fewer than 2 qualifying legs';
     else if (hadPair && filtered.length < 2) skipReason = 'fewer than 2 legs after straight conflicts';
     else if (ranked.positiveEv > 0) skipReason = 'parlay stake rounded below 0.25u';
     return {

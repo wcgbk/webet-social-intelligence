@@ -2,7 +2,9 @@
 
 const { MODEL_VERSION, FLAG_ENV } = require('./constants');
 const { fitWalkForward, applyCalibration } = require('./calibrate');
-const { gameKey, marketFamily, annotateCandidate, selectStraights } = require('./select');
+const {
+  gameKey, marketFamily, annotateCandidate, selectStraights, pastPregameCutoff, pregameClockMs,
+} = require('./select');
 const { sizeStraights, sumUnits } = require('./size');
 const { recheckPrices, validateCard, autoCorrectCard, parseAmerican, toParlay, toPick } = require('./guards');
 const { summaryFrom } = require('../omega-vnext/assemble');
@@ -80,10 +82,23 @@ async function buildCard(input) {
   const date = input && input.date;
   const history = Array.isArray(input && input.history) ? input.history : [];
   const fit = fitWalkForward(history, date);
+  const asOfMs = pregameClockMs(input);
+  const pregameOpts = { pregameAsOfMs: asOfMs };
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
   const prepared = [];
   const rejections = [];
   for (const cand of normalized) {
+    if (pastPregameCutoff(cand.commenceTime, asOfMs)) {
+      rejections.push({
+        matchup: cand.matchup,
+        side: cand.pick,
+        market: cand.market,
+        sport: cand.sport,
+        reason: 'in-progress-or-started',
+        commenceTime: cand.commenceTime || '',
+      });
+      continue;
+    }
     if (cand.pMkt == null && cand.odds != null) {
       const implied = americanToImplied(cand.odds);
       if (implied != null) cand.pMkt = implied;
@@ -122,9 +137,9 @@ async function buildCard(input) {
   const checked = await recheckPrices(bettable, input.recheck);
   for (const drop of checked.dropped) rejections.push(drop);
   const kept = checked.kept;
-  const straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified)));
+  const straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified), pregameOpts));
   const parlayKept = kept.filter((cand) => cand.parlayQualified);
-  const sizedParlay = sizeParlay(parlayKept, straights);
+  const sizedParlay = sizeParlay(parlayKept, straights, pregameOpts);
   if (!sizedParlay.publish && sizedParlay.skipReason) {
     rejections.push({
       matchup: null,
@@ -190,7 +205,7 @@ async function buildCard(input) {
     v1WouldParlay: false,
     parlaySource: sizedParlay.publish ? 'calibrated-edge' : null,
   };
-  const published = autoCorrectCard(card);
+  const published = autoCorrectCard(card, pregameOpts);
   const errors = validateCard(published);
   if (errors.length) {
     published.qaNotes = (published.qaNotes || []).concat(errors);
@@ -237,6 +252,7 @@ async function publishFromOmegaCandidates(input) {
     history: input.history || [],
     recheck: input.recheck || null,
     hardFails: input.hardFails || [],
+    pregameAsOfMs: input.pregameAsOfMs,
   });
   return card;
 }

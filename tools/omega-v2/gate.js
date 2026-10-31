@@ -13,6 +13,7 @@ const path = require('path');
 const fs = require('fs');
 
 const root = path.join(__dirname, '../..');
+const FUTURE_COMMENCE = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
 const v2 = require('../../netlify/functions/lib/omega-v2');
 const { publishEdgeCard } = require('../../netlify/functions/lib/omega-vnext/assemble');
 const grading = require('../../netlify/functions/lib/omega-grading-rules');
@@ -62,7 +63,7 @@ function strong(sport, matchup, pick, market) {
     pModel: 0.68,
     pMkt: 0.50,
     uncertainty: 0.18,
-    commenceTime: '2026-10-20T17:00:00Z',
+    commenceTime: FUTURE_COMMENCE,
     result: 'win',
     line: market === 'Total' ? 45.5 : null,
   };
@@ -78,7 +79,7 @@ function weak(i) {
     pModel: 0.52,
     pMkt: 0.52,
     uncertainty: 0.18,
-    commenceTime: '2026-10-20T23:00:00Z',
+    commenceTime: FUTURE_COMMENCE,
     result: 'loss',
   };
 }
@@ -227,7 +228,7 @@ async function main() {
   });
   assert.strictEqual(one.picks.length, 1, 'must not force-fill to 3');
   assert.strictEqual(one.picks[0].odds, '-110');
-  assert.strictEqual(one.picks[0].commenceTime, '2026-10-20T17:00:00Z');
+  assert.strictEqual(one.picks[0].commenceTime, FUTURE_COMMENCE);
   const units = one.picks[0].unitsNum;
   assert.ok(units > 0 && units <= 2, `stake ${units} outside quarter-Kelly cap`);
   assert.strictEqual(Math.round(units * 4) / 4, units);

@@ -535,6 +535,7 @@ async function generateOmegaVnext(opts = {}) {
         ? opts.priceRecheck
         : recheckFromCachedBoard(snap && snap.oddsBySport),
       hardFails,
+      pregameAsOfMs: gateOpts.asOfMs,
     });
     built.morningBoard = boardSave;
   }

@@ -64,6 +64,18 @@ function candidateFrom(row) {
   };
 }
 
+/** Card clock before the first kickoff, outside the 5-minute grace. */
+function replayPregameAsOfMs(day) {
+  let earliest = Infinity;
+  for (const row of dayPool(day)) {
+    const t = Date.parse(row.commenceTime || '');
+    if (Number.isFinite(t) && t < earliest) earliest = t;
+  }
+  if (Number.isFinite(earliest)) return earliest - (6 * 60 * 1000);
+  const noon = Date.parse(`${day.date}T12:00:00Z`);
+  return Number.isFinite(noon) ? noon : Date.now();
+}
+
 function dayPool(day) {
   const map = new Map();
   const rows = [...(day.straights || [])];
@@ -216,6 +228,7 @@ async function v2Bets(derived) {
       candidates: dayPool(day).map(candidateFrom),
       history: historyBefore(derived, day.date),
       recheck: null,
+      pregameAsOfMs: replayPregameAsOfMs(day),
     });
     let straightN = 0;
     for (const pick of card.picks) {
@@ -582,6 +595,7 @@ async function main() {
       date: day.date,
       candidates: dayPool(day).map(candidateFrom),
       history: historyBefore(derived, day.date),
+      pregameAsOfMs: replayPregameAsOfMs(day),
     });
     const map = new Map();
     for (const row of card.parlayPool) {

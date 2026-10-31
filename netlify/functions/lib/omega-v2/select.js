@@ -3,6 +3,30 @@
 const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS,
 } = require('./constants');
+
+/** Kickoff at or before asOf plus this window is not a pregame candidate. */
+const PREGAME_GRACE_MS = 5 * 60 * 1000;
+
+/**
+ * Pregame clock. Replay passes opts.pregameAsOfMs. Live calls omit it and
+ * use Date.now().
+ */
+function pregameClockMs(opts) {
+  if (opts && Number.isFinite(Number(opts.pregameAsOfMs))) return Number(opts.pregameAsOfMs);
+  return Date.now();
+}
+
+/**
+ * True when commenceTime <= asOf + 5 minutes.
+ * A missing or unparseable commenceTime is not dropped here.
+ */
+function pastPregameCutoff(commenceTime, asOfMs) {
+  if (commenceTime == null || commenceTime === '') return false;
+  const t = typeof commenceTime === 'number' ? commenceTime : Date.parse(commenceTime);
+  if (!Number.isFinite(t)) return false;
+  const clock = Number.isFinite(asOfMs) ? asOfMs : Date.now();
+  return t <= clock + PREGAME_GRACE_MS;
+}
 const { americanToImplied, americanToDecimal, evAtOdds } = require('../omega-vnext/odds_math');
 
 function normTeam(name) {
@@ -121,9 +145,10 @@ function annotateCandidate(candidate) {
   };
 }
 
-function selectStraights(annotated) {
+function selectStraights(annotated, opts) {
+  const asOfMs = pregameClockMs(opts);
   const ranked = (annotated || [])
-    .filter((c) => c.qualified)
+    .filter((c) => c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
     .sort((a, b) => (b.ev - a.ev) || (b.edge - a.edge) || String(a.pick).localeCompare(String(b.pick)));
   const out = [];
   const used = new Set();
@@ -145,4 +170,7 @@ module.exports = {
   uncertaintyFloor,
   annotateCandidate,
   selectStraights,
+  PREGAME_GRACE_MS,
+  pregameClockMs,
+  pastPregameCutoff,
 };

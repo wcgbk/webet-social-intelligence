@@ -13,6 +13,7 @@ const { kellyFraction, americanToDecimal } = require('./netlify/functions/lib/om
 
 const DATE = '2026-10-30';
 const COMMENCE = '2026-10-30T23:00:00Z';
+const PREGAME = Date.parse('2026-10-30T16:00:00Z');
 
 function side(over) {
   return {
@@ -95,6 +96,7 @@ function novig(pick) {
   }));
   const noFill = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: flat,
     parlayPool: flat,
     history: [],
@@ -119,6 +121,7 @@ function novig(pick) {
   });
   const pair = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [edgeLeg(0), edgeLeg(1)],
     history: [],
   });
@@ -138,6 +141,7 @@ function novig(pick) {
 
   const one = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [edgeLeg(0)],
     history: [],
   });
@@ -146,6 +150,7 @@ function novig(pick) {
 
   const pricedOut = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [0, 1].map((i) => edgeLeg(i, { odds: 100, oddsStr: '+100', pModel: 0.55, pMkt: 0.40 })),
     history: [],
   });
@@ -155,6 +160,7 @@ function novig(pick) {
 
   const dust = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [0, 1].map((i) => edgeLeg(i, {
       odds: -110,
       oddsStr: '-110',
@@ -168,6 +174,7 @@ function novig(pick) {
 
   const banned = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [
       edgeLeg(0, { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'A ML', side: 'A ML', market: 'Moneyline' }),
       edgeLeg(0, { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'A -3.5', side: 'A -3.5', market: 'Spread', line: -3.5 }),
@@ -183,6 +190,7 @@ function novig(pick) {
 
   const same = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [
       edgeLeg(0, { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'B ML', side: 'B ML' }),
       edgeLeg(0, {
@@ -205,7 +213,7 @@ function novig(pick) {
     market: 'Total',
     line: 40 + i,
   } : {}));
-  const goal = await v2.buildCard({ date: DATE, candidates: trio, history: [] });
+  const goal = await v2.buildCard({ date: DATE, pregameAsOfMs: PREGAME, candidates: trio, history: [] });
   assert.strictEqual(goal.parlayLegs[0].legs.length, 3, 'three qualifying legs are the goal');
   for (const leg of goal.parlayLegs[0].legs) novig(leg);
   assert.ok(parseFloat(goal.parlayLegs[0].ev) > 0);
@@ -265,6 +273,7 @@ function novig(pick) {
   const kNcaaf = 0.72;
   const clear = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [side({
       sport: 'NCAAF',
       matchup: 'Kent State @ Toledo',
@@ -289,6 +298,7 @@ function novig(pick) {
   const pMktNoise = pKent - 0.02;
   const noisy = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [side({
       sport: 'NCAAF',
       matchup: 'Kent State @ Toledo',
@@ -312,6 +322,7 @@ function novig(pick) {
 
   const plus575 = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [side({
       odds: 575,
       oddsStr: '+575',
@@ -388,6 +399,7 @@ function novig(pick) {
   });
   const matched = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: rejectedLegs,
     parlayPool: rejectedLegs,
     v1Qualified: rejectedLegs,
@@ -400,6 +412,7 @@ function novig(pick) {
 
   const hammer = await v2.buildCard({
     date: DATE,
+    pregameAsOfMs: PREGAME,
     candidates: [side({
       pModel: 0.82,
       pMkt: 0.52,
@@ -435,6 +448,7 @@ function novig(pick) {
   try {
     await v2.buildCard({
       date: DATE,
+      pregameAsOfMs: PREGAME,
       candidates: [side({ pModel: 0.6, pMkt: 0.5 })],
       history: [{ date: DATE, sport: 'NFL', pModel: 0.6, pMkt: 0.5, result: 'win' }],
     });

@@ -4,7 +4,7 @@ const {
   MODEL_VERSION, MAX_STRAIGHTS, PER_BET_CAP, STRAIGHT_BUDGET, CARD_BUDGET, PARLAY_STAKE_CAP,
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
-const { marketFamily } = require('./select');
+const { marketFamily, pastPregameCutoff, pregameClockMs } = require('./select');
 const { bannedPairReason } = require('./parlay');
 const { americanJuiceDelta, ratingToConfidence } = require('../omega-vnext/odds_math');
 
@@ -169,16 +169,53 @@ function unitsOf(row) {
 }
 
 /**
+ * Drop straights and parlay tickets that include a started game.
+ * commenceTime <= asOf + 5 minutes is started. The ticket is removed
+ * rather than repriced. This never throws and never blocks the card.
+ */
+function removeStartedLegs(card, opts) {
+  const asOfMs = pregameClockMs(opts);
+  const notes = [];
+  const picks = [];
+  for (const pick of (card && card.picks) || []) {
+    if (pastPregameCutoff(pick && pick.commenceTime, asOfMs)) {
+      notes.push(`removed started straight ${pick.pick || pick.side || pick.matchup}`);
+      continue;
+    }
+    picks.push(pick);
+  }
+  const parlayLegs = [];
+  for (const ticket of (card && card.parlayLegs) || []) {
+    const legs = (ticket && ticket.legs) || [];
+    const started = legs.filter((leg) => pastPregameCutoff(leg && leg.commenceTime, asOfMs));
+    if (!started.length) {
+      parlayLegs.push(ticket);
+      continue;
+    }
+    for (const leg of started) {
+      notes.push(`removed started parlay leg ${leg.pick || leg.side || leg.matchup}`);
+    }
+  }
+  return { picks, parlayLegs, notes };
+}
+
+/**
  * QA never withholds a straight card. Round stakes, cap them, drop a
  * duplicate game. A parlay whose stake rounds under 0.25u is removed.
- * It is not floored back up to 0.25u.
+ * It is not floored back up to 0.25u. A started leg is removed here.
+ * That correction is not a validation error.
  */
-function autoCorrectCard(card) {
+function autoCorrectCard(card, opts) {
   const notes = [];
+  const clockOpts = opts && Number.isFinite(Number(opts.pregameAsOfMs))
+    ? opts
+    : (card && Number.isFinite(Number(card.pregameAsOfMs)) ? card : {});
+  const removed = removeStartedLegs(card, clockOpts);
+  notes.push(...removed.notes);
   const out = {
     ...(card || {}),
-    picks: [...((card && card.picks) || [])],
-    parlayLegs: [...((card && card.parlayLegs) || [])],
+    picks: removed.picks,
+    parlayLegs: removed.parlayLegs,
   };
   if (out.modelVersion !== MODEL_VERSION) {
     notes.push('stamped model version');
@@ -372,6 +409,7 @@ module.exports = {
   toParlay,
   validateCard,
   autoCorrectCard,
+  removeStartedLegs,
   recheckFromCachedBoard,
   parseAmerican,
   ratingFor,

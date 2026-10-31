@@ -1,9 +1,9 @@
 'use strict';
 
 const {
-  KELLY_FRACTION, PER_BET_CAP, STRAIGHT_BUDGET, UNIT_DOLLARS,
+  KELLY_FRACTION, PER_BET_CAP, STRAIGHT_BUDGET, UNIT_DOLLARS, BANKROLL_UNITS,
 } = require('./constants');
-const { kellyFraction } = require('../omega-vnext/odds_math');
+const { americanToDecimal } = require('../omega-vnext/odds_math');
 
 function roundQuarter(n) {
   return Math.round((Number(n) + 1e-12) * 4) / 4;
@@ -15,18 +15,35 @@ function stakeUsd(units) {
 }
 
 /**
- * Quarter-Kelly at the pick-time American price.
- * 1% of bankroll displays as 1.0u (same scale as the live kellyToUnits).
- * Nearest 0.25u. No 0.25 floor: a dust stake is a pass, not a forced lean.
- * Per-bet cap is 2u.
+ * Full Kelly f = (b*p - q) / b, p = calibrated probability, q = 1-p,
+ * b = decimal - 1. Quarter-Kelly multiplies by KELLY_FRACTION (0.25).
+ * Units = that fraction * BANKROLL_UNITS. 1u = UNIT_DOLLARS ($150) and
+ * the roll is 100u ($15,000), so 1% of bankroll is 1.0u.
+ * Nearest 0.25u. Under 0.25u rounds to 0 (a pass, not a forced lean).
+ * Then the per-bet cap.
+ *
+ * A -290 price at 3.5% EV has b = 100/290 ≈ 0.345, so f ≈ 0.035/0.345 ≈ 10.2%
+ * and quarter-Kelly ≈ 2.54u. The 2u print is this cap binding, not a
+ * different formula. Short prices with an edge inside FAV_MIN_EDGE never
+ * reach this function.
  */
-function quarterKellyUnits(pCal, american) {
-  const frac = kellyFraction(pCal, american, KELLY_FRACTION);
-  if (!(frac > 0)) return { units: 0, kellyFrac: frac || 0 };
-  let units = roundQuarter(frac * 100);
-  if (units > PER_BET_CAP) units = PER_BET_CAP;
+function quarterKellyFromDecimal(pCal, decimal, cap) {
+  const dec = Number(decimal);
+  const p = Number(pCal);
+  if (!(dec > 1) || !(p > 0) || !(p < 1)) return { units: 0, kellyFrac: 0, full: 0 };
+  const b = dec - 1;
+  const full = (b * p - (1 - p)) / b;
+  if (!(full > 0)) return { units: 0, kellyFrac: 0, full: 0 };
+  const frac = full * KELLY_FRACTION;
+  let units = roundQuarter(frac * BANKROLL_UNITS);
+  const ceiling = cap == null ? PER_BET_CAP : cap;
+  if (units > ceiling) units = ceiling;
   if (units < 0.25) units = 0;
-  return { units, kellyFrac: frac };
+  return { units, kellyFrac: frac, full };
+}
+
+function quarterKellyUnits(pCal, american, cap) {
+  return quarterKellyFromDecimal(pCal, americanToDecimal(american), cap);
 }
 
 function sizeStraight(candidate) {
@@ -78,6 +95,7 @@ function sizeStraights(selected) {
 module.exports = {
   roundQuarter,
   stakeUsd,
+  quarterKellyFromDecimal,
   quarterKellyUnits,
   sizeStraight,
   trimBudget,

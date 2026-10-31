@@ -5,6 +5,7 @@ const {
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
 const { marketFamily } = require('./select');
+const { bannedPairReason } = require('./parlay');
 const { americanJuiceDelta, ratingToConfidence } = require('../omega-vnext/odds_math');
 
 const STALE_CENTS = 15;
@@ -108,6 +109,7 @@ function toPick(row) {
     qualityGrade: rating,
     commenceTime: row.commenceTime || '',
     edgePct: pct(row.edge),
+    edgeNovig: row.edgeNovig != null ? row.edgeNovig : null,
     ev: pct(row.ev),
     evRaw: row.ev,
     confidence: ratingToConfidence(rating),
@@ -133,7 +135,7 @@ function toParlay(ticket, scanned) {
   const legs = ticket.legs.map((leg) => toPick({ ...leg, units: ticket.units, stakeUsd: ticket.stakeUsd }));
   const markets = legs.map((leg) => marketFamily(leg.betType || leg.market, leg.pick));
   return [{
-    type: `${ticket.legs.length}-leg-ml-total`,
+    type: `${ticket.legs.length}-leg`,
     units: fmtU(ticket.units),
     unitsNum: ticket.units,
     stakeUsd: ticket.stakeUsd,
@@ -146,10 +148,12 @@ function toParlay(ticket, scanned) {
     uniqueSports: new Set(ticket.legs.map((leg) => String(leg.sport || '').toUpperCase())).size,
     independent: ticket.factor === 1,
     legMarkets: markets,
-    correlationNote: ticket.correlated
-      ? `correlation haircut ${ticket.factor}`
-      : 'distinct sports, no same-direction total stack',
+    correlationNote: ticket.correlationNote
+      || (ticket.correlated
+        ? `correlation factor ${ticket.factor}`
+        : 'Distinct games. Joint probability is the product.'),
     correlationHaircut: String(ticket.factor),
+    pJoint: ticket.pJoint,
     correlationFactor: ticket.factor,
     candidatesScanned: scanned,
     source: 'omega-v2',
@@ -164,8 +168,9 @@ function unitsOf(row) {
 }
 
 /**
- * QA never withholds a card. Round stakes, cap them, drop a duplicate game,
- * and keep a parlay the historical rules already produced.
+ * QA never withholds a straight card. Round stakes, cap them, drop a
+ * duplicate game. A parlay whose stake rounds under 0.25u is removed.
+ * It is not floored back up to 0.25u.
  */
 function autoCorrectCard(card) {
   const notes = [];
@@ -235,16 +240,17 @@ function autoCorrectCard(card) {
   if (out.parlayLegs[0]) {
     const pl = { ...out.parlayLegs[0], legs: (out.parlayLegs[0].legs || []).map((leg) => ({ ...leg, modelVersion: MODEL_VERSION })) };
     let u = Math.round(unitsOf(pl) * 4) / 4;
-    if (!(u >= 0.25)) {
-      u = 0.25;
-      notes.push('parlay stake floored so the ticket still publishes');
-    }
     if (u > PARLAY_STAKE_CAP) u = PARLAY_STAKE_CAP;
-    pl.unitsNum = u;
-    pl.units = `${u}u`;
-    pl.modelVersion = MODEL_VERSION;
-    pl.stakeUsd = Math.ceil(u * 150 - 1e-9);
-    out.parlayLegs = [pl];
+    if (!(u >= 0.25)) {
+      notes.push('parlay stake rounded to 0');
+      out.parlayLegs = [];
+    } else {
+      pl.unitsNum = u;
+      pl.units = `${u}u`;
+      pl.modelVersion = MODEL_VERSION;
+      pl.stakeUsd = Math.ceil(u * 150 - 1e-9);
+      out.parlayLegs = [pl];
+    }
   }
   const straightUnits = +picks.reduce((s, p) => s + unitsOf(p), 0).toFixed(2);
   const parlayUnits = out.parlayLegs[0] ? unitsOf(out.parlayLegs[0]) : 0;
@@ -256,18 +262,6 @@ function autoCorrectCard(card) {
   out.qaNotes = notes;
   out.qaCorrected = notes.length > 0;
   return out;
-}
-
-function sameGameCount(legs) {
-  const counts = new Map();
-  for (const leg of legs || []) {
-    const g = String(leg.matchup || '').toLowerCase();
-    if (!g) continue;
-    counts.set(g, (counts.get(g) || 0) + 1);
-  }
-  let extra = 0;
-  for (const n of counts.values()) if (n > 1) extra += n - 1;
-  return extra;
 }
 
 function validateCard(card) {
@@ -295,9 +289,12 @@ function validateCard(card) {
     const u = unitsOf(parlay);
     if (!(u >= 0.25)) errors.push('parlay stake is below 0.25u');
     if (u > PARLAY_STAKE_CAP + 1e-9) errors.push('parlay stake is above the cap');
-    const extra = sameGameCount(parlay.legs);
-    const factor = Number(parlay.correlationFactor != null ? parlay.correlationFactor : parlay.correlationHaircut);
-    if (extra > 0 && !(factor < 1)) errors.push('same-game parlay haircut is not below 1');
+    const banned = bannedPairReason(parlay.legs);
+    if (banned) errors.push(banned);
+    for (const leg of parlay.legs || []) {
+      const edge = Number(leg.edgeNovig != null ? leg.edgeNovig : leg.edge);
+      if (Number.isFinite(edge) && !(edge > 0)) errors.push(`parlay leg edge is not positive (${leg.pick})`);
+    }
   }
   if ((card.straightUnits || 0) > STRAIGHT_BUDGET + 1e-9) errors.push('straight budget exceeded');
   if ((card.totalUnits || 0) > CARD_BUDGET + 1e-9) errors.push('card budget exceeded');

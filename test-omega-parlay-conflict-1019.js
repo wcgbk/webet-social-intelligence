@@ -264,15 +264,20 @@ function parsePct(v) {
     assert.ok(u >= 0.25 && u <= 2);
     assert.strictEqual(Math.round(u * 4) / 4, u);
   }
-  if (card.parlayLegs.length) {
-    assert.strictEqual(sharp.parlayLegs.length, 1, 'v2 keeps a parlay when v1 rules produced one');
-  }
   const sharpTicket = sharp.parlayLegs[0];
+  if (sharp.parlayLegs.length) {
+    assert.strictEqual(sharp.parlayLegs.length, 1);
+  }
   if (sharpTicket) {
     assert.ok(sharpTicket.legs.length === 2 || sharpTicket.legs.length === 3);
     const stake = parseFloat(sharpTicket.units);
     assert.ok(stake >= 0.25 && stake <= 1);
+    assert.strictEqual(Math.round(stake * 4) / 4, stake);
+    assert.ok(parsePct(sharpTicket.ev) > 0, `joint EV ${sharpTicket.ev}`);
+    const v2lib = require('./netlify/functions/lib/omega-v2');
+    assert.strictEqual(v2lib.bannedPairReason(sharpTicket.legs), null);
     for (const leg of sharpTicket.legs) {
+      if (leg.edgeNovig != null) assert.ok(Number(leg.edgeNovig) > 0, `${leg.pick} edge ${leg.edgeNovig}`);
       for (const straight of sharp.picks) {
         assert.strictEqual(parlay.conflictsWithStraight(leg, straight), false, `${leg.pick} conflicts with ${straight.pick}`);
       }

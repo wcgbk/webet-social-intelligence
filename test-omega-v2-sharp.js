@@ -1,13 +1,15 @@
 'use strict';
 
 /**
- * Live omega-v2 sharp card: default on, no forced straight fill,
- * historical parlay kept, same-game haircut only, quarter-Kelly cap.
+ * Live omega-v2 card. Legs need a positive no-vig edge. A parlay needs
+ * two or three of those legs, a positive joint EV, and a quarter-Kelly
+ * stake that survives the 0.25u step. There is no v1 parlay to copy.
  */
 
 const assert = require('assert');
 const v2 = require('./netlify/functions/lib/omega-v2');
 const { publishEdgeCard } = require('./netlify/functions/lib/omega-vnext/assemble');
+const { kellyFraction, americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
 const DATE = '2026-10-30';
 const COMMENCE = '2026-10-30T23:00:00Z';
@@ -43,6 +45,12 @@ function assertQuarter(units, cap) {
   assert.strictEqual(Math.round(units * 4) / 4, units);
 }
 
+function novig(pick) {
+  const edge = Number(pick.edgeNovig);
+  assert.ok(edge > 0, `${pick.pick} edgeNovig ${pick.edgeNovig}`);
+  assert.ok(pick.pCal > pick.pMkt, `${pick.pick} pCal ${pick.pCal} pMkt ${pick.pMkt}`);
+}
+
 (async () => {
   const saved = process.env.OMEGA_PIPELINE_V2;
   delete process.env.OMEGA_PIPELINE_V2;
@@ -55,8 +63,21 @@ function assertQuarter(units, cap) {
 
   assert.strictEqual(v2.MODEL_VERSION, 'omega-v2-sharp-2026-10-30');
   assert.strictEqual(v2.UNIT_DOLLARS, 150);
+  assert.strictEqual(v2.BANKROLL_UNITS, 100);
   assert.strictEqual(v2.PER_BET_CAP, 2);
+  assert.strictEqual(v2.PARLAY_STAKE_CAP, 1);
+  assert.strictEqual(v2.FAV_AMERICAN, -200);
+  assert.strictEqual(v2.FAV_MIN_EDGE, 0.042);
   assert.ok(v2.priorKFor('MLB') < v2.priorKFor('NFL'));
+
+  const dec290 = americanToDecimal(-290);
+  const pKent = 1.035 / dec290;
+  const kelly = v2.quarterKellyFromDecimal(pKent, dec290);
+  assert.ok(Math.abs(kelly.kellyFrac - kellyFraction(pKent, -290, 0.25)) < 1e-9);
+  assert.ok(Math.abs(kelly.full - ((dec290 - 1) * pKent - (1 - pKent)) / (dec290 - 1)) < 1e-12);
+  const uncapped = v2.quarterKellyFromDecimal(pKent, dec290, 100);
+  assert.strictEqual(uncapped.units, 2.5, '3.5% EV at -290 is 2.5u before the cap');
+  assert.strictEqual(kelly.units, 2, 'the 2u print is the per-bet cap');
 
   const flat = [0, 1, 2].map((i) => side({
     matchup: `Away ${i} @ Home ${i}`,
@@ -72,49 +93,285 @@ function assertQuarter(units, cap) {
     history: [],
   });
   assert.strictEqual(noFill.picks.length, 0, 'flat prices must not be filled to 3');
-  assert.strictEqual(noFill.parlayLegs.length, 1, 'historical parlay still publishes');
-  assert.strictEqual(noFill.v1WouldParlay, true);
-  assert.strictEqual(noFill.parlayLegs[0].legs.length, 3);
-  assert.strictEqual(Number(noFill.parlayLegs[0].correlationFactor), 1);
-  assertQuarter(noFill.parlayLegs[0].unitsNum, 1);
-  assert.ok(noFill.parlayLegs[0].unitsNum >= 0.5, 'positive-EV parlay keeps a profit stake');
-  assert.strictEqual(noFill.pass, false);
+  assert.strictEqual(noFill.parlayLegs.length, 0, 'zero no-vig edge is not a parlay');
+  assert.strictEqual(noFill.v1WouldParlay, false);
+  assert.strictEqual(noFill.parlaySource, null);
+  assert.strictEqual(noFill.pass, true);
   assert.strictEqual(noFill.modelVersion, v2.MODEL_VERSION);
+  assert.ok(noFill.rejections.some((row) => row.reason === 'fewer than 2 qualifying legs'));
 
-  const sameGame = [
-    side({
-      matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B',
-      side: 'B ML', pick: 'B ML', market: 'Moneyline', ev: 0.02, coverProb: 0.55,
-    }),
-    side({
-      matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B',
-      side: 'Over 45.5', pick: 'Over 45.5', market: 'Total', line: 45.5,
-      ev: -0.01, coverProb: 0.48,
-    }),
-    side({
-      matchup: 'C @ D', awayTeam: 'C', homeTeam: 'D',
-      side: 'D ML', pick: 'D ML', market: 'Moneyline', ev: -0.02, coverProb: 0.48,
-    }),
-    side({
-      matchup: 'C @ D', awayTeam: 'C', homeTeam: 'D',
-      side: 'Over 44', pick: 'Over 44', market: 'Total', line: 44,
-      ev: -0.01, coverProb: 0.47,
-    }),
-  ];
-  const haircut = await v2.buildCard({
+  const edgeLeg = (i, over) => side({
+    matchup: `Away ${i} @ Home ${i}`,
+    awayTeam: `Away ${i}`,
+    homeTeam: `Home ${i}`,
+    side: `Home ${i} ML`,
+    pick: `Home ${i} ML`,
+    pModel: 0.62,
+    pMkt: 0.52,
+    ...over,
+  });
+  const pair = await v2.buildCard({
     date: DATE,
-    candidates: sameGame,
-    parlayPool: sameGame,
+    candidates: [edgeLeg(0), edgeLeg(1)],
     history: [],
   });
-  assert.strictEqual(haircut.picks.length, 0);
-  assert.strictEqual(haircut.parlayLegs.length, 1, 'same-game ticket is haircut, not dropped');
-  assert.ok(Number(haircut.parlayLegs[0].correlationFactor) < 1);
-  assert.ok(String(haircut.parlayLegs[0].correlationHaircut).startsWith('0.95^'));
-  assertQuarter(haircut.parlayLegs[0].unitsNum, 1);
-  const games = haircut.parlayLegs[0].legs.map((leg) => String(leg.matchup).toLowerCase());
-  assert.ok(games.length >= 2);
-  assert.ok(new Set(games).size < games.length, 'ticket actually shares a game');
+  assert.strictEqual(pair.parlayLegs.length, 1, 'two qualifying legs publish');
+  assert.strictEqual(pair.parlayLegs[0].legs.length, 2);
+  assert.strictEqual(pair.parlaySource, 'calibrated-edge');
+  for (const leg of pair.parlayLegs[0].legs) novig(leg);
+  const pCal = 0.3 * 0.62 + 0.7 * 0.52;
+  const jointDec = (americanToDecimal(-110) ** 2);
+  const jointSized = v2.quarterKellyFromDecimal(pCal * pCal, jointDec, 1);
+  assert.strictEqual(pair.parlayLegs[0].unitsNum, jointSized.units);
+  assertQuarter(pair.parlayLegs[0].unitsNum, 1);
+  assert.ok(pair.parlayLegs[0].unitsNum < 0.5 || pair.parlayLegs[0].unitsNum >= 0.25);
+  assert.ok(parseFloat(pair.parlayLegs[0].ev) > 0);
+  assert.strictEqual(Number(pair.parlayLegs[0].correlationFactor), 1);
+  assert.ok(!/0\.95/.test(pair.parlayLegs[0].correlationNote));
+
+  const one = await v2.buildCard({
+    date: DATE,
+    candidates: [edgeLeg(0)],
+    history: [],
+  });
+  assert.strictEqual(one.parlayLegs.length, 0, 'one qualifying leg is not a parlay');
+  assert.ok(one.picks.length <= 1);
+
+  const pricedOut = await v2.buildCard({
+    date: DATE,
+    candidates: [0, 1].map((i) => edgeLeg(i, { odds: 100, oddsStr: '+100', pModel: 0.55, pMkt: 0.40 })),
+    history: [],
+  });
+  assert.strictEqual(pricedOut.picks.length, 0, 'price edge must be positive for a straight');
+  assert.strictEqual(pricedOut.parlayLegs.length, 0, 'negative joint EV does not publish');
+  assert.ok(pricedOut.rejections.some((row) => row.reason === 'no ticket with positive joint EV'));
+
+  const dust = await v2.buildCard({
+    date: DATE,
+    candidates: [0, 1].map((i) => edgeLeg(i, {
+      odds: 500,
+      oddsStr: '+500',
+      pModel: 0.1933,
+      pMkt: 0.16,
+    })),
+    history: [],
+  });
+  assert.strictEqual(dust.parlayLegs.length, 0, 'stake that rounds under 0.25u is not a parlay');
+  assert.ok(dust.rejections.some((row) => row.reason === 'parlay stake rounded below 0.25u'));
+
+  const banned = await v2.buildCard({
+    date: DATE,
+    candidates: [
+      edgeLeg(0, { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'A ML', side: 'A ML', market: 'Moneyline' }),
+      edgeLeg(0, { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'A -3.5', side: 'A -3.5', market: 'Spread', line: -3.5 }),
+      edgeLeg(1),
+    ],
+    history: [],
+  });
+  assert.ok(banned.parlayLegs.length === 1);
+  assert.strictEqual(v2.bannedPairReason(banned.parlayLegs[0].legs), null);
+  const bannedGames = banned.parlayLegs[0].legs.map((leg) => `${leg.matchup}|${leg.betType}`);
+  assert.ok(!bannedGames.includes('A @ B|Moneyline') || !bannedGames.includes('A @ B|Spread'));
+  for (const leg of banned.parlayLegs[0].legs) novig(leg);
+
+  const same = await v2.buildCard({
+    date: DATE,
+    candidates: [
+      edgeLeg(0, { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'B ML', side: 'B ML' }),
+      edgeLeg(0, {
+        matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B',
+        pick: 'Over 45.5', side: 'Over 45.5', market: 'Total', line: 45.5,
+      }),
+    ],
+    history: [],
+  });
+  assert.strictEqual(same.picks.length, 1);
+  assert.strictEqual(same.parlayLegs.length, 1, 'ML+total on one game still publishes');
+  assert.strictEqual(same.parlayLegs[0].legs.length, 2);
+  assert.strictEqual(Number(same.parlayLegs[0].correlationFactor), 1);
+  assert.ok(/applied phi 0/.test(same.parlayLegs[0].correlationNote), same.parlayLegs[0].correlationNote);
+  assert.ok(/n=14/.test(same.parlayLegs[0].correlationNote));
+
+  const trio = [0, 1, 2].map((i) => edgeLeg(i, i === 1 ? {
+    pick: `Over ${40 + i}`,
+    side: `Over ${40 + i}`,
+    market: 'Total',
+    line: 40 + i,
+  } : {}));
+  const goal = await v2.buildCard({ date: DATE, candidates: trio, history: [] });
+  assert.strictEqual(goal.parlayLegs[0].legs.length, 3, 'three qualifying legs are the goal');
+  for (const leg of goal.parlayLegs[0].legs) novig(leg);
+  assert.ok(parseFloat(goal.parlayLegs[0].ev) > 0);
+
+  const ml = (matchup, pick, edge) => ({
+    sport: 'NFL',
+    matchup,
+    pick,
+    market: 'Moneyline',
+    odds: -110,
+    edgeNovig: edge,
+    parlayQualified: true,
+    calibration: { pCal: 0.56 },
+  });
+  const tied = v2.chooseTicket([
+    ml('A @ B', 'A ML', 0.04),
+    ml('C @ D', 'Over 45', 0.04),
+    { ...ml('C @ D', 'Over 45', 0.04), market: 'Total', pick: 'Over 45' },
+    ml('E @ F', 'E ML', 0.04),
+    ml('G @ H', 'G ML', 0.04),
+  ]);
+  assert.ok(tied);
+  assert.strictEqual(tied.legs.length, 3);
+  assert.strictEqual(v2.mlTotalMix(tied.legs), 1, 'ML+total wins a tie on edge');
+  const edged = v2.chooseTicket([
+    ml('A @ B', 'A ML', 0.06),
+    ml('C @ D', 'C ML', 0.06),
+    ml('E @ F', 'E ML', 0.06),
+    { ...ml('G @ H', 'Over 50', 0.01), market: 'Total', pick: 'Over 50' },
+  ]);
+  assert.strictEqual(v2.mlTotalMix(edged.legs), 0, 'a higher edge sum beats the ML+total pattern');
+
+  const longshot = v2.sizeParlay([
+    {
+      sport: 'NBA', matchup: 'Denver Nuggets @ Phoenix Suns', pick: 'Under 231', market: 'Total',
+      odds: 100, edgeNovig: 0.0246, parlayQualified: true, calibration: { pCal: 0.5091050480440619 },
+    },
+    {
+      sport: 'NBA', matchup: 'Chicago Bulls @ Boston Celtics', pick: 'Chicago Bulls', market: 'Moneyline',
+      odds: 650, edgeNovig: 0.0183, parlayQualified: true, calibration: { pCal: 0.1401382910181729 },
+    },
+    {
+      sport: 'NBA', matchup: 'Charlotte Hornets @ Washington Wizards', pick: 'Charlotte Hornets', market: 'Moneyline',
+      odds: 100, edgeNovig: 0.0168, parlayQualified: true, calibration: { pCal: 0.5143777178910498 },
+    },
+  ], []);
+  assert.strictEqual(longshot.publish, true);
+  assert.strictEqual(longshot.legs.length, 2, 'a 3-leg that rounds to 0u falls through to a 2-leg');
+  assert.ok(longshot.legs.some((leg) => /Under 231/.test(leg.pick)));
+  assert.ok(longshot.legs.some((leg) => /Bulls/.test(leg.pick)), 'the higher no-vig edge pair still includes the longshot');
+  assert.strictEqual(longshot.units, 0.25);
+  assert.ok(longshot.ev > 0);
+
+  const dec = dec290;
+  const pClear = pKent;
+  const pMktClear = pClear - 0.07;
+  const kNcaaf = 0.72;
+  const clear = await v2.buildCard({
+    date: DATE,
+    candidates: [side({
+      sport: 'NCAAF',
+      matchup: 'Kent State @ Toledo',
+      awayTeam: 'Kent State',
+      homeTeam: 'Toledo',
+      pick: 'Kent State ML',
+      side: 'Kent State ML',
+      odds: -290,
+      oddsStr: '-290',
+      pMkt: pMktClear,
+      pModel: (pClear - kNcaaf * pMktClear) / (1 - kNcaaf),
+    })],
+    history: [],
+  });
+  assert.strictEqual(clear.picks.length, 1, 'a short price that clears 4.2pp is a bet');
+  assert.ok(clear.picks[0].edgeNovig >= 0.042);
+  assert.strictEqual(clear.picks[0].unitsNum, 2, 'quarter-Kelly above 2u caps at 2u');
+  assert.ok(Math.abs(clear.picks[0].pCal - pClear) < 1e-9);
+
+  const pMktNoise = pKent - 0.02;
+  const noisy = await v2.buildCard({
+    date: DATE,
+    candidates: [side({
+      sport: 'NCAAF',
+      matchup: 'Kent State @ Toledo',
+      awayTeam: 'Kent State',
+      homeTeam: 'Toledo',
+      pick: 'Kent State ML',
+      side: 'Kent State ML',
+      odds: -290,
+      oddsStr: '-290',
+      pMkt: pMktNoise,
+      pModel: (pKent - kNcaaf * pMktNoise) / (1 - kNcaaf),
+      coverProb: 0.77,
+      ev: 0.035,
+      edgePct: 0.026,
+    })],
+    history: [],
+  });
+  assert.strictEqual(noisy.picks.length, 0, '3.5% EV at -290 with a 2pp no-vig edge is not a straight');
+  assert.strictEqual(noisy.parlayLegs.length, 0);
+  assert.ok(noisy.rejections.some((row) => row.reason === 'heavy-favorite-edge'));
+
+  const warriorsGame = 'Houston Rockets @ Golden State Warriors';
+  const bullsGame = 'Orlando Magic @ Chicago Bulls';
+  const kentGame = 'Kent State @ Toledo';
+  const noEdge = (over) => side({
+    sport: 'NBA',
+    odds: -110,
+    oddsStr: '-110',
+    pModel: 0.52,
+    pMkt: 0.52,
+    coverProb: 0.55,
+    ev: 0.04,
+    edgePct: 0.03,
+    ...over,
+  });
+  const rejectedLegs = [
+    noEdge({
+      matchup: warriorsGame,
+      awayTeam: 'Houston Rockets',
+      homeTeam: 'Golden State Warriors',
+      side: 'Golden State Warriors +2.5',
+      pick: 'Golden State Warriors +2.5',
+      market: 'Spread',
+      line: 2.5,
+    }),
+    noEdge({
+      matchup: bullsGame,
+      awayTeam: 'Orlando Magic',
+      homeTeam: 'Chicago Bulls',
+      side: 'Chicago Bulls ML',
+      pick: 'Chicago Bulls ML',
+      market: 'Moneyline',
+      odds: 650,
+      oddsStr: '+650',
+      bestDkHr: { american: 650, book: 'draftkings' },
+      pModel: 0.133,
+      pMkt: 0.133,
+      coverProb: 0.22,
+    }),
+    noEdge({
+      sport: 'NCAAF',
+      matchup: kentGame,
+      awayTeam: 'Kent State',
+      homeTeam: 'Toledo',
+      side: 'Kent State ML',
+      pick: 'Kent State ML',
+      odds: -290,
+      oddsStr: '-290',
+      pMkt: pMktNoise,
+      pModel: (pKent - kNcaaf * pMktNoise) / (1 - kNcaaf),
+      coverProb: 0.77,
+      ev: 0.035,
+    }),
+  ];
+  const v1Card = publishEdgeCard({
+    positions: rejectedLegs,
+    qualified: rejectedLegs,
+    yesPool: rejectedLegs,
+    cardDate: DATE,
+    dateFormatted: DATE,
+  });
+  const matched = await v2.buildCard({
+    date: DATE,
+    candidates: rejectedLegs,
+    parlayPool: rejectedLegs,
+    v1Qualified: rejectedLegs,
+    history: [],
+  });
+  assert.ok(v1Card.parlayLegs.length === 1, 'the fixture is the v1 ticket the owner rejected');
+  assert.strictEqual(matched.parlayLegs.length, 0, 'v2 must not keep Warriors, Bulls, or a noisy favorite');
+  assert.ok(!matched.picks.some((pick) => /warriors|bulls|kent state/i.test(pick.pick)));
+  assert.strictEqual(matched.parlaySource, null);
 
   const hammer = await v2.buildCard({
     date: DATE,
@@ -128,7 +385,9 @@ function assertQuarter(units, cap) {
     history: [],
   });
   assert.strictEqual(hammer.picks.length, 1);
+  assert.strictEqual(hammer.parlayLegs.length, 0);
   assert.strictEqual(hammer.picks[0].unitsNum, 2, 'quarter-Kelly above 2u caps');
+  assert.ok(hammer.picks[0].edgeNovig <= 0.10);
   assert.strictEqual(hammer.picks[0].modelVersion, v2.MODEL_VERSION);
 
   const board = await v2.saveMorningBoard(DATE, flat, { dryRun: true });
@@ -146,123 +405,6 @@ function assertQuarter(units, cap) {
   });
   assert.strictEqual(history.length, 1);
   assert.strictEqual(history[0].date, '2026-10-29');
-
-  function legKey(leg) {
-    return [
-      String(leg.matchup || '').trim().toLowerCase(),
-      String(leg.pick || leg.side || '').trim().toLowerCase(),
-      String(leg.betType || leg.market || '').trim().toLowerCase(),
-      String(leg.odds).replace(/\s/g, ''),
-    ].join('|');
-  }
-
-  // Two v2 favorites, and a v1 card that keeps the other side of one of them.
-  // The parlay must be the v1 3-leg, not the two v2 straights.
-  const fav = (over) => side({
-    pModel: 0.64,
-    pMkt: 0.524,
-    coverProb: 0.56,
-    ev: 0.06,
-    edgePct: 0.03,
-    ...over,
-  });
-  const dog = (over) => side({
-    pModel: 0.14,
-    pMkt: 0.133,
-    coverProb: 0.22,
-    ev: 0.04,
-    edgePct: 0.01,
-    odds: 650,
-    oddsStr: '+650',
-    bestDkHr: { american: 650, book: 'draftkings' },
-    ...over,
-  });
-  const chiefsGame = 'Buffalo Bills @ Kansas City Chiefs';
-  const eaglesGame = 'Dallas Cowboys @ Philadelphia Eagles';
-  const bullsGame = 'Orlando Magic @ Chicago Bulls';
-  const warriorsGame = 'Houston Rockets @ Golden State Warriors';
-  const v1Dogs = [
-    dog({
-      sport: 'NBA',
-      matchup: chiefsGame,
-      awayTeam: 'Buffalo Bills',
-      homeTeam: 'Kansas City Chiefs',
-      side: 'Buffalo Bills',
-      pick: 'Buffalo Bills',
-      market: 'Moneyline',
-    }),
-    dog({
-      sport: 'NBA',
-      matchup: bullsGame,
-      awayTeam: 'Orlando Magic',
-      homeTeam: 'Chicago Bulls',
-      side: 'Chicago Bulls',
-      pick: 'Chicago Bulls',
-      market: 'Moneyline',
-    }),
-    dog({
-      sport: 'NBA',
-      matchup: warriorsGame,
-      awayTeam: 'Houston Rockets',
-      homeTeam: 'Golden State Warriors',
-      side: 'Golden State Warriors +2.5',
-      pick: 'Golden State Warriors +2.5',
-      market: 'Spread',
-      line: 2.5,
-      odds: -110,
-      oddsStr: '-110',
-      bestDkHr: { american: -110, book: 'draftkings' },
-      pModel: 0.53,
-      pMkt: 0.524,
-      coverProb: 0.52,
-    }),
-  ];
-  const v2Favorites = [
-    fav({
-      matchup: chiefsGame,
-      awayTeam: 'Buffalo Bills',
-      homeTeam: 'Kansas City Chiefs',
-      side: 'Kansas City Chiefs ML',
-      pick: 'Kansas City Chiefs ML',
-    }),
-    fav({
-      matchup: eaglesGame,
-      awayTeam: 'Dallas Cowboys',
-      homeTeam: 'Philadelphia Eagles',
-      side: 'Philadelphia Eagles ML',
-      pick: 'Philadelphia Eagles ML',
-    }),
-  ];
-  const boardPool = v1Dogs.concat(v2Favorites);
-  const v1Card = publishEdgeCard({
-    positions: boardPool,
-    qualified: v1Dogs,
-    yesPool: boardPool,
-    cardDate: DATE,
-    dateFormatted: DATE,
-  });
-  const matched = await v2.buildCard({
-    date: DATE,
-    candidates: boardPool,
-    parlayPool: boardPool,
-    v1Qualified: v1Dogs,
-    history: [],
-  });
-  const v1Keys = (v1Card.parlayLegs[0].legs || []).map(legKey).sort();
-  const v2Keys = (matched.parlayLegs[0].legs || []).map(legKey).sort();
-  assert.deepStrictEqual(v2Keys, v1Keys, 'v2 parlay legs must equal the v1 historical legs');
-  assert.strictEqual(v1Keys.length, 3);
-  const picks = v2Keys.map((key) => key.split('|')[1]);
-  assert.ok(picks.some((pick) => pick.includes('chicago bulls')));
-  assert.ok(picks.some((pick) => pick.includes('warriors +2.5')));
-  assert.ok(picks.some((pick) => pick.includes('buffalo bills')));
-  assert.ok(!picks.some((pick) => pick.includes('kansas city chiefs')));
-  assert.ok(matched.picks.some((p) => /kansas city chiefs/i.test(p.pick)));
-  assert.ok(matched.picks.some((p) => /philadelphia eagles/i.test(p.pick)));
-  assertQuarter(matched.parlayLegs[0].unitsNum, 1);
-  const jointEv = parseFloat(String(matched.parlayLegs[0].ev).replace('%', ''));
-  if (jointEv >= 0) assert.ok(matched.parlayLegs[0].unitsNum >= 0.5);
-  else assert.strictEqual(matched.parlayLegs[0].unitsNum, 0.25);
 
   let leaked = false;
   try {

@@ -236,12 +236,14 @@ async function main() {
     date: '2026-10-03',
     candidates: [
       strong('NFL', 'A @ B', 'A ML', 'Moneyline'),
-      strong('NFL', 'A @ B', 'Over 45.5', 'Total'),
+      strong('NFL', 'A @ B', 'A -3.5', 'Spread'),
     ],
     history: [],
   });
-  assert.strictEqual(sameGame.parlayLegs.length, 0, 'same-game parlay must not publish');
+  assert.strictEqual(sameGame.parlayLegs.length, 0, 'same-game ML+spread must not publish');
   assert.ok(sameGame.picks.length <= 1);
+  assert.ok(sameGame.rejections.some((row) => row.reason === 'no ticket with positive joint EV'
+    || row.reason === 'fewer than 2 qualifying legs'));
 
   const priced = (row) => {
     const american = Number(String(row.odds).replace(/[^0-9.+-]/g, ''));
@@ -266,7 +268,7 @@ async function main() {
     ],
     history: [],
   });
-  assert.ok(ticket.parlayLegs.length === 1, 'historical parlay should publish');
+  assert.ok(ticket.parlayLegs.length === 1, 'three positive-edge legs should publish a parlay');
   const parlay = ticket.parlayLegs[0];
   assert.ok(parlay.legs.length === 2 || parlay.legs.length === 3);
   assert.ok(parlay.legMarkets.includes('Moneyline') && parlay.legMarkets.includes('Total'));
@@ -283,8 +285,13 @@ async function main() {
     ],
     history: [],
   });
-  assert.strictEqual(st.parlayLegs.length, 0, 'st. louis and st louis are the same game');
-  assert.ok(st.picks.length <= 1);
+  assert.strictEqual(st.picks.length, 1, 'st. louis and st louis are one game, so one straight');
+  assert.strictEqual(st.parlayLegs.length, 1, 'same-game ML+total is allowed');
+  assert.strictEqual(st.parlayLegs[0].legs.length, 2);
+  assert.strictEqual(Number(st.parlayLegs[0].correlationFactor), 1);
+  const stMarkets = st.parlayLegs[0].legMarkets.slice().sort();
+  assert.deepStrictEqual(stMarkets, ['Moneyline', 'Total']);
+  assert.strictEqual(new Set(st.parlayLegs[0].legs.map((leg) => leg.matchup.toLowerCase().replace(/\./g, ''))).size, 1);
 
   let networkCalls = 0;
   const rechecked = await v2.buildCard({

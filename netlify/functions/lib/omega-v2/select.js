@@ -1,9 +1,8 @@
 'use strict';
 
 const {
-  EDGE_FLOOR, MAX_EDGE, MAX_STRAIGHTS, PRICE_BASE_DECIMAL, UNC_BASELINE,
+  MAX_EDGE, MAX_STRAIGHTS, FAV_AMERICAN, FAV_MIN_EDGE,
 } = require('./constants');
-const { clamp, uncertaintyFor } = require('./calibrate');
 const { americanToImplied, americanToDecimal, evAtOdds } = require('../omega-vnext/odds_math');
 
 function normTeam(name) {
@@ -38,50 +37,60 @@ function totalSide(pick) {
   return null;
 }
 
-function edgeFloor(candidate, fit) {
-  const dec = americanToDecimal(candidate.odds);
-  const priceScale = clamp((dec || PRICE_BASE_DECIMAL) / PRICE_BASE_DECIMAL, 0.85, 2);
-  const u = uncertaintyFor(fit, candidate.sport, candidate.uncertainty);
-  const uncScale = clamp(u / UNC_BASELINE, 0.85, 2);
-  return {
-    floor: EDGE_FLOOR * priceScale * uncScale,
-    priceScale,
-    uncScale,
-    uncertainty: u,
-  };
+/** Short prices need a larger no-vig edge. See FAV_AMERICAN / FAV_MIN_EDGE. */
+function failsFavoriteLimit(odds, edgeNovig) {
+  const american = Number(odds);
+  if (!Number.isFinite(american) || american > FAV_AMERICAN) return false;
+  return !(edgeNovig >= FAV_MIN_EDGE);
 }
 
 /**
- * A side qualifies only when its calibrated edge over the pick-time price
- * clears the scaled floor. Nothing is added to fill a slot.
+ * Straight: positive no-vig edge, positive EV at the bet price, under the
+ * miscalibration cap, and clear of the short-price minimum.
+ * Parlay leg: the same, except a negative price-EV can still sit in the
+ * pool. The ticket is dropped later if the joint EV is not positive.
+ * Nothing is added to fill a slot.
  */
-function annotateCandidate(candidate, fit) {
+function annotateCandidate(candidate) {
   const cal = candidate.calibration;
-  if (!cal) return { ...candidate, qualified: false, rejectReason: 'no-calibration' };
+  if (!cal) {
+    return {
+      ...candidate,
+      qualified: false,
+      parlayQualified: false,
+      rejectReason: 'no-calibration',
+    };
+  }
   const implied = americanToImplied(candidate.odds);
   const dec = americanToDecimal(candidate.odds);
-  if (implied == null || dec == null) {
-    return { ...candidate, qualified: false, rejectReason: 'bad-price' };
+  const pMkt = Number(cal.pMkt);
+  if (implied == null || dec == null || !Number.isFinite(pMkt)) {
+    return {
+      ...candidate,
+      qualified: false,
+      parlayQualified: false,
+      rejectReason: 'bad-price',
+    };
   }
   const edge = cal.pCal - implied;
+  const edgeNovig = cal.pCal - pMkt;
   const ev = evAtOdds(cal.pCal, candidate.odds);
-  const scaled = edgeFloor(candidate, fit);
   let rejectReason = null;
-  if (!(edge >= scaled.floor)) rejectReason = 'edge-below-floor';
-  else if (edge > MAX_EDGE) rejectReason = 'edge-over-10pp';
-  else if (!(ev >= 0)) rejectReason = 'negative-ev';
+  if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
+  else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
+  else if (failsFavoriteLimit(candidate.odds, edgeNovig)) rejectReason = 'heavy-favorite-edge';
+  const straightReject = rejectReason
+    || (!(edge > 0) || !(ev > 0) ? 'price-edge-not-positive' : null);
   return {
     ...candidate,
     implied,
     decimal: dec,
     edge,
+    edgeNovig,
     ev,
-    floor: scaled.floor,
-    priceScale: scaled.priceScale,
-    uncScale: scaled.uncScale,
-    uncertaintyUsed: scaled.uncertainty,
-    qualified: rejectReason == null,
-    rejectReason,
+    qualified: straightReject == null,
+    parlayQualified: rejectReason == null,
+    rejectReason: straightReject,
   };
 }
 
@@ -105,7 +114,7 @@ module.exports = {
   gameKey,
   marketFamily,
   totalSide,
-  edgeFloor,
+  failsFavoriteLimit,
   annotateCandidate,
   selectStraights,
 };

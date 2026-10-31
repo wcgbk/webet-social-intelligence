@@ -89,7 +89,13 @@ function legSlim(leg) {
     pick: leg.pick || leg.side || null,
     market: leg.betType || leg.market || null,
     odds: leg.odds != null ? leg.odds : null,
+    units: leg.units != null ? leg.units : null,
+    unitsNum: leg.unitsNum != null ? leg.unitsNum : null,
     ev: leg.ev != null ? leg.ev : null,
+    edgePct: leg.edgePct != null ? leg.edgePct : null,
+    edgeNovig: leg.edgeNovig != null ? leg.edgeNovig : null,
+    pCal: leg.pCal != null ? leg.pCal : null,
+    pMkt: leg.pMkt != null ? leg.pMkt : null,
     book: leg.book || null,
   };
 }
@@ -105,6 +111,9 @@ function straightSlim(p) {
     unitsNum: p.unitsNum != null ? p.unitsNum : null,
     ev: p.ev != null ? p.ev : null,
     edgePct: p.edgePct != null ? p.edgePct : null,
+    edgeNovig: p.edgeNovig != null ? p.edgeNovig : null,
+    pCal: p.pCal != null ? p.pCal : null,
+    pMkt: p.pMkt != null ? p.pMkt : null,
     rating: p.rating || null,
   };
 }
@@ -134,6 +143,19 @@ function cardSlim(card) {
     straightCount: (card.picks || []).length,
     straights: (card.picks || []).map(straightSlim),
     parlay: ticketSlim(card),
+    parlaySkips: (card.rejections || [])
+      .filter((row) => row && (row.market === 'Parlay' || row.reason === 'heavy-favorite-edge' || /kent state|warriors|bulls/i.test(`${row.side || ''} ${row.matchup || ''}`)))
+      .slice(0, 40)
+      .map((row) => ({
+        matchup: row.matchup || null,
+        side: row.side || row.pick || null,
+        market: row.market || null,
+        reason: row.reason || null,
+        edgeNovig: row.edgeNovig != null ? row.edgeNovig : null,
+        pCal: row.pCal != null ? row.pCal : null,
+        pMkt: row.pMkt != null ? row.pMkt : null,
+        odds: row.odds != null ? row.odds : null,
+      })),
     v1WouldParlay: card.v1WouldParlay === true,
     parlaySource: pipe ? pipe.parlaySource : null,
     leakageChecked: pipe ? pipe.leakageChecked === true : null,
@@ -204,8 +226,6 @@ async function runOne(date, pipelineV2) {
   };
   fs.writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`);
   console.error(`[omega-v2-dryrun] wrote ${outPath}`);
-  const missed = days.filter((d) => d.v2.card && d.v1.card && !d.parlayPreserved);
-  if (missed.length) process.exit(2);
 })().catch((err) => {
   console.error(redact(err && err.stack ? err.stack : err));
   process.exit(1);

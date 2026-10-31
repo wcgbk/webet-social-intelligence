@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  MAX_EDGE, MAX_STRAIGHTS, FAV_AMERICAN, FAV_MIN_EDGE,
+  MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS,
 } = require('./constants');
 const { americanToImplied, americanToDecimal, evAtOdds } = require('../omega-vnext/odds_math');
 
@@ -37,16 +37,40 @@ function totalSide(pick) {
   return null;
 }
 
-/** Short prices need a larger no-vig edge. See FAV_AMERICAN / FAV_MIN_EDGE. */
-function failsFavoriteLimit(odds, edgeNovig) {
-  const american = Number(odds);
-  if (!Number.isFinite(american) || american > FAV_AMERICAN) return false;
-  return !(edgeNovig >= FAV_MIN_EDGE);
+/** No-vig bucket for the uncertainty floor. Last bucket includes p = 1. */
+function bucketForNovig(pNovig) {
+  const p = Number(pNovig);
+  for (let i = 0; i < NO_VIG_BUCKETS.length; i += 1) {
+    const bucket = NO_VIG_BUCKETS[i];
+    const last = i === NO_VIG_BUCKETS.length - 1;
+    if (p >= bucket.lo && (last || p < bucket.hi)) return bucket;
+  }
+  return NO_VIG_BUCKETS[NO_VIG_BUCKETS.length - 1];
+}
+
+/**
+ * (pCal - longshot penalty) - pNovig must exceed k * SE(bucket).
+ * The penalty is already 0 outside the long-shot buckets.
+ */
+function uncertaintyFloor(pCal, pNovig) {
+  const bucket = bucketForNovig(pNovig);
+  const edge = Number(pCal) - Number(pNovig);
+  const penalty = bucket.penalty;
+  const adjusted = edge - penalty;
+  const floor = EDGE_FLOOR_K * bucket.se;
+  return {
+    bucket,
+    edge,
+    penalty,
+    adjusted,
+    floor,
+    ok: Number.isFinite(adjusted) && adjusted > floor,
+  };
 }
 
 /**
  * Straight: positive no-vig edge, positive EV at the bet price, under the
- * miscalibration cap, and clear of the short-price minimum.
+ * miscalibration cap, and clear of k*SE in its no-vig bucket.
  * Parlay leg: the same, except a negative price-EV can still sit in the
  * pool. The ticket is dropped later if the joint EV is not positive.
  * Nothing is added to fill a slot.
@@ -74,11 +98,12 @@ function annotateCandidate(candidate) {
   }
   const edge = cal.pCal - implied;
   const edgeNovig = cal.pCal - pMkt;
+  const gate = uncertaintyFloor(cal.pCal, pMkt);
   const ev = evAtOdds(cal.pCal, candidate.odds);
   let rejectReason = null;
   if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
   else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
-  else if (failsFavoriteLimit(candidate.odds, edgeNovig)) rejectReason = 'heavy-favorite-edge';
+  else if (!gate.ok) rejectReason = 'edge-below-uncertainty-floor';
   const straightReject = rejectReason
     || (!(edge > 0) || !(ev > 0) ? 'price-edge-not-positive' : null);
   return {
@@ -87,6 +112,8 @@ function annotateCandidate(candidate) {
     decimal: dec,
     edge,
     edgeNovig,
+    edgeFloor: gate.floor,
+    longshotPenalty: gate.penalty,
     ev,
     qualified: straightReject == null,
     parlayQualified: rejectReason == null,
@@ -114,7 +141,8 @@ module.exports = {
   gameKey,
   marketFamily,
   totalSide,
-  failsFavoriteLimit,
+  bucketForNovig,
+  uncertaintyFloor,
   annotateCandidate,
   selectStraights,
 };

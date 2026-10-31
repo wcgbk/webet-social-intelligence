@@ -49,6 +49,9 @@ function novig(pick) {
   const edge = Number(pick.edgeNovig);
   assert.ok(edge > 0, `${pick.pick} edgeNovig ${pick.edgeNovig}`);
   assert.ok(pick.pCal > pick.pMkt, `${pick.pick} pCal ${pick.pCal} pMkt ${pick.pMkt}`);
+  const shown = parseFloat(pick.edgePct) / 100;
+  assert.ok(Math.abs(shown - edge) < 0.001, `${pick.pick} edgePct ${pick.edgePct} is not pCal - pNovig`);
+  assert.ok(pick.priceEdgePct != null, `${pick.pick} missing priceEdgePct`);
 }
 
 (async () => {
@@ -66,8 +69,12 @@ function novig(pick) {
   assert.strictEqual(v2.BANKROLL_UNITS, 100);
   assert.strictEqual(v2.PER_BET_CAP, 2);
   assert.strictEqual(v2.PARLAY_STAKE_CAP, 1);
-  assert.strictEqual(v2.FAV_AMERICAN, -200);
-  assert.strictEqual(v2.FAV_MIN_EDGE, 0.042);
+  assert.strictEqual(v2.EDGE_FLOOR_K, 1.5);
+  assert.strictEqual(v2.NO_VIG_BUCKETS.length, 5);
+  assert.ok(v2.NO_VIG_BUCKETS[2].se < v2.NO_VIG_BUCKETS[0].se, 'the middle bucket is tighter than the long-shot tail');
+  const plusGate = v2.uncertaintyFloor(0.167, 0.140);
+  assert.ok(plusGate.floor > 0.0269, `+575 floor ${plusGate.floor} must sit above a 2.69pp edge`);
+  assert.strictEqual(plusGate.ok, false);
   assert.ok(v2.priorKFor('MLB') < v2.priorKFor('NFL'));
 
   const dec290 = americanToDecimal(-290);
@@ -149,10 +156,10 @@ function novig(pick) {
   const dust = await v2.buildCard({
     date: DATE,
     candidates: [0, 1].map((i) => edgeLeg(i, {
-      odds: 500,
-      oddsStr: '+500',
-      pModel: 0.1933,
-      pMkt: 0.16,
+      odds: -110,
+      oddsStr: '-110',
+      pModel: 0.56,
+      pMkt: 0.51,
     })),
     history: [],
   });
@@ -272,8 +279,10 @@ function novig(pick) {
     })],
     history: [],
   });
-  assert.strictEqual(clear.picks.length, 1, 'a short price that clears 4.2pp is a bet');
-  assert.ok(clear.picks[0].edgeNovig >= 0.042);
+  assert.strictEqual(clear.picks.length, 1, 'a short price that clears its bucket floor is a bet');
+  assert.ok(clear.picks[0].edgeNovig > v2.uncertaintyFloor(clear.picks[0].pCal, clear.picks[0].pMkt).floor);
+  assert.strictEqual(clear.picks[0].edgePct, `${(clear.picks[0].edgeNovig * 100).toFixed(1)}%`);
+  assert.ok(clear.picks[0].priceEdgePct);
   assert.strictEqual(clear.picks[0].unitsNum, 2, 'quarter-Kelly above 2u caps at 2u');
   assert.ok(Math.abs(clear.picks[0].pCal - pClear) < 1e-9);
 
@@ -299,7 +308,23 @@ function novig(pick) {
   });
   assert.strictEqual(noisy.picks.length, 0, '3.5% EV at -290 with a 2pp no-vig edge is not a straight');
   assert.strictEqual(noisy.parlayLegs.length, 0);
-  assert.ok(noisy.rejections.some((row) => row.reason === 'heavy-favorite-edge'));
+  assert.ok(noisy.rejections.some((row) => row.reason === 'edge-below-uncertainty-floor'));
+
+  const plus575 = await v2.buildCard({
+    date: DATE,
+    candidates: [side({
+      odds: 575,
+      oddsStr: '+575',
+      pMkt: 0.140,
+      pModel: (0.167 - 0.70 * 0.140) / 0.30,
+      coverProb: 0.167,
+    })],
+    history: [],
+  });
+  assert.strictEqual(plus575.picks.length, 0, '+575 at 2.7pp does not clear k*SE');
+  assert.strictEqual(plus575.parlayLegs.length, 0);
+  assert.ok(plus575.rejections.some((row) => row.reason === 'edge-below-uncertainty-floor'));
+  assert.ok(Math.abs(plus575.rejections.find((row) => row.reason === 'edge-below-uncertainty-floor').edgeNovig - 0.027) < 1e-9);
 
   const warriorsGame = 'Houston Rockets @ Golden State Warriors';
   const bullsGame = 'Orlando Magic @ Chicago Bulls';

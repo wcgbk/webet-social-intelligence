@@ -24,8 +24,7 @@ function stakeUsd(units) {
  *
  * A -290 price at 3.5% EV has b = 100/290 ≈ 0.345, so f ≈ 0.035/0.345 ≈ 10.2%
  * and quarter-Kelly ≈ 2.54u. The 2u print is this cap binding, not a
- * different formula. Short prices with an edge inside FAV_MIN_EDGE never
- * reach this function.
+ * different formula. An edge inside k*SE(bucket) never reaches this function.
  */
 function quarterKellyFromDecimal(pCal, decimal, cap) {
   const dec = Number(decimal);

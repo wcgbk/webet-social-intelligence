@@ -14,8 +14,8 @@ const MAX_STRAIGHTS = 3;
 /**
  * Per-bet ceiling, 2u = $300 = 2% of the $15,000 roll.
  * Quarter-Kelly on a -290 price at 3.5% EV is 2.54u before this cap, which
- * is why that price printed 2u. The cap is a risk limit. The short-price
- * edge rule below is what keeps a noisy favorite from reaching it.
+ * is why that price printed 2u. The cap is a risk limit. The uncertainty
+ * floor below is what keeps a noisy edge from reaching it.
  */
 const PER_BET_CAP = 2;
 const STRAIGHT_BUDGET = 3.5;
@@ -34,9 +34,9 @@ const PARLAY_LEAN_STAKE = 0.25;
 /** Retired. Joint EV must be positive. There is no 3% parlay floor. */
 const PARLAY_MIN_EV = 0;
 /**
- * Retired scaled floor. The live gate is the sign of the no-vig edge, plus
- * the short-price minimum. A 1pp scaled floor was not estimated from the
- * graded sample. Kept at 0 so a stale caller cannot revive the 1pp screen.
+ * Retired scaled floor. The live gate is the sign of the no-vig edge, then
+ * the bucket uncertainty floor. A 1pp scaled floor was not estimated from
+ * the graded sample. Kept at 0 so a stale caller cannot revive the 1pp screen.
  */
 const EDGE_FLOOR = 0;
 /**
@@ -47,25 +47,23 @@ const EDGE_FLOOR = 0;
  */
 const MAX_EDGE = 0.10;
 /**
- * American price at or below this is a short price.
- * Mode B's Brier excess over the no-vig market is 0.000428
- * (tools/omega-calibration/out/walkforward-cal4.md, n=4160 rows, 341 games).
- * RMSE = sqrt(0.000428) = 0.0207 probability.
- * Quarter-Kelly stake moves by 25 * RMSE / b, with b = 100/|price|.
- * That move reaches 1.0u at b = 0.517, American about -193.
- * -200 is the round price at which one RMSE of phantom edge is already
- * a full unit (1.03u). The suggested -250 leaves -200 to -249 uncapped
- * while that stake error is already above 1u.
+ * One uncertainty floor for every straight and every parlay leg.
+ * edge = (pCal - penalty) - pNovig must exceed EDGE_FLOOR_K * SE(bucket).
+ * Buckets are on the no-vig probability. SE and the long-shot penalty are
+ * fit on the 4,160 graded walk-forward rows (341 games). A thin bucket is
+ * shrunk toward the global residual variance (0.234655) and toward bias 0,
+ * with prior strength 80. Penalty is max(0, -bias) only when pNovig < 0.35.
+ * See DATA-THRESHOLDS-V2.md. k = 1.5. The <0.2 floor is 7.805pp, so a
+ * +575 with pCal 0.167 and pNovig 0.140 (2.7pp) does not qualify.
  */
-const FAV_AMERICAN = -200;
-/**
- * Minimum no-vig edge (pCal - Pinnacle no-vig) required at a short price.
- * The 95% CI on mode B minus market Brier runs up to 0.001792 (same fit,
- * n=4160, 341 games). sqrt(0.001792) = 0.0423. An edge inside that band
- * is not separable from calibration noise. Threshold is 0.042.
- * Applied to straights and to parlay legs.
- */
-const FAV_MIN_EDGE = 0.042;
+const EDGE_FLOOR_K = 1.5;
+const NO_VIG_BUCKETS = [
+  { lo: 0, hi: 0.2, n: 56, games: 55, se: 0.052035, bias: -0.032896, penalty: 0.032896 },
+  { lo: 0.2, hi: 0.35, n: 145, games: 127, se: 0.037668, bias: -0.032354, penalty: 0.032354 },
+  { lo: 0.35, hi: 0.65, n: 3541, games: 341, se: 0.008385, bias: 0.000670, penalty: 0 },
+  { lo: 0.65, hi: 0.8, n: 221, games: 160, se: 0.031055, bias: 0.006278, penalty: 0 },
+  { lo: 0.8, hi: 1, n: 197, games: 122, se: 0.026143, bias: -0.001903, penalty: 0 },
+];
 /** Prior shrink toward the no-vig price. Matches the known ~54% forecast vs ~50% hits. */
 const PRIOR_SHRINK_K = 0.70;
 /**
@@ -126,8 +124,8 @@ module.exports = {
   PARLAY_MIN_EV,
   EDGE_FLOOR,
   MAX_EDGE,
-  FAV_AMERICAN,
-  FAV_MIN_EDGE,
+  EDGE_FLOOR_K,
+  NO_VIG_BUCKETS,
   PAIR_PHI,
   PRIOR_SHRINK_K,
   SPORT_PRIOR_K,

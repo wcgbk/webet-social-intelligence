@@ -144,7 +144,7 @@ function cardSlim(card) {
     straights: (card.picks || []).map(straightSlim),
     parlay: ticketSlim(card),
     parlaySkips: (card.rejections || [])
-      .filter((row) => row && (row.market === 'Parlay' || row.reason === 'heavy-favorite-edge' || /kent state|warriors|bulls/i.test(`${row.side || ''} ${row.matchup || ''}`)))
+      .filter((row) => row && (row.market === 'Parlay' || row.reason === 'edge-below-uncertainty-floor' || /kent state|warriors|bulls/i.test(`${row.side || ''} ${row.matchup || ''}`)))
       .slice(0, 40)
       .map((row) => ({
         matchup: row.matchup || null,

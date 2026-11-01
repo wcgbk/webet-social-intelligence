@@ -13,6 +13,7 @@
 const config = require('./lib/omega-vnext/config');
 const store = require('./lib/omega-vnext/store');
 const { runPmObserver, buildPmOpenArtifact } = require('./lib/omega-vnext/pm_observer');
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
 const MODEL_VERSION = config.MODEL_VERSION;
 const readPicks = store.readPicks;
@@ -96,6 +97,8 @@ function json(statusCode, body) {
 }
 
 exports.handler = async (event) => {
+  const skip = rejectUnlessEtSlot('capture-omega-pm-observer', event, new Date());
+  if (skip) return skip;
   const qs = (event && event.queryStringParameters) || {};
   const dateISO = qs.date || null;
   const slot = String(qs.slot || '').toLowerCase() === 'open' ? 'open' : 'post';

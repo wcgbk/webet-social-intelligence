@@ -66,14 +66,24 @@ function hourlyAt(minute) {
 /** @type {Record<string, {etTimes: string[], days?: number[]}>} */
 const ET_SCHEDULE = {
   // 'trigger-picks-alpha' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
-  // 10:05 ET card build. Cron "5 14,15 * * *" is 14:05 UTC (EDT) and
-  // 15:05 UTC (EST). The ±10 min guard does not let 15:05 UTC EDT (11:05 ET)
-  // or 14:05 UTC EST (09:05 ET) through. Capture stays at 10:00.
-  'trigger-picks-omega': { etTimes: ['10:05'] },
+  // 03:00 ET baseline. Cron "0 7,8 * * *" is 07:00 UTC (EDT) and 08:00 UTC (EST).
+  // etGuard keeps 03:00 ET.
+  'capture-odds-3am': { etTimes: ['03:00'] },
+  // 10:00 ET board. Cron "0 14,15 * * *" is 14:00 UTC (EDT) and 15:00 UTC (EST).
+  // etGuard keeps 10:00 ET.
+  'capture-odds-10am': { etTimes: ['10:00'] },
+  // 10:15 ET card build. Cron "15 14,15 * * *" is 14:15 UTC (EDT) and
+  // 15:15 UTC (EST). etGuard keeps 10:15 ET. Reads the stored 10:00 board.
+  'trigger-picks-omega': { etTimes: ['10:15'] },
   // 10:15 ET news re-rank. Cron "15 14,15 * * *" is 14:15 UTC (EDT) and
   // 15:15 UTC (EST). Prices stay the 10:00 snapshot. No Odds API pull.
   'rerank-picks-omega': { etTimes: ['10:15'] },
-  'verify-picks-omega': { etTimes: ['10:30'] },
+  // 10:45 ET verify. Cron "45 14,15 * * *" is 14:45 UTC (EDT) and
+  // 15:45 UTC (EST). etGuard keeps 10:45 ET. Reads the stored 10:00 board.
+  'verify-picks-omega': { etTimes: ['10:45'] },
+  // 10:45 ET V1 A/B. Cron "45 14,15 * * *" is 14:45 UTC (EDT) and
+  // 15:45 UTC (EST). etGuard keeps 10:45 ET. No Odds API pull.
+  'trigger-picks-omega-v1': { etTimes: ['10:45'] },
   // 10:45 ET written context. Cron "45 14,15 * * *" is 14:45 UTC (EDT) and
   // 15:45 UTC (EST). No Odds API pull. Does not finalize.
   'narrate-card-omega': { etTimes: ['10:45'] },
@@ -148,7 +158,9 @@ const ET_SCHEDULE = {
   'trigger-omega-nba-shadow': { etTimes: ['17:30'] },
   'trigger-omega-nba-shadow-grade': { etTimes: ['08:00'] },
   'capture-omega-pm-observer-open': { etTimes: ['08:30'] },
-  'capture-omega-pm-observer': { etTimes: ['10:15'] },
+  // 10:50 ET PM observer. Cron "50 14,15 * * *" is 14:50 UTC (EDT) and
+  // 15:50 UTC (EST). etGuard keeps 10:50 ET. Audit log only.
+  'capture-omega-pm-observer': { etTimes: ['10:50'] },
   'capture-omega-walkforward': { etTimes: ['11:15'] },
   'capture-omega-walkforward-evening': { etTimes: ['19:45'] },
   // 'capture-opening-lines' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.

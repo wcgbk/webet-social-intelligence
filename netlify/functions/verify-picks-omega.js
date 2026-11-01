@@ -1005,8 +1005,12 @@ exports.formatCombinedAmerican = formatCombinedAmerican;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 // ── Handler ──
 exports.handler = async (event) => {
+  const skip = rejectUnlessEtSlot('verify-picks-omega', event, new Date());
+  if (skip) return skip;
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
 
   try {

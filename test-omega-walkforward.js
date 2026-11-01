@@ -245,7 +245,7 @@ assert.ok(/storeWalkforwardSamples/.test(captureSrc));
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
 assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15 \* \* \*"/.test(toml));
 assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "15 14 \* \* \*"/.test(toml), 'generate 10:15am EDT after 10AM pull (changed 2026-10-18)');
+assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "15 14,15 \* \* \*"/.test(toml), 'generate 10:15 ET after 10AM pull (DST-proof)');
 assert.ok(/2026-11-01/.test(toml));
 assert.ok(toml.includes('"0 7" → "0 8"'), 'EST shift list covers capture-odds-3am');
 assert.ok(/Do not switch it before/.test(toml));

@@ -169,8 +169,9 @@ async function main() {
     'netlify/functions/lib/omega-vnext/parlay.js',
     'netlify/functions/lib/omega-vnext/calibrate.js',
     'netlify/functions/lib/omega-vnext/odds_math.js',
-    'netlify/functions/lib/et-schedule.js',
   ];
+  // et-schedule.js is not in this freeze. The Omega card-chain slots there
+  // are DST-corrected. Grading, prices, and selection stay frozen.
   const diff = execSync(`git diff --name-only a592e0b -- ${forbidden.join(' ')}`, {
     cwd: root,
     encoding: 'utf8',

@@ -4,7 +4,11 @@
 // force:true — morning run must rebuild even if an early/overnight same-day card exists
 // (OVERWRITE_GUARD otherwise keeps last night's picks and ignores 6/7:30/9 line snaps).
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
+  const skip = rejectUnlessEtSlot('trigger-picks-omega', event, new Date());
+  if (skip) return skip;
   console.log("[trigger-picks-omega] Scheduled run triggered (omega-vnext)");
 
   const siteURL = process.env.URL || "https://webetsocial.com";

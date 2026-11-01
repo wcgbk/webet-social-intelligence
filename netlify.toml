@@ -29,12 +29,12 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-omega-v1"]
-  schedule = "45 14 * * *"  # 10:45am ET EDT (EST from Nov 1: "45 15"). Omega V1 A/B: after Omega 10:15 generate; reads edge-picks-omega read-only, writes edge-picks-omega-v1ab.
+  schedule = "45 14,15 * * *"  # 10:45 ET. DST-proof via etGuard. V1 A/B after Omega 10:15; reads edge-picks-omega, writes edge-picks-omega-v1ab.
 
 [functions."trigger-picks-omega"]
-  schedule = "15 14 * * *"  # 10:15am ET EDT, after 10AM pull (was "30 13 * * *")
-  # OMEGA vNext (v12 CLV-first) — 9:30am ET (13:30 UTC in EDT). Generate early enough for QA;
-  # verify 10:30am ET; public card live by ~11:00am ET. Writes edge-picks-omega → /omega.
+  schedule = "15 14,15 * * *"  # 10:15 ET. DST-proof via etGuard. After the 10:00 board.
+  # OMEGA vNext (v12 CLV-first). Writes edge-picks-omega → /omega.
+  # Verify 10:45 ET; public card live by ~11:00 ET.
   # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
 
 [functions."generate-picks-omega-background"]
@@ -43,8 +43,8 @@
 
 [functions."verify-picks-omega"]
   # Reads stored odds-master 1000 board (no live Odds pull since 2026-10-18).
-  schedule = "45 14 * * *"  # 10:45am ET EDT, reads stored 1000 board (was "30 14 * * *")
-  # Omega QA — 10:30am ET (14:30 UTC EDT). Target: publish unlock by 11:00am ET.
+  schedule = "45 14,15 * * *"  # 10:45 ET. DST-proof via etGuard. Reads stored 1000 board.
+  # Omega QA. Target: publish unlock by 11:00 ET.
   # Placeability advisory; must not invent sides. Empty card remains valid.
 
 [functions."self-optimize-omega"]
@@ -263,9 +263,8 @@
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pm-observer"]
-  schedule = "50 14 * * *"  # 10:50am ET EDT, after 10:15 generate (was "15 14 * * *")
-  # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after 9:30 generate.
-  # Audit log: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
+  schedule = "50 14,15 * * *"  # 10:50 ET. DST-proof via etGuard. After 10:15 generate.
+  # Omega PM observer sidecar. Audit log → omega-pm-observer/{date}.
   # Generate already applied hard-capped soft score in-process. This job does
   # not mutate the live card / grades / units. ?slot=open also writes the open key.
   # Soft-fail if PM APIs down.
@@ -1006,17 +1005,16 @@
   included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]
 
 [functions."capture-odds-3am"]
-  schedule = "0 7 * * *"
-  # 07:00 UTC = 3:00am ET (EDT). The ONLY overnight Odds pull (Ben 2026-10-18):
-  # writes odds-master baseline-0300 (all books/markets, raw events stored).
-  # EST shift (Nov 1): move to "0 8 * * *".
+  schedule = "0 7,8 * * *"
+  # 03:00 ET. DST-proof via etGuard (07:00 UTC EDT, 08:00 UTC EST).
+  # Overnight Odds pull (Ben 2026-10-18): odds-master baseline-0300.
   included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-odds-10am"]
-  schedule = "0 14 * * *"
-  # 14:00 UTC = 10:00am ET (EDT). The ONLY morning Odds pull (Ben 2026-10-18):
-  # writes odds-master check-1000, the board both Omega (10:15) and V1 (10:35) read.
-  # EST shift (Nov 1): move to "0 15 * * *".
+  schedule = "0 14,15 * * *"
+  # 10:00 ET. DST-proof via etGuard (14:00 UTC EDT, 15:00 UTC EST).
+  # Morning Odds pull (Ben 2026-10-18): odds-master check-1000.
+  # Board both Omega (10:15) and V1 (10:35) read.
   included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pinnacle-lines"]

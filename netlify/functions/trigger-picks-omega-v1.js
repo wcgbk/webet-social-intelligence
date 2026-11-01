@@ -1,6 +1,10 @@
 // trigger-picks-omega-v1.js — 10:45 AM ET: rebuild the Omega V1 A/B card from the 10:15 Omega card (read-only).
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
+  const skip = rejectUnlessEtSlot('trigger-picks-omega-v1', event, new Date());
+  if (skip) return skip;
   console.log("[trigger-picks-omega-v1] Scheduled run triggered (omega-vnext)");
 
   const siteURL = process.env.URL || "https://webetsocial.com";

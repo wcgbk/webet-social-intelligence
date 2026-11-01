@@ -373,8 +373,8 @@ assert.deepStrictEqual(
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
 // Intentional schedule change 2026-10-18: Omega morning captures paused;
 // the only Odds pulls are capture-odds-3am (0300 ET) + capture-odds-10am (1000 ET).
-assert.ok(/\[functions\."capture-odds-3am"\]\s*\n\s*schedule = "0 7 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."capture-odds-10am"\]\s*\n\s*schedule = "0 14 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-odds-3am"\]\s*\n\s*schedule = "0 7,8 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-odds-10am"\]\s*\n\s*schedule = "0 14,15 \* \* \*"/.test(toml));
 assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13 \* \* \*"/.test(toml));
 const tspBlock = toml.split('[functions."fetch-tsp-live"]')[1].split('\n[functions.')[0];
 // #82 paused the Hermes fetch. The schedule line stays commented; do not require it live.

@@ -1467,7 +1467,9 @@
       .replace(/the model/g, 'WeBetAI')
       .replace(/Model:/g, 'WeBetAI:')
       .replace(/Model shows/g, 'WeBetAI shows')
-      .replace(/Model edge/g, 'WeBetAI edge');
+      .replace(/Model edge/g, 'WeBetAI edge')
+      .replace(/\bedge[ _]?band\b/gi, 'edge')
+      .replace(/\b(Omega|Alpha)\b/g, 'WeBetAI');
   }
 
   /** Normalize rating → badge key (aplus/a/aminus/…). Never use numeric confidence as a key. */

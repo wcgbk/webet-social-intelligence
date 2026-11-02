@@ -1976,22 +1976,22 @@
 
       <!-- DAILY EDGE PICKS PANEL -->
       <div class="panel" id="panel-picks" style="overflow:hidden;">
-        <iframe id="picks-iframe" src="/alpha" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="picks-iframe" data-src="/alpha" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- NFL MODEL PANEL -->
       <div class="panel" id="panel-nfl" style="overflow:hidden;">
-        <iframe id="nfl-iframe" src="/nfl" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="nfl-iframe" data-src="/nfl" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- COLLEGE FOOTBALL MODEL PANEL -->
       <div class="panel" id="panel-cfb" style="overflow:hidden;">
-        <iframe id="cfb-iframe" src="/cfb" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="cfb-iframe" data-src="/cfb" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- GROK BETA MODEL PANEL -->
       <div class="panel" id="panel-grok-beta" style="overflow:hidden;">
-        <iframe id="grok-beta-iframe" src="/live-edge" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="grok-beta-iframe" data-src="/live-edge" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- OMEGA MODEL PANEL -->
@@ -2021,27 +2021,27 @@
       </div>
 
       <div class="panel" id="panel-omega" style="overflow:hidden;">
-        <iframe id="omega-iframe" src="/daily-omega" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="omega-iframe" data-src="/daily-omega" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- PREMIUM LIVE PICKS PANEL (private live sportsbook feed) -->
       <div class="panel" id="panel-live-picks" style="overflow:hidden;">
-        <iframe id="live-picks-iframe" src="/live-picks?embed=1" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="live-picks-iframe" data-src="/live-picks?embed=1" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- GAMECAST PANEL -->
       <div class="panel" id="panel-gamecast" style="overflow:hidden;">
-        <iframe id="gamecast-iframe" src="/gamecast" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="gamecast-iframe" data-src="/gamecast" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- MLB FIRST 5 PICKS PANEL -->
       <div class="panel" id="panel-mlb" style="overflow:hidden;">
-        <iframe src="/mlb" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/mlb" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- WEBIT PANEL -->
       <div class="panel" id="panel-webit" style="overflow:hidden;">
-        <iframe src="/webit" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/webit" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- PROFILE PANEL -->
@@ -2053,7 +2053,7 @@
 
       <!-- FEED PANEL -->
       <div class="panel" id="panel-feed" style="overflow:hidden;">
-        <iframe src="/betty/blog" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/betty/blog" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
 
@@ -2075,22 +2075,22 @@
 
       <!-- FULL TRACK RECORD + ARCHITECTURE PANEL (opened from the percentile panel button) -->
       <div class="panel" id="panel-arch" style="overflow:hidden;">
-        <iframe src="/percentile" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/percentile" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- P2P SPORTS EXCHANGE PANEL -->
       <div class="panel" id="panel-p2p-sports" style="overflow:hidden;">
-        <iframe src="/p2p-sports" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/p2p-sports" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- P2P TRENDING PANEL -->
       <div class="panel" id="panel-p2p-trending" style="overflow:hidden;">
-        <iframe src="/p2p-trending" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/p2p-trending" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- PICK 3 PVP — same-domain iframe so the session reaches /pick3p2p -->
       <div class="panel" id="panel-p2p" style="overflow:hidden;">
-        <iframe src="/pick3p2p" title="Pick 3 PVP" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe data-src="/pick3p2p" title="Pick 3 PVP" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- ADMIN PANEL -->
@@ -2166,7 +2166,7 @@
         <button class="panel-refresh-btn" onclick="document.getElementById('iframe-guardian').src = document.getElementById('iframe-guardian').src" title="Refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-        <iframe id="iframe-guardian" src="/guardian/digest" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="iframe-guardian" data-src="/guardian/digest" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- WEBET BUILDER PANEL -->
@@ -2174,7 +2174,7 @@
         <button class="panel-refresh-btn" onclick="document.getElementById('iframe-builder').src = document.getElementById('iframe-builder').src" title="Refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-        <iframe id="iframe-builder" src="/admin?demo=1#feed" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="iframe-builder" data-src="/admin?demo=1#feed" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- COMET SNIPER PANEL -->
@@ -2539,6 +2539,8 @@
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     const target = document.getElementById('panel-' + panel);
     if (target) target.classList.add('active');
+    // Lazy-load: panel iframes only fetch when their panel is first opened.
+    if (target) target.querySelectorAll('iframe[data-src]').forEach(fr => { if (!fr.getAttribute('src')) fr.src = fr.dataset.src; });
     if (panel === 'grokbot' && typeof window.wbHealGrokbotFrame === 'function') window.wbHealGrokbotFrame();
 
     // Keep the URL + browser-tab title in sync so the current page is shareable and

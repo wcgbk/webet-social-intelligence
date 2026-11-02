@@ -2610,7 +2610,7 @@
 
   /* ─── Edge Picks Panel ──────────────────────────────────────────── */
   async function loadPicks() {
-    const res = await fetch('/.netlify/functions/get-picks-omega');
+    const res = await fetch('/.netlify/functions/get-picks-omega?t=' + Date.now(), { cache: 'no-store' });
     const data = await res.json();
     const el = document.getElementById('picks-content');
     if (!data || !data.picks || data.picks.length === 0) {
@@ -3259,7 +3259,7 @@
   /* ─── Fetch today's picks on load ───────────────────────────────── */
   async function fetchTodaysPicks() {
     try {
-      const res = await fetch('/.netlify/functions/get-picks-omega');
+      const res = await fetch('/.netlify/functions/get-picks-omega?t=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
       todaysPicks = data;
       updateEmptyState(data);

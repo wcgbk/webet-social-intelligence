@@ -362,6 +362,23 @@ function matchOutcome(outcomes, leg) {
   return null;
 }
 
+const DK_HR_RECHECK = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
+
+/**
+ * Quote books a recheck may use. The leg's own book only when it is
+ * DraftKings or Hard Rock, then those books. Never Pinnacle, FanDuel,
+ * BetMGM, or an offshore book. A missing quote leaves the locked price.
+ */
+function recheckBookOrder(book) {
+  const order = [];
+  const posted = String(book || '').toLowerCase();
+  if (DK_HR_RECHECK.has(posted)) order.push(posted);
+  for (const key of ['draftkings', 'hardrockbet', 'hardrock']) {
+    if (!order.includes(key)) order.push(key);
+  }
+  return order;
+}
+
 /**
  * Pre-publish quote from an already-loaded odds board.
  * No network. A missing event leaves the locked price alone.
@@ -384,7 +401,7 @@ function recheckFromCachedBoard(oddsBySport) {
       ? 'totals'
       : (marketFamily(leg.market, leg.pick) === 'Spread' ? 'spreads' : 'h2h');
     const books = ev.bookmakers || [];
-    const order = [leg.book, 'draftkings', 'hardrockbet', 'hardrock', 'pinnacle', 'fanduel', 'betmgm'];
+    const order = recheckBookOrder(leg && leg.book);
     for (const want of order) {
       if (!want) continue;
       const book = books.find((b) => String(b.key || '').toLowerCase() === String(want).toLowerCase());

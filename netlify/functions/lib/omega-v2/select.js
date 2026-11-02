@@ -93,10 +93,11 @@ function uncertaintyFloor(pCal, pNovig) {
 }
 
 /**
- * Straight: positive no-vig edge, positive EV at the bet price, under the
+ * Straight: positive no-vig edge, positive EV at the DK/HR price, under the
  * miscalibration cap, and clear of k*SE in its no-vig bucket.
- * Parlay leg: the same, except a negative price-EV can still sit in the
- * pool. The ticket is dropped later if the joint EV is not positive.
+ * Parlay qualification here is that same no-vig screen. usableLegs also
+ * requires pCal * decimal(DK/HR price) > 1. A leg that fails is skipped as
+ * leg-ev-not-positive and is not on the ticket.
  * Nothing is added to fill a slot.
  */
 function annotateCandidate(candidate) {

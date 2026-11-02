@@ -32,6 +32,7 @@ function candidate(over) {
     side: 'Kansas City Chiefs ML',
     market: 'Moneyline',
     odds: '-110',
+    book: 'draftkings',
     pModel: 0.62,
     pMkt: 0.52,
     uncertainty: 0.18,

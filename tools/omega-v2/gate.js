@@ -60,6 +60,7 @@ function strong(sport, matchup, pick, market) {
     pick,
     market,
     odds: '-110',
+    book: 'draftkings',
     pModel: 0.68,
     pMkt: 0.50,
     uncertainty: 0.18,
@@ -76,6 +77,7 @@ function weak(i) {
     pick: `Away ${i} ML`,
     market: 'Moneyline',
     odds: '-110',
+    book: 'draftkings',
     pModel: 0.52,
     pMkt: 0.52,
     uncertainty: 0.18,
@@ -202,7 +204,7 @@ async function main() {
   });
   assert.strictEqual(prior.calibration.trainN, 0);
   assert.strictEqual(prior.leakageChecked, true);
-  assert.strictEqual(prior.modelVersion, 'omega-v2-sharp-2026-10-30');
+  assert.strictEqual(prior.modelVersion, 'omega-v2-sharp-2026-11-01-dkhr');
 
   const next = await v2.buildCard({
     date: '2026-10-02',

@@ -12,6 +12,8 @@ Size at quarter-Kelly on that same price. Round to 0.25u. Cap 1.25u per bet. Str
 
 Parlay legs come only from qualified sides. The ticket must mix a moneyline and a total, on different games, 2 or 3 legs. Same-game tickets are rejected. Same-sport legs and same-direction totals take a correlation haircut below 1. Publish only at EV of 3% or more. The stake is quarter-Kelly, capped at 0.5u and at the smallest straight.
 
+Every published straight and parlay leg is priced at DraftKings or Hard Rock (`bestDkHr` when that American number is finite, otherwise the posted book if it is already one of those). Any other book is rejected as `no-dk-hr-price` and is not on the card. A parlay leg also needs positive EV at that price (`pCal * decimal - 1 > 0`). A miss is skipped as `leg-ev-not-positive`, and the ticket falls back to the best valid ticket.
+
 A pre-publish price recheck is a hook the caller supplies. The pipeline does not call The Odds API. The gate is `npm run omega-v2:gate`.
 
 ## 30-day replay (9/30–10/29)

@@ -21,6 +21,7 @@ const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, c
 const { runOmegaLineCapture } = require('./capture_runner');
 const {
   pipelineV2Enabled, publishFromOmegaCandidates, saveMorningBoard, loadGradedHistory, recheckFromCachedBoard,
+  MODEL_VERSION: OMEGA_V2_MODEL_VERSION,
 } = require('../omega-v2');
 
 const mlb = require('./sports/mlb');
@@ -522,7 +523,7 @@ async function generateOmegaVnext(opts = {}) {
     }
     const boardSave = await saveMorningBoard(dateISO, candidates, {
       dryRun: dryRun || shadow,
-      modelVersion: 'omega-v2-sharp-2026-10-30',
+      modelVersion: OMEGA_V2_MODEL_VERSION,
     });
     built = await publishFromOmegaCandidates({
       date: dateISO,

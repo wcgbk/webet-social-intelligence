@@ -16,7 +16,7 @@ const COMMENCE = '2026-10-30T23:00:00Z';
 const PREGAME = Date.parse('2026-10-30T16:00:00Z');
 
 function side(over) {
-  return {
+  const row = {
     sport: 'NFL',
     matchup: 'Buffalo Bills @ Kansas City Chiefs',
     awayTeam: 'Buffalo Bills',
@@ -38,6 +38,19 @@ function side(over) {
     line: null,
     ...over,
   };
+  if (!over || !Object.prototype.hasOwnProperty.call(over, 'bestDkHr')) {
+    const book = String(row.book || '').toLowerCase();
+    const dk = book === 'draftkings' || book === 'hardrockbet' || book === 'hardrock' || book === 'hardrockbet_oh';
+    if (!dk) row.bestDkHr = null;
+    else {
+      const american = typeof row.odds === 'number'
+        ? row.odds
+        : Number(String(row.odds).replace(/[−–]/g, '-').replace(/^\+/, ''));
+      const canon = (book === 'hardrock' || book === 'hardrockbet_oh') ? 'hardrockbet' : book;
+      row.bestDkHr = { american, book: canon };
+    }
+  }
+  return row;
 }
 
 function assertQuarter(units, cap) {
@@ -65,7 +78,7 @@ function novig(pick) {
   if (saved == null) delete process.env.OMEGA_PIPELINE_V2;
   else process.env.OMEGA_PIPELINE_V2 = saved;
 
-  assert.strictEqual(v2.MODEL_VERSION, 'omega-v2-sharp-2026-10-30');
+  assert.strictEqual(v2.MODEL_VERSION, 'omega-v2-sharp-2026-11-01-dkhr');
   assert.strictEqual(v2.UNIT_DOLLARS, 150);
   assert.strictEqual(v2.BANKROLL_UNITS, 100);
   assert.strictEqual(v2.PER_BET_CAP, 2);

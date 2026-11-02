@@ -197,13 +197,59 @@ function betterTicket(a, b) {
   return a.scored.ev - b.scored.ev;
 }
 
+/**
+ * Price EV at the leg's DK/HR American number.
+ * Null when the probability or the price cannot be scored.
+ */
+function legPriceEv(leg) {
+  const p = Number(leg && leg.calibration && leg.calibration.pCal);
+  const dec = americanToDecimal(leg && leg.odds);
+  if (!(p > 0 && p < 1) || dec == null) return null;
+  return p * dec - 1;
+}
+
+/**
+ * A no-vig leg whose DK/HR price is not +EV. Other disqualifications
+ * (no calibration, no no-vig edge, uncertainty floor) are not this skip.
+ */
+function legFailsPriceEv(leg) {
+  if (!leg || leg.parlayQualified === false) return false;
+  const p = Number(leg.calibration && leg.calibration.pCal);
+  const dec = americanToDecimal(leg.odds);
+  if (!(p > 0 && p < 1 && dec != null && (leg.edgeNovig > 0))) return false;
+  return !(legPriceEv(leg) > 0);
+}
+
+function legEvSkips(pool) {
+  const skips = [];
+  for (const leg of pool || []) {
+    if (!legFailsPriceEv(leg)) continue;
+    const p = Number(leg.calibration && leg.calibration.pCal);
+    skips.push({
+      matchup: leg.matchup || null,
+      side: leg.pick || leg.side || null,
+      market: leg.market || null,
+      sport: leg.sport || null,
+      reason: 'leg-ev-not-positive',
+      odds: leg.odds,
+      edge: leg.edge != null ? leg.edge : null,
+      edgeNovig: leg.edgeNovig != null ? leg.edgeNovig : null,
+      pCal: p,
+      pMkt: leg.calibration && leg.calibration.pMkt != null ? leg.calibration.pMkt : null,
+    });
+  }
+  return skips;
+}
+
 function usableLegs(pool, opts) {
   const asOfMs = pregameClockMs(opts);
   return (pool || []).filter((leg) => {
     if (pastPregameCutoff(leg.commenceTime, asOfMs)) return false;
     if (leg.parlayQualified === false) return false;
     const p = Number(leg.calibration && leg.calibration.pCal);
-    return p > 0 && p < 1 && americanToDecimal(leg.odds) != null && (leg.edgeNovig > 0);
+    const dec = americanToDecimal(leg.odds);
+    if (!(p > 0 && p < 1 && dec != null && (leg.edgeNovig > 0))) return false;
+    return legPriceEv(leg) > 0;
   });
 }
 
@@ -299,4 +345,7 @@ module.exports = {
   legMarket,
   mlTotalMix,
   sameSide,
+  legPriceEv,
+  legFailsPriceEv,
+  legEvSkips,
 };

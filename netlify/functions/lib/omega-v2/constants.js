@@ -1,7 +1,7 @@
 'use strict';
 
 /** Live Omega card. OMEGA_PIPELINE_V2=0 (or opts.pipelineV2 false) falls back to v1. */
-const MODEL_VERSION = 'omega-v2-sharp-2026-10-30';
+const MODEL_VERSION = 'omega-v2-sharp-2026-11-01-dkhr';
 const UNIT_DOLLARS = 150;
 /**
  * Stated bankroll is 100u. 1u = $150, so the roll behind the Kelly display

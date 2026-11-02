@@ -58,7 +58,8 @@ These are card rules. The graded sample was not used to tune them.
 | Parlay cap | 1u | Stated ceiling. |
 | Parlay step | 0.25u, no 0.5u floor | Nearest 0.25u. A ticket that rounds to 0u is skipped. The next ranked ticket with positive joint EV and a stake of at least 0.25u is used. If none remain, there is no parlay. |
 | Parlay shape | 2 legs allowed, 3 legs preferred | No ticket with fewer than 2 qualifying legs. |
-| Leg rule | same uncertainty floor as a straight | `(pCal − penalty) − pNovig > k * SE(bucket)`. A longshot whose edge is inside that floor is out. A longshot that clears it can be a leg. |
+| Price | DraftKings or Hard Rock only | The bet price is `bestDkHr` when that American number is finite, even if another book is a better price. Hard Rock aliases publish as `hardrockbet`. No DK/HR price rejects the candidate (`no-dk-hr-price`). The pre-publish recheck reads only those books. EV, the price edge, and selection use that DK/HR price. The uncertainty floor is re-checked on the candidate after that price is locked. |
+| Leg rule | same uncertainty floor as a straight, plus positive EV at the DK/HR price | `(pCal − penalty) − pNovig > k * SE(bucket)`, scored after the DK/HR price replaces the raw best price. A longshot whose edge is inside that floor is out. A leg that clears the floor but has `pCal * decimal(DK/HR price) − 1` at or below 0 is skipped (`leg-ev-not-positive`) and is not a parlay leg. |
 | Joint rule | joint EV must be positive | Otherwise no parlay. |
 | Ranking | more legs, then the sum of no-vig edges, then an ML+total mix, then joint EV | The historical ML+total pattern is only that tiebreak. |
 | Sizing price | exact decimal product | American odds are display only. Quarter-Kelly uses the product. |

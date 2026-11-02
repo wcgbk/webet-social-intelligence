@@ -9,8 +9,49 @@ const { sizeStraights, sumUnits } = require('./size');
 const { recheckPrices, validateCard, autoCorrectCard, parseAmerican, toParlay, toPick } = require('./guards');
 const { summaryFrom } = require('../omega-vnext/assemble');
 const { publishEdgeCard } = require('../omega-vnext/assemble');
-const { sizeParlay } = require('./parlay');
+const { sizeParlay, legEvSkips, legFailsPriceEv } = require('./parlay');
 const { americanToImplied } = require('../omega-vnext/odds_math');
+
+const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
+
+function finiteAmerican(value) {
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0 ? value : null;
+  return parseAmerican(value);
+}
+
+/** hardrock / hardrockbet_oh publish as the same Hard Rock book. */
+function canonicalPlaceBook(book) {
+  const key = String(book || '').toLowerCase();
+  if (key === 'hardrock' || key === 'hardrockbet' || key === 'hardrockbet_oh') return 'hardrockbet';
+  if (key === 'draftkings') return 'draftkings';
+  return key;
+}
+
+/**
+ * Placeable DraftKings or Hard Rock price for this side.
+ * bestDkHr wins even when raw.book is a better number somewhere else.
+ * Without it, only a posted DK/HR book is kept. Null means no-dk-hr-price.
+ * The line is not touched: bestDkHr is the same side and point.
+ */
+function placeableDkHr(raw) {
+  const px = raw && raw.bestDkHr;
+  if (px && typeof px === 'object') {
+    const american = finiteAmerican(px.american);
+    if (american != null) {
+      return { odds: american, book: canonicalPlaceBook(px.book) || null, fromBest: true };
+    }
+  }
+  const posted = String(raw && raw.book || '').toLowerCase();
+  if (DK_HR_BOOKS.has(posted)) {
+    return { odds: parseAmerican(raw.odds), book: canonicalPlaceBook(posted), fromBest: false };
+  }
+  return null;
+}
+
+function oddsLabel(american) {
+  if (!Number.isFinite(american)) return null;
+  return american > 0 ? `+${american}` : String(american);
+}
 
 function pipelineV2Enabled(opts, env) {
   const options = opts || {};
@@ -41,27 +82,30 @@ function numProb(v) {
 function normalizeCandidate(raw) {
   const pick = raw.pick || raw.side || '';
   const market = marketFamily(raw.market || raw.betType, pick);
-  const odds = parseAmerican(raw.odds);
+  const quote = placeableDkHr(raw);
   return {
     sport: String(raw.sport || '').toUpperCase(),
     matchup: raw.matchup || `${raw.awayTeam || ''} @ ${raw.homeTeam || ''}`.trim(),
     pick: String(pick),
     market,
     marketFamily: market,
-    odds,
-    oddsText: raw.odds,
+    odds: quote ? quote.odds : null,
+    oddsText: quote && quote.fromBest ? (oddsLabel(quote.odds) || raw.odds) : raw.odds,
     line: raw.line != null ? raw.line : (raw.betPoint != null ? raw.betPoint : null),
     pModel: numProb(raw.pModel != null ? raw.pModel : (raw.modelRawP != null ? raw.modelRawP : raw.p_model)),
     pMkt: numProb(raw.pMkt != null ? raw.pMkt : (raw.fair_sharp_p != null ? raw.fair_sharp_p : raw.sharpFairP)),
     uncertainty: Number.isFinite(Number(raw.uncertainty)) ? Number(raw.uncertainty) : null,
     commenceTime: raw.commenceTime || '',
-    book: raw.book || null,
+    book: quote ? quote.book : (raw.book || null),
+    postedBook: raw.book || null,
+    postedOdds: raw.odds,
     homeTeam: raw.homeTeam || null,
     awayTeam: raw.awayTeam || null,
     result: raw.result || null,
     clvPp: raw.clvPp != null && raw.clvPp !== '' ? Number(raw.clvPp) : null,
     coreReasoning: raw.coreReasoning || '',
     gameKey: gameKey(raw.matchup || `${raw.awayTeam || ''} @ ${raw.homeTeam || ''}`),
+    noDkHr: !quote,
   };
 }
 
@@ -88,6 +132,18 @@ async function buildCard(input) {
   const prepared = [];
   const rejections = [];
   for (const cand of normalized) {
+    if (cand.noDkHr) {
+      rejections.push({
+        matchup: cand.matchup,
+        side: cand.pick,
+        market: cand.market,
+        sport: cand.sport,
+        reason: 'no-dk-hr-price',
+        odds: cand.postedOdds != null ? cand.postedOdds : null,
+        book: cand.postedBook || null,
+      });
+      continue;
+    }
     if (pastPregameCutoff(cand.commenceTime, asOfMs)) {
       rejections.push({
         matchup: cand.matchup,
@@ -139,6 +195,8 @@ async function buildCard(input) {
   const kept = checked.kept;
   const straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified), pregameOpts));
   const parlayKept = kept.filter((cand) => cand.parlayQualified);
+  for (const skip of legEvSkips(parlayKept)) rejections.push(skip);
+  const parlayPoolLegs = parlayKept.filter((cand) => !legFailsPriceEv(cand));
   const sizedParlay = sizeParlay(parlayKept, straights, pregameOpts);
   if (!sizedParlay.publish && sizedParlay.skipReason) {
     rejections.push({
@@ -167,7 +225,7 @@ async function buildCard(input) {
     pipeline: 'omega-v2',
     picks,
     parlayLegs,
-    parlayPool: parlayKept.map((cand) => ({
+    parlayPool: parlayPoolLegs.map((cand) => ({
       matchup: cand.matchup,
       pick: cand.pick,
       market: cand.market,
@@ -233,6 +291,7 @@ function fromOmegaCandidate(c) {
     uncertainty: c.uncertainty,
     commenceTime: c.commenceTime,
     book: c.book,
+    bestDkHr: c.bestDkHr || null,
     homeTeam: c.homeTeam,
     awayTeam: c.awayTeam,
     result: c.result,

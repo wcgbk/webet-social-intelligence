@@ -11,6 +11,7 @@
  */
 
 const fs = require('fs');
+const { MODEL_VERSION } = require('../../netlify/functions/lib/omega-v2/constants');
 
 process.env.OMEGA_REPLAY_NO_WRITE = '1';
 process.env.OMEGA_X_AUTOPOST = 'false';
@@ -144,7 +145,7 @@ function cardSlim(card) {
     straights: (card.picks || []).map(straightSlim),
     parlay: ticketSlim(card),
     parlaySkips: (card.rejections || [])
-      .filter((row) => row && (row.market === 'Parlay' || row.reason === 'edge-below-uncertainty-floor' || /kent state|warriors|bulls/i.test(`${row.side || ''} ${row.matchup || ''}`)))
+      .filter((row) => row && (row.market === 'Parlay' || row.reason === 'edge-below-uncertainty-floor' || row.reason === 'leg-ev-not-positive' || row.reason === 'no-dk-hr-price' || /kent state|warriors|bulls/i.test(`${row.side || ''} ${row.matchup || ''}`)))
       .slice(0, 40)
       .map((row) => ({
         matchup: row.matchup || null,
@@ -217,7 +218,7 @@ async function runOne(date, pipelineV2) {
   }
   const report = {
     generatedAt: new Date().toISOString(),
-    modelVersion: 'omega-v2-sharp-2026-10-30',
+    modelVersion: MODEL_VERSION,
     dryRun: true,
     wroteProd: false,
     oddsApiCalled: false,

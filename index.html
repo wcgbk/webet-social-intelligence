@@ -580,8 +580,6 @@
 
   <div class="hero-input-block">
     <div class="chips" id="chips">
-      <button class="chip" data-prompt="What's trending right now?">What's trending right now?</button>
-      <button class="chip" data-prompt="Give me today's daily digest">Give me today's daily digest</button>
       <button class="chip" data-prompt="Best sportsbook picks tonight?">Best sportsbook picks tonight?</button>
     </div>
     <div class="input-wrap">
@@ -634,5 +632,19 @@
 </script>
 
   <script src="/js/site-share.js" defer></script>
+<script>
+(function(){
+  function balanceChip(){
+    var c=document.getElementById('chips'),sub=document.querySelector('.hero-sub'),inp=document.querySelector('.input-wrap');
+    if(!c||!sub||!inp)return;
+    c.style.transform='';
+    var s=sub.getBoundingClientRect().bottom,i=inp.getBoundingClientRect().top,r=c.getBoundingClientRect();
+    c.style.transform='translateY('+(((s+i-r.height)/2)-r.top)+'px)';
+  }
+  window.addEventListener('load',balanceChip);window.addEventListener('resize',balanceChip);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(balanceChip);
+  balanceChip();
+})();
+</script>
 </body>
 </html>

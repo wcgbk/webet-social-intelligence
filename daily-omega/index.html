@@ -1731,7 +1731,7 @@
 
     // ═══ SECTION 1: Top 3 Straight Picks ═══
     html += `<div class="card-section">
-      <div class="card-section-title">Daily Lock - Top 3 Straight Picks</div>`;
+      <div class="card-section-title">Top Straight Picks</div>`;
 
     const straightSummaryRows = [];
     for (let i = 0; i < picks.length; i++) {
@@ -1803,7 +1803,7 @@
       const legCount = sortedParlayLegs.length;
 
       html += `<div class="card-section">
-        <div class="card-section-title parlay-sec">Daily Lock - Top 3 Leg Parlay</div>`;
+        <div class="card-section-title parlay-sec">Top Parlay</div>`;
 
       for (const rawLeg of sortedParlayLegs) {
         const leg = enrichParlayLeg(rawLeg, picks);

@@ -296,7 +296,7 @@ async function callClaude(systemPrompt, messagesOrString, options = {}) {
         'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
-        model: options.model || 'claude-haiku-4-5-20251001',
+        model: options.model || 'claude-haiku-5-5',
         max_tokens: options.maxTokens || 2048,
         system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
         messages,

@@ -4015,7 +4015,7 @@
   }
 
   function choose(sport) {
-    try { appendMsg('user', sport === 'All' ? 'All of it' : sport); } catch (e) {}
+    try { appendMsg('user', sport === 'All' ? "Show Today's Picks" : sport); } catch (e) {}
     try { localStorage.setItem('wb_prefs', JSON.stringify({ sports: [sport] })); } catch (e) {}
     FE('onboard_sports_chosen', { sport: sport });
     fetch('/api/get-picks-alpha')
@@ -4026,13 +4026,11 @@
 
   function start() {
     FE('onboard_shown');
-    betty("Hey, I'm Betty 👋 I read the markets, the injury reports, and all of social media so you don't have to — and today's edge card is ready. Quick one so I can tailor it: which sports do you bet?");
+    betty("Hey, I'm Betty 👋 I read the markets, the injury reports, and all of social media so you don't have to — and today's edge card is ready.");
     chipRow([
-      { label: 'NBA', fn: choose },
-      { label: 'MLB', fn: choose },
-      { label: 'NHL', fn: choose },
-      { label: 'All of it', fn: function () { choose('All'); } }
+      { label: "Show Today's Picks", fn: function () { choose('All'); } }
     ]);
+    try { var _r = messagesList.lastElementChild; if (_r && _r.className === 'wb-ob-chips') { _r.style.justifyContent = 'center'; _r.style.paddingLeft = '0'; } } catch (e) {}
   }
 
   function mergePrefs() {

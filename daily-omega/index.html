@@ -655,7 +655,7 @@
       </tbody>
     </table>
     <div class="show-more-bar" id="showMoreBar" onclick="showAllDays()">
-      <span>Show past 30 days + monthly totals &#9660;</span>
+      <span>Show past 30 days &#9660;</span>
     </div>
   </div>
 
@@ -2172,15 +2172,6 @@
         html += `<tr class="kpi-section-head"><td colspan="4">Totals</td></tr>`;
         html += summaryRow('Past 30 days', w30, 'ROI ' + (w30.roi || '0%'));
       }
-      const months = data.months || [];
-      if (months.length) {
-        html += `<tr class="kpi-section-head"><td colspan="4">Monthly totals</td></tr>`;
-        const curMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 7);
-        for (const m of months) {
-          const short = new Date(m.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-          html += summaryRow(short, m, (m.month === curMonth ? 'Month to date · ' : '') + 'ROI ' + (m.roi || '0%'));
-        }
-      }
     }
 
     document.getElementById('results-body').innerHTML = html;
@@ -2189,7 +2180,7 @@
     if (bar) {
       bar.classList.add('has-more');
       bar.style.display = '';
-      bar.querySelector('span').textContent = kpiExpanded ? 'Show past 7 days only \u25B2' : 'Show past 30 days + monthly totals \u25BC';
+      bar.querySelector('span').textContent = kpiExpanded ? 'Show past 7 days only \u25B2' : 'Show past 30 days \u25BC';
     }
     applyLiveKpi();
   }

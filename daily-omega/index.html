@@ -2167,11 +2167,6 @@
           <td class="${pr >= 0 ? 'profit-positive' : 'profit-negative'}">${(pr >= 0 ? '+$' : '-$') + Math.abs(pr).toLocaleString()}</td>
         </tr>`;
       };
-      const w30 = data.windows && data.windows.last30;
-      if (w30) {
-        html += `<tr class="kpi-section-head"><td colspan="4">Totals</td></tr>`;
-        html += summaryRow('Past 30 days', w30, 'ROI ' + (w30.roi || '0%'));
-      }
     }
 
     document.getElementById('results-body').innerHTML = html;

@@ -3709,6 +3709,12 @@
   function scrollToMsgTop(el) {
     if (!el) return;
     requestAnimationFrame(() => {
+      // A reply may render as several groups (intro, picks, parlay); anchor on the first one after the user's last message.
+      const groups = [...messagesList.querySelectorAll(':scope > .msg-group')];
+      let lastUser = -1;
+      groups.forEach((g, i) => { if (g.classList.contains('user')) lastUser = i; });
+      const first = groups.slice(lastUser + 1).find(g => !g.querySelector('.typing-dots'));
+      if (first && groups.indexOf(el) > lastUser) el = first;
       const areaTop = chatArea.getBoundingClientRect().top;
       const tb = document.querySelector('.topbar');
       const overlap = tb ? Math.max(0, tb.getBoundingClientRect().bottom - areaTop) : 0;

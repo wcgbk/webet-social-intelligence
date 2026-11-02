@@ -1181,6 +1181,8 @@
       display: flex; align-items: center; gap: 8px;
     }
     .picks-banner-count { font-weight: 700; font-size: 0.875rem; }
+    .show-picks-btn { font-family: inherit; cursor: pointer; justify-content: center; margin: 0 auto; }
+    .show-picks-btn:hover { background: rgba(0,76,84,0.1); }
 
     /* ─── Settings Panel ──────────────────────────────────────────────── */
     .settings-group {
@@ -1919,9 +1921,8 @@
             <p class="empty-subtitle" id="empty-subtitle">Loading today's edge picks...</p>
             <div id="picks-banner-area"></div>
             <div class="suggestions-grid" id="suggestions-grid">
-              <button class="suggestion-card" onclick="useSuggestion(this)">
-                <span class="suggestion-card-icon">⚡</span>
-                <span class="suggestion-card-text">Show Today's Picks</span>
+              <button class="picks-banner show-picks-btn" onclick="useSuggestion(this)">
+                <span class="suggestion-card-text picks-banner-count">Show Today's Picks</span>
               </button>
             </div>
           </div>

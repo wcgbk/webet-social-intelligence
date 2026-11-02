@@ -27,7 +27,7 @@ FORMAT RULES:
 - Minimal emojis. One max per message, only if it fits naturally.
 
 PICKS INTEGRITY:
-- The ONLY betting picks you endorse are from [EDGE PICKS] data. These come from /alpha on webetsocial.com.
+- The ONLY betting picks you endorse are from [EDGE PICKS] data. These are today's Edge card from /daily-omega on webetsocial.com (straights plus the parlay). Call it "today's Edge card" — never name internal model versions.
 - NEVER generate your own picks. You're the interface for WeBetAI's model, not a sportsbook.
 - If a game isn't in today's picks: "That one didn't make the cut today — model only takes high-edge plays."
 - No picks loaded = "Picks drop at 10am EST."
@@ -59,19 +59,10 @@ function timedFetch(url, ms = 3000) {
 
 // ── Data source fetchers ──
 
-async function fetchEdgePicks() {
-  try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore('edge-picks-alpha');
-    const latestDate = await store.get('latest-date');
-    if (!latestDate) return null;
-    return await store.get(`picks-${latestDate.trim()}`, { type: 'json' });
-  } catch (_) {
-    return timedFetch(`${SITE()}/.netlify/functions/get-picks-alpha`);
-  }
-}
+// Today's Edge card — same live source as /daily-omega (get-picks-omega handles sticky/latest date).
+function fetchEdgePicks() { return timedFetch(`${SITE()}/.netlify/functions/get-picks-omega`, 6000); }
 
-function fetchResults() { return timedFetch(`${SITE()}/.netlify/functions/get-results-alpha`); }
+function fetchResults() { return timedFetch(`${SITE()}/.netlify/functions/get-results-omega`, 6000); }
 function fetchRatings(league) { return timedFetch(`${SITE()}/.netlify/functions/get-ratings${league ? `?league=${league}` : ''}`); }
 function fetchGuardian() { return timedFetch(`${SITE()}/.netlify/functions/get-guardian`); }
 function fetchMarkets() { return timedFetch(`${SITE()}/.netlify/functions/get-bettoredge`); }
@@ -171,8 +162,12 @@ async function buildContext(enabledSources) {
       let s = `[EDGE PICKS — ${data.dateFormatted || data.date}]\n`;
       s += `${data.summary?.totalPicks || 0} picks, ${data.summary?.totalUnits || '0u'} units | ${(data.summary?.sportsCovered || []).join(', ')}\n`;
       data.picks.forEach((p, idx) => {
-        s += `#${idx + 1} [${p.rating}] ${p.sport}: ${p.matchup} — ${p.pick} | ${p.odds} | ${p.units}u\n`;
-        s += `  Why: ${p.coreReasoning} | Risk: ${p.whatLoses}\n`;
+        s += `#${idx + 1} [${String(p.rating || '').toUpperCase()}] ${p.sport}: ${p.matchup} — ${p.pickDisplay || p.pick} | ${p.odds} | ${String(p.units || '').replace(/u$/,'')}u\n`;
+        s += `  Why: ${p.coreReasoning || ''}${p.whatLoses ? ' | Risk: ' + p.whatLoses : ''}\n`;
+      });
+      (data.parlayLegs || []).forEach(pl => {
+        if (!pl?.legs?.length) return;
+        s += `PARLAY ${pl.combinedOdds || ''} ${pl.units || ''}: ${pl.legs.map(l => `${l.pickDisplay || l.pick} ${l.odds} (${l.matchup})`).join(' + ')}\n`;
       });
       ctx.push(s);
     }
@@ -408,7 +403,7 @@ exports.handler = async (event) => {
       }
       return {
         statusCode: 200, headers: CORS,
-        body: JSON.stringify({ type: 'picks', content: intro, picks, date: picksData?.date || null, dateFormatted: dateLabel }),
+        body: JSON.stringify({ type: 'picks', content: intro, picks, parlayLegs: picksData?.parlayLegs || [], date: picksData?.date || null, dateFormatted: dateLabel }),
       };
     }
 

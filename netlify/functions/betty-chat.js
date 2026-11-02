@@ -1,6 +1,6 @@
 // betty-chat.js — Netlify Function
 // Multi-agent orchestrator: Betty uses Grok (xAI), Claude (Anthropic), and ChatGPT (OpenAI)
-// as verification agents for /alpha picks. Handles general chat, pick verification, and P2P bets.
+// as verification agents for today's Edge card picks. Handles general chat, pick verification, and P2P bets.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +26,7 @@ Your capabilities:
 - You scan X (Twitter), prediction markets, and sportsbooks for trending intel
 
 CRITICAL RULE — PICKS INTEGRITY:
-- The ONLY picks you endorse are the ones in TODAY'S EDGE PICKS below. These come from /alpha on webetsocial.com.
+- The ONLY picks you endorse are the ones in TODAY'S EDGE PICKS below. These are today's Edge card from /daily-omega on webetsocial.com. Call it "today's Edge card" — never name internal model versions.
 - NEVER generate your own betting picks from your general knowledge. You are the interface for WeBetAI's model, not a sportsbook.
 - If a game isn't in today's edge picks, say "that game didn't make our picks today" — the model only picks high-edge plays.
 - You CAN discuss games casually, but don't frame anything as a WeBetAI pick unless it's in the data.
@@ -83,26 +83,15 @@ Respond with a JSON object (and nothing else):
 
 // ── Fetch today's picks from Netlify Blobs ──
 async function getTodaysPicks() {
+  // Today's Edge card — same live source as /daily-omega.
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore('edge-picks-alpha');
-    const latestDate = await store.get('latest-date');
-    if (!latestDate) return null;
-    const dateKey = latestDate.trim();
-    const picks = await store.get(`picks-${dateKey}`, { type: 'json' });
-    return picks;
-  } catch (err) {
-    console.error('[betty-chat] Blobs error:', err.message);
-    // Fallback: fetch via internal API
-    try {
-      const siteUrl = process.env.URL || 'https://webetsocial.com';
-      const res = await fetch(`${siteUrl}/.netlify/functions/get-picks-alpha`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.error('[betty-chat] Fallback fetch error:', e.message);
-    }
-    return null;
+    const siteUrl = process.env.URL || 'https://webetsocial.com';
+    const res = await fetch(`${siteUrl}/.netlify/functions/get-picks-omega`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.error('[betty-chat] picks fetch error:', e.message);
   }
+  return null;
 }
 
 // ── Format picks for system prompt injection ──

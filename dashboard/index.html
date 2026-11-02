@@ -2609,7 +2609,7 @@
 
   /* ─── Edge Picks Panel ──────────────────────────────────────────── */
   async function loadPicks() {
-    const res = await fetch('/.netlify/functions/get-picks-alpha');
+    const res = await fetch('/.netlify/functions/get-picks-omega');
     const data = await res.json();
     const el = document.getElementById('picks-content');
     if (!data || !data.picks || data.picks.length === 0) {
@@ -3258,7 +3258,7 @@
   /* ─── Fetch today's picks on load ───────────────────────────────── */
   async function fetchTodaysPicks() {
     try {
-      const res = await fetch('/.netlify/functions/get-picks-alpha');
+      const res = await fetch('/.netlify/functions/get-picks-omega');
       const data = await res.json();
       todaysPicks = data;
       updateEmptyState(data);
@@ -3418,6 +3418,7 @@
           appendMsg('ai', data.content);
         }
         if (data.picks && data.picks.length) renderPicksStack(data.picks);
+        if (data.parlayLegs && data.parlayLegs.length) renderParlay(data.parlayLegs);
       } else if (data.content) {
         messages.push({ role: 'assistant', content: data.content });
         appendMsg('ai', data.content);
@@ -3476,8 +3477,9 @@
     </div>`;
   }
 
-  function renderPicksStack(picks) {
-    window._bettyPicks = picks;
+  function renderPicksStack(picks, append) {
+    const offset = append ? (window._bettyPicks || []).length : 0;
+    window._bettyPicks = append ? (window._bettyPicks || []).concat(picks) : picks;
     const group = document.createElement('div');
     group.className = 'msg-group picks-msg';
     const avatar = document.createElement('div');
@@ -3489,7 +3491,7 @@
     if (!wbUser) {
       extra = `<div class="picks-claim"><span>Sign in to save these picks. 1,000 WeBit free.</span><button type="button" onclick="openSignIn()">Sign in</button></div>`;
     }
-    contentWrap.innerHTML = `<div class="picks-stack">${picks.map((p, i) => pickCardHTML(p, i)).join('')}${extra}</div>`;
+    contentWrap.innerHTML = `<div class="picks-stack">${picks.map((p, i) => pickCardHTML(p, offset + i)).join('')}${append ? '' : extra}</div>`;
     group.appendChild(avatar);
     group.appendChild(contentWrap);
     messagesList.appendChild(group);
@@ -3523,6 +3525,16 @@
   function renderPickCard(pick) {
     renderPicksStack([pick]);
   }
+
+  /* Today's Edge card parlay (top-level parlayLegs[] from get-picks-omega) */
+  function renderParlay(parlayLegs) {
+    const parlays = Array.isArray(parlayLegs) ? parlayLegs.filter(pl => pl && Array.isArray(pl.legs) && pl.legs.length) : [];
+    parlays.forEach(pl => {
+      appendMsg('ai', `Parlay (${pl.legs.length} legs) at ${pl.combinedOdds || ''}${pl.units ? ', ' + pl.units : ''}:`);
+      renderPicksStack(pl.legs, true);
+    });
+  }
+  window.renderParlay = renderParlay;
 
   /* ─── Render verification panel ─────────────────────────────────── */
   function renderVerification(data) {
@@ -3994,10 +4006,11 @@
     var matches = sport === 'All' ? picks : picks.filter(function (p) { return (p.sport || '').toUpperCase() === sport.toUpperCase(); });
     if (matches.length) {
       betty(sport === 'All' ? "Here's everything on today's card — each one cleared the calibrated-edge bar:" : "Here's what WeBetAI found in " + sport + " today:");
-      matches.forEach(function (p) { try { renderPickCard(p); } catch (e) {} });
+      try { renderPicksStack(matches); } catch (e) {}
+      if (sport === 'All') { try { renderParlay(picksData.parlayLegs); } catch (e) {} }
     } else if (picks.length) {
       betty("No " + sport + " edges today — WeBetAI only plays when the math clears the bar, no forcing it. Here's where the value landed instead:");
-      picks.forEach(function (p) { try { renderPickCard(p); } catch (e) {} });
+      try { renderPicksStack(picks); } catch (e) {}
     } else {
       betty("Today's card hasn't dropped yet (it lands 9am ET). Ask me anything in the meantime.");
     }
@@ -4018,7 +4031,7 @@
     try { appendMsg('user', sport === 'All' ? "Show Today's Picks" : sport); } catch (e) {}
     try { localStorage.setItem('wb_prefs', JSON.stringify({ sports: [sport] })); } catch (e) {}
     FE('onboard_sports_chosen', { sport: sport });
-    fetch('/api/get-picks-alpha')
+    fetch('/.netlify/functions/get-picks-omega')
       .then(function (r) { return r.json(); })
       .then(function (d) { showEdges(sport, d); offerSave(sport); })
       .catch(function () { betty("Couldn't load today's card right now — try 'Show today's picks' in a minute."); });

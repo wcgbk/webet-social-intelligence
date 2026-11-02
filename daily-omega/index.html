@@ -664,14 +664,6 @@
     <!-- Verify Picks button removed 2026-06-27 — user-facing verify feature retired per Ben -->
   </div>
 
-  <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.25rem 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
-    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem;">
-      <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Daily Edge</span>
-    </div>
-    <p style="font-size: .75rem; color: var(--txt-m); line-height: 1.45; margin: 0 0 .5rem;">Why WeBetAI locked the card, and where the number still pays.</p>
-    <p id="daily-edge-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.7; font-weight: 400; margin: 0;"></p>
-  </div>
-
   <div id="insights-section" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.25rem 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--teal);">
     <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem;">
       <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Insights</span>
@@ -1653,19 +1645,6 @@
     const summary = data.summary || {};
 
     document.getElementById('date-header').textContent = data.dateFormatted || data.date || 'Today';
-
-    const summaryEl = document.getElementById('daily-edge-summary');
-    const summaryText = document.getElementById('daily-edge-text');
-    const edgeSummary = data.edgeSummary || '';
-    if (edgeSummary) {
-      summaryText.textContent = cleanReasoning(edgeSummary);
-      summaryEl.style.display = 'block';
-    } else if (picks.length > 0) {
-      const sportStr = [...new Set(picks.map(p => p.sport))].join(', ');
-      const pickDescs = picks.map(p => `${p.pick} (${p.odds})`).join(', ');
-      summaryText.textContent = `WeBetAI's card in ${sportStr} is built around ${pickDescs}. The prices on these sides are why they are locked, and each stake stays inside a normal daily card. Read the blurb under the number for the matchup. Pass on any play that does not sound like your game.`;
-      summaryEl.style.display = 'block';
-    }
 
     const insightsEl = document.getElementById('insights-section');
     const insightsText = document.getElementById('insights-text');

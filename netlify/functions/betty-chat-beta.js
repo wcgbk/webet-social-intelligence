@@ -38,6 +38,7 @@ GENERAL KNOWLEDGE:
 - You have access to live ESPN scores, Polymarket, Kalshi, BettorEdge, team ratings, Guardian fact-checks, and the WeBetAI data ecosystem.
 - For topics outside your live data, use your general knowledge. Be helpful, be accurate.
 - If you don't know something, say so honestly.
+- For lineups, starters, injuries, rosters, depth charts, player stats, records, schedules, or news, call the ESPN tools first. If ESPN has no confirmed starters, say they're projected/probable per ESPN and that lineups post close to tip/kickoff. Never invent players, stats, or statuses.
 
 RESPONSE RULES (CRITICAL):
 - NEVER direct people to URLs, pages, dashboards, or sections. Just give them the answer.
@@ -275,6 +276,144 @@ async function callGrok(systemPrompt, messages, options = {}) {
   }
 }
 
+
+// ── ESPN tool use for general chat ──
+const ESPN_SPORT = { nba: 'basketball', 'mens-college-basketball': 'basketball', wnba: 'basketball', nfl: 'football', 'college-football': 'football', nhl: 'hockey', mlb: 'baseball' };
+const LEAGUE_ENUM = Object.keys(ESPN_SPORT);
+async function espnGet(url, ms = 4000) {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
+  try { const r = await fetch(url, { signal: c.signal }); if (!r.ok) throw new Error('ESPN ' + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const espnBase = (lg) => `https://site.api.espn.com/apis/site/v2/sports/${ESPN_SPORT[lg]}/${lg}`;
+const teamCache = {};
+async function resolveTeam(lg, q) {
+  if (!teamCache[lg]) {
+    const d = await espnGet(`${espnBase(lg)}/teams?limit=500`);
+    teamCache[lg] = (d.sports?.[0]?.leagues?.[0]?.teams || []).map(x => x.team);
+  }
+  const s = String(q || '').toLowerCase().trim();
+  return teamCache[lg].find(t => [t.abbreviation, t.name, t.shortDisplayName, t.displayName, t.location, t.nickname].some(v => v && v.toLowerCase() === s))
+    || teamCache[lg].find(t => (t.displayName || '').toLowerCase().includes(s));
+}
+const ESPN_TOOLS = [
+  { name: 'espn_scoreboard', description: 'ESPN scoreboard for a league on a date: games, eventIds, status, scores, records, probable pitchers/starters when listed.', input_schema: { type: 'object', properties: { league: { type: 'string', enum: LEAGUE_ENUM }, date: { type: 'string', description: 'YYYYMMDD, default today' } }, required: ['league'] } },
+  { name: 'espn_team', description: 'ESPN team info: record, standing, next game (eventId), full roster with positions, and current injury report. Use for roster/record/injury questions.', input_schema: { type: 'object', properties: { league: { type: 'string', enum: LEAGUE_ENUM }, team: { type: 'string', description: 'team name, city or abbreviation' } }, required: ['league', 'team'] } },
+  { name: 'espn_depth_chart', description: 'ESPN depth chart / projected starters by position for a team.', input_schema: { type: 'object', properties: { league: { type: 'string', enum: LEAGUE_ENUM }, team: { type: 'string' } }, required: ['league', 'team'] } },
+  { name: 'espn_game_summary', description: 'ESPN game summary by eventId: boxscore leaders/player stats, injuries, starters if posted, odds line, news headlines.', input_schema: { type: 'object', properties: { league: { type: 'string', enum: LEAGUE_ENUM }, eventId: { type: 'string' } }, required: ['league', 'eventId'] } },
+  { name: 'espn_player', description: 'Search an ESPN athlete by name; returns team, position, status/injury and season stats summary.', input_schema: { type: 'object', properties: { name: { type: 'string' }, league: { type: 'string', enum: LEAGUE_ENUM } }, required: ['name'] } },
+  { name: 'espn_news', description: 'Latest ESPN news headlines for a league (optionally a team).', input_schema: { type: 'object', properties: { league: { type: 'string', enum: LEAGUE_ENUM }, team: { type: 'string' } }, required: ['league'] } },
+];
+function todayET() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, ''); }
+async function runEspnTool(name, a) {
+  const lg = a.league;
+  if (lg && !ESPN_SPORT[lg]) return { error: 'unsupported league' };
+  if (name === 'espn_scoreboard') {
+    const d = await espnGet(`${espnBase(lg)}/scoreboard?dates=${a.date || todayET()}&limit=100`);
+    return (d.events || []).map(e => { const c = e.competitions?.[0] || {}; return { eventId: e.id, name: e.name, date: e.date, status: e.status?.type?.shortDetail,
+      teams: (c.competitors || []).map(t => ({ team: t.team?.abbreviation, homeAway: t.homeAway, score: t.score, record: t.records?.[0]?.summary, probables: (t.probables || []).map(p => `${p.shortDisplayName}: ${p.athlete?.displayName}`) })),
+      odds: c.odds?.[0]?.details }; });
+  }
+  if (name === 'espn_team' || name === 'espn_depth_chart') {
+    const t = await resolveTeam(lg, a.team); if (!t) return { error: 'team not found' };
+    if (name === 'espn_depth_chart') {
+      const yr = new Date().getFullYear() + (['nba', 'nhl', 'mens-college-basketball'].includes(lg) && new Date().getMonth() >= 8 ? 1 : 0);
+      try {
+        const d = await espnGet(`https://sports.core.api.espn.com/v2/sports/${ESPN_SPORT[lg]}/leagues/${lg}/seasons/${yr}/teams/${t.id}/depthcharts`);
+        const items = d.items || [];
+        const ids = new Set(); items.forEach(it => Object.values(it.positions || {}).forEach(p => (p.athletes || []).slice(0, 3).forEach(x => ids.add((x.athlete?.$ref || '').match(/athletes\/(\d+)/)?.[1]))));
+        const ro = await espnGet(`${espnBase(lg)}/teams/${t.id}/roster`).catch(() => ({}));
+        const nm = {}; const flat = (ro.athletes || []).flatMap(g => g.items || [g]); flat.forEach(p => nm[p.id] = p.displayName);
+        return { team: t.displayName, charts: items.map(it => ({ name: it.name, positions: Object.fromEntries(Object.entries(it.positions || {}).map(([k, p]) => [k, (p.athletes || []).slice(0, 3).map(x => nm[(x.athlete?.$ref || '').match(/athletes\/(\d+)/)?.[1]] || '?')])) })) };
+      } catch (e) { return { team: t.displayName, error: 'no depth chart from ESPN' }; }
+    }
+    const [info, ro, inj] = await Promise.all([
+      espnGet(`${espnBase(lg)}/teams/${t.id}`).catch(() => ({})),
+      espnGet(`${espnBase(lg)}/teams/${t.id}/roster`).catch(() => ({})),
+      espnGet(`${espnBase(lg)}/injuries`).catch(() => ({})),
+    ]);
+    const tm = info.team || {};
+    const ne = tm.nextEvent?.[0];
+    const flat = (ro.athletes || []).flatMap(g => g.items || [g]);
+    const injT = (inj.injuries || []).find(x => x.id == t.id || x.displayName === t.displayName);
+    return { team: t.displayName, record: (tm.record?.items || []).map(r => `${r.description || r.type}: ${r.summary}`), standing: tm.standingSummary,
+      nextGame: ne ? { eventId: ne.id, name: ne.name, date: ne.date, status: ne.competitions?.[0]?.status?.type?.shortDetail } : null,
+      roster: flat.map(p => `${p.displayName} ${p.position?.abbreviation || ''}${p.injuries?.length ? ' (' + p.injuries[0].status + ')' : ''}`),
+      injuries: (injT?.injuries || []).map(i => ({ player: i.athlete?.displayName, status: i.status, detail: i.shortComment || i.details?.type })) };
+  }
+  if (name === 'espn_game_summary') {
+    const d = await espnGet(`${espnBase(lg)}/summary?event=${a.eventId}`);
+    const bs = d.boxscore || {};
+    return { header: d.header?.competitions?.[0]?.competitors?.map(c => `${c.team?.abbreviation} ${c.score || ''} (${c.record?.[0]?.summary || ''})`), status: d.header?.competitions?.[0]?.status?.type?.detail,
+      players: (bs.players || []).map(tp => ({ team: tp.team?.abbreviation, stats: (tp.statistics || []).slice(0, 2).map(s => ({ labels: s.labels, athletes: (s.athletes || []).slice(0, 12).map(x => `${x.athlete?.displayName}${x.starter ? '*' : ''}: ${(x.stats || []).join(' ')}`) })) })),
+      leaders: (d.leaders || []).map(l => ({ team: l.team?.abbreviation, leaders: (l.leaders || []).map(c => `${c.displayName}: ${c.leaders?.[0]?.athlete?.displayName} ${c.leaders?.[0]?.displayValue}`) })),
+      injuries: (d.injuries || []).map(t => ({ team: t.team?.abbreviation, list: (t.injuries || []).map(i => `${i.athlete?.displayName} ${i.status} ${i.details?.type || ''}`) })),
+      odds: d.pickcenter?.[0]?.details, news: (d.news?.articles || []).slice(0, 4).map(n => n.headline) };
+  }
+  if (name === 'espn_player') {
+    const d = await espnGet(`https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(a.name)}&type=player&limit=5`);
+    const hits = (d.items || []).filter(h => !lg || h.league === lg || (h.defaultLeagueSlug || '') === lg);
+    const h = hits[0] || d.items?.[0]; if (!h) return { error: 'player not found' };
+    const hl = h.league || h.defaultLeagueSlug || lg;
+    if (!ESPN_SPORT[hl]) return { name: h.displayName, league: hl };
+    const ov = await espnGet(`https://site.web.api.espn.com/apis/common/v3/sports/${ESPN_SPORT[hl]}/${hl}/athletes/${h.id}`).catch(() => ({}));
+    const at = ov.athlete || {};
+    return { name: at.displayName || h.displayName, league: hl, team: at.team?.displayName, position: at.position?.abbreviation, status: at.status?.type,
+      injuries: (at.injuries || []).map(i => `${i.status} ${i.details?.type || ''} ${i.shortComment || ''}`), stats: at.statsSummary?.statistics?.map(s => `${s.displayName}: ${s.displayValue}`) };
+  }
+  if (name === 'espn_news') {
+    let url = `${espnBase(lg)}/news?limit=8`;
+    if (a.team) { const t = await resolveTeam(lg, a.team); if (t) url += `&team=${t.id}`; }
+    const d = await espnGet(url);
+    return (d.articles || []).slice(0, 8).map(n => ({ headline: n.headline, published: n.published, desc: (n.description || '').slice(0, 160) }));
+  }
+  return { error: 'unknown tool' };
+}
+
+// General chat with ESPN tool loop (max 4 tool rounds)
+async function callClaudeWithEspn(systemPrompt, messages, options = {}) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+  const msgs = [...messages];
+  const started = Date.now();
+  for (let round = 0; round < 5; round++) {
+    const allowTools = round < 4 && Date.now() - started < 18000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeout || 20000);
+    let data;
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+        body: JSON.stringify({
+          model: options.model || 'claude-haiku-5-5',
+          max_tokens: options.maxTokens || 2048,
+          system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+          tools: ESPN_TOOLS,
+          ...(allowTools ? {} : { tool_choice: { type: 'none' } }),
+          messages: msgs,
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`Claude API ${res.status} ${(await res.text()).slice(0, 200)}`);
+      data = await res.json();
+    } finally { clearTimeout(timeout); }
+    const blocks = data.content || [];
+    const uses = blocks.filter(b => b.type === 'tool_use');
+    if (data.stop_reason !== 'tool_use' || !uses.length) {
+      return blocks.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    }
+    msgs.push({ role: 'assistant', content: blocks });
+    const results = await Promise.all(uses.map(async u => {
+      let out;
+      try { out = await runEspnTool(u.name, u.input || {}); } catch (e) { out = { error: String(e.message || e) }; }
+      return { type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out).slice(0, 12000) };
+    }));
+    msgs.push({ role: 'user', content: results });
+  }
+  return '';
+}
+
 // ── Call Anthropic Claude API ──
 async function callClaude(systemPrompt, messagesOrString, options = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -454,7 +593,7 @@ exports.handler = async (event) => {
     }
 
     // ── General chat with full context ──
-    const content = await callClaude(fullSystemPrompt, messages, { maxTokens: 2048 });
+    const content = await callClaudeWithEspn(fullSystemPrompt, messages, { maxTokens: 2048 });
 
     return {
       statusCode: 200, headers: CORS,

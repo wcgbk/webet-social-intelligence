@@ -618,6 +618,7 @@
       transform: translateY(-1px);
     }
     .suggestion-card:active { transform: translateY(0); }
+    .suggestions-grid > .suggestion-card:only-child { grid-column: 1 / -1; justify-self: center; }
     .suggestion-card-icon {
       font-size: 1.25rem;
       margin-bottom: 8px;
@@ -1836,14 +1837,6 @@
       <button class="nav-item" data-panel="p2p" onclick="switchPanel('p2p')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
         Pick 3 PVP
-      </button>
-      <button class="nav-item" data-panel="gamecast" onclick="switchPanel('gamecast')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4.5c2.8 4.3 2.8 10.7 0 15M18 4.5c-2.8 4.3-2.8 10.7 0 15"/></svg></span>
-        Picks Gamecast
-      </button>
-      <button class="nav-item" data-panel="percentile" onclick="switchPanel('percentile')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
-        Percentile Rankings
       </button>
 
       <button class="nav-item" data-panel="p2p-sports" onclick="switchPanel('p2p-sports')">

@@ -306,7 +306,7 @@ async function callClaude(systemPrompt, messagesOrString, options = {}) {
     clearTimeout(timeout);
     if (!res.ok) throw new Error(`Claude API ${res.status}`);
     const data = await res.json();
-    return data.content?.[0]?.text || '';
+    return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '';
   } catch (err) {
     clearTimeout(timeout);
     throw err;

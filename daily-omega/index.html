@@ -1986,6 +1986,11 @@
 
   // Load results automatically
   let kpiExpanded = false;
+  // Show the last saved KPIs instantly, then refresh from the server.
+  try {
+    const saved = JSON.parse(localStorage.getItem('edgeKpi7') || 'null');
+    if (saved) { resultsSnapshot = saved; renderResults(saved); }
+  } catch (e) {}
   loadResults();
 
   async function loadResults(opts) {
@@ -1998,6 +2003,7 @@
       const data = await resp.json();
       resultsSnapshot = data;
       renderResults(data);
+      if (!kpiExpanded) { try { localStorage.setItem('edgeKpi7', JSON.stringify(data)); } catch (e) {} }
     } catch (err) {
       console.error('Results load failed:', err);
       document.getElementById('results-body').innerHTML =

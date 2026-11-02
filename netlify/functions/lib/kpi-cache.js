@@ -19,7 +19,7 @@ function cacheTtlMs(cached) {
 function cacheControlFor(cached) {
   const sec = resultHasPending(cached) ? 30 : 300;
   // Header-only: serve edge copy instantly while it refreshes in the background (values unchanged).
-  return `public, max-age=${sec}, s-maxage=${sec}, stale-while-revalidate=${sec * 4}`;
+  return `public, max-age=${sec}, s-maxage=${sec}, stale-while-revalidate=86400`;
 }
 
 function wantFresh(event) {

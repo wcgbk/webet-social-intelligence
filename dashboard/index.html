@@ -3447,7 +3447,8 @@
   }
 
   function pickCardHTML(pick, idx) {
-    const badgeCls = pick.rating === 'A+' ? 'badge-aplus' : pick.rating === 'A' ? 'badge-a' : pick.rating === 'A-' ? 'badge-aminus' : pick.rating === 'B+' ? 'badge-bplus' : 'badge-b';
+    const rating = String(pick.rating || 'B+').toUpperCase();
+    const badgeCls = rating === 'A+' ? 'badge-aplus' : rating === 'A' ? 'badge-a' : rating === 'A-' ? 'badge-aminus' : rating === 'B+' ? 'badge-bplus' : 'badge-b';
     const units = parseFloat(pick.units) || 1;
     const risk = units * DOLLAR_PER_UNIT;
     const win = Math.round(calcWinnings(risk, pick.odds || '-110'));
@@ -3457,7 +3458,7 @@
     return `<div class="pick-card" id="pc-${idx}">
       <div class="pick-header">
         <span class="sport-tag">${esc(pick.sport || 'SPORT')}</span>
-        <span class="rating-badge ${badgeCls}">${esc(pick.rating || 'B+')}</span>
+        <span class="rating-badge ${badgeCls}">${esc(rating)}</span>
       </div>
       <div class="pick-bet">
         <span class="pick-name">${esc(pick.pick || '')}</span>

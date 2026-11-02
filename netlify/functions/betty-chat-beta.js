@@ -419,7 +419,7 @@ exports.handler = async (event) => {
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ type: 'chat', content: 'No picks to verify right now. Picks drop at 10am EST.' }) };
       }
 
-      const desc = `PICK: ${pick.sport} — ${pick.matchup}\nPick: ${pick.pick} | ${pick.betType} | Odds: ${pick.odds}\nRating: ${pick.rating} | Units: ${pick.units} | Win Prob: ${pick.winProbability}\nReasoning: ${pick.coreReasoning}\nRisk: ${pick.whatLoses}\nEdge: ${pick.modelEdge}`;
+      const desc = `PICK: ${pick.sport} — ${pick.matchup}\nPick: ${pick.pick} | ${pick.betType} | Odds: ${pick.odds}\nRating: ${String(pick.rating || "").toUpperCase()} | Units: ${pick.units} | Win Prob: ${pick.winProbability}\nReasoning: ${pick.coreReasoning}\nRisk: ${pick.whatLoses}\nEdge: ${pick.modelEdge}`;
 
       const [g, c, o] = await Promise.allSettled([
         callGrok(GROK_VERIFY, [{ role: 'user', content: desc }], { model: 'grok-3', timeout: 12000 }),

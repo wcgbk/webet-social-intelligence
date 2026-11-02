@@ -3493,7 +3493,7 @@
     group.appendChild(contentWrap);
     messagesList.appendChild(group);
     const intro = group.previousElementSibling;
-    (intro || group).scrollIntoView({ block: 'start', behavior: 'smooth' });
+    scrollToMsgTop(intro && !intro.classList.contains('user') ? intro : group);
   }
 
   function togglePickWhy(idx) {
@@ -3592,7 +3592,7 @@
     group.appendChild(avatar);
     group.appendChild(contentWrap);
     messagesList.appendChild(group);
-    scrollToBottom();
+    scrollToMsgTop(group);
   }
 
   /* ─── Render message ────────────────────────────────────────────── */
@@ -3648,7 +3648,7 @@
     }
 
     messagesList.appendChild(group);
-    scrollToBottom();
+    if (role === 'user') scrollToBottom(); else scrollToMsgTop(group);
   }
 
   /* ─── Markdown formatter ────────────────────────────────────────── */
@@ -3703,6 +3703,18 @@
 
   function scrollToBottom() {
     requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
+  }
+
+  // Scroll so the TOP of Betty's new message sits at the top of the visible chat area (below any overlapping topbar).
+  function scrollToMsgTop(el) {
+    if (!el) return;
+    requestAnimationFrame(() => {
+      const areaTop = chatArea.getBoundingClientRect().top;
+      const tb = document.querySelector('.topbar');
+      const overlap = tb ? Math.max(0, tb.getBoundingClientRect().bottom - areaTop) : 0;
+      const delta = el.getBoundingClientRect().top - areaTop - overlap - 8;
+      chatArea.scrollTop = Math.max(0, chatArea.scrollTop + delta);
+    });
   }
 
   /* ─── Conversation persistence ──────────────────────────────────── */

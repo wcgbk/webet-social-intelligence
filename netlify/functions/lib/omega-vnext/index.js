@@ -555,6 +555,21 @@ async function generateOmegaVnext(opts = {}) {
   };
   if (usePipelineV2) {
     console.log(`[omega-v2] ${publishedVersion} date=${dateISO} straights=${picks.length} parlays=${(parlayLegs || []).length} trainN=${built.calibration ? built.calibration.trainN : 0}`);
+    if (!skipNarrate) {
+      // Text only: narrator vetoes/unit cuts never change a v2 pick, leg, stake, or price.
+      const t = await narrateTextOnly({
+        picks,
+        parlayLegs,
+        dateFormatted,
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        narrateFn: typeof opts.narrateFn === 'function' ? opts.narrateFn : undefined,
+      });
+      picks = t.picks;
+      parlayLegs = t.parlayLegs;
+      narr.insights = t.insights;
+      narr.claudeVerified = t.claudeVerified;
+      narr.narration = t.narration;
+    }
   } else if (!skipNarrate) {
     // Caps already ran inside publishEdgeCard, so narration quotes final units.
     narr = await narrateAndVerify({
@@ -718,6 +733,7 @@ async function generateOmegaVnext(opts = {}) {
     };
     picksData.v1WouldParlay = built.v1WouldParlay === true;
     picksData.meta.pipelineV2 = true;
+    picksData.narration = narr.narration || { status: skipNarrate ? 'skipped' : 'none', vetoesIgnored: 0 };
   }
   if (shadow) {
     picksData.shadow = true;

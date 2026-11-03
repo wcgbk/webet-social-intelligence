@@ -7,6 +7,12 @@
  * and parlay ticket (refresh with tools/omega-v2/refresh-fixtures.js).
  * Read-only. No network, no Odds API. Spec: stakeaudit GATE_SPEC.md (approved 2026-11-03).
  *
+ * Card fixtures are not the only input. The same letter, stake, and B-cap
+ * rules also run on the results blob and the public picks JSON for each
+ * card date: get-results-omega days (stakeDollars, rating), the picks-{date}
+ * blob those handlers read, and any public trim refresh-fixtures.js saved
+ * outside the hand-aligned card fixture. Offline files only.
+ *
  * A rule fails a day only on or after its effective date. Earlier failures
  * are printed as REPORT and do not block. Exit 1 on any blocking failure.
  */
@@ -22,6 +28,7 @@ const FIXTURES = process.env.OMEGA_V2_CARD_FIXTURES
   || path.join(__dirname, '../../test/fixtures/omega-v2-cards');
 const V2_FIRST_DAY = '2026-10-31';
 const WINDOW_DAYS = 30;
+const DATE_RE = /^(\d{4}-\d{2}-\d{2})$/;
 /** Per-rule effective dates (ET card date). b4385ca and 8a197cd deployed 2026-11-03. */
 const EFFECTIVE = {
   letter: '2026-11-03',
@@ -115,6 +122,266 @@ function checkCard(card, date) {
   return fails;
 }
 
+function normLetter(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase().replace(/[−–]/g, '-').replace(/\s+/g, '');
+  if (s === 'a+' || s === 'aplus') return 'aplus';
+  if (s === 'a-' || s === 'aminus') return 'aminus';
+  if (s === 'b+' || s === 'bplus') return 'bplus';
+  return s;
+}
+
+function windowDates(dates) {
+  return [...new Set((dates || []).filter((d) => DATE_RE.test(d) && d >= V2_FIRST_DAY))].sort().slice(-WINDOW_DAYS);
+}
+
+function publishedRoots() {
+  const roots = [];
+  const add = (p) => {
+    if (p && !roots.includes(p)) roots.push(p);
+  };
+  add(process.env.OMEGA_V2_RESULTS);
+  add(process.env.OMEGA_V2_PUBLIC);
+  add(process.env.OMEGA_V2_BLOBS);
+  add(path.join(path.dirname(FIXTURES), 'omega-v2-results'));
+  add(FIXTURES);
+  return roots;
+}
+
+function isPublishedName(name, skipCards) {
+  if (skipCards && name.startsWith('card-')) return false;
+  if (/^card-\d{4}-\d{2}-\d{2}\.json$/.test(name)) return true;
+  if (/^picks-\d{4}-\d{2}-\d{2}(?:\.json)?$/.test(name)) return true;
+  if (/^(?:res|results|public)-\d{4}-\d{2}-\d{2}\.json$/.test(name)) return true;
+  if (/^results-omega-cache/.test(name)) return true;
+  return false;
+}
+
+function filesInRoot(root, skipCards) {
+  if (!root || !fs.existsSync(root)) return [];
+  const stat = fs.statSync(root);
+  if (stat.isFile()) return [root];
+  const out = [];
+  for (const name of fs.readdirSync(root)) {
+    if (!isPublishedName(name, skipCards)) continue;
+    const full = path.join(root, name);
+    if (fs.statSync(full).isFile()) out.push(full);
+  }
+  return out;
+}
+
+function dateFromName(file) {
+  const m = path.basename(file).match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+function kindOf(doc) {
+  const picks = (doc && doc.picks) || [];
+  const graded = picks.some((p) => p && (p.stakeDollars != null || p.result != null) && (p.edgePct == null || p.edgePct === ''));
+  if (graded && !doc.parlayPool && !doc.parlayLegs) return 'results';
+  if (doc && (doc.parlayLegs || picks.some((p) => p && p.edgePct != null && p.edgePct !== ''))) return 'public';
+  return 'results';
+}
+
+function pushDoc(out, doc, file, fallbackDate) {
+  if (!doc || typeof doc !== 'object' || !Array.isArray(doc.picks)) return;
+  const date = (typeof doc.date === 'string' && DATE_RE.test(doc.date) && doc.date) || fallbackDate;
+  if (!date) return;
+  out.push({ date, doc, file, kind: kindOf(doc) });
+}
+
+function expandPublished(json, file) {
+  const out = [];
+  const fallback = dateFromName(file);
+  if (Array.isArray(json)) {
+    for (const day of json) pushDoc(out, day, file, fallback);
+    return out;
+  }
+  if (json && Array.isArray(json.days)) {
+    for (const day of json.days) pushDoc(out, day, file, null);
+    return out;
+  }
+  pushDoc(out, json, file, fallback);
+  return out;
+}
+
+function dayFingerprint(date, doc) {
+  const rows = [];
+  for (const p of (doc && doc.picks) || []) {
+    rows.push([p && p.pick, p && p.matchup, p && p.rating, p && p.grade, p && p.units, p && p.stakeUsd, p && p.stakeDollars, p && p.edgePct].join('|'));
+  }
+  for (const t of (doc && doc.parlayLegs) || []) {
+    rows.push(['ticket', t && t.units, t && t.stakeUsd, t && t.stakeDollars].join('|'));
+  }
+  return `${date}#${rows.join(';')}`;
+}
+
+/**
+ * Offline results / public picks. A pointed-at file is always read.
+ * A directory contributes blob keys and per-date dumps, not the hand-aligned
+ * card fixtures when the directory is the card-fixture root.
+ */
+function loadPublished(roots, opts) {
+  const list = Array.isArray(roots) ? roots : publishedRoots();
+  const fixtureRoot = (opts && opts.fixtureRoot) || FIXTURES;
+  const seenFile = new Set();
+  const items = [];
+  const errors = [];
+  for (const root of list) {
+    if (!root) continue;
+    const skipCards = path.resolve(root) === path.resolve(fixtureRoot);
+    for (const file of filesInRoot(root, skipCards)) {
+      const abs = path.resolve(file);
+      if (seenFile.has(abs)) continue;
+      seenFile.add(abs);
+      let json;
+      try {
+        json = JSON.parse(fs.readFileSync(file, 'utf8'));
+      } catch (err) {
+        errors.push({ file, msg: err && err.message });
+        continue;
+      }
+      items.push(...expandPublished(json, file));
+    }
+  }
+  const keep = new Set(windowDates(items.map((item) => item.date)));
+  const seenDay = new Set();
+  const published = [];
+  for (const item of items) {
+    if (!keep.has(item.date)) continue;
+    const fp = dayFingerprint(item.date, item.doc);
+    if (seenDay.has(fp)) continue;
+    seenDay.add(fp);
+    published.push(item);
+  }
+  published.sort((a, b) => a.date.localeCompare(b.date) || a.file.localeCompare(b.file));
+  return { items: published, errors };
+}
+
+function isParlayRow(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (String(row.sport || '').toUpperCase() === 'PARLAY') return true;
+  if (normLetter(row.rating) === 'p' || String(row.rating || '').trim().toUpperCase() === 'P') return true;
+  if (Array.isArray(row.legs)) return true;
+  return false;
+}
+
+function unitsOfRow(row) {
+  if (!row) return NaN;
+  return num(row.unitsNum != null ? row.unitsNum : row.units);
+}
+
+function findCardRow(card, row) {
+  if (!card || !row) return null;
+  const pool = [];
+  for (const p of card.picks || []) pool.push(p);
+  for (const t of card.parlayLegs || []) {
+    for (const leg of t.legs || []) pool.push(leg);
+  }
+  const name = row.pick;
+  if (!name) return null;
+  const hits = pool.filter((p) => p && (p.pick === name || p.pickDisplay === name));
+  if (row.matchup) {
+    const matched = hits.filter((p) => p.matchup === row.matchup);
+    if (matched.length) return matched[0];
+  }
+  return hits[0] || null;
+}
+
+function rowEdge(row, cardRow) {
+  if (row && row.edgePct != null && row.edgePct !== '') return row.edgePct;
+  if (cardRow && cardRow.edgePct != null && cardRow.edgePct !== '') return cardRow.edgePct;
+  return null;
+}
+
+/**
+ * Letter, stake, and B-cap on a results day or a public/stored picks card.
+ * Letter uses the row's printed edge, or the paired card fixture's edge when
+ * the results row does not store one. Parlay tickets are stake-only.
+ */
+function checkPublished(doc, date, card, meta) {
+  const fails = [];
+  const src = meta && meta.file ? path.basename(meta.file) : 'results';
+  const add = (rule, msg) => fails.push({
+    rule,
+    msg: `${src}: ${msg}`,
+    blocking: !!(EFFECTIVE[rule] && date >= EFFECTIVE[rule]),
+    source: src,
+  });
+  const straights = [];
+  for (const row of (doc && doc.picks) || []) {
+    if (!isParlayRow(row)) straights.push(row);
+    else checkStake(row, 'parlay', card, add);
+  }
+  for (const row of straights) checkStraight(row, card, add);
+  for (const ticket of (doc && doc.parlayLegs) || []) {
+    checkStake(ticket, 'parlay', card, add);
+    for (const leg of ticket.legs || []) {
+      if (!isParlayRow(leg)) checkStraight(leg, card, add, { leg: true });
+    }
+  }
+  return fails;
+}
+
+function checkStake(row, role, card, add) {
+  const label = (row && (row.pick || row.type)) || (role === 'parlay' ? 'ticket' : 'pick');
+  const u = unitsOfRow(row);
+  if (!(u > 0)) {
+    add('units', `${label} has no stake units`);
+    return;
+  }
+  if (role !== 'parlay') {
+    if (roundQuarter(u) !== u || u > PER_BET_CAP || u < 0.25) {
+      add('units', `${label} ${row.units} off the 0.25u grid or outside 0.25-${PER_BET_CAP}u`);
+    }
+  } else if (roundQuarter(u) !== u || u < 0.25) {
+    add('units', `${label} ${row.units} off the 0.25u grid`);
+  }
+  const want = dollars(u);
+  const hasUsd = row.stakeUsd != null && row.stakeUsd !== '';
+  const hasDollars = row.stakeDollars != null && row.stakeDollars !== '';
+  if (hasUsd && Number(row.stakeUsd) !== want) add('dollars', `${label} stakeUsd ${row.stakeUsd}, want ${want}`);
+  if (hasDollars && Number(row.stakeDollars) !== want) add('dollars', `${label} stakeDollars ${row.stakeDollars}, want ${want}`);
+  if (!hasUsd && !hasDollars && role !== 'leg') add('dollars', `${label} has no stakeUsd or stakeDollars`);
+  if (role === 'straight' && card) {
+    const cardRow = findCardRow(card, row);
+    if (cardRow) {
+      const cu = unitsOfRow(cardRow);
+      if (Number.isFinite(cu) && Math.abs(cu - u) > 1e-9) {
+        add('units', `${label} stake ${row.units} vs card ${cardRow.units}`);
+      }
+    }
+  }
+}
+
+function checkStraight(row, card, add, opts) {
+  const leg = opts && opts.leg;
+  checkStake(row, leg ? 'leg' : 'straight', card, add);
+  const cardRow = findCardRow(card, row);
+  const edge = rowEdge(row, cardRow);
+  const shown = edge == null ? null : num(edge);
+  const want = shown == null || Number.isNaN(shown) ? null : letterFor(shown);
+  if (want) {
+    const bad = [];
+    if (normLetter(row.rating) !== want) bad.push(`rating ${row.rating}`);
+    if (row.grade != null && row.grade !== '' && normLetter(row.grade) !== want) bad.push(`grade ${row.grade}`);
+    if (row.qualityGrade != null && row.qualityGrade !== '' && normLetter(row.qualityGrade) !== want) bad.push(`qualityGrade ${row.qualityGrade}`);
+    if (bad.length) add('letter', `${row.pick} edge ${edge} is ${bad.join(', ')}, want ${want}`);
+  }
+  if (!leg) {
+    const storedB = [row.rating, row.grade, row.qualityGrade].some((value) => normLetter(value) === 'b');
+    const u = unitsOfRow(row);
+    if (storedB && u > EDGE_B_UNIT_CAP + 1e-9) {
+      add('bcap', `${row.pick} is B at ${row.units} (cap ${EDGE_B_UNIT_CAP}u)`);
+    }
+  }
+  if (row.confidence != null && row.confidence !== '') {
+    const stored = normLetter(row.rating) || normLetter(row.grade) || normLetter(row.qualityGrade);
+    if (stored && Number(row.confidence) !== ratingToConfidence(stored)) {
+      add('confidence', `${row.pick} confidence ${row.confidence}, want ${ratingToConfidence(stored)} for ${stored}`);
+    }
+  }
+}
+
 function loadDays(dir) {
   const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^card-\d{4}-\d{2}-\d{2}\.json$/.test(f)) : [];
   return files
@@ -155,8 +422,18 @@ async function buildCheck() {
   return fails;
 }
 
+function logFails(date, fails) {
+  let blocking = 0;
+  for (const f of fails) {
+    console.log(`${date} ${f.blocking ? 'BLOCK' : 'REPORT'} [${f.rule}] ${f.msg}`);
+    if (f.blocking) blocking += 1;
+  }
+  return blocking;
+}
+
 async function main() {
   const days = loadDays(FIXTURES);
+  const cards = new Map();
   let blocking = 0;
   if (!days.length) {
     console.log(`BLOCK no v2 card fixtures in ${FIXTURES}`);
@@ -164,12 +441,34 @@ async function main() {
   }
   for (const d of days) {
     const card = JSON.parse(fs.readFileSync(d.file, 'utf8'));
+    cards.set(d.date, card);
     const fails = checkCard(card, d.date);
-    if (!fails.length) { console.log(`${d.date} PASS`); continue; }
-    for (const f of fails) {
-      console.log(`${d.date} ${f.blocking ? 'BLOCK' : 'REPORT'} [${f.rule}] ${f.msg}`);
-      if (f.blocking) blocking += 1;
-    }
+    if (!fails.length) console.log(`${d.date} PASS`);
+    else blocking += logFails(d.date, fails);
+  }
+  const published = loadPublished(publishedRoots(), { fixtureRoot: FIXTURES });
+  for (const err of published.errors) {
+    console.log(`BLOCK [results] unreadable ${path.basename(err.file)}: ${err.msg}`);
+    blocking += 1;
+  }
+  if (!published.items.length && !published.errors.length) {
+    console.log('results PASS no separate results or public blob');
+  }
+  const byKey = new Map();
+  for (const item of published.items) {
+    const key = `${item.date}\0${item.file}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(item);
+  }
+  for (const item of published.items) {
+    const key = `${item.date}\0${item.file}`;
+    if (byKey.get(key) === null) continue;
+    const group = byKey.get(key);
+    byKey.set(key, null);
+    const fails = [];
+    for (const one of group) fails.push(...checkPublished(one.doc, one.date, cards.get(one.date), one));
+    if (!fails.length) console.log(`${item.date} ${item.kind} PASS ${path.basename(item.file)}`);
+    else blocking += logFails(item.date, fails);
   }
   const build = await buildCheck();
   if (!build.length) console.log('build PASS');
@@ -188,4 +487,15 @@ if (require.main === module) {
   main().catch((err) => { console.error(err); process.exit(1); });
 }
 
-module.exports = { checkCard, letterFor, quarterKelly, EFFECTIVE };
+module.exports = {
+  checkCard,
+  checkPublished,
+  loadPublished,
+  letterFor,
+  normLetter,
+  quarterKelly,
+  windowDates,
+  publishedRoots,
+  EFFECTIVE,
+  V2_FIRST_DAY,
+};

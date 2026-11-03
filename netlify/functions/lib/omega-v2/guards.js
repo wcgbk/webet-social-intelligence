@@ -84,14 +84,16 @@ function pct(p) {
 }
 
 function ratingFor(edge) {
-  if (edge >= 0.05) return 'aplus';
-  if (edge >= 0.035) return 'a';
-  if (edge >= 0.02) return 'aminus';
+  // Same tenth the card prints in edgePct. Exact 5.0, 3.5, and 2.0 take the higher letter.
+  const shown = Number(String(pct(edge)).replace('%', ''));
+  if (shown >= 5) return 'aplus';
+  if (shown >= 3.5) return 'a';
+  if (shown >= 2) return 'aminus';
   return 'b';
 }
 
 function toPick(row) {
-  const rating = ratingFor(row.edge);
+  const rating = ratingFor(row.edgeNovig);
   return {
     sport: row.sport,
     matchup: row.matchup,

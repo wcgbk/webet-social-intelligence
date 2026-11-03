@@ -284,8 +284,10 @@ async function main() {
   const st = await v2.buildCard({
     date: '2026-10-03',
     candidates: [
-      strong('NHL', 'Boston Bruins @ St. Louis Blues', 'Boston Bruins ML', 'Moneyline'),
-      strong('NHL', 'Boston Bruins @ st louis blues', 'Over 5.5', 'Total'),
+      // NFL, not NHL: an NHL moneyline is shrunk onto the no-vig fair (k = 1)
+      // and would not clear an edge. This check is the same-game pair.
+      strong('NFL', 'Buffalo Bills @ St. Louis Battlehawks', 'Buffalo Bills ML', 'Moneyline'),
+      strong('NFL', 'Buffalo Bills @ st louis battlehawks', 'Over 45.5', 'Total'),
     ],
     history: [],
   });

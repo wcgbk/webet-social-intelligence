@@ -122,6 +122,8 @@ function annotateCandidate(candidate) {
     };
   }
   const edge = cal.pCal - implied;
+  // Both edges use the final map. The 10pp screen does not see the raw
+  // model-minus-fair gap, and it does see an edge the map just created.
   const edgeNovig = cal.pCal - pMkt;
   const gate = uncertaintyFloor(cal.pCal, pMkt);
   const ev = evAtOdds(cal.pCal, candidate.odds);

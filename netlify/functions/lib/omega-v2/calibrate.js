@@ -2,8 +2,10 @@
 
 const {
   PRIOR_SHRINK_K, SPORT_PRIOR_K, SHRINK_GRID, MIN_POOLED, MIN_SPORT, ISOTONIC_MIN,
-  SHRINK_PRIOR_PENALTY, PLATT_LAMBDA,
+  SHRINK_PRIOR_PENALTY, PLATT_LAMBDA, SHRINK_N0, SPORT_MIN_GAMES,
+  NHL_ML_SHRINK_K, NHL_ML_WALKFORWARD_BEATS_NOVIG,
 } = require('./constants');
+const { marketFamily } = require('./select');
 
 function clamp(x, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
@@ -260,17 +262,22 @@ function estimationUncertainty(rows) {
 /**
  * Fit per-sport shrink + Platt (isotonic blend once n >= 40).
  * Uses only rows dated before cardDate. Empty history returns the prior.
+ * A sport under its floor is counted and then left out of bySport.
+ * The pooled fit is kept for the card stamp. It is not an applied map
+ * for a sport under the floor, and applyCalibration does not read it.
  */
 function fitWalkForward(history, cardDate) {
   const rows = (history || []).filter(usable);
   assertNoLeakage(rows, cardDate);
   const pooled = fitSelected(rows);
   const bySport = {};
+  const sportN = {};
   const sports = [...new Set(rows.map((r) => String(r.sport || '').toUpperCase()).filter(Boolean))];
   for (const sport of sports) {
     const subset = rows.filter((r) => String(r.sport || '').toUpperCase() === sport);
-    // A sport fit needs its own holdout. Below that, the pooled fit is used.
-    if (subset.length >= Math.max(MIN_SPORT, 24)) bySport[sport] = fitSelected(subset);
+    sportN[sport] = subset.length;
+    // Own holdout only. A thinner pooled fit must not fill this in.
+    if (subset.length >= sportFloor(sport)) bySport[sport] = fitSelected(subset);
   }
   const uncertainty = { default: estimationUncertainty(rows) };
   for (const sport of sports) {
@@ -287,6 +294,7 @@ function fitWalkForward(history, cardDate) {
     trainMaxDate,
     pooled,
     bySport,
+    sportN,
     uncertainty,
     leakageChecked: true,
   };
@@ -300,16 +308,74 @@ function priorKFor(sport) {
   return PRIOR_SHRINK_K;
 }
 
+function sportFloor(sport) {
+  const key = String(sport || '').toUpperCase();
+  if (SPORT_MIN_GAMES && Object.prototype.hasOwnProperty.call(SPORT_MIN_GAMES, key)) {
+    const n = Number(SPORT_MIN_GAMES[key]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return MIN_SPORT;
+}
+
+/** Graded rows for this sport. A missing count is 0, not the pooled n. */
+function sportCount(fit, sport) {
+  const key = String(sport || '').toUpperCase();
+  if (fit && fit.sportN && Number.isFinite(Number(fit.sportN[key]))) return Number(fit.sportN[key]);
+  if (fit && fit.bySport && fit.bySport[key] && Number.isFinite(Number(fit.bySport[key].n))) {
+    return Number(fit.bySport[key].n);
+  }
+  return 0;
+}
+
+/**
+ * Weight on the sport prior. n0 / (n0 + n), clamped to [0, 1].
+ * Zero rows is a full prior (w = 1).
+ */
+function priorWeight(nSport) {
+  const n = Number(nSport);
+  const sample = Number.isFinite(n) && n > 0 ? n : 0;
+  return clamp(SHRINK_N0 / (SHRINK_N0 + sample), 0, 1);
+}
+
+function nhlMoneylineLocked(sport, market, pick, beatsNovig) {
+  const flag = beatsNovig == null ? NHL_ML_WALKFORWARD_BEATS_NOVIG : !!beatsNovig;
+  if (flag) return false;
+  if (String(sport || '').toUpperCase() !== 'NHL') return false;
+  return marketFamily(market, pick) === 'Moneyline';
+}
+
+/**
+ * Shrink toward the sharp no-vig fair.
+ * p = (1 - k) * pModel + k * pFair.
+ * Under the sport floor, or with no fitted k, k is the sport prior.
+ * At or above the floor, k blends that prior with the sport fit:
+ *   w = priorWeight(n), k = w * k_prior + (1 - w) * k_fit.
+ * NHL moneylines return NHL_ML_SHRINK_K until a walk-forward beats no-vig.
+ */
+function shrinkKFor(sport, nSport, kFit, market, pick, beatsNovig) {
+  if (nhlMoneylineLocked(sport, market, pick, beatsNovig)) return NHL_ML_SHRINK_K;
+  const kPrior = priorKFor(sport);
+  const n = Number(nSport);
+  const sample = Number.isFinite(n) && n > 0 ? n : 0;
+  if (sample < sportFloor(sport) || !Number.isFinite(Number(kFit))) return kPrior;
+  const w = priorWeight(sample);
+  return clamp(w * kPrior + (1 - w) * Number(kFit), 0, 1);
+}
+
+/**
+ * Sport model only when that sport is at its floor.
+ * The pooled fit is not a fallback. Callers under the floor use the prior.
+ */
 function modelFor(fit, sport) {
   const key = String(sport || '').toUpperCase();
-  if (fit && fit.bySport && fit.bySport[key]) return fit.bySport[key];
-  if (fit && fit.pooled && fit.pooled.n >= MIN_POOLED) return fit.pooled;
+  const n = sportCount(fit, sport);
+  if (n >= sportFloor(sport) && fit && fit.bySport && fit.bySport[key]) return fit.bySport[key];
   return {
-    n: fit && fit.pooled ? fit.pooled.n : 0,
-    k: PRIOR_SHRINK_K,
+    n,
+    k: priorKFor(sport),
     platt: { a: 0, b: 1 },
     isotonic: null,
-    method: 'prior',
+    method: n > 0 ? 'sport-floor' : 'prior',
   };
 }
 
@@ -322,18 +388,39 @@ function uncertaintyFor(fit, sport, candidateUncertainty) {
   return 0.30;
 }
 
-/** pCal = Platt(shrink(pModel, pMkt)), averaged with isotonic when the fit has one. */
+/**
+ * Final probability, then the 10pp screen in select.js reads this pCal.
+ * Shrink first. A Platt or isotonic map runs only for a sport at its floor,
+ * and only from that sport's fit. NHL moneylines skip the map while the
+ * no-vig lock is on, so pCal is the fair. Pooled coefficients are never read.
+ */
 function applyCalibration(candidate, fit) {
-  const model = modelFor(fit, candidate && candidate.sport);
   const pModel = Number(candidate && candidate.pModel);
   const pMkt = Number(candidate && candidate.pMkt);
   if (!Number.isFinite(pModel) || !Number.isFinite(pMkt)) return null;
-  const k = model.method === 'prior' ? priorKFor(candidate && candidate.sport) : model.k;
+  const sport = candidate && candidate.sport;
+  const market = candidate && (candidate.market || candidate.marketFamily || candidate.betType);
+  const pick = candidate && (candidate.pick || candidate.side);
+  const n = sportCount(fit, sport);
+  const locked = nhlMoneylineLocked(sport, market, pick);
+  const floor = sportFloor(sport);
+  const key = String(sport || '').toUpperCase();
+  const sportModel = !locked && n >= floor && fit && fit.bySport && fit.bySport[key]
+    ? fit.bySport[key]
+    : null;
+  const k = shrinkKFor(sport, n, sportModel ? sportModel.k : null, market, pick);
   const pShrink = shrinkP(pModel, pMkt, k);
-  const pPlatt = applyPlatt(pShrink, model.platt);
-  let pCal = pPlatt;
-  if (model.isotonic) {
-    pCal = clipP(0.5 * pPlatt + 0.5 * applyIsotonic(model.isotonic, pPlatt));
+  let method = locked ? 'nhl-ml-novig' : (sportModel ? sportModel.method : (n > 0 ? 'sport-floor' : 'prior'));
+  let pCal = pShrink;
+  let mapApplied = false;
+  if (sportModel && (sportModel.method === 'platt' || sportModel.method === 'platt+isotonic')) {
+    const pPlatt = applyPlatt(pShrink, sportModel.platt);
+    pCal = pPlatt;
+    if (sportModel.isotonic) {
+      pCal = clipP(0.5 * pPlatt + 0.5 * applyIsotonic(sportModel.isotonic, pPlatt));
+    }
+    mapApplied = true;
+    method = sportModel.method;
   }
   return {
     pModel: clipP(pModel),
@@ -341,8 +428,11 @@ function applyCalibration(candidate, fit) {
     pShrink,
     pCal,
     shrinkK: k,
-    method: model.method,
-    trainN: model.n,
+    method,
+    trainN: n,
+    sportFloor: floor,
+    mapApplied,
+    pooledIgnored: true,
   };
 }
 
@@ -358,4 +448,9 @@ module.exports = {
   shrinkP,
   modelFor,
   priorKFor,
+  sportFloor,
+  sportCount,
+  priorWeight,
+  nhlMoneylineLocked,
+  shrinkKFor,
 };

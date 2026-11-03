@@ -66,4 +66,6 @@ These are card rules. The graded sample was not used to tune them.
 
 ## Retired on this path
 
-`PARLAY_PROFIT_FLOOR` 0.5, `PARLAY_LEAN_STAKE` 0.25, `PARLAY_MIN_EV` 0.03, the scaled `EDGE_FLOOR`, `SAME_SPORT_HAIRCUT` 0.95, `TOTAL_HAIRCUT`, `FAV_AMERICAN` −200, and `FAV_MIN_EDGE` 0.042 are not read. The −200 screen applied one flat edge only at short prices. The bucket floor replaces it for every price. The v1 historical parlay builder is not called. Sport prior shrinks (NFL 0.70, NCAAF 0.72, NBA 0.75, NHL 0.68, MLB 0.46) are unchanged and were not re-fit here.
+`PARLAY_PROFIT_FLOOR` 0.5, `PARLAY_LEAN_STAKE` 0.25, `PARLAY_MIN_EV` 0.03, the scaled `EDGE_FLOOR`, `SAME_SPORT_HAIRCUT` 0.95, `TOTAL_HAIRCUT`, `FAV_AMERICAN` −200, and `FAV_MIN_EDGE` 0.042 are not read. The −200 screen applied one flat edge only at short prices. The bucket floor replaces it for every price. The v1 historical parlay builder is not called. Sport prior shrinks (NFL 0.70, NCAAF 0.72, NBA 0.75, NHL 0.68, MLB 0.46) were not re-fit here.
+
+A sport under `SPORT_MIN_GAMES` (24 graded bets) does not take a Platt or isotonic map, including a pooled one. The shrink is `p = (1-k)*pModel + k*pFair`, with `k` the sport prior until the sport is at its floor, then blended toward the sport fit by `w = 80/(80+n)`. NHL moneylines stay at `k = 1` (the fair) until an NHL-only walk-forward beats the no-vig line out of sample. The 10pp screen reads the edge after that map.

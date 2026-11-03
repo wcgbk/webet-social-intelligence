@@ -1,6 +1,8 @@
 'use strict';
 
-const { MODEL_VERSION, FLAG_ENV } = require('./constants');
+const {
+  MODEL_VERSION, FLAG_ENV, SHRINK_N0, MIN_SPORT, NHL_ML_SHRINK_K, NHL_ML_WALKFORWARD_BEATS_NOVIG,
+} = require('./constants');
 const { fitWalkForward, applyCalibration } = require('./calibrate');
 const {
   gameKey, marketFamily, annotateCandidate, selectStraights, pastPregameCutoff, pregameClockMs,
@@ -247,8 +249,16 @@ async function buildCard(input) {
     calibration: {
       trainN: fit.trainN,
       trainMaxDate: fit.trainMaxDate,
+      // Pooled method and shrinkK are the unused pooled fit. A sport under
+      // its floor does not take this map. Applied k is on each pick.
       method: fit.pooled.method,
       shrinkK: fit.pooled.k,
+      pooledAppliesUnderFloor: false,
+      sportN: fit.sportN || {},
+      sportFloor: MIN_SPORT,
+      shrinkN0: SHRINK_N0,
+      nhlMlShrinkK: NHL_ML_SHRINK_K,
+      nhlMlWalkforwardBeatsNovig: NHL_ML_WALKFORWARD_BEATS_NOVIG,
       bySport: Object.fromEntries(Object.entries(fit.bySport).map(([sport, model]) => [sport, {
         n: model.n,
         k: model.k,

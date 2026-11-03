@@ -70,6 +70,8 @@ const PRIOR_SHRINK_K = 0.70;
  * Sport priors used until a walk-forward fit has its own holdout.
  * Higher k trusts the no-vig price more. MLB stays looser so a real
  * starter miss is not shrunk under the edge floor.
+ * NHL moneylines do not use 0.68 while NHL_ML_WALKFORWARD_BEATS_NOVIG
+ * is false. That cell is NHL_ML_SHRINK_K (full no-vig).
  */
 const SPORT_PRIOR_K = {
   MLB: 0.46,
@@ -80,7 +82,50 @@ const SPORT_PRIOR_K = {
 };
 const SHRINK_GRID = [0.40, 0.55, 0.70, 0.85, 0.95];
 const MIN_POOLED = 8;
+/**
+ * Default graded-bet floor before a sport may use a fitted map.
+ * Pooled n does not satisfy this. A sport under its own floor gets
+ * shrink only. See SPORT_MIN_GAMES.
+ */
 const MIN_SPORT = 24;
+/**
+ * Per-sport minimum of graded bets (any market) before Platt or isotonic
+ * may touch that sport. The number is the sport's own rows, not the
+ * pooled card history. A pooled fit cannot override a sport under its floor,
+ * and a sport fit is not stored or applied below it.
+ * 24 matches the holdout floor already required for a sport model.
+ */
+const SPORT_MIN_GAMES = {
+  MLB: MIN_SPORT,
+  NFL: MIN_SPORT,
+  NCAAF: MIN_SPORT,
+  NBA: MIN_SPORT,
+  NHL: MIN_SPORT,
+};
+/**
+ * Prior strength for the shrink weight. Weight on the sport prior is
+ *   w = clamp(SHRINK_N0 / (SHRINK_N0 + n_sport), 0, 1)
+ *   k = clamp(w * k_prior + (1 - w) * k_fit, 0, 1)
+ *   p = (1 - k) * pModel + k * pFair
+ * n = 0 or n under the sport floor has no fit, so k = k_prior (w = 1).
+ * 80 is the same prior strength used on the uncertainty buckets above.
+ * At n = 80 the prior and the fitted shrink split the weight evenly.
+ */
+const SHRINK_N0 = 80;
+/**
+ * NHL moneyline shrink toward the Pinnacle no-vig fair.
+ * Stored walk-forward (tools/omega-calibration/out/walkforward-cal4.md,
+ * window 2026-09-22 through 2026-10-08): NHL|Moneyline K = 1.00, kMle = 1.00,
+ * 128 rows / 64 games, Platt a = 0, b = 1.59. On the 64 graded ML dogs the
+ * no-vig Brier was 0.232 and the model Brier was 0.237. That sample did not
+ * beat the no-vig line, so k stays 1 and no Platt or isotonic is applied
+ * on an NHL moneyline.
+ * Set NHL_ML_WALKFORWARD_BEATS_NOVIG only after a new NHL-only walk-forward
+ * beats the no-vig price out of sample. Until then this lock wins over
+ * SPORT_PRIOR_K.NHL, the sample-size blend, and every pooled or sport map.
+ */
+const NHL_ML_SHRINK_K = 1;
+const NHL_ML_WALKFORWARD_BEATS_NOVIG = false;
 const ISOTONIC_MIN = 40;
 /** Penalty on Brier when the fitted shrink leaves the prior. Walk-forward only. */
 const SHRINK_PRIOR_PENALTY = 0.05;
@@ -132,6 +177,10 @@ module.exports = {
   SHRINK_GRID,
   MIN_POOLED,
   MIN_SPORT,
+  SPORT_MIN_GAMES,
+  SHRINK_N0,
+  NHL_ML_SHRINK_K,
+  NHL_ML_WALKFORWARD_BEATS_NOVIG,
   ISOTONIC_MIN,
   SHRINK_PRIOR_PENALTY,
   PLATT_LAMBDA,

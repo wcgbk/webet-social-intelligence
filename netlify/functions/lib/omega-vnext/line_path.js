@@ -11,8 +11,38 @@ const {
 const { americanToImplied } = require('./odds_math');
 const { americanCentsWorse } = require('./edge');
 
+/** NFD, then drop combining marks, so "Montréal" and "Montreal" are one key. */
+function foldAccents(value) {
+  return String(value || '').normalize('NFD').replace(/\p{M}/gu, '');
+}
+
 function gameKey(away, home) {
-  return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
+  const fold = (name) => foldAccents(name).trim().toLowerCase();
+  return `${fold(away)} @ ${fold(home)}`;
+}
+
+function foldGameKey(key) {
+  return foldAccents(key)
+    .toLowerCase()
+    .replace(/\s*@\s*/g, ' @ ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Find a snap game by away/home. The folded key wins. A stored key that
+ * still has accents (or the other way around) matches the same fold.
+ */
+function lookupGame(games, away, home) {
+  if (!games || typeof games !== 'object') return null;
+  const key = gameKey(away, home);
+  if (games[key] != null) return games[key];
+  const folded = foldGameKey(key);
+  for (const stored of Object.keys(games)) {
+    if (games[stored] == null) continue;
+    if (foldGameKey(stored) === folded) return games[stored];
+  }
+  return null;
 }
 
 function bookKey(b) {
@@ -419,9 +449,8 @@ function annotateLineMoves(candidates, openSnap, nowSnap) {
   const nowGames = (nowSnap && nowSnap.games) || openGames;
 
   return (candidates || []).map(c => {
-    const key = gameKey(c.awayTeam, c.homeTeam);
-    const openG = openGames[key] || null;
-    const nowG = nowGames[key] || null;
+    const openG = lookupGame(openGames, c.awayTeam, c.homeTeam);
+    const nowG = lookupGame(nowGames, c.awayTeam, c.homeTeam);
     // Attach capturedAt onto game objects for openPrint
     const openWithTs = openG
       ? { ...openG, capturedAt: (openSnap && (openSnap.capturedAt || openSnap.fetchedAt)) || null }
@@ -621,7 +650,10 @@ async function storeLinePoll(dateISO, poll) {
 }
 
 module.exports = {
+  foldAccents,
   gameKey,
+  foldGameKey,
+  lookupGame,
   hhmmET,
   etDateISO,
   snapBlobKey,

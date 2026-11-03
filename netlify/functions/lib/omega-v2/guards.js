@@ -121,6 +121,14 @@ function toPick(row) {
     pModel: row.calibration.pModel,
     pMkt: row.calibration.pMkt,
     pCal: row.calibration.pCal,
+    p_model: row.calibration.pModel != null
+      ? row.calibration.pModel
+      : (row.pModel != null ? row.pModel : (row.p_model != null ? row.p_model : null)),
+    fair_sharp_p: row.calibration.pMkt != null
+      ? row.calibration.pMkt
+      : (row.pMkt != null ? row.pMkt : (row.fair_sharp_p != null ? row.fair_sharp_p : null)),
+    openPrint: row.openPrint != null ? row.openPrint : null,
+    lineMove: row.lineMove != null ? row.lineMove : null,
     book: row.book || null,
     homeTeam: row.homeTeam || null,
     awayTeam: row.awayTeam || null,

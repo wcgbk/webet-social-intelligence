@@ -106,6 +106,8 @@ function normalizeCandidate(raw) {
     coreReasoning: raw.coreReasoning || '',
     gameKey: gameKey(raw.matchup || `${raw.awayTeam || ''} @ ${raw.homeTeam || ''}`),
     noDkHr: !quote,
+    openPrint: raw.openPrint != null ? raw.openPrint : null,
+    lineMove: raw.lineMove != null ? raw.lineMove : null,
   };
 }
 
@@ -277,6 +279,8 @@ async function buildCard(input) {
 }
 
 function fromOmegaCandidate(c) {
+  const pModel = c.modelRawP != null ? c.modelRawP : (c.p_model != null ? c.p_model : (c.pModel != null ? c.pModel : c.coverProb));
+  const pMkt = c.fair_sharp_p != null ? c.fair_sharp_p : (c.sharpFairP != null ? c.sharpFairP : c.pMkt);
   return {
     sport: c.sport,
     matchup: c.matchup || `${c.awayTeam || ''} @ ${c.homeTeam || ''}`,
@@ -286,8 +290,10 @@ function fromOmegaCandidate(c) {
     betType: c.betType,
     odds: c.oddsStr || c.odds,
     line: c.line,
-    pModel: c.modelRawP != null ? c.modelRawP : (c.p_model != null ? c.p_model : (c.pModel != null ? c.pModel : c.coverProb)),
-    pMkt: c.fair_sharp_p != null ? c.fair_sharp_p : (c.sharpFairP != null ? c.sharpFairP : c.pMkt),
+    pModel,
+    pMkt,
+    p_model: pModel != null ? pModel : null,
+    fair_sharp_p: pMkt != null ? pMkt : null,
     uncertainty: c.uncertainty,
     commenceTime: c.commenceTime,
     book: c.book,
@@ -297,6 +303,8 @@ function fromOmegaCandidate(c) {
     result: c.result,
     clvPp: c.clvPp,
     coreReasoning: c.coreReasoning,
+    openPrint: c.openPrint != null ? c.openPrint : null,
+    lineMove: c.lineMove != null ? c.lineMove : null,
   };
 }
 

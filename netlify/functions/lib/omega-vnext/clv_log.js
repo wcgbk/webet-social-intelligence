@@ -61,8 +61,8 @@ function enrichBetTimeFields(p, { modelVersion = MODEL_VERSION, date = null } = 
     line,
     odds,
     book,
-    p_model: p.p_model != null ? p.p_model : null,
-    fair_sharp_p: p.fair_sharp_p != null ? p.fair_sharp_p : null,
+    p_model: p.p_model != null ? p.p_model : (p.pModel != null ? p.pModel : null),
+    fair_sharp_p: p.fair_sharp_p != null ? p.fair_sharp_p : (p.pMkt != null ? p.pMkt : null),
     predictedClv: p.predictedClv != null ? p.predictedClv : null,
     modelVersion: p.modelVersion || modelVersion,
     lockSnapshot: p.lockSnapshot || {
@@ -115,6 +115,7 @@ function betTimeClvSeed(pick) {
     timestampET: enriched.timestampET,
     lockSnapshot: enriched.lockSnapshot,
     openPrint: enriched.openPrint || null,
+    lineMove: enriched.lineMove || null,
     steamToward: !!enriched.steamToward,
     steamAgainst: !!enriched.steamAgainst,
     predictedResidualClv: enriched.predictedResidualClv != null ? enriched.predictedResidualClv : null,

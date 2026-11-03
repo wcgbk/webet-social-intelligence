@@ -705,9 +705,8 @@ async function runOmegaSteamRecheck(picksData, pickReports) {
     }
     for (let i = 0; i < picksData.picks.length; i++) {
       const pick = picksData.picks[i];
-      const key = linePath.gameKey(pick.awayTeam, pick.homeTeam);
-      const openG = (openSnap.games || {})[key];
-      const nowG = ((nowSnap && nowSnap.games) || {})[key];
+      const openG = linePath.lookupGame(openSnap.games || {}, pick.awayTeam, pick.homeTeam);
+      const nowG = linePath.lookupGame((nowSnap && nowSnap.games) || {}, pick.awayTeam, pick.homeTeam);
       if (!openG) continue;
       const openWithTs = { ...openG, capturedAt: openSnap.capturedAt || null };
       const cand = {

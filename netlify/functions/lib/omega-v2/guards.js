@@ -7,6 +7,7 @@ const { assertNoLeakage } = require('./calibrate');
 const { marketFamily, pastPregameCutoff, pregameClockMs } = require('./select');
 const { bannedPairReason } = require('./parlay');
 const { americanJuiceDelta, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
+const { letterFromPrintedEdge } = require('./letter');
 
 const STALE_CENTS = 15;
 const STALE_POINTS = 1;
@@ -85,11 +86,28 @@ function pct(p) {
 
 function ratingFor(edge) {
   // Same tenth the card prints in edgePct. Exact 5.0, 3.5, and 2.0 take the higher letter.
-  const shown = Number(String(pct(edge)).replace('%', ''));
-  if (shown >= 5) return 'aplus';
-  if (shown >= 3.5) return 'a';
-  if (shown >= 2) return 'aminus';
-  return 'b';
+  return letterFromPrintedEdge(edge) || 'b';
+}
+
+/**
+ * Rewrite rating, grade, qualityGrade, and confidence from the printed edgePct.
+ * Missing edgePct leaves the stored letter alone. Returns true when a field changes.
+ */
+function stampPrintedLetter(row, notes) {
+  if (!row || row.edgePct == null || row.edgePct === '') return false;
+  const letter = letterFromPrintedEdge(row.edgePct);
+  if (!letter) return false;
+  const conf = ratingToConfidence(letter);
+  if (row.rating === letter && row.grade === letter && row.qualityGrade === letter && Number(row.confidence) === conf) {
+    return false;
+  }
+  const from = row.rating || row.grade || '?';
+  row.rating = letter;
+  row.grade = letter;
+  row.qualityGrade = letter;
+  row.confidence = conf;
+  if (notes) notes.push(`letter ${row.pick || row.side || row.matchup} ${from} -> ${letter}`);
+  return true;
 }
 
 function toPick(row) {
@@ -216,9 +234,10 @@ function removeStartedLegs(card, opts) {
 
 /**
  * QA never withholds a straight card. Round stakes, cap them, drop a
- * duplicate game. A parlay whose stake rounds under 0.25u is removed.
- * It is not floored back up to 0.25u. A started leg is removed here.
- * That correction is not a validation error.
+ * duplicate game. The letter is the printed edgePct tenth. A true B above
+ * 0.5u is capped after that rewrite. A parlay whose stake rounds under
+ * 0.25u is removed. It is not floored back up to 0.25u. A started leg is
+ * removed here. That correction is not a validation error.
  */
 function autoCorrectCard(card, opts) {
   const notes = [];
@@ -285,16 +304,26 @@ function autoCorrectCard(card, opts) {
       picks.shift();
     }
   }
-  // Grade B straights cap at 0.5u. Parlay legs, ticket units, grades, and prices stay.
-  for (const p of picks) {
-    if (!(isEdgeGradeB(p.rating) || isEdgeGradeB(p.grade) || isEdgeGradeB(p.qualityGrade))) continue;
-    if (!(unitsOf(p) > EDGE_B_UNIT_CAP)) continue;
-    p.units = '0.5u';
-    if (Object.prototype.hasOwnProperty.call(p, 'unitsNum')) p.unitsNum = EDGE_B_UNIT_CAP;
-    const stake = Math.ceil(0.5 * 150);
-    if (Object.prototype.hasOwnProperty.call(p, 'stakeUsd')) p.stakeUsd = stake;
-    if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = stake;
-    notes.push(`b-grade cap ${p.pick || p.side}`);
+  // Letter first, then the B cap, so a mislabeled A is not cut to 0.5u.
+  // Parlay legs, ticket units, and prices are not this cap. Repeat until the
+  // letter and the cap stop moving, at most 3 passes.
+  let gradeGuard = 0;
+  let gradeMoved = true;
+  while (gradeMoved && gradeGuard < 3) {
+    gradeGuard += 1;
+    gradeMoved = false;
+    for (const p of picks) {
+      if (stampPrintedLetter(p, notes)) gradeMoved = true;
+      if (!(isEdgeGradeB(p.rating) || isEdgeGradeB(p.grade) || isEdgeGradeB(p.qualityGrade))) continue;
+      if (!(unitsOf(p) > EDGE_B_UNIT_CAP)) continue;
+      p.units = '0.5u';
+      if (Object.prototype.hasOwnProperty.call(p, 'unitsNum')) p.unitsNum = EDGE_B_UNIT_CAP;
+      const stake = Math.ceil(0.5 * 150);
+      if (Object.prototype.hasOwnProperty.call(p, 'stakeUsd')) p.stakeUsd = stake;
+      if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = stake;
+      notes.push(`b-grade cap ${p.pick || p.side}`);
+      gradeMoved = true;
+    }
   }
   out.picks = picks;
   if (out.parlayLegs.length > 1) {
@@ -302,7 +331,14 @@ function autoCorrectCard(card, opts) {
     out.parlayLegs = out.parlayLegs.slice(0, 1);
   }
   if (out.parlayLegs[0]) {
-    const pl = { ...out.parlayLegs[0], legs: (out.parlayLegs[0].legs || []).map((leg) => ({ ...leg, modelVersion: MODEL_VERSION })) };
+    const pl = {
+      ...out.parlayLegs[0],
+      legs: (out.parlayLegs[0].legs || []).map((leg) => {
+        const next = { ...leg, modelVersion: MODEL_VERSION };
+        stampPrintedLetter(next, notes);
+        return next;
+      }),
+    };
     let u = Math.round(unitsOf(pl) * 4) / 4;
     if (u > PARLAY_STAKE_CAP) u = PARLAY_STAKE_CAP;
     if (!(u >= 0.25)) {

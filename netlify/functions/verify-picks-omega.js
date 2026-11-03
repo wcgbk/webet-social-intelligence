@@ -59,7 +59,14 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
 const { refillKilledParlay } = require('./lib/omega-vnext/parlay');
-const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
+const {
+  decimalToAmerican,
+  formatAmerican,
+  ratingToConfidence,
+  EDGE_B_UNIT_CAP,
+  isEdgeGradeB,
+} = require('./lib/omega-vnext/odds_math');
+const { letterFromPrintedEdge, shownEdgePoints } = require('./lib/omega-v2/letter');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -233,27 +240,18 @@ function runMathChecks(pick) {
     }
   }
 
-  // Grade check — quality/edge bands (v12.1+), NOT units
-  // A+ ≥5.0%, A ≥3.5%, A- ≥2.0%, else B. Exact band edges use higher grade.
-  const edgeFrac = (() => {
-    const raw = pick.edgePct != null ? pick.edgePct : pick.ev;
-    if (raw == null) return null;
-    if (typeof raw === 'number') return raw > 1 ? raw / 100 : raw;
-    const n = parseFloat(String(raw).replace(/[^0-9.+-]/g, ''));
-    if (!Number.isFinite(n)) return null;
-    return Math.abs(n) > 1 ? n / 100 : n;
-  })();
-  if (edgeFrac != null) {
-    let expectedGrade = 'b';
-    if (edgeFrac >= 0.050) expectedGrade = 'aplus';
-    else if (edgeFrac >= 0.035) expectedGrade = 'a';
-    else if (edgeFrac >= 0.020) expectedGrade = 'aminus';
+  // Grade check — printed edge tenth, NOT units.
+  // A+ ≥5.0, A ≥3.5, A− ≥2.0, else B. Exact boundary rounds up to the higher letter.
+  const edgeSource = pick.edgePct != null && pick.edgePct !== '' ? pick.edgePct : pick.ev;
+  const expectedGrade = letterFromPrintedEdge(edgeSource);
+  if (expectedGrade && pick.rating) {
     const norm = String(pick.rating || '').toLowerCase().replace(/\+/g, 'plus').replace(/-/g, 'minus');
     const normMap = { 'a+': 'aplus', aplus: 'aplus', a: 'a', 'a-': 'aminus', aminus: 'aminus', b: 'b', 'b+': 'bplus', bplus: 'bplus' };
     const have = normMap[norm] || norm;
-    if (pick.rating && have !== expectedGrade) {
+    if (have !== expectedGrade) {
       checks.gradeMatch = false;
-      warnings.push(`Grade mismatch: "${pick.rating}" but edge ${(edgeFrac * 100).toFixed(1)}% should be "${expectedGrade}"`);
+      const shown = shownEdgePoints(edgeSource);
+      warnings.push(`Grade mismatch: "${pick.rating}" but edge ${shown}% should be "${expectedGrade}"`);
     }
   }
 
@@ -810,60 +808,187 @@ Be honest and direct. Don't flag things just to flag them. Only raise genuine co
   return { verdict: "skip", analysis: "Sharp review unavailable" };
 }
 
+function straightUnitsOf(row) {
+  if (!row) return 0;
+  if (row.unitsNum != null && row.unitsNum !== '' && Number.isFinite(Number(row.unitsNum))) return Number(row.unitsNum);
+  const n = parseUnits(row.units);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Set rating, grade, qualityGrade, and confidence from the printed edgePct.
+ * Does not touch the stake. Missing edgePct leaves the stored letter alone.
+ */
+function rewriteLetterFromEdge(row, notes) {
+  if (!row || row.edgePct == null || row.edgePct === '') return false;
+  const letter = letterFromPrintedEdge(row.edgePct);
+  if (!letter) return false;
+  const conf = ratingToConfidence(letter);
+  if (row.rating === letter && row.grade === letter && row.qualityGrade === letter && Number(row.confidence) === conf) {
+    return false;
+  }
+  const from = row.rating || row.grade || '?';
+  row.rating = letter;
+  row.grade = letter;
+  row.qualityGrade = letter;
+  row.confidence = conf;
+  if (notes) notes.push(`letter ${row.pick || row.side || row.matchup} ${from} -> ${letter}`);
+  return true;
+}
+
+/** True B straights above 0.5u drop to 0.5u ($75). Parlay legs are not capped here. */
+function capStraightB(row, notes) {
+  if (!row) return false;
+  if (!(isEdgeGradeB(row.rating) || isEdgeGradeB(row.grade) || isEdgeGradeB(row.qualityGrade))) return false;
+  if (!(straightUnitsOf(row) > EDGE_B_UNIT_CAP + 1e-9)) return false;
+  row.units = typeof row.units === 'number' ? EDGE_B_UNIT_CAP : `${EDGE_B_UNIT_CAP}u`;
+  if (Object.prototype.hasOwnProperty.call(row, 'unitsNum')) row.unitsNum = EDGE_B_UNIT_CAP;
+  const stake = Math.ceil(EDGE_B_UNIT_CAP * 150);
+  if (Object.prototype.hasOwnProperty.call(row, 'stakeUsd') || Object.prototype.hasOwnProperty.call(row, 'stakeDollars')) {
+    if (Object.prototype.hasOwnProperty.call(row, 'stakeUsd')) row.stakeUsd = stake;
+    if (Object.prototype.hasOwnProperty.call(row, 'stakeDollars')) row.stakeDollars = stake;
+  } else {
+    row.stakeUsd = stake;
+  }
+  if (notes) notes.push(`b-grade cap ${row.pick || row.side}`);
+  return true;
+}
+
+function applyLetterAndCap(picksData) {
+  const notes = [];
+  let changed = false;
+  let stakeChanged = false;
+  for (const p of (picksData && picksData.picks) || []) {
+    if (rewriteLetterFromEdge(p, notes)) changed = true;
+    if (capStraightB(p, notes)) {
+      changed = true;
+      stakeChanged = true;
+    }
+  }
+  for (const ticket of (picksData && picksData.parlayLegs) || []) {
+    for (const leg of (ticket && ticket.legs) || []) {
+      if (rewriteLetterFromEdge(leg, notes)) changed = true;
+    }
+  }
+  return { changed, stakeChanged, notes };
+}
+
+function gradeStillWrong(picksData, reports) {
+  const gradeBad = (reports || []).some((r) => r.checks && r.checks.gradeMatch === false);
+  const bBad = ((picksData && picksData.picks) || []).some((p) => (
+    (isEdgeGradeB(p.rating) || isEdgeGradeB(p.grade) || isEdgeGradeB(p.qualityGrade))
+    && straightUnitsOf(p) > EDGE_B_UNIT_CAP + 1e-9
+  ));
+  return gradeBad || bBad;
+}
+
+/**
+ * QA letter pass. Rewrite the letter from the printed edgePct, re-apply the
+ * B 0.5u cap, then re-run math checks. Loop until nothing moves, at most 3 passes.
+ * Stakes change only when a corrected letter is B and the straight is over 0.5u.
+ */
+function autoCorrectCard(picksData) {
+  const notes = [];
+  let changed = false;
+  let stakeChanged = false;
+  let reports = [];
+  let passes = 0;
+  let stable = false;
+  for (let pass = 0; pass < 3; pass++) {
+    passes += 1;
+    const step = applyLetterAndCap(picksData);
+    if (step.changed) changed = true;
+    if (step.stakeChanged) stakeChanged = true;
+    notes.push(...step.notes);
+    reports = ((picksData && picksData.picks) || []).map((p) => runMathChecks(p));
+    const stillWrong = gradeStillWrong(picksData, reports);
+    if (!step.changed && !stillWrong) {
+      stable = true;
+      break;
+    }
+    if (!step.changed) break;
+  }
+  return { changed, stakeChanged, notes, reports, passes, stable };
+}
+
 // ── Auto-Fix: drop a critical pick. Do not invent a replacement straight. ──
 async function autoFixPicks(picksData, pickReports) {
-  const criticalIndices = [];
-  for (let i = 0; i < pickReports.length; i++) {
-    if (pickReports[i].mathSeverity === "critical") criticalIndices.push(i);
-  }
-  if (criticalIndices.length === 0) return { fixed: false, replacements: [] };
-
   const replacements = [];
-  for (const idx of criticalIndices.slice().sort((a, b) => b - a)) {
-    const badPick = picksData.picks[idx];
-    if (!badPick) continue;
-    replacements.push({
-      index: idx,
-      removed: badPick.pick,
-      removedReason: (pickReports[idx].errors || []).join("; "),
-      added: null,
-    });
-    picksData.picks.splice(idx, 1);
-    console.log(`[verify-fix] REMOVED pick ${idx + 1}: "${badPick.pick}" (no replacement — verify does not invent straights)`);
+  const reports = Array.isArray(pickReports) ? pickReports : [];
+  const criticalIndices = [];
+  for (let i = 0; i < reports.length; i++) {
+    if (reports[i].mathSeverity === "critical") criticalIndices.push(i);
   }
 
-  // Fix narrative warnings (too short/empty) — add generic narrative if missing
-  for (let i = 0; i < picksData.picks.length; i++) {
-    const p = picksData.picks[i];
-    if (!p.coreReasoning || p.coreReasoning.trim().length < 20) {
-      p.coreReasoning = `WeBetAI's statistical model identifies edge value on this ${p.sport} ${p.betType || ''} play. The projection disagrees with the consensus line, creating a positive expected value opportunity.`;
-      console.log(`[verify-fix] Added generic narrative for pick ${i + 1}: "${p.pick}"`);
+  if (criticalIndices.length > 0) {
+    for (const idx of criticalIndices.slice().sort((a, b) => b - a)) {
+      const badPick = picksData.picks[idx];
+      if (!badPick) continue;
+      replacements.push({
+        index: idx,
+        removed: badPick.pick,
+        removedReason: (reports[idx].errors || []).join("; "),
+        added: null,
+      });
+      picksData.picks.splice(idx, 1);
+      console.log(`[verify-fix] REMOVED pick ${idx + 1}: "${badPick.pick}" (no replacement — verify does not invent straights)`);
     }
-    if (!p.whatLoses || p.whatLoses.trim().length < 10) {
-      p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+
+    // Fix narrative warnings (too short/empty) — add generic narrative if missing
+    for (let i = 0; i < picksData.picks.length; i++) {
+      const p = picksData.picks[i];
+      if (!p.coreReasoning || p.coreReasoning.trim().length < 20) {
+        p.coreReasoning = `WeBetAI's statistical model identifies edge value on this ${p.sport} ${p.betType || ''} play. The projection disagrees with the consensus line, creating a positive expected value opportunity.`;
+        console.log(`[verify-fix] Added generic narrative for pick ${i + 1}: "${p.pick}"`);
+      }
+      if (!p.whatLoses || p.whatLoses.trim().length < 10) {
+        p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+      }
+    }
+
+    // Recalculate summary + enforce 4.0u daily cap (straights ≤3.5u + parlay 0.5u).
+    // v2 cards skip the v1 trim. The letter pass below is the last stake edit.
+    enforceOmegaDailyUnitCap(picksData);
+    const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
+      + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
+    if (picksData.summary) {
+      picksData.summary.totalPicks = picksData.picks.length;
+      picksData.summary.totalStraightBets = picksData.picks.length;
+      picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
     }
   }
 
-  // Grades are quality (edge/CLV) — do not force them back to unit-sized letters.
-  // Keep existing rating/confidence from generator; only ensure confidence exists.
-  for (const p of picksData.picks) {
-    if (p.rating && (p.confidence == null || p.confidence === '')) {
-      const map = { aplus: 90, a: 82, aminus: 75, bplus: 68, b: 60 };
-      p.confidence = map[String(p.rating).toLowerCase()] || 60;
-    }
-  }
-
-  // Recalculate summary + enforce 4.0u daily cap (straights ≤3.5u + parlay 0.5u)
-  enforceOmegaDailyUnitCap(picksData);
-  const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
-    + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
-  if (picksData.summary) {
+  // Letters follow the printed edgePct, never the stake. Then the B cap, then math again.
+  const qa = autoCorrectCard(picksData);
+  if (qa.stakeChanged && picksData.summary) {
+    const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
+      + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
     picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
   }
+  if (qa.changed && picksData.summary && Object.prototype.hasOwnProperty.call(picksData.summary, 'aplusLocks')) {
+    picksData.summary.aplusLocks = picksData.picks.filter((p) => String(p.rating).toLowerCase() === 'aplus').length;
+  }
 
-  return { fixed: true, replacements };
+  return { fixed: replacements.length > 0 || qa.changed, replacements, qa };
+}
+
+function clearResolvedGradeWarnings(pickReports, picks) {
+  let removed = 0;
+  for (const p of picks || []) {
+    const math = runMathChecks(p);
+    if (!math.checks.gradeMatch) continue;
+    for (const rep of pickReports || []) {
+      if (rep.pick !== `${p.pick} ${p.odds}`) continue;
+      const next = (rep.warnings || []).filter((w) => !String(w).startsWith('Grade mismatch'));
+      removed += (rep.warnings || []).length - next.length;
+      rep.warnings = next;
+      if (rep.mathChecks) rep.mathChecks.gradeMatch = true;
+      if (rep.severity === 'warning' && next.length === 0 && (rep.errors || []).length === 0) rep.severity = 'clean';
+    }
+  }
+  return removed;
 }
 
 // ── Write updated picks back to blob ──
@@ -1003,6 +1128,9 @@ exports.resolveLockedParlay = resolveLockedParlay;
 exports.formatCombinedAmerican = formatCombinedAmerican;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
+exports.runMathChecks = runMathChecks;
+exports.autoCorrectCard = autoCorrectCard;
+exports.autoFixPicks = autoFixPicks;
 
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
@@ -1108,6 +1236,9 @@ exports.handler = async (event) => {
 
     // ── Step 2: Auto-fix critical issues ──
     const fixResult = await autoFixPicks(picksData, pickReports);
+    if (fixResult.qa && fixResult.qa.stable) {
+      totalWarnings -= clearResolvedGradeWarnings(pickReports, picksData.picks);
+    }
     if (fixResult.fixed) {
       console.log(`[verify] Auto-fixed ${fixResult.replacements.length} pick(s)`);
       // Write updated picks back to blob so the page shows clean data
@@ -1178,7 +1309,7 @@ exports.handler = async (event) => {
     // ── Step 3c: FINAL PASS — re-verify the locked card. Do not rebuild the parlay. ──
     // After drops, the published card must stay the one generate locked:
     // 1. Every remaining pick has a real narrative (not generic)
-    // 2. Grades stay quality/edge — never rewritten from units
+    // 2. Grades follow the printed edgePct — never rewritten from units
     // 3. Math checks pass
     // 4. A locked parlay is preserved, or a dropped leg is removed. It is not rebuilt.
     {
@@ -1203,7 +1334,8 @@ exports.handler = async (event) => {
       }
 
       // Strip stale sharp-review annotations only.
-      // Grades stay quality/edge from generator — NEVER rewrite from units (v12.1+).
+      // Letters follow the printed edgePct. They are never rewritten from units.
+      autoCorrectCard(picksData);
       for (const p of picksData.picks) {
         delete p.sharpConcern; delete p._dropRedFlag;
       }

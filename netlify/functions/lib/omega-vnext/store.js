@@ -405,7 +405,20 @@ async function readCaptureHealthDate(dateISO) {
   return readJson(assertOpsKey(`omega-ops/capture-health-${d}`));
 }
 
+/** READ ONLY. Generate-time health record (omega-health-{date}); null if absent. */
+async function readHealthRecord(dateISO) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO || ''))) return null;
+  return readJson(`omega-health-${dateISO}`);
+}
+
+/** READ ONLY. Latest health record pointer; null if absent (caller falls back to today ET). */
+async function readHealthLatest() {
+  return readJson('omega-health-latest');
+}
+
 module.exports = {
+  readHealthRecord,
+  readHealthLatest,
   storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson,
   storePmObserver, readPmObserver, storePmObserverOpen, readPmObserverOpen,
   pmObserverStorageKey, pmObserverAliasKey,

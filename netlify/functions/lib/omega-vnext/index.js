@@ -13,6 +13,7 @@ const { selectStraights, applyDailyUnitCap, applyExposureCaps, prepareEdgePositi
 const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble');
 const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
+const { narrateTextOnly } = require('./narrate_text');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');

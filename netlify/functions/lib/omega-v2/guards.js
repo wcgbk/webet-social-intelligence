@@ -6,7 +6,7 @@ const {
 const { assertNoLeakage } = require('./calibrate');
 const { marketFamily, pastPregameCutoff, pregameClockMs } = require('./select');
 const { bannedPairReason } = require('./parlay');
-const { americanJuiceDelta, ratingToConfidence } = require('../omega-vnext/odds_math');
+const { americanJuiceDelta, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
 
 const STALE_CENTS = 15;
 const STALE_POINTS = 1;
@@ -269,6 +269,17 @@ function autoCorrectCard(card, opts) {
       notes.push(`budget dropped ${victim.pick || victim.side}`);
       picks.shift();
     }
+  }
+  // Grade B straights cap at 0.5u. Parlay legs, ticket units, grades, and prices stay.
+  for (const p of picks) {
+    if (!(isEdgeGradeB(p.rating) || isEdgeGradeB(p.grade) || isEdgeGradeB(p.qualityGrade))) continue;
+    if (!(unitsOf(p) > EDGE_B_UNIT_CAP)) continue;
+    p.units = '0.5u';
+    if (Object.prototype.hasOwnProperty.call(p, 'unitsNum')) p.unitsNum = EDGE_B_UNIT_CAP;
+    const stake = Math.ceil(0.5 * 150);
+    if (Object.prototype.hasOwnProperty.call(p, 'stakeUsd')) p.stakeUsd = stake;
+    if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = stake;
+    notes.push(`b-grade cap ${p.pick || p.side}`);
   }
   out.picks = picks;
   if (out.parlayLegs.length > 1) {

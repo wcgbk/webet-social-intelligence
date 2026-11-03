@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "omega-v2:gate": "node tools/omega-v2/gate.js",
+    "omega-v2:math-gate": "node tools/omega-v2/math-gate.js",
     "omega-v2:replay": "node tools/omega-v2/replay.js"
   },
   "dependencies": {

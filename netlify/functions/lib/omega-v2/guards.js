@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  MODEL_VERSION, MAX_STRAIGHTS, PER_BET_CAP, STRAIGHT_BUDGET, CARD_BUDGET, PARLAY_STAKE_CAP,
+  MODEL_VERSION, MAX_STRAIGHTS, PER_BET_CAP, STRAIGHT_BUDGET, CARD_BUDGET, PARLAY_STAKE_CAP, UNIT_DOLLARS,
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
 const { marketFamily, pastPregameCutoff, pregameClockMs } = require('./select');
@@ -165,6 +165,11 @@ function toParlay(ticket, scanned) {
   }];
 }
 
+function wholeDollarStake(units) {
+  const u = Number(units);
+  return u > 0 ? Math.ceil(u * UNIT_DOLLARS - 1e-9) : 0;
+}
+
 function unitsOf(row) {
   const n = Number(row && row.unitsNum != null ? row.unitsNum : String(row && row.units || '').replace(/[^0-9.]/g, ''));
   return Number.isFinite(n) ? n : 0;
@@ -303,6 +308,9 @@ function autoCorrectCard(card, opts) {
       out.parlayLegs = [pl];
     }
   }
+  // Whole-dollar stake on every straight and the ticket: final units x $150, rounded up.
+  for (const p of picks) p.stakeUsd = wholeDollarStake(unitsOf(p));
+  if (out.parlayLegs[0]) out.parlayLegs[0].stakeUsd = wholeDollarStake(unitsOf(out.parlayLegs[0]));
   const straightUnits = +picks.reduce((s, p) => s + unitsOf(p), 0).toFixed(2);
   const parlayUnits = out.parlayLegs[0] ? unitsOf(out.parlayLegs[0]) : 0;
   out.straightUnits = straightUnits;
@@ -433,6 +441,7 @@ function recheckFromCachedBoard(oddsBySport) {
 }
 
 module.exports = {
+  wholeDollarStake,
   assertNoLeakage,
   recheckPrices,
   toPick,

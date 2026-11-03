@@ -28,9 +28,16 @@ if [ -n "$DIRTY" ]; then
   exit 1
 fi
 
+# 1b) Omega v2 pre-deploy gate (card checks + math gate replay). Any failure stops here: no push, no deploy.
+echo "→ running omega-v2 gate…"
+if ! npm run -s omega-v2:gate; then
+  echo "✋ omega-v2 gate failed — not pushing, not deploying."
+  exit 1
+fi
+
 # 2) Sync GitHub BEFORE going live, so origin/main always == what users get.
 echo "→ pushing to origin/main…"
-git push origin main
+git push origin HEAD:main
 
 # 3) Ship the working tree to the live site.
 echo "→ deploying to webetsocial.com…"

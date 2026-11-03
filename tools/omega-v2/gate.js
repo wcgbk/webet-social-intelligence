@@ -316,6 +316,10 @@ async function main() {
   assert.strictEqual(rechecked.priceRecheck.checked, true);
 
   console.log('PASS omega-v2 gate');
+
+  // Math gate: replay stored v2 cards against the approved GATE_SPEC rules.
+  const math = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'math-gate.js')], { stdio: 'inherit' });
+  if (math.status !== 0) throw new Error('omega-v2 math gate failed');
 }
 
 main().catch((err) => {

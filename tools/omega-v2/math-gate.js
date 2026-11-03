@@ -3,6 +3,8 @@
 /**
  * Omega v2 math gate. Replays stored v2 cards (test/fixtures/omega-v2-cards,
  * last 30 days, 2026-10-31 on) and re-scores them with HEAD rules.
+ * Fixtures must come from stored cards and include stakeUsd on every straight
+ * and parlay ticket (refresh with tools/omega-v2/refresh-fixtures.js).
  * Read-only. No network, no Odds API. Spec: stakeaudit GATE_SPEC.md (approved 2026-11-03).
  *
  * A rule fails a day only on or after its effective date. Earlier failures

@@ -11,13 +11,13 @@ const { isCfbSport, formatCfbPickDisplay, formatCfbMatchupDisplay } = require('.
 const PICK_KEEP = [
   'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'grade', 'qualityGrade', 'confidence',
   'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
-  'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge', 'book', 'displayBook', 'executionBook', 'lockGrade', 'lockFormulaLine', 'lockReceiptLine', 'lockAvailability',
+  'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge', 'book', 'displayBook', 'executionBook', 'lockGrade', 'lockFormulaLine', 'lockReceiptLine', 'lockAvailability', 'stakeUsd',
 ];
 
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
   'uniqueGames', 'uniqueSports', 'independent', 'legMarkets', 'correlationNote', 'correlationHaircut',
-  'candidatesScanned', 'stake', 'source',
+  'candidatesScanned', 'stake', 'stakeUsd', 'source',
 ];
 
 const ROOT_DROP = [
@@ -45,7 +45,12 @@ function parlayPublic(parlayLegs) {
     for (const k of PARLAY_KEEP) {
       if (pl[k] !== undefined) out[k] = pl[k];
     }
-    out.legs = Array.isArray(pl.legs) ? pl.legs.map(pickPublic) : [];
+    // stakeUsd is the ticket stake; legs do not carry their own.
+    out.legs = Array.isArray(pl.legs) ? pl.legs.map((leg) => {
+      const o = pickPublic(leg);
+      if (o && typeof o === 'object') delete o.stakeUsd;
+      return o;
+    }) : [];
     return out;
   });
 }

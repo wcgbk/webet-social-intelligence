@@ -90,6 +90,14 @@ function readBody(event) {
 
 async function openStore() {
   const { getStore } = await import('@netlify/blobs');
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (token) {
+    return getStore({
+      name: BLOB_STORE,
+      siteID: process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606',
+      token,
+    });
+  }
   return getStore(BLOB_STORE);
 }
 

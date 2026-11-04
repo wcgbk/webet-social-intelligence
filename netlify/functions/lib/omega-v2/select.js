@@ -61,6 +61,18 @@ function totalSide(pick) {
   return null;
 }
 
+/**
+ * Half-width of the linear blend across the 0.35 no-vig boundary.
+ * Bucket SE and penalty stay the fitted table. Inside [0.33, 0.37) both
+ * are interpolated so a 0.001 move cannot jump k*SE by 4pp (the hard step
+ * is 1.5 * (0.037668 - 0.008385) = 4.39pp, plus the 3.24pp penalty step).
+ * 0.02 is wide enough that a fair of 0.349 and Nashville's 0.3501 share a
+ * side, and narrow enough that a price at 0.389 (Thunder) keeps the
+ * middle-bucket SE. Interior points keep their bucket.
+ */
+const BOUNDARY_BLEND = 0.02;
+const SMOOTH_BOUNDARY = 0.35;
+
 /** No-vig bucket for the uncertainty floor. Last bucket includes p = 1. */
 function bucketForNovig(pNovig) {
   const p = Number(pNovig);
@@ -73,17 +85,42 @@ function bucketForNovig(pNovig) {
 }
 
 /**
- * (pCal - longshot penalty) - pNovig must exceed k * SE(bucket).
- * The penalty is already 0 outside the long-shot buckets.
+ * SE and long-shot penalty at pNovig. Hard bucket inside each band.
+ * Across 0.35, linear in probability between the two adjacent buckets.
  */
-function uncertaintyFloor(pCal, pNovig) {
+function smoothedNovigStats(pNovig) {
   const bucket = bucketForNovig(pNovig);
-  const edge = Number(pCal) - Number(pNovig);
-  const penalty = bucket.penalty;
-  const adjusted = edge - penalty;
-  const floor = EDGE_FLOOR_K * bucket.se;
+  const p = Number(pNovig);
+  const idx = NO_VIG_BUCKETS.findIndex((row) => row.hi === SMOOTH_BOUNDARY);
+  const left = idx >= 0 ? NO_VIG_BUCKETS[idx] : null;
+  const right = left ? NO_VIG_BUCKETS[idx + 1] : null;
+  if (!left || !right || !Number.isFinite(p)) {
+    return { bucket, se: bucket.se, penalty: bucket.penalty };
+  }
+  const lo = SMOOTH_BOUNDARY - BOUNDARY_BLEND;
+  const hi = SMOOTH_BOUNDARY + BOUNDARY_BLEND;
+  if (p < lo || p >= hi) return { bucket, se: bucket.se, penalty: bucket.penalty };
+  const t = (p - lo) / (hi - lo);
   return {
     bucket,
+    se: left.se + t * (right.se - left.se),
+    penalty: left.penalty + t * (right.penalty - left.penalty),
+  };
+}
+
+/**
+ * (pCal - longshot penalty) - pNovig must exceed k * SE.
+ * SE and the penalty are the bucket values, blended across 0.35.
+ */
+function uncertaintyFloor(pCal, pNovig) {
+  const smooth = smoothedNovigStats(pNovig);
+  const edge = Number(pCal) - Number(pNovig);
+  const penalty = smooth.penalty;
+  const adjusted = edge - penalty;
+  const floor = EDGE_FLOOR_K * smooth.se;
+  return {
+    bucket: smooth.bucket,
+    se: smooth.se,
     edge,
     penalty,
     adjusted,
@@ -127,6 +164,10 @@ function annotateCandidate(candidate) {
   const edgeNovig = cal.pCal - pMkt;
   const gate = uncertaintyFloor(cal.pCal, pMkt);
   const ev = evAtOdds(cal.pCal, candidate.odds);
+  // Rank on the no-vig shrink, not on a later Platt lift. pShrink is the
+  // shipped shrink (calibrate.js). Missing pShrink falls back to pCal.
+  const pShrink = Number.isFinite(Number(cal.pShrink)) ? Number(cal.pShrink) : Number(cal.pCal);
+  const evShrink = evAtOdds(pShrink, candidate.odds);
   let rejectReason = null;
   if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
   else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
@@ -142,17 +183,26 @@ function annotateCandidate(candidate) {
     edgeFloor: gate.floor,
     longshotPenalty: gate.penalty,
     ev,
+    evShrink,
     qualified: straightReject == null,
     parlayQualified: rejectReason == null,
     rejectReason: straightReject,
   };
 }
 
+/** Price EV after the no-vig shrink. Callers that only stored `ev` keep that order. */
+function rankEv(row) {
+  const shrunk = Number(row && row.evShrink);
+  if (Number.isFinite(shrunk)) return shrunk;
+  const ev = Number(row && row.ev);
+  return Number.isFinite(ev) ? ev : -Infinity;
+}
+
 function selectStraights(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
   const ranked = (annotated || [])
     .filter((c) => c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
-    .sort((a, b) => (b.ev - a.ev) || (b.edge - a.edge) || String(a.pick).localeCompare(String(b.pick)));
+    .sort((a, b) => (rankEv(b) - rankEv(a)) || (b.edge - a.edge) || String(a.pick).localeCompare(String(b.pick)));
   const out = [];
   const used = new Set();
   for (const c of ranked) {
@@ -170,7 +220,10 @@ module.exports = {
   marketFamily,
   totalSide,
   bucketForNovig,
+  smoothedNovigStats,
   uncertaintyFloor,
+  BOUNDARY_BLEND,
+  rankEv,
   annotateCandidate,
   selectStraights,
   PREGAME_GRACE_MS,

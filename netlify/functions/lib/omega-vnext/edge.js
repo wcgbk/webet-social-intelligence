@@ -428,6 +428,25 @@ function predictedClvCents(bestUsAmerican, sharpAmerican, pModel, fairSharpP) {
   return +((0.55 * priceClv + 0.45 * modelClv)).toFixed(2);
 }
 
+/**
+ * Soft book lagging the sharp price. Positive lagPp means DraftKings or
+ * Hard Rock still implies less than the Pinnacle no-vig fair (a better
+ * number than the sharp book). 1.5 percentage points is past a normal
+ * hold gap. The flag does not block a card.
+ */
+function staleSoftLag(allBundles, sideBundle) {
+  if (!sideBundle) return { stale: false, lagPp: null, book: null };
+  const fair = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
+  const dk = bestDkHrPrice(sideBundle.prices);
+  if (fair == null || !dk || !Number.isFinite(Number(dk.american))) {
+    return { stale: false, lagPp: null, book: dk ? canonicalizeBook(dk.book) : null };
+  }
+  const imp = americanToImplied(dk.american);
+  if (imp == null) return { stale: false, lagPp: null, book: canonicalizeBook(dk.book) };
+  const lagPp = +((fair - imp) * 100).toFixed(2);
+  return { stale: lagPp >= 1.5, lagPp, book: canonicalizeBook(dk.book) };
+}
+
 function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const bestDkHr = bestDkHrPrice(sideBundle.prices);
@@ -437,6 +456,7 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const book = bestUs ? bestUs.book : 'consensus';
   const liquid = hasMajorLiquidity(sideBundle.prices);
   const place = assessPlaceability(sideBundle.prices, odds, sideBundle.point);
+  const softLag = staleSoftLag(allBundles, sideBundle);
   const predClv = predictedClvCents(odds, sharpAm, raw.modelRawP, fairSharp);
   const ev = (odds != null && Number.isFinite(raw.coverProb))
     ? evAtOdds(raw.coverProb, odds)
@@ -466,6 +486,8 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     bestPlaceable: place.bestPlaceable,
     placeable: place.placeable,
     bestDkHr,
+    staleSoft: softLag.stale,
+    softLagPp: softLag.lagPp,
     alternate: !!(raw && raw.alternate) || !!(sideBundle && sideBundle.alternate),
   };
 }
@@ -504,6 +526,7 @@ module.exports = {
   collectLinesForEdge,
   bestPrice,
   bestDkHrPrice,
+  staleSoftLag,
   DK_HR_BOOKS,
   sharpConsensusAmerican,
   hasMajorLiquidity,

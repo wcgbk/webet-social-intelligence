@@ -16,7 +16,7 @@ const { clamp } = require('../odds_math');
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
   formatMatchup, fuzzyTeam, mapGamesSoft, LEAGUE_PPG,
-  spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
+  blendWithMarket,
 } = require('./_common');
 const { applyGameDayAdjustments } = require('./game_day');
 const { collectMarketOutcomes, collectLinesForEdge, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
@@ -33,6 +33,14 @@ const NHL_MIN_GAMES = 5;
 const LG_SAVE = 0.905;
 const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
+/** Home team share of regulation ties. OT/SO is about 54% home. */
+const OT_HOME = 0.54;
+/**
+ * Phantom shots mixed into a starter's save rate at the league save rate.
+ * A short sample cannot move expected goals as far as the raw SV%.
+ */
+const PHANTOM_SHOTS = 500;
+const GOALIE_SHOTS_IF_MISSING = 400;
 
 function capsOf(caps) {
   return caps || (ENGINE_SOFT && ENGINE_SOFT.NHL) || {
@@ -241,16 +249,27 @@ function goalieOf(espnGame, side) {
   return null;
 }
 
+function regressSavePct(sv, shotsAgainst) {
+  const rate = Number(sv);
+  if (!Number.isFinite(rate)) return null;
+  const sa = Number(shotsAgainst);
+  const shots = Number.isFinite(sa) && sa > 0 ? sa : GOALIE_SHOTS_IF_MISSING;
+  return (rate * shots + LG_SAVE * PHANTOM_SHOTS) / (shots + PHANTOM_SHOTS);
+}
+
 function goalieResidual(espnGame, cfg) {
   const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
   const hg = goalieOf(espnGame, 'home');
   const ag = goalieOf(espnGame, 'away');
   if (!hg || !ag) return none;
   if (hg.confirmed === false || ag.confirmed === false) return none;
-  const hs = asUnitRate(hg.savePct != null ? hg.savePct : hg.svPct, 'save');
-  const asv = asUnitRate(ag.savePct != null ? ag.savePct : ag.svPct, 'save');
+  const hsRaw = asUnitRate(hg.savePct != null ? hg.savePct : hg.svPct, 'save');
+  const asRaw = asUnitRate(ag.savePct != null ? ag.savePct : ag.svPct, 'save');
+  if (hsRaw == null || asRaw == null) return none;
+  if (hsRaw < 0.85 || hsRaw > 0.95 || asRaw < 0.85 || asRaw > 0.95) return none;
+  const hs = regressSavePct(hsRaw, hg.shotsAgainst != null ? hg.shotsAgainst : hg.shots);
+  const asv = regressSavePct(asRaw, ag.shotsAgainst != null ? ag.shotsAgainst : ag.shots);
   if (hs == null || asv == null) return none;
-  if (hs < 0.85 || hs > 0.95 || asv < 0.85 || asv > 0.95) return none;
   const perM = Number.isFinite(Number(cfg.goalieMarginPerSave)) ? Number(cfg.goalieMarginPerSave) : 8;
   const perT = Number.isFinite(Number(cfg.goalieTotalPerSave)) ? Number(cfg.goalieTotalPerSave) : 6;
   const capM = Number.isFinite(Number(cfg.goalieMaxAbsMarginAdj)) ? Number(cfg.goalieMaxAbsMarginAdj) : 0.12;
@@ -347,6 +366,114 @@ function buildMethods({ enginesOn, usedGameday }) {
   return base;
 }
 
+function logFact(n) {
+  let s = 0;
+  for (let i = 2; i <= n; i += 1) s += Math.log(i);
+  return s;
+}
+
+function poissonPmf(k, lam) {
+  if (!(lam > 0)) return k === 0 ? 1 : 0;
+  if (k < 0) return 0;
+  return Math.exp(-lam + k * Math.log(lam) - logFact(k));
+}
+
+/**
+ * Independent NHL price from expected goals.
+ * Regulation is Poisson x Poisson. A tie goes to OT/SO and the home team
+ * wins that at OT_HOME. Puck-line -1.5 needs a two-goal regulation win,
+ * because an OT winner only wins by one. Totals add the OT goal on a tie.
+ */
+function nhlScoreMatrix(homeGoals, awayGoals, maxGoals) {
+  const cap = maxGoals == null ? 12 : maxGoals;
+  const lh = Math.max(0.2, Number(homeGoals) || 0);
+  const la = Math.max(0.2, Number(awayGoals) || 0);
+  const ph = [];
+  const pa = [];
+  for (let i = 0; i <= cap; i += 1) {
+    ph.push(poissonPmf(i, lh));
+    pa.push(poissonPmf(i, la));
+  }
+  const margin = new Map();
+  const totals = new Map();
+  let mass = 0;
+  const add = (map, key, p) => map.set(key, (map.get(key) || 0) + p);
+  for (let i = 0; i <= cap; i += 1) {
+    for (let j = 0; j <= cap; j += 1) {
+      const p = ph[i] * pa[j];
+      if (!(p > 0)) continue;
+      mass += p;
+      if (i !== j) {
+        add(margin, i - j, p);
+        add(totals, i + j, p);
+      } else {
+        add(margin, 1, p * OT_HOME);
+        add(margin, -1, p * (1 - OT_HOME));
+        add(totals, i + j + 1, p);
+      }
+    }
+  }
+  return { margin, totals, mass };
+}
+
+function lambdasFromBoard(margin, total) {
+  const m = Number.isFinite(Number(margin)) ? Number(margin) : 0;
+  const t = Number.isFinite(Number(total)) ? Number(total) : NEUTRAL_TOTAL;
+  return {
+    home: Math.max(0.2, (t + m) / 2),
+    away: Math.max(0.2, (t - m) / 2),
+  };
+}
+
+function sideWinProb(massMap, thresh) {
+  let win = 0;
+  let loss = 0;
+  for (const [k, p] of massMap) {
+    if (Math.abs(k - thresh) < 1e-9) continue;
+    if (k > thresh) win += p;
+    else loss += p;
+  }
+  const live = win + loss;
+  if (!(live > 0)) return 0.5;
+  return clamp(win / live, 0.02, 0.98);
+}
+
+/**
+ * Moneyline, puck line, or total. `isHome` is this side.
+ * Spread `line` is this side's points. Total `line` is the number.
+ */
+function nhlMarketProb({ margin, total, market, isHome, line, side }) {
+  const lam = lambdasFromBoard(margin, total);
+  const matrix = nhlScoreMatrix(lam.home, lam.away);
+  const family = String(market || '');
+  if (family === 'Moneyline' || /moneyline/i.test(family)) {
+    let home = 0;
+    let away = 0;
+    for (const [k, p] of matrix.margin) {
+      if (k > 0) home += p;
+      else if (k < 0) away += p;
+    }
+    const p = isHome ? home : away;
+    const s = home + away;
+    return s > 0 ? clamp(p / s, 0.02, 0.98) : 0.5;
+  }
+  if (family === 'Total' || /total/i.test(family)) {
+    const number = Number(line);
+    let over = 0;
+    let under = 0;
+    for (const [k, p] of matrix.totals) {
+      if (k > number) over += p;
+      else if (k < number) under += p;
+    }
+    const wantOver = /over/i.test(side || '');
+    return sideWinProb(new Map([[1, wantOver ? over : under], [-1, wantOver ? under : over]]), 0);
+  }
+  const points = Number(line);
+  const signed = new Map();
+  for (const [k, p] of matrix.margin) signed.set(isHome ? k : -k, p);
+  return sideWinProb(signed, -points);
+}
+
 function findEspnGame(ev, espnGames) {
   if (!espnGames || !espnGames.length || !ev) return null;
   const home = (ev.home_team || '').toLowerCase();
@@ -418,7 +545,9 @@ function projectGame(event, standings, espnGame, gameDay) {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      let p = nhlMarketProb({
+        margin: modelMargin, total: modelTotal, market: 'Moneyline', isHome, side: b.side,
+      });
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
       out.push(enrichCandidateWithEdge({
         sport: SPORT, homeTeam: home, awayTeam: away,
@@ -438,7 +567,9 @@ function projectGame(event, standings, espnGame, gameDay) {
       const line = b.point;
       if (line == null) continue;
       const isHome = b.side === home;
-      let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
+      let pCover = nhlMarketProb({
+        margin: modelMargin, total: modelTotal, market: 'Spread', isHome, line, side: b.side,
+      });
       pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       out.push(enrichCandidateWithEdge({
@@ -458,7 +589,9 @@ function projectGame(event, standings, espnGame, gameDay) {
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
-      let p = totalCoverProb(modelTotal, line, b.side, SPORT);
+      let p = nhlMarketProb({
+        margin: modelMargin, total: modelTotal, market: 'Total', isHome: false, line, side: b.side,
+      });
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
       out.push(enrichCandidateWithEdge({
         sport: SPORT, homeTeam: home, awayTeam: away,
@@ -489,6 +622,10 @@ module.exports = {
   nhlStandingsEnv,
   applyNhlEngineSoft,
   teamGpg,
+  nhlMarketProb,
+  regressSavePct,
+  OT_HOME,
+  PHANTOM_SHOTS,
   NHL_MARGIN_CAP,
   NHL_TOTAL_MIN,
   NHL_TOTAL_MAX,

@@ -111,7 +111,8 @@ const MODEL_SPORTS = ['NBA', 'NHL', 'NCAAM', 'NFL', 'NCAAF'];
  * Prior strength for the shrink weight. Weight on the sport prior is
  *   w = clamp(SHRINK_N0 / (SHRINK_N0 + n_sport), 0, 1)
  *   k = clamp(w * k_prior + (1 - w) * k_fit, 0, 1)
- *   p = (1 - k) * pModel + k * pFair
+ *   logit(p) = (1 - k) * logit(pModel - intercept) + k * logit(pFair)
+ * The intercept is the walk-forward mean residual vs the no-vig price.
  * n = 0 or n under the sport floor has no fit, so k = k_prior (w = 1).
  * 80 is the same prior strength used on the uncertainty buckets above.
  * At n = 80 the prior and the fitted shrink split the weight evenly.

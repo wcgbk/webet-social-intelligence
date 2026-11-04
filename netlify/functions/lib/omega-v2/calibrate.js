@@ -26,8 +26,86 @@ function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
 }
 
-function shrinkP(pModel, pMkt, k) {
-  return clipP((1 - k) * pModel + k * pMkt);
+/**
+ * Prior count for a sport x market intercept. The fitted mean residual is
+ * shrunk toward 0 by n / (n + BIAS_N0). Thin cells stay on the market.
+ * This is not a blend weight.
+ */
+const BIAS_N0 = 8;
+
+/** origin/main blend, probability space. Replay uses it as CURRENT. */
+let mathMode = 'logodds';
+
+function setMathMode(mode) {
+  mathMode = mode === 'linear' ? 'linear' : 'logodds';
+  return mathMode;
+}
+
+function shrinkPLinear(pModel, pMkt, k) {
+  return clipP((1 - k) * Number(pModel) + k * Number(pMkt));
+}
+
+/**
+ * Blend in log-odds. `intercept` is the walk-forward mean of
+ * (pModel - pFair) for this sport x market, removed before the blend so
+ * the cell is centered on the no-vig price.
+ *   p0 = pModel - intercept
+ *   logit(p) = (1 - k) * logit(p0) + k * logit(pFair)
+ */
+function shrinkP(pModel, pMkt, k, intercept) {
+  const shift = Number.isFinite(Number(intercept)) ? Number(intercept) : 0;
+  const p0 = clipP(Number(pModel) - shift);
+  const z = (1 - k) * logit(p0) + k * logit(pMkt);
+  return clipP(sigmoid(z));
+}
+
+function cellKey(row) {
+  const market = row && (row.market || row.betType || row.marketFamily);
+  if (!market) return null;
+  const sport = String((row && row.sport) || '').toUpperCase();
+  if (!sport) return null;
+  return `${sport}|${marketFamily(market, row.pick || row.side)}`;
+}
+
+function biasFor(bias, row) {
+  if (!bias) return 0;
+  const key = cellKey(row);
+  if (!key || !Number.isFinite(Number(bias[key]))) return 0;
+  return Number(bias[key]);
+}
+
+/**
+ * Mean (pModel - pFair) per sport x market, shrunk toward 0.
+ * Rows without a market are skipped so they do not land on Moneyline.
+ */
+function fitCellBias(rows) {
+  const groups = {};
+  for (const row of rows || []) {
+    const key = cellKey(row);
+    if (!key) continue;
+    const pModel = Number(row.pModel);
+    const pMkt = Number(row.pMkt);
+    if (!Number.isFinite(pModel) || !Number.isFinite(pMkt)) continue;
+    if (!groups[key]) groups[key] = { n: 0, sum: 0 };
+    groups[key].n += 1;
+    groups[key].sum += pModel - pMkt;
+  }
+  const bias = {};
+  for (const key of Object.keys(groups)) {
+    const g = groups[key];
+    const mean = g.sum / g.n;
+    const w = g.n / (g.n + BIAS_N0);
+    bias[key] = w * mean;
+  }
+  return bias;
+}
+
+function centerRows(rows, bias) {
+  return (rows || []).map((row) => {
+    const shift = biasFor(bias, row);
+    if (!shift) return row;
+    return { ...row, pModel: clipP(Number(row.pModel) - shift) };
+  });
 }
 
 function brier(ps, ys) {
@@ -269,12 +347,14 @@ function estimationUncertainty(rows) {
 function fitWalkForward(history, cardDate) {
   const rows = (history || []).filter(usable);
   assertNoLeakage(rows, cardDate);
-  const pooled = fitSelected(rows);
+  const bias = mathMode === 'linear' ? {} : fitCellBias(rows);
+  const trainRows = mathMode === 'linear' ? rows : centerRows(rows, bias);
+  const pooled = fitSelected(trainRows);
   const bySport = {};
   const sportN = {};
   const sports = [...new Set(rows.map((r) => String(r.sport || '').toUpperCase()).filter(Boolean))];
   for (const sport of sports) {
-    const subset = rows.filter((r) => String(r.sport || '').toUpperCase() === sport);
+    const subset = trainRows.filter((r) => String(r.sport || '').toUpperCase() === sport);
     sportN[sport] = subset.length;
     // Own holdout only. A thinner pooled fit must not fill this in.
     if (subset.length >= sportFloor(sport)) bySport[sport] = fitSelected(subset);
@@ -295,8 +375,10 @@ function fitWalkForward(history, cardDate) {
     pooled,
     bySport,
     sportN,
+    bias,
     uncertainty,
     leakageChecked: true,
+    mathMode,
   };
 }
 
@@ -409,7 +491,10 @@ function applyCalibration(candidate, fit) {
     ? fit.bySport[key]
     : null;
   const k = shrinkKFor(sport, n, sportModel ? sportModel.k : null, market, pick);
-  const pShrink = shrinkP(pModel, pMkt, k);
+  const intercept = locked || mathMode === 'linear' ? 0 : biasFor(fit && fit.bias, candidate);
+  const pShrink = mathMode === 'linear'
+    ? shrinkPLinear(pModel, pMkt, k)
+    : shrinkP(pModel, pMkt, k, intercept);
   let method = locked ? 'nhl-ml-novig' : (sportModel ? sportModel.method : (n > 0 ? 'sport-floor' : 'prior'));
   let pCal = pShrink;
   let mapApplied = false;
@@ -427,6 +512,7 @@ function applyCalibration(candidate, fit) {
     pMkt: clipP(pMkt),
     pShrink,
     pCal,
+    intercept,
     shrinkK: k,
     method,
     trainN: n,
@@ -446,6 +532,12 @@ module.exports = {
   applyCalibration,
   uncertaintyFor,
   shrinkP,
+  shrinkPLinear,
+  setMathMode,
+  fitCellBias,
+  biasFor,
+  cellKey,
+  BIAS_N0,
   modelFor,
   priorKFor,
   sportFloor,

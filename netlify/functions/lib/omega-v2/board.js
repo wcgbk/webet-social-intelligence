@@ -79,6 +79,8 @@ function historyRow(date, pick) {
   return {
     date: String(date),
     sport: pick.sport || null,
+    market: pick.market || pick.betType || null,
+    pick: pick.pick || pick.side || null,
     pModel,
     pMkt,
     result,

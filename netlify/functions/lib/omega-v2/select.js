@@ -3,6 +3,10 @@
 const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS,
 } = require('./constants');
+const { dkHrLineAgrees, quotePoint } = require('./board');
+
+/** Same placeable books as a published straight. A missing book is not a reject. */
+const PLACEABLE_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
 /** Kickoff at or before asOf plus this window is not a pregame candidate. */
 const PREGAME_GRACE_MS = 5 * 60 * 1000;
@@ -130,6 +134,24 @@ function uncertaintyFloor(pCal, pNovig) {
 }
 
 /**
+ * DraftKings or Hard Rock, on the number the edge was computed on.
+ * A missing book is left alone. A posted non-DK/HR book, or a DK/HR quote
+ * whose point is a different number, is not a price we can stake.
+ */
+function placeableReject(candidate) {
+  const book = String(candidate && candidate.book || '').toLowerCase();
+  if (book && !PLACEABLE_BOOKS.has(book)) return 'no-dk-hr-price';
+  const px = candidate && candidate.bestDkHr;
+  if (!px || typeof px !== 'object') return null;
+  const pxBook = String(px.book || '').toLowerCase();
+  const pxAmerican = Number(px.american);
+  const pxHasPrice = Number.isFinite(pxAmerican) && pxAmerican !== 0;
+  if (pxHasPrice && pxBook && !PLACEABLE_BOOKS.has(pxBook)) return 'no-dk-hr-price';
+  if (pxHasPrice && !dkHrLineAgrees(candidate.line, quotePoint(px))) return 'dk-hr-line-mismatch';
+  return null;
+}
+
+/**
  * Straight: positive no-vig edge, positive EV at the DK/HR price, under the
  * miscalibration cap, and clear of k*SE in its no-vig bucket.
  * Parlay qualification here is that same no-vig screen. usableLegs also
@@ -168,8 +190,10 @@ function annotateCandidate(candidate) {
   // shipped shrink (calibrate.js). Missing pShrink falls back to pCal.
   const pShrink = Number.isFinite(Number(cal.pShrink)) ? Number(cal.pShrink) : Number(cal.pCal);
   const evShrink = evAtOdds(pShrink, candidate.odds);
+  const bookReject = placeableReject(candidate);
   let rejectReason = null;
-  if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
+  if (bookReject) rejectReason = bookReject;
+  else if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
   else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
   else if (!gate.ok) rejectReason = 'edge-below-uncertainty-floor';
   const straightReject = rejectReason

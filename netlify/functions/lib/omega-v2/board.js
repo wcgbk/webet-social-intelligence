@@ -17,6 +17,33 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** A spread or total number. Moneyline and a missing quote stay null. */
+function finitePoint(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Point on a DK/HR quote, when the quote recorded one. */
+function quotePoint(px) {
+  if (!px || typeof px !== 'object') return null;
+  if (px.point != null && px.point !== '') return finitePoint(px.point);
+  if (px.line != null && px.line !== '') return finitePoint(px.line);
+  return null;
+}
+
+/**
+ * True when the DK/HR number is the number the edge was computed on.
+ * A moneyline, or a quote that did not record a point, does not disagree.
+ * Any other difference is a different bet.
+ */
+function dkHrLineAgrees(edgeLine, quoteLine) {
+  const edge = finitePoint(edgeLine);
+  const quote = finitePoint(quoteLine);
+  if (edge == null || quote == null) return true;
+  return Math.abs(edge - quote) <= 1e-6;
+}
+
 function slimCandidate(c) {
   if (!c) return null;
   return {
@@ -33,6 +60,9 @@ function slimCandidate(c) {
     edgePct: c.edgePct != null ? c.edgePct : null,
     uncertainty: numOrNull(c.uncertainty),
     book: c.book || null,
+    edgeLine: c.line != null ? c.line : null,
+    dkLine: quotePoint(c.bestDkHr),
+    lineAgrees: dkHrLineAgrees(c.line, quotePoint(c.bestDkHr)),
     openPrice: c.openPrint && c.openPrint.odds != null ? c.openPrint.odds : (c.openPrice != null ? c.openPrice : null),
     openBook: c.openPrint && c.openPrint.book ? c.openPrint.book : (c.openBook || null),
     commenceTime: c.commenceTime || '',
@@ -138,4 +168,7 @@ module.exports = {
   saveMorningBoard,
   loadGradedHistory,
   historyRow,
+  finitePoint,
+  quotePoint,
+  dkHrLineAgrees,
 };

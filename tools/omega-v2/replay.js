@@ -500,9 +500,9 @@ function buildMarkdown(report) {
   const V = report.v2;
   const boot = report.bootstrap;
   const lines = [];
-  lines.push('# Omega pipeline v2 replay');
+  lines.push('# Pipeline v2 replay');
   lines.push('');
-  lines.push(`Walk-forward on the stored Omega card, ${report.window[0]} to ${report.window[1]} (${report.days} days). 1u = $150. Profit dollars and units are whole numbers rounded away from zero. The close is used only for CLV. Prices and win/loss grades are the stored card.`);
+  lines.push(`Walk-forward on the stored card, ${report.window[0]} to ${report.window[1]} (${report.days} days). 1u = $150. Profit dollars and units are whole numbers rounded away from zero. The close is used only for CLV. Prices and win/loss grades are the stored card.`);
   lines.push('');
   lines.push('The candidate pool each day is the published straights plus that day\'s parlay legs. Full morning boards are not stored, so v2 can drop or resize a published leg. It cannot add a bet that never made the card.');
   lines.push('');
@@ -538,7 +538,7 @@ function buildMarkdown(report) {
   lines.push('');
   lines.push('## Read');
   lines.push('');
-  lines.push('Live straights were about even and the parlays made the card. v2 kept the prices and the grades, then dropped any leg whose walk-forward probability did not clear the price. What remained was 7 straights and no parlay. Those 7 beat the close and lost the games. The all-straight Brier did not improve on the raw model, and the no-vig market is still the best probability in the file.');
+  lines.push(`On this window v2 published ${V.straights.bets} straights and ${V.parlays.bets} parlays. The live card published ${L.straights.bets} straights and ${L.parlays.bets} parlays. The candidate pool is the published card, not the morning board, so a leg that never made the card cannot be added.`);
   lines.push('');
   lines.push(`Recommendation: ${report.recommendation.ship ? 'Recommend enabling the flag.' : 'Do not replace the live card.'} ${report.recommendation.text}`);
   lines.push('');
@@ -577,7 +577,7 @@ function recommend(live, next, boot, calibration) {
   }
   return {
     ship: false,
-    text: 'The profit gap is not significant. v2 is the cleaner process (no forced fill, walk-forward calibration, ML+total parlays only), but this 30-day pool does not justify replacing the live card. Leave OMEGA_PIPELINE_V2 off and keep the shadow.',
+    text: 'The profit gap is not significant. v2 does not force a pick, and a parlay leg has to be +EV at a DraftKings or Hard Rock price with no shared game or club. This 30-day pool does not justify replacing the live card. Leave the pipeline flag off.',
     brierBetter,
   };
 }

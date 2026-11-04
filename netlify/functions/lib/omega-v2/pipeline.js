@@ -14,6 +14,7 @@ const { publishEdgeCard } = require('../omega-vnext/assemble');
 const { sizeParlay, legEvSkips, legFailsPriceEv, legBookSkips, quotedLeg } = require('./parlay');
 const { americanToImplied } = require('../omega-vnext/odds_math');
 const { applySportCoverage, stampQualified } = require('./coverage');
+const { dkHrLineAgrees, quotePoint } = require('./board');
 
 const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
@@ -31,17 +32,28 @@ function canonicalPlaceBook(book) {
 }
 
 /**
- * Placeable DraftKings or Hard Rock price for this side.
+ * Placeable DraftKings or Hard Rock price for this side and this number.
  * bestDkHr wins even when raw.book is a better number somewhere else.
- * Without it, only a posted DK/HR book is kept. Null means no-dk-hr-price.
- * The line is not touched: bestDkHr is the same side and point.
+ * A non-DK/HR book on that quote is not used. A quote point that differs
+ * from the line the edge was computed on is not used. Without a usable
+ * bestDkHr, only a posted DK/HR book is kept.
  */
 function placeableDkHr(raw) {
   const px = raw && raw.bestDkHr;
+  const edgeLine = raw && raw.line != null && raw.line !== ''
+    ? raw.line
+    : (raw && raw.betPoint != null && raw.betPoint !== '' ? raw.betPoint : null);
   if (px && typeof px === 'object') {
     const american = finiteAmerican(px.american);
+    const postedBook = String(px.book || '').toLowerCase();
+    if (american != null && postedBook && !DK_HR_BOOKS.has(postedBook)) {
+      return { reject: 'no-dk-hr-price' };
+    }
+    if (american != null && !dkHrLineAgrees(edgeLine, quotePoint(px))) {
+      return { reject: 'dk-hr-line-mismatch' };
+    }
     if (american != null) {
-      return { odds: american, book: canonicalPlaceBook(px.book) || null, fromBest: true };
+      return { odds: american, book: canonicalPlaceBook(postedBook) || null, fromBest: true };
     }
   }
   const posted = String(raw && raw.book || '').toLowerCase();
@@ -86,29 +98,33 @@ function normalizeCandidate(raw) {
   const pick = raw.pick || raw.side || '';
   const market = marketFamily(raw.market || raw.betType, pick);
   const quote = placeableDkHr(raw);
+  const rejected = quote && quote.reject;
+  const priced = !!(quote && !rejected);
   return {
     sport: String(raw.sport || '').toUpperCase(),
     matchup: raw.matchup || `${raw.awayTeam || ''} @ ${raw.homeTeam || ''}`.trim(),
     pick: String(pick),
     market,
     marketFamily: market,
-    odds: quote ? quote.odds : null,
-    oddsText: quote && quote.fromBest ? (oddsLabel(quote.odds) || raw.odds) : raw.odds,
+    odds: priced ? quote.odds : null,
+    oddsText: priced && quote.fromBest ? (oddsLabel(quote.odds) || raw.odds) : raw.odds,
     line: raw.line != null ? raw.line : (raw.betPoint != null ? raw.betPoint : null),
     pModel: numProb(raw.pModel != null ? raw.pModel : (raw.modelRawP != null ? raw.modelRawP : raw.p_model)),
     pMkt: numProb(raw.pMkt != null ? raw.pMkt : (raw.fair_sharp_p != null ? raw.fair_sharp_p : raw.sharpFairP)),
     uncertainty: Number.isFinite(Number(raw.uncertainty)) ? Number(raw.uncertainty) : null,
     commenceTime: raw.commenceTime || '',
-    book: quote ? quote.book : (raw.book || null),
+    book: priced ? quote.book : (raw.book || null),
     postedBook: raw.book || null,
     postedOdds: raw.odds,
+    bestDkHr: raw.bestDkHr && typeof raw.bestDkHr === 'object' ? raw.bestDkHr : null,
+    lineMismatch: rejected === 'dk-hr-line-mismatch',
     homeTeam: raw.homeTeam || null,
     awayTeam: raw.awayTeam || null,
     result: raw.result || null,
     clvPp: raw.clvPp != null && raw.clvPp !== '' ? Number(raw.clvPp) : null,
     coreReasoning: raw.coreReasoning || '',
     gameKey: gameKey(raw.matchup || `${raw.awayTeam || ''} @ ${raw.homeTeam || ''}`),
-    noDkHr: !quote,
+    noDkHr: !priced,
     openPrint: raw.openPrint != null ? raw.openPrint : null,
     lineMove: raw.lineMove != null ? raw.lineMove : null,
   };
@@ -125,6 +141,19 @@ function dedupe(cands) {
 
 /** Same screen as the main loop. A rescued row is not a free pass. */
 function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
+  if (cand.lineMismatch) {
+    rejections.push({
+      matchup: cand.matchup,
+      side: cand.pick,
+      market: cand.market,
+      sport: cand.sport,
+      reason: 'dk-hr-line-mismatch',
+      odds: cand.postedOdds != null ? cand.postedOdds : null,
+      book: cand.postedBook || null,
+      line: cand.line != null ? cand.line : null,
+    });
+    return;
+  }
   if (cand.noDkHr) {
     rejections.push({
       matchup: cand.matchup,

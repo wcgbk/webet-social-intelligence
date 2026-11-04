@@ -292,12 +292,12 @@ async function main() {
     history: [],
   });
   assert.strictEqual(st.picks.length, 1, 'st. louis and st louis are one game, so one straight');
-  assert.strictEqual(st.parlayLegs.length, 1, 'same-game ML+total is allowed');
-  assert.strictEqual(st.parlayLegs[0].legs.length, 2);
-  assert.strictEqual(Number(st.parlayLegs[0].correlationFactor), 1);
-  const stMarkets = st.parlayLegs[0].legMarkets.slice().sort();
-  assert.deepStrictEqual(stMarkets, ['Moneyline', 'Total']);
-  assert.strictEqual(new Set(st.parlayLegs[0].legs.map((leg) => leg.matchup.toLowerCase().replace(/\./g, ''))).size, 1);
+  assert.strictEqual(st.parlayLegs.length, 0, 'same-game ML+total does not publish');
+  assert.strictEqual(st.pass, false, 'the straight still publishes');
+  assert.strictEqual(v2.bannedPairReason([
+    { matchup: 'Buffalo Bills @ St. Louis Battlehawks', pick: 'Buffalo Bills ML', market: 'Moneyline', homeTeam: 'St. Louis Battlehawks', awayTeam: 'Buffalo Bills' },
+    { matchup: 'Buffalo Bills @ st louis battlehawks', pick: 'Over 45.5', market: 'Total', line: 45.5, homeTeam: 'st louis battlehawks', awayTeam: 'Buffalo Bills' },
+  ]), 'same-game');
 
   let networkCalls = 0;
   const rechecked = await v2.buildCard({
@@ -336,6 +336,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (candidateClv.status !== 0) throw new Error('candidate clv gate failed');
+
+  const placeParlay = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-place-parlay.js')],
+    { stdio: 'inherit' }
+  );
+  if (placeParlay.status !== 0) throw new Error('place and parlay gate failed');
 }
 
 main().catch((err) => {

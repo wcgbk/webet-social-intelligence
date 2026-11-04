@@ -239,11 +239,11 @@ function novig(pick) {
     history: [],
   });
   assert.strictEqual(same.picks.length, 1);
-  assert.strictEqual(same.parlayLegs.length, 1, 'ML+total on one game still publishes');
-  assert.strictEqual(same.parlayLegs[0].legs.length, 2);
-  assert.strictEqual(Number(same.parlayLegs[0].correlationFactor), 1);
-  assert.ok(/applied phi 0/.test(same.parlayLegs[0].correlationNote), same.parlayLegs[0].correlationNote);
-  assert.ok(/n=14/.test(same.parlayLegs[0].correlationNote));
+  assert.strictEqual(same.parlayLegs.length, 0, 'ML+total on one game does not publish');
+  assert.strictEqual(v2.pairRule(
+    { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'B ML', market: 'Moneyline' },
+    { matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B', pick: 'Over 45.5', market: 'Total', line: 45.5 },
+  ).reason, 'same-game');
 
   const trio = [0, 1, 2].map((i) => edgeLeg(i, i === 1 ? {
     pick: `Over ${40 + i}`,

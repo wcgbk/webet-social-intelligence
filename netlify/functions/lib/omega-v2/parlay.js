@@ -1,9 +1,10 @@
 'use strict';
 
 const {
-  PAIR_PHI, PARLAY_STAKE_CAP, CARD_BUDGET,
+  PARLAY_STAKE_CAP, CARD_BUDGET,
 } = require('./constants');
-const { marketFamily, gameKey, pastPregameCutoff, pregameClockMs } = require('./select');
+const { marketFamily, gameKey, normTeam, pastPregameCutoff, pregameClockMs } = require('./select');
+const { dkHrLineAgrees, quotePoint } = require('./board');
 const { roundQuarter, stakeUsd, sumUnits, quarterKellyFromDecimal } = require('./size');
 
 /**
@@ -37,6 +38,9 @@ function quotedLeg(leg) {
   const px = leg.bestDkHr;
   const pxAmerican = px && typeof px === 'object' ? finiteAmerican(px.american) : null;
   const pxBook = px && typeof px === 'object' ? String(px.book || '').toLowerCase() : '';
+  // A DK/HR number on a different point is a different bet. Do not borrow it.
+  if (pxAmerican != null && px && !dkHrLineAgrees(leg.line, quotePoint(px))) return null;
+  if (pxAmerican != null && pxBook && !PLACEABLE_BOOKS.has(pxBook)) return null;
   if (pxAmerican != null && PLACEABLE_BOOKS.has(pxBook)) {
     return {
       ...leg,
@@ -96,38 +100,54 @@ function sameSide(a, b) {
 }
 
 /**
- * Same-game market pairs.
- * ML+spread is disallowed. The graded same-game sample of that pair is
- * n=4, phi=1.0, SE=0.50 (kpi.picks, all models). The 95% interval excludes
- * 0: the spread side and the moneyline side are one outcome, not two bets.
- * Same side is the measured case. The opposite side is the complement
- * (a middle) and is not a second leg either.
- * ML+total and spread+total keep the product of the probabilities.
- * Their measured phi sits inside 1.96 SE, so PAIR_PHI.apply is 0.
- * That is not the flat 0.95 haircut.
+ * Clubs on a leg. Names come from home, away, or the two sides of the
+ * matchup, compared exactly. A pick token is used only when the game
+ * names are missing, and a total still contributes no pick side.
+ */
+function legClubs(leg) {
+  const out = new Set();
+  const add = (name) => {
+    const team = normTeam(name);
+    if (team) out.add(team);
+  };
+  add(leg && leg.homeTeam);
+  add(leg && leg.awayTeam);
+  const parts = String((leg && leg.matchup) || '').split(/\s*@\s*/);
+  if (parts.length === 2) {
+    add(parts[0]);
+    add(parts[1]);
+  }
+  if (out.size === 0 && legMarket(leg) !== 'Total') {
+    const pickTeam = teamToken(legPick(leg));
+    if (pickTeam) out.add(pickTeam);
+  }
+  return out;
+}
+
+function sharesTeam(a, b) {
+  const right = legClubs(b);
+  for (const club of legClubs(a)) {
+    if (right.has(club)) return true;
+  }
+  return false;
+}
+
+/**
+ * Every same-game pair is one ticket, including moneyline plus total and
+ * spread plus total. The same club in two games is the same ban.
+ * A surviving ticket is cross-game, and its joint is the product.
  */
 function pairRule(a, b) {
-  const sameGame = legGame(a) && legGame(a) === legGame(b);
-  if (!sameGame) return { ok: true, sameGame: false, phi: 0, kind: 'cross-game', n: null };
-  const key = [legMarket(a), legMarket(b)].sort().join('+');
-  if (key === 'Moneyline+Spread') {
-    const side = sameSide(a, b) ? 'same-side' : 'opposite';
-    return { ok: false, sameGame: true, kind: key, reason: `same-game-ml-spread-${side}` };
+  const leftGame = legGame(a);
+  const rightGame = legGame(b);
+  const sameGame = !!(leftGame && leftGame === rightGame);
+  if (sameGame) {
+    return { ok: false, sameGame: true, sameTeam: true, phi: 0, kind: 'same-game', reason: 'same-game' };
   }
-  if (key === 'Moneyline+Moneyline' || key === 'Spread+Spread' || key === 'Total+Total') {
-    return { ok: false, sameGame: true, kind: key, reason: 'same-game-same-market' };
+  if (sharesTeam(a, b)) {
+    return { ok: false, sameGame: false, sameTeam: true, phi: 0, kind: 'same-team', reason: 'same-team' };
   }
-  const measured = PAIR_PHI[key];
-  if (!measured) return { ok: false, sameGame: true, kind: key, reason: 'same-game-unmeasured' };
-  return {
-    ok: true,
-    sameGame: true,
-    kind: key,
-    phi: measured.apply,
-    measuredPhi: measured.phi,
-    n: measured.n,
-    se: measured.se,
-  };
+  return { ok: true, sameGame: false, sameTeam: false, phi: 0, kind: 'cross-game', n: null };
 }
 
 function bannedPairReason(legs) {
@@ -147,9 +167,8 @@ function sigma(p) {
 }
 
 /**
- * Joint probability. Cross-game pairs and same-game pairs whose phi is
- * inside sampling noise contribute the product. A measured phi that cleared
- * its SE would add phi * sigma_a * sigma_b on that pair only.
+ * Joint probability of a legal ticket. Every pair is cross-game, so the
+ * joint is the product of the leg probabilities. A banned pair returns null.
  */
 function scoreLegs(legs) {
   const list = legs || [];
@@ -199,15 +218,8 @@ function scoreLegs(legs) {
   };
 }
 
-function correlationNote(pairs) {
-  const same = (pairs || []).filter((pair) => pair.sameGame);
-  if (!same.length) return 'Distinct games. Joint probability is the product. No flat haircut.';
-  return same.map((pair) => {
-    const measured = Number(pair.measuredPhi);
-    const n = pair.n;
-    const applied = pair.phi || 0;
-    return `${pair.kind} measured phi ${measured.toFixed(3)} on n=${n} (SE ${Number(pair.se).toFixed(3)}); applied phi ${applied} because the 95% interval includes 0.`;
-  }).join(' ');
+function correlationNote() {
+  return 'Distinct games. Joint probability is the product. No flat haircut.';
 }
 
 function combinations(pool, n) {

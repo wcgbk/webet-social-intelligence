@@ -4,14 +4,14 @@ const {
   MODEL_VERSION, MAX_STRAIGHTS, PER_BET_CAP, STRAIGHT_BUDGET, CARD_BUDGET, PARLAY_STAKE_CAP, UNIT_DOLLARS,
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
-const { marketFamily, pastPregameCutoff, pregameClockMs } = require('./select');
+const { marketFamily, pastPregameCutoff, pregameClockMs, annotateCandidate } = require('./select');
 const { bannedPairReason, sizeParlay, quotedLeg, canonicalPlaceBook, PLACEABLE_BOOKS } = require('./parlay');
+const { dkHrLineAgrees } = require('./board');
 const { quarterKellyFromDecimal } = require('./size');
 const { americanJuiceDelta, americanToDecimal, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
 const { letterFromPrintedEdge } = require('./letter');
 
 const STALE_CENTS = 15;
-const STALE_POINTS = 1;
 
 function parseAmerican(raw) {
   if (raw == null || raw === '') return null;
@@ -24,8 +24,10 @@ function parseAmerican(raw) {
 /**
  * Pre-publish price recheck. `recheck` is injected by the caller.
  * This module never calls The Odds API or any other network price source.
- * A quote that is more than 15 juice cents worse, or more than 1 point off
- * the number, drops the leg. A null quote leaves the locked price in place.
+ * A quote whose number differs from the edge line is dropped. Juice more
+ * than 15 cents worse is dropped. A smaller DK/HR move is repriced, and
+ * the leg stays only while it is still +EV at that price. A null quote,
+ * or a quote from any other book, leaves the locked price in place.
  */
 async function recheckPrices(candidates, recheck) {
   if (typeof recheck !== 'function') {
@@ -52,25 +54,64 @@ async function recheckPrices(candidates, recheck) {
       dropped.push({ pick: cand.pick, matchup: cand.matchup, reason: quote.reason || 'price-recheck' });
       continue;
     }
-    const cents = americanJuiceDelta(parseAmerican(cand.odds), parseAmerican(quote.american));
-    const lineCap = marketFamily(cand.market, cand.pick) === 'Moneyline' ? null : STALE_POINTS;
-    const lineDrift = cand.line != null && quote.line != null
-      ? Math.abs(Number(cand.line) - Number(quote.line))
-      : 0;
-    const juiceWorse = cents != null && cents > STALE_CENTS;
-    const lineWorse = lineCap != null && lineDrift > lineCap + 1e-9;
-    if (juiceWorse || lineWorse) {
+    const quoteBook = String(quote.book || '').toLowerCase();
+    if (quoteBook && !PLACEABLE_BOOKS.has(quoteBook)) {
+      kept.push(cand);
+      continue;
+    }
+    const quoteLine = quote.line != null && quote.line !== '' ? quote.line : quote.point;
+    if (!dkHrLineAgrees(cand.line, quoteLine)) {
+      dropped.push({
+        pick: cand.pick,
+        matchup: cand.matchup,
+        market: cand.market,
+        reason: 'dk-hr-line-mismatch',
+        line: cand.line != null ? cand.line : null,
+        quoteLine: quoteLine != null ? quoteLine : null,
+      });
+      continue;
+    }
+    const nextOdds = parseAmerican(quote.american);
+    const curOdds = parseAmerican(cand.odds);
+    const cents = americanJuiceDelta(curOdds, nextOdds);
+    if (cents != null && cents > STALE_CENTS) {
       dropped.push({
         pick: cand.pick,
         matchup: cand.matchup,
         market: cand.market,
         reason: 'price-recheck',
         cents,
-        lineDrift,
+        lineDrift: 0,
       });
       continue;
     }
-    kept.push(cand);
+    if (nextOdds == null || nextOdds === curOdds) {
+      kept.push(cand);
+      continue;
+    }
+    const nextBook = canonicalPlaceBook(quote.book) || cand.book;
+    const repriced = annotateCandidate({
+      ...cand,
+      odds: nextOdds,
+      book: nextBook,
+      bestDkHr: {
+        ...(cand.bestDkHr && typeof cand.bestDkHr === 'object' ? cand.bestDkHr : {}),
+        american: nextOdds,
+        book: nextBook,
+      },
+    });
+    if (repriced.qualified || (repriced.ev > 0 && repriced.parlayQualified)) {
+      kept.push(repriced);
+      continue;
+    }
+    dropped.push({
+      pick: cand.pick,
+      matchup: cand.matchup,
+      market: cand.market,
+      reason: 'price-recheck',
+      cents,
+      lineDrift: 0,
+    });
   }
   return { checked: true, dropped, kept };
 }
@@ -455,6 +496,13 @@ function autoCorrectCard(card, opts) {
   }
   replaceIllegalParlayBooks(out, picks, clockOpts, notes);
   if (out.parlayLegs[0]) {
+    const banned = bannedPairReason(out.parlayLegs[0].legs);
+    if (banned) {
+      notes.push(`dropped correlated parlay (${banned})`);
+      out.parlayLegs = [];
+    }
+  }
+  if (out.parlayLegs[0]) {
     const pl = {
       ...out.parlayLegs[0],
       legs: (out.parlayLegs[0].legs || []).map((leg) => {
@@ -554,6 +602,7 @@ function normQuote(s) {
 function matchOutcome(outcomes, leg) {
   const pick = normQuote(leg && (leg.pick || leg.side));
   const wantTotal = /^\s*over\b/.test(pick) ? 'over' : (/^\s*under\b/.test(pick) ? 'under' : null);
+  const family = marketFamily(leg && leg.market, leg && (leg.pick || leg.side));
   const line = leg && leg.line != null && leg.line !== '' ? Number(leg.line) : null;
   for (const o of outcomes || []) {
     const name = normQuote(o && o.name);
@@ -562,8 +611,9 @@ function matchOutcome(outcomes, leg) {
     } else if (pick && name && !pick.includes(name) && !name.includes(pick.split(' ')[0])) {
       continue;
     }
-    if (line != null && o.point != null && Math.abs(Number(o.point) - line) > 0.51 && !wantTotal && marketFamily(leg.market, leg.pick) !== 'Moneyline') {
-      continue;
+    if (family !== 'Moneyline') {
+      const point = o && o.point != null && o.point !== '' ? Number(o.point) : null;
+      if (line == null || point == null || !Number.isFinite(point) || Math.abs(point - line) > 1e-6) continue;
     }
     if (Number.isFinite(Number(o.price))) return o;
   }

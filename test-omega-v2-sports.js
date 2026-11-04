@@ -6,6 +6,8 @@ const config = require('./netlify/functions/lib/omega-vnext/config');
 const { SPORT_PRIOR_K, SPORT_MIN_GAMES, MODEL_SPORTS, MIN_SPORT } = require('./netlify/functions/lib/omega-v2/constants');
 const { projectAll } = require('./netlify/functions/lib/omega-vnext');
 const { buildCard } = require('./netlify/functions/lib/omega-v2/pipeline');
+const { marketAnchorBoard } = require('./netlify/functions/lib/omega-v2/coverage');
+const { americanToImplied } = require('./netlify/functions/lib/omega-vnext/odds_math');
 const ncaam = require('./netlify/functions/lib/omega-vnext/sports/ncaam');
 
 const labels = SPORTS.map((row) => row[0]);
@@ -91,6 +93,103 @@ assert.ok(away && Math.abs(away.modelRawP - away.fair_sharp_p) < 0.02);
   const nfl = (kept.sportCoverage.rows || []).find((r) => r.sport === 'NFL');
   assert.strictEqual(nfl.action, 'none', 'a prior-shrink edge is not rewritten');
   assert.ok(!kept.sportCoverage.corrected.includes('NFL'));
+
+  const boardEvent = {
+    home_team: 'Home College',
+    away_team: 'Away College',
+    commence_time: future,
+    bookmakers: [
+      { key: 'pinnacle', markets: [{ key: 'h2h', outcomes: [
+        { name: 'Away College', price: 150 }, { name: 'Home College', price: -170 },
+      ] }] },
+      { key: 'draftkings', markets: [{ key: 'h2h', outcomes: [
+        { name: 'Away College', price: 140 }, { name: 'Home College', price: -160 },
+      ] }] },
+      { key: 'hardrockbet', markets: [{ key: 'h2h', outcomes: [
+        { name: 'Away College', price: 160 }, { name: 'Home College', price: -175 },
+      ] }] },
+    ],
+  };
+  const anchored = marketAnchorBoard('NBA', [boardEvent]);
+  const away = anchored.find((row) => row.pick === 'Away College ML');
+  const home = anchored.find((row) => row.pick === 'Home College ML');
+  assert.ok(away && home, 'both sides rescore when Pinnacle and a DK/HR price exist');
+  assert.strictEqual(away.odds, 160, 'best DK/HR price on the away side is Hard Rock +160');
+  assert.strictEqual(away.book, 'hardrockbet');
+  assert.strictEqual(home.odds, -160, 'best DK/HR price on the home side is DraftKings -160');
+  assert.strictEqual(home.book, 'draftkings');
+  assert.strictEqual(away.pModel, away.pMkt);
+  assert.ok(Math.abs(away.priceEdge - (away.pModel - americanToImplied(away.odds))) < 1e-12);
+  assert.ok(Math.abs(away.pModel - americanToImplied(150)) > 1e-4, 'p is the Pinnacle no-vig, not the raw price');
+
+  const warnings = [];
+  const logs = [];
+  const warn0 = console.warn;
+  const log0 = console.log;
+  console.warn = (...args) => { warnings.push(args.map((part) => String(part)).join(' ')); };
+  console.log = (...args) => { logs.push(args.map((part) => String(part)).join(' ')); };
+  let gapCard;
+  let boomCard;
+  let boomThrew = null;
+  try {
+    gapCard = await buildCard({
+      date: '2026-11-04',
+      candidates: [],
+      history: [],
+      stageCounts: { board: { NBA: 1 }, raw: { NBA: 0 } },
+      boardBySport: { NBA: [boardEvent] },
+    });
+    try {
+      boomCard = await buildCard({
+        date: '2026-11-04',
+        candidates: [],
+        history: [],
+        stageCounts: { board: { NHL: 2 }, raw: { NHL: 1 } },
+        boardBySport: new Proxy({}, {
+          get() { throw new Error('rescore failed'); },
+        }),
+      });
+    } catch (err) {
+      boomThrew = err;
+    }
+  } finally {
+    console.warn = warn0;
+    console.log = log0;
+  }
+
+  assert.ok(gapCard, 'a zero-score sport still publishes');
+  assert.strictEqual(boomThrew, null, 'a throwing auto-correct must not reject the card');
+  assert.ok(boomCard && Array.isArray(boomCard.picks), 'throwing auto-correct still returns a card');
+  const gapRow = (gapCard.sportCoverage.rows || []).find((r) => r.sport === 'NBA');
+  assert.ok(gapRow, 'NBA coverage row');
+  assert.strictEqual(gapRow.action, 'auto-corrected');
+  assert.strictEqual(gapRow.board, 1);
+  assert.strictEqual(gapRow.scored, 0);
+  assert.ok(gapRow.candidates >= 2, 'rescued sides count as candidates');
+  assert.strictEqual(gapCard.sportCoverage.added, undefined, 'rescued rows are not stored on the card');
+  assert.ok(!gapCard.sportCoverage.corrected.includes('NBA'));
+  assert.strictEqual((gapCard.picks || []).length, 0, 'market-anchored rows are graded, not forced');
+  assert.ok((gapCard.rejections || []).some((r) => r.sport === 'NBA'), 'rescued rows reach grading');
+  assert.strictEqual(gapCard.pass, true);
+  assert.ok(warnings.some((line) => line.includes('NBA') && /scored=0/.test(line) && /board games=/.test(line)));
+  for (const sport of MODEL_SPORTS) {
+    assert.ok(logs.some((line) => line.startsWith(`[coverage] ${sport} board games=`) && /scored=\d+/.test(line) && /candidates=\d+/.test(line)), sport);
+  }
+  for (const line of logs.concat(warnings)) {
+    if (!line.includes('[coverage]')) continue;
+    assert.ok(!/\bAlpha\b/.test(line) && !/\bOmega\b/.test(line), line);
+  }
+
+  const boomRow = (boomCard.sportCoverage.rows || []).find((r) => r.sport === 'NHL');
+  assert.ok(boomRow, 'NHL coverage row after a throw');
+  assert.strictEqual(boomCard.sportCoverage.rows.length, 5, 'one sport throwing does not drop the report');
+  assert.strictEqual(boomRow.action, 'no-score-warn');
+  assert.strictEqual(boomRow.scored, 0);
+  assert.strictEqual((boomCard.picks || []).length, 0);
+  assert.strictEqual(boomCard.pass, true, 'publish is not blocked');
+  assert.ok(warnings.some((line) => line.includes('NHL') && line.includes('auto-correct failed') && line.includes('rescore failed')));
+  assert.ok(warnings.some((line) => line.includes('NHL') && /scored=0/.test(line)));
+
   console.log('test-omega-v2-sports: ALL PASS');
 })().catch((err) => {
   console.error(err);

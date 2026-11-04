@@ -519,6 +519,140 @@ async function sportReachCheck() {
   return fails;
 }
 
+/**
+ * Board games with nothing scored warn and attempt one market-anchored
+ * rescore. The card still publishes. A rescore that throws is a warning,
+ * not a block. Every model sport is a row on the coverage report.
+ */
+async function coverageCheck() {
+  const fails = [];
+  const { applySportCoverage } = require('../../netlify/functions/lib/omega-v2/coverage');
+  const v2 = require('../../netlify/functions/lib/omega-v2');
+  const want = ['NBA', 'NCAAM', 'NFL', 'NCAAF', 'NHL'];
+  const future = new Date(Date.now() + 6 * 3600 * 1000).toISOString();
+  const boardEvent = {
+    home_team: 'Home College',
+    away_team: 'Away College',
+    commence_time: future,
+    bookmakers: [
+      { key: 'pinnacle', markets: [{ key: 'h2h', outcomes: [
+        { name: 'Away College', price: 150 }, { name: 'Home College', price: -170 },
+      ] }] },
+      { key: 'draftkings', markets: [{ key: 'h2h', outcomes: [
+        { name: 'Away College', price: 140 }, { name: 'Home College', price: -160 },
+      ] }] },
+    ],
+  };
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => {
+    warnings.push(args.map((part) => String(part)).join(' '));
+  };
+  const add = (msg) => fails.push({ rule: 'coverage', msg, blocking: true });
+  const rowFor = (report, sport) => ((report && report.rows) || []).find((row) => row.sport === sport);
+  const missingSports = (report) => want.filter((sport) => !rowFor(report, sport));
+  const attempt = (action) => action === 'auto-corrected' || action === 'no-score-warn';
+  const published = (card) => {
+    const empty = card.picks.length === 0 && (card.parlayLegs || []).length === 0;
+    return !empty || card.pass === true;
+  };
+  try {
+    const stageCounts = { board: { NBA: 1 }, raw: { NBA: 0 } };
+    const boardBySport = { NBA: [boardEvent] };
+    let report = null;
+    try {
+      report = applySportCoverage([], stageCounts, { boardBySport, candidates: [] });
+    } catch (err) {
+      add(`zero-score coverage threw: ${err && err.message}`);
+    }
+    const nba = rowFor(report, 'NBA');
+    if (!nba) add('NBA missing from coverage report after a board with 0 scored');
+    else if (!attempt(nba.action)) add(`NBA action ${nba.action} is not an auto-correct attempt`);
+    else if (nba.scored !== 0 || !(nba.board > 0)) {
+      add(`NBA board=${nba.board} scored=${nba.scored}, want games on the board and 0 scored`);
+    }
+    if (!warnings.some((line) => line.includes('[coverage]') && line.includes('NBA') && /scored=0/.test(line))) {
+      add('zero-score board did not log a [coverage] warning');
+    }
+    const gapSports = missingSports(report);
+    if (report && gapSports.length) add(`coverage report missing ${gapSports.join(', ')}`);
+
+    let card = null;
+    let cardErr = null;
+    try {
+      card = await v2.buildCard({
+        date: '2026-11-04',
+        candidates: [],
+        history: [],
+        stageCounts,
+        boardBySport,
+      });
+    } catch (err) {
+      cardErr = err;
+    }
+    if (cardErr || !card || !Array.isArray(card.picks)) {
+      add(`zero-score board blocked the card: ${cardErr && cardErr.message}`);
+    } else {
+      const cardNba = rowFor(card.sportCoverage, 'NBA');
+      if (!cardNba || !attempt(cardNba.action)) {
+        add(`published card NBA action ${cardNba && cardNba.action} did not record the auto-correct`);
+      }
+      const cardGap = missingSports(card.sportCoverage);
+      if (cardGap.length) add(`published card coverage report missing ${cardGap.join(', ')}`);
+      if (!published(card)) add('zero-score board built a card but did not publish the pass');
+    }
+
+    const boomBoard = new Proxy({}, {
+      get() { throw new Error('rescore failed'); },
+    });
+    const boomCounts = { board: { NHL: 2 }, raw: { NHL: 1 } };
+    let boomReport = null;
+    let boomErr = null;
+    try {
+      boomReport = applySportCoverage([], boomCounts, { boardBySport: boomBoard, candidates: [] });
+    } catch (err) {
+      boomErr = err;
+    }
+    if (boomErr) add(`auto-correct throw escaped applySportCoverage: ${boomErr.message}`);
+    else {
+      const nhl = rowFor(boomReport, 'NHL');
+      if (!nhl || nhl.action !== 'no-score-warn') {
+        add(`throwing auto-correct action ${nhl && nhl.action}, want no-score-warn`);
+      }
+      const boomGap = missingSports(boomReport);
+      if (boomGap.length) add(`throwing auto-correct dropped ${boomGap.join(', ')} from the report`);
+    }
+    if (!warnings.some((line) => line.includes('[coverage]') && line.includes('auto-correct failed'))) {
+      add('throwing auto-correct did not warn');
+    }
+
+    let boomCard = null;
+    let boomCardErr = null;
+    try {
+      boomCard = await v2.buildCard({
+        date: '2026-11-04',
+        candidates: [],
+        history: [],
+        stageCounts: boomCounts,
+        boardBySport: boomBoard,
+      });
+    } catch (err) {
+      boomCardErr = err;
+    }
+    if (boomCardErr || !boomCard || !Array.isArray(boomCard.picks)) {
+      add(`throwing auto-correct blocked publish: ${boomCardErr && boomCardErr.message}`);
+    } else if (!published(boomCard)) {
+      add('throwing auto-correct returned a card that did not publish');
+    } else {
+      const boomGap = missingSports(boomCard.sportCoverage);
+      if (boomGap.length) add(`published card after a throwing auto-correct missing ${boomGap.join(', ')}`);
+    }
+  } finally {
+    console.warn = origWarn;
+  }
+  return fails;
+}
+
 async function main() {
   const days = loadDays(FIXTURES);
   const cards = new Map();
@@ -566,6 +700,9 @@ async function main() {
     console.log(`build ${f.blocking ? 'BLOCK' : 'REPORT'} [${f.rule}] ${f.msg}`);
     if (f.blocking) blocking += 1;
   }
+  const coverage = await coverageCheck();
+  if (!coverage.length) console.log('coverage PASS');
+  else blocking += logFails('coverage', coverage);
   if (blocking) {
     console.log(`FAIL omega-v2 math gate: ${blocking} blocking`);
     process.exit(1);

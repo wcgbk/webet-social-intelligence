@@ -123,6 +123,49 @@ function dedupe(cands) {
   return [...map.values()];
 }
 
+/** Same screen as the main loop. A rescued row is not a free pass. */
+function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
+  if (cand.noDkHr) {
+    rejections.push({
+      matchup: cand.matchup,
+      side: cand.pick,
+      market: cand.market,
+      sport: cand.sport,
+      reason: 'no-dk-hr-price',
+      odds: cand.postedOdds != null ? cand.postedOdds : null,
+      book: cand.postedBook || null,
+    });
+    return;
+  }
+  if (pastPregameCutoff(cand.commenceTime, asOfMs)) {
+    rejections.push({
+      matchup: cand.matchup,
+      side: cand.pick,
+      market: cand.market,
+      sport: cand.sport,
+      reason: 'in-progress-or-started',
+      commenceTime: cand.commenceTime || '',
+    });
+    return;
+  }
+  if (cand.pMkt == null && cand.odds != null) {
+    const implied = americanToImplied(cand.odds);
+    if (implied != null) cand.pMkt = implied;
+  }
+  if (cand.pModel == null || cand.pMkt == null || cand.odds == null) {
+    rejections.push({
+      matchup: cand.matchup,
+      side: cand.pick,
+      market: cand.market,
+      sport: cand.sport,
+      reason: cand.odds == null ? 'bad-price' : 'missing-prob',
+    });
+    return;
+  }
+  const calibration = applyCalibration(cand, fit);
+  prepared.push({ ...cand, calibration });
+}
+
 /**
  * Build one v2 card. Flag-off callers should use runPipeline, which delegates
  * to the production publisher and does not enter this function.
@@ -136,51 +179,39 @@ async function buildCard(input) {
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
   const prepared = [];
   const rejections = [];
-  for (const cand of normalized) {
-    if (cand.noDkHr) {
-      rejections.push({
-        matchup: cand.matchup,
-        side: cand.pick,
-        market: cand.market,
-        sport: cand.sport,
-        reason: 'no-dk-hr-price',
-        odds: cand.postedOdds != null ? cand.postedOdds : null,
-        book: cand.postedBook || null,
-      });
-      continue;
-    }
-    if (pastPregameCutoff(cand.commenceTime, asOfMs)) {
-      rejections.push({
-        matchup: cand.matchup,
-        side: cand.pick,
-        market: cand.market,
-        sport: cand.sport,
-        reason: 'in-progress-or-started',
-        commenceTime: cand.commenceTime || '',
-      });
-      continue;
-    }
-    if (cand.pMkt == null && cand.odds != null) {
-      const implied = americanToImplied(cand.odds);
-      if (implied != null) cand.pMkt = implied;
-    }
-    if (cand.pModel == null || cand.pMkt == null || cand.odds == null) {
-      rejections.push({
-        matchup: cand.matchup,
-        side: cand.pick,
-        market: cand.market,
-        sport: cand.sport,
-        reason: cand.odds == null ? 'bad-price' : 'missing-prob',
-      });
-      continue;
-    }
-    const calibration = applyCalibration(cand, fit);
-    prepared.push({ ...cand, calibration });
+  for (const cand of normalized) stageCandidate(cand, fit, asOfMs, prepared, rejections);
+  let sportCoverage;
+  try {
+    sportCoverage = applySportCoverage(prepared, input.stageCounts, {
+      boardBySport: input.boardBySport || null,
+      candidates: input.candidates || [],
+    });
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.warn(`[coverage] coverage check failed: ${msg}`);
+    sportCoverage = {
+      sports: [],
+      biasLimit: null,
+      corrected: [],
+      rows: [],
+      error: 'coverage check failed',
+    };
   }
-  const sportCoverage = stampQualified(
-    applySportCoverage(prepared, input.stageCounts),
-    null,
-  );
+  const rescued = sportCoverage && Array.isArray(sportCoverage.added) ? sportCoverage.added : [];
+  if (sportCoverage && Object.prototype.hasOwnProperty.call(sportCoverage, 'added')) {
+    delete sportCoverage.added;
+  }
+  for (const raw of rescued) {
+    try {
+      const cand = normalizeCandidate(raw);
+      cand.autoCorrected = true;
+      stageCandidate(cand, fit, asOfMs, prepared, rejections);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      console.warn(`[coverage] rescued row skipped: ${msg}`);
+    }
+  }
+  stampQualified(sportCoverage, null);
   const annotated = prepared.map((cand) => annotateCandidate(cand));
   stampQualified(sportCoverage, annotated);
   for (const cand of annotated) {
@@ -340,6 +371,7 @@ async function publishFromOmegaCandidates(input) {
     hardFails: input.hardFails || [],
     pregameAsOfMs: input.pregameAsOfMs,
     stageCounts: input.stageCounts || null,
+    boardBySport: input.boardBySport || null,
   });
   return card;
 }

@@ -33,6 +33,8 @@ function slimCandidate(c) {
     edgePct: c.edgePct != null ? c.edgePct : null,
     uncertainty: numOrNull(c.uncertainty),
     book: c.book || null,
+    openPrice: c.openPrint && c.openPrint.odds != null ? c.openPrint.odds : (c.openPrice != null ? c.openPrice : null),
+    openBook: c.openPrint && c.openPrint.book ? c.openPrint.book : (c.openBook || null),
     commenceTime: c.commenceTime || '',
     homeTeam: c.homeTeam || null,
     awayTeam: c.awayTeam || null,

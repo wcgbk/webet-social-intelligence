@@ -1053,6 +1053,27 @@ exports.handler = async (event) => {
         console.error('[track-clv] parlay leg grade:', e.message);
       }
 
+      // Scored-candidate closes from this run's cache and stored boards only.
+      // A failure here must not drop the pick write.
+      try {
+        const { attachCandidateCloses } = require('./lib/omega-v2/candidate_clv');
+        await attachCandidateCloses(clvData, {
+          dateISO,
+          existingCandidates: existingClv && existingClv.candidates,
+          picksData,
+          bulkCache,
+          nowIso: new Date().toISOString(),
+          betAt: (picksData && picksData.generatedAt) || null,
+          readJson: async (key) => {
+            try { return await store.get(key, { type: 'json' }); } catch (_) { return null; }
+          },
+        });
+      } catch (e) {
+        const msg = String(e && e.message || 'error');
+        console.error(`[candidate-clv] skipped: ${/bearer|token|authorization/i.test(msg) ? 'unavailable' : msg}`);
+        if (existingClv && Array.isArray(existingClv.candidates)) clvData.candidates = existingClv.candidates;
+      }
+
       await store.setJSON(`clv-${dateISO}`, clvData);
       console.log(`[track-clv] Stored CLV data at clv-${dateISO}`);
 

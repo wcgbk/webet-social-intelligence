@@ -16,7 +16,7 @@ const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('.
 const { narrateTextOnly } = require('./narrate_text');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
-const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');
+const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, readJson } = require('./store');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
@@ -873,6 +873,26 @@ async function generateOmegaVnext(opts = {}) {
       key: shadow ? `omega-shadow/pm-observer/${dateISO}` : `omega-pm-observer/${dateISO}`,
       shadow: !!shadow,
     };
+  }
+
+  // Scored-candidate close fields on the CLV blob. Never fail the card write.
+  if (!dryRun && !shadow && !simMode && !replayLike) {
+    try {
+      const { seedCandidateClv } = require('../omega-v2/candidate_clv');
+      await seedCandidateClv({
+        dateISO,
+        candidates,
+        published: (picks || []).concat((parlayLegs || []).flatMap((ticket) => ticket.legs || [])),
+        masterBoard,
+        linePathMeta,
+        betAt: now.toISOString(),
+        readJson: (key) => readJson(key),
+        writeJson: (key, data) => storeJson(key, data),
+      });
+    } catch (e) {
+      const msg = String(e && e.message || 'error');
+      console.warn(`[candidate-clv] seed skipped: ${/bearer|token|authorization/i.test(msg) ? 'unavailable' : msg}`);
+    }
   }
 
   console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length} hardFails=${hardFails.length}`);

@@ -329,6 +329,13 @@ async function main() {
   // Math gate: replay stored v2 cards against the approved GATE_SPEC rules.
   const math = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'math-gate.js')], { stdio: 'inherit' });
   if (math.status !== 0) throw new Error('omega-v2 math gate failed');
+
+  const candidateClv = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-candidate-clv.js')],
+    { stdio: 'inherit' }
+  );
+  if (candidateClv.status !== 0) throw new Error('candidate clv gate failed');
 }
 
 main().catch((err) => {

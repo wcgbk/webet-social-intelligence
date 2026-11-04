@@ -380,7 +380,7 @@ function stampDay(base, scopes, parlayMeta) {
     kpiScope: 'record=straightsOnly,roi=allIn',
     recordScope: 'straightsOnly',
     roiScope: 'allIn',
-    record: all.record,
+    record: st.record,
     bets: all.bets,
     straightsOnly: scopes.straightsOnly,
     allIn: scopes.allIn,

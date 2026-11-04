@@ -165,15 +165,15 @@ async function main() {
 
   const forbidden = [
     'netlify/functions/lib/omega-grading-rules.js',
-    'netlify/functions/get-results-omega.js',
     'netlify/functions/lib/omega-vnext/select.js',
     'netlify/functions/lib/omega-vnext/assemble.js',
     'netlify/functions/lib/omega-vnext/parlay.js',
     'netlify/functions/lib/omega-vnext/calibrate.js',
     'netlify/functions/lib/omega-vnext/odds_math.js',
   ];
-  // et-schedule.js is not in this freeze. The Omega card-chain slots there
-  // are DST-corrected. Grading, prices, and selection stay frozen.
+  // get-results-omega.js is outside this freeze: day.record counts straights
+  // only (test-omega-results-kpi-1030.js). Grading rules, prices, and
+  // selection stay frozen. et-schedule.js stays out (DST-corrected slots).
   const diff = execSync(`git diff --name-only a592e0b -- ${forbidden.join(' ')}`, {
     cwd: root,
     encoding: 'utf8',
@@ -358,6 +358,13 @@ async function main() {
   // Math gate: replay stored v2 cards against the approved GATE_SPEC rules.
   const math = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'math-gate.js')], { stdio: 'inherit' });
   if (math.status !== 0) throw new Error('omega-v2 math gate failed');
+
+  const resultsKpi = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-results-kpi-1030.js')],
+    { stdio: 'inherit' }
+  );
+  if (resultsKpi.status !== 0) throw new Error('results kpi gate failed');
 
   const candidateClv = require('child_process').spawnSync(
     process.execPath,

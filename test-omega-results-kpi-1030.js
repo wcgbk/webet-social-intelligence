@@ -67,8 +67,12 @@ await check('record and ROI for each scope come from the same bets', async () =>
   assert.strictEqual(day.allIn.roi, '27.4%');
   assert.notStrictEqual(day.straightsOnly.roi, day.allIn.roi);
   // Published day shape (WeBet 10/30): record = straights, money/ROI = all-in.
+  // The record string matches that label. A parlay loss stays out of it.
   assert.strictEqual(day.recordScope, 'straightsOnly');
   assert.strictEqual(day.roiScope, 'allIn');
+  assert.strictEqual(day.record, '1-0-1');
+  assert.strictEqual(day.record, day.straightsOnly.record);
+  assert.notStrictEqual(day.record, day.allIn.record);
   assert.strictEqual(day.wins, day.straightsOnly.wins);
   assert.strictEqual(day.losses, day.straightsOnly.losses);
   assert.strictEqual(day.profit, day.allIn.profit);

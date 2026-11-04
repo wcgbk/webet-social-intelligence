@@ -377,6 +377,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (replayDkhr.status !== 0) throw new Error('replay dkhr gate failed');
+
+  const boardOrder = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-odds-master-board-order.js')],
+    { stdio: 'inherit' }
+  );
+  if (boardOrder.status !== 0) throw new Error('odds-master board order gate failed');
 }
 
 main().catch((err) => {

@@ -38,12 +38,12 @@ async function loadMasterBoard(dateISO, read = readJson) {
   const dateDoc = await read(`by-date/${dateISO}`);
   const evs = (dateDoc && Array.isArray(dateDoc.events)) ? dateDoc.events : [];
   if (!evs.length) return null;
-  const eventsBySport = {}; const games0300 = {}; const games1000 = {};
-  let at0300 = null; let at1000 = null; let booksSeen = new Set();
-  await mapLimit(evs, 8, async (ev) => {
-    if (!ev || !ev.sport || ev.eventId == null || !ev.homeTeam || !ev.awayTeam) return;
+  // Workers return rows. Assembly below walks by-date order, so parallel
+  // completion cannot reorder games, books, or the last slot timestamp.
+  const rows = await mapLimit(evs, 8, async (ev) => {
+    if (!ev || !ev.sport || ev.eventId == null || !ev.homeTeam || !ev.awayTeam) return null;
     const index = await read(`index/${ev.sport}/${ev.eventId}`);
-    if (!index) return;
+    if (!index) return null;
     const books = Array.isArray(index.books) && index.books.length ? index.books : ['hardrockbet', 'pinnacle', 'draftkings', 'fanduel'];
     const build = async (at) => {
       if (!at) return null;
@@ -55,7 +55,7 @@ async function loadMasterBoard(dateISO, read = readJson) {
           const outcomes = price && price.sides ? outcomesFor(m, price.sides, ev.homeTeam, ev.awayTeam) : [];
           if (outcomes.length) markets.push({ key: m, outcomes });
         }
-        if (markets.length) { bookmakers.push({ key: book, markets }); booksSeen.add(book); }
+        if (markets.length) bookmakers.push({ key: book, markets });
       }
       if (!bookmakers.length) return null;
       return { id: ev.eventId, sport: ev.sport, sport_key: ev.sport, home_team: ev.homeTeam, away_team: ev.awayTeam,
@@ -63,12 +63,34 @@ async function loadMasterBoard(dateISO, read = readJson) {
     };
     const a03 = index.baseline0300 && index.baseline0300.at;
     const a10 = index.checks && index.checks['1000'] && index.checks['1000'].at;
-    if (a03) at0300 = a03; if (a10) at1000 = a10;
     const [ev1000, ev0300] = await Promise.all([build(a10), build(a03)]);
-    if (ev1000) { (eventsBySport[ev.sport] = eventsBySport[ev.sport] || []).push(ev1000);
-      games1000[gameKey(ev.awayTeam, ev.homeTeam)] = { sport: ev.sport, ...extractGameBooks(ev1000) }; }
-    if (ev0300) { games0300[gameKey(ev.awayTeam, ev.homeTeam)] = { sport: ev.sport, ...extractGameBooks(ev0300) }; }
+    const have = new Set();
+    for (const built of [ev1000, ev0300]) {
+      if (!built) continue;
+      for (const bm of built.bookmakers) have.add(bm.key);
+    }
+    const booksSeen = [];
+    const seen = new Set();
+    for (const book of books) {
+      if (have.has(book) && !seen.has(book)) { seen.add(book); booksSeen.push(book); }
+    }
+    return { ev1000, ev0300, booksSeen, a03, a10 };
   });
+  const eventsBySport = {}; const games0300 = {}; const games1000 = {};
+  let at0300 = null; let at1000 = null; const booksSeen = new Set();
+  for (const row of rows) {
+    if (!row) continue;
+    if (row.a03) at0300 = row.a03;
+    if (row.a10) at1000 = row.a10;
+    for (const book of row.booksSeen) booksSeen.add(book);
+    if (row.ev1000) {
+      (eventsBySport[row.ev1000.sport] = eventsBySport[row.ev1000.sport] || []).push(row.ev1000);
+      games1000[gameKey(row.ev1000.away_team, row.ev1000.home_team)] = { sport: row.ev1000.sport, ...extractGameBooks(row.ev1000) };
+    }
+    if (row.ev0300) {
+      games0300[gameKey(row.ev0300.away_team, row.ev0300.home_team)] = { sport: row.ev0300.sport, ...extractGameBooks(row.ev0300) };
+    }
+  }
   if (!Object.keys(eventsBySport).length && !Object.keys(games1000).length) return null;
   return { date: dateISO, eventsBySport, games0300, games1000, at0300, at1000, booksSeen: [...booksSeen],
     polls: [

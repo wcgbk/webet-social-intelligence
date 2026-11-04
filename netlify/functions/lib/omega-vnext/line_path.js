@@ -585,6 +585,45 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
 }
 
 /**
+ * Card-level captureHealth from a raw assessCaptureHealth result.
+ * Does not fetch. Replay keeps the historical non-blocking view.
+ * A live assessment with at least one usable snap is returned unchanged.
+ * A live assessment with zero usable snaps does not block the card.
+ */
+function cardCaptureHealth(assessment, opts = {}) {
+  const health = (assessment && typeof assessment === 'object') ? assessment : {};
+  const dateISO = opts.dateISO != null ? String(opts.dateISO) : '';
+  if (opts.replayLike) {
+    const complete = health.usableSnapCount > 0 && health.missingSlotsET.length === 0;
+    return {
+      ...health,
+      hardFail: false,
+      reason: null,
+      retriedCapture: false,
+      retryOk: null,
+      ok: complete,
+      warning: complete
+        ? null
+        : `CAPTURE_HEALTH: historical replay skips live snap retry/hard-fail for ${dateISO}`,
+    };
+  }
+  if (!(Number(health.usableSnapCount) === 0)) return health;
+  const skipped = 'line-move annotation was skipped';
+  const base = health.reason
+    || health.warning
+    || `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`;
+  const text = String(base).includes(skipped) ? String(base) : `${base}; ${skipped}`;
+  return {
+    ...health,
+    ok: false,
+    hardFail: false,
+    degraded: true,
+    warning: text,
+    reason: text,
+  };
+}
+
+/**
  * Load line path for date; return { path, earliest, latest }.
  */
 async function loadLinePath(dateISO) {
@@ -669,6 +708,7 @@ module.exports = {
   missingDueSlots,
   canonicalRetrySlot,
   assessCaptureHealth,
+  cardCaptureHealth,
   loadLinePath,
   storeLinePoll,
   readJsonBlob,

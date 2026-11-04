@@ -394,7 +394,8 @@ for (const f of ['index.js', 'select.js', 'gates.js', 'ingest.js']) {
   assert.ok(!/['"]tsp-live['"]/.test(src), `${f} must not name the tsp-live store`);
 }
 const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
-assert.ok(/CAPTURE_HEALTH/.test(indexSrc));
+assert.ok(/cardCaptureHealth\(/.test(indexSrc), 'zero usable snaps are downgraded onto the card');
+assert.ok(!/code = 'CAPTURE_HEALTH'/.test(indexSrc), 'generate does not throw CAPTURE_HEALTH');
 assert.ok(/storeShadowPicks/.test(indexSrc));
 assert.ok(!/storePmObserver\(dateISO/.test(indexSrc.slice(indexSrc.indexOf('if (!dryRun && shadow)'), indexSrc.indexOf('} else if (!dryRun && !simMode)'))));
 

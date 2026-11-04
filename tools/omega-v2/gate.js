@@ -391,6 +391,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (boardOrder.status !== 0) throw new Error('odds-master board order gate failed');
+
+  const captureDegraded = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-capture-degraded.js')],
+    { stdio: 'inherit' }
+  );
+  if (captureDegraded.status !== 0) throw new Error('capture degraded gate failed');
 }
 
 main().catch((err) => {

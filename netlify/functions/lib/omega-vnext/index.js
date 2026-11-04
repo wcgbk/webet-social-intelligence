@@ -18,7 +18,7 @@ const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, readJson } = require('./store');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
-const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
+const { loadLinePath, annotateLineMoves, assessCaptureHealth, cardCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 const {
   pipelineV2Enabled, publishFromOmegaCandidates, saveMorningBoard, loadGradedHistory, recheckFromCachedBoard,
@@ -275,9 +275,9 @@ async function generateOmegaVnext(opts = {}) {
   }
 
   // Open→pick US line-move (earliest morning snap → latest pre-generate).
-  // Missing required snaps: one real Odds capture into the current ET slot, then re-load.
-  // Zero usable snaps after that hard-fails. Partial snaps warn and continue.
-  // Does not invent snaps and does not force-fill leans.
+  // Partial snaps warn and continue. Zero usable snaps on a live run degrade
+  // capture health and still publish; line moves are not annotated.
+  // Does not invent snaps, retry a paid capture, or force-fill leans.
   let linePathMeta = { path: null, earliest: null, latest: null };
   if (masterBoard && masterBoard.polls && masterBoard.polls.length) {
     const polls = masterBoard.polls;
@@ -297,7 +297,7 @@ async function generateOmegaVnext(opts = {}) {
   let retryOk = null;
   // Retry only for snaps that should already exist (9:05 must not treat 9:15 as failed).
   const dueMissing = missingDueSlots(captureHealth.missingSlotsET, now);
-  const retrySlot = null; // Ben 2026-10-18: generate never fires a paid capture retry; missing 0300/1000 snaps warn/hard-fail per capture health.
+  const retrySlot = null; // Ben 2026-10-18: generate never fires a paid capture retry; missing 0300/1000 snaps stay on capture health.
   const _unusedRetrySlot = (replayLike || storedOddsBySport) ? null : canonicalRetrySlot(now, {
     slots: requiredSlotsET,
     missingDue: dueMissing,
@@ -338,22 +338,14 @@ async function generateOmegaVnext(opts = {}) {
     });
   }
 
+  // Replay rewrites health before the log so historical cards stay non-blocking.
+  // Live health is logged and emitted raw, then downgraded onto the card.
   if (replayLike) {
-    const complete = captureHealth.usableSnapCount > 0 && captureHealth.missingSlotsET.length === 0;
-    captureHealth = {
-      ...captureHealth,
-      hardFail: false,
-      reason: null,
-      retriedCapture: false,
-      retryOk: null,
-      ok: complete,
-      warning: complete
-        ? null
-        : `CAPTURE_HEALTH: historical replay skips live snap retry/hard-fail for ${dateISO}`,
-    };
+    captureHealth = cardCaptureHealth(captureHealth, { replayLike: true, dateISO });
   }
 
-  if (linePathMeta.earliest) {
+  const liveZeroSnaps = !replayLike && Number(captureHealth.usableSnapCount) === 0;
+  if (linePathMeta.earliest && !liveZeroSnaps) {
     candidates = annotateLineMoves(candidates, linePathMeta.earliest, linePathMeta.latest || linePathMeta.earliest);
     const withOpen = candidates.filter(c => c.openPrint).length;
     const openSlot = linePathMeta.earliest.hhmm || linePathMeta.earliest.slot;
@@ -367,7 +359,8 @@ async function generateOmegaVnext(opts = {}) {
   if (captureHealth.warning || captureHealth.hardFail) console.warn(JSON.stringify(healthLog));
   else console.log(JSON.stringify(healthLog));
 
-  // Ops-only signal: persist snapshot + optional HTTP callback. Does NOT change hardFail policy.
+  // Ops-only signal: persist snapshot + optional HTTP callback.
+  // A live zero-snap run still reports usableSnapCount 0 here. It does not block the card.
   if (!replayLike && !shadow && !dryRun) {
     try {
       await emitCaptureHealthOps(dateISO, captureHealth, { shadow: !!shadow });
@@ -376,11 +369,8 @@ async function generateOmegaVnext(opts = {}) {
     }
   }
 
-  if (captureHealth.hardFail) {
-    const err = new Error(captureHealth.reason || `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`);
-    err.code = 'CAPTURE_HEALTH';
-    err.captureHealth = captureHealth;
-    throw err;
+  if (!replayLike) {
+    captureHealth = cardCaptureHealth(captureHealth, { replayLike: false, dateISO });
   }
 
   // Kalshi/Polymarket soft features BEFORE gates so yesPool carries _pmScoreAdj
@@ -914,4 +904,5 @@ module.exports = {
   projectAll,
   todayET,
   assessCaptureHealth,
+  cardCaptureHealth,
 };

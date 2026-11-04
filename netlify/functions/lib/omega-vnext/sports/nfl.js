@@ -8,8 +8,9 @@
  */
 const {
   formatMatchup, mapGamesSoft,
-  spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
+  totalCoverProb, blendWithMarket,
 } = require('./_common');
+const { footballCoverProb } = require('./margin_dist');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments } = require('./game_day');
 const { HFA } = require('../config');
@@ -75,7 +76,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      let p = footballCoverProb(isHome ? modelMargin : -modelMargin, null, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
@@ -92,7 +93,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     for (const b of bundles) {
       if (b.point == null) continue;
       const isHome = b.side === home;
-      let p = spreadCoverProb(isHome ? modelMargin : -modelMargin, b.point, SPORT);
+      let p = footballCoverProb(isHome ? modelMargin : -modelMargin, b.point, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {

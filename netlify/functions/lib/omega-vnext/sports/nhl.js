@@ -8,9 +8,15 @@
  * read that flag: projectAll is the gate. A direct project() call still
  * emits candidates so the engine can be checked before enable.
  *
- * Missing shots, savePct, or goalie rates soft-fail to 0. Residuals sit
- * under ENGINE_SOFT.NHL. Final margin/total soft-clamp (|spread| 6, total 12)
- * and still emit a candidate.
+ * Missing shots or a goalie save rate soft-fail to 0. Residuals sit under
+ * ENGINE_SOFT.NHL and then the Poisson score matrix. Final margin/total
+ * soft-clamp (|spread| 6, total 12) and still emit a candidate.
+ *
+ * ESPN public inputs (site.api.espn.com / site.web.api.espn.com only):
+ * team shots for/against per game, or a shot share, and the probable or
+ * confirmed starter's season save% regressed by shots faced. Coefficients
+ * are SHOT_SHARE_MARGIN, SHOT_VOLUME_TOTAL, and the goalie per-save rates
+ * in ENGINE_SOFT.NHL. A probable starter counts at PROBABLE_GOALIE_WEIGHT.
  */
 const { clamp } = require('../odds_math');
 const { HFA, ENGINE_SOFT } = require('../config');
@@ -31,8 +37,27 @@ const NHL_GPG_FLOOR = 1.5;
 const NHL_GPG_CAP = 5.2;
 const NHL_MIN_GAMES = 5;
 const LG_SAVE = 0.905;
-const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
+/**
+ * Shot share = shots for / (shots for + shots against). League share is 0.50.
+ * SHOT_SHARE_MARGIN is goals of margin per 1.0 share gap (home − away),
+ * applied to expected goals before the Poisson matrix. A 0.08 gap
+ * (about 54% vs 46%) is 0.096 goals. The 42-for / 20-against bag is a
+ * 0.355 gap and still hits the ±0.30 stack cap. Missing shots → 0.
+ *
+ * SHOT_VOLUME_TOTAL is goals of total per combined shot above
+ * 2 × LEAGUE_SHOTS_PG (about 29 shots a side). One extra shot is 0.015
+ * goals. It nudges the total. It does not replace the standings total.
+ */
+const SHOT_SHARE_MARGIN = 1.20;
+const SHOT_VOLUME_TOTAL = 0.015;
+const LEAGUE_SHOTS_PG = 29;
+/**
+ * A probable starter who is not confirmed counts at this fraction of a
+ * confirmed starter. A save% with no status flag stays at full weight.
+ * confirmed:false with no probable flag stays at 0.
+ */
+const PROBABLE_GOALIE_WEIGHT = 0.60;
 /** Home team share of regulation ties. OT/SO is about 54% home. */
 const OT_HOME = 0.54;
 /**
@@ -189,25 +214,36 @@ function ratePerGame(raw, games, seasonMin) {
   return n;
 }
 
-function shotProfile(bag, games) {
+function shotShareOnly(bag) {
+  let share = Number(bag.shotShare != null ? bag.shotShare : bag.shotSharePct);
+  if (!Number.isFinite(share)) return null;
+  if (share > 1 && share <= 100) share /= 100;
+  if (share <= 0.35 || share >= 0.65) return null;
+  return { shotsFor: null, shotsAgainst: null, share };
+}
+
+/**
+ * Per-game shots, or a shot share when the shot counts are absent.
+ * A count above 42 is a season total and needs at least 5 games.
+ */
+function shotBag(bag, games) {
   if (!bag || typeof bag !== 'object') return null;
-  const shotsFor = ratePerGame(bag.shotsFor != null ? bag.shotsFor : bag.shots, games, 60);
+  const shotsFor = ratePerGame(bag.shotsFor != null ? bag.shotsFor : bag.shots, games, 42);
   const shotsAgainst = ratePerGame(
     bag.shotsAgainst != null ? bag.shotsAgainst : bag.shotsAgainstPerGame,
     games,
-    60
+    42
   );
-  const savePct = asUnitRate(bag.savePct != null ? bag.savePct : bag.savePercentage, 'save');
-  let shootingPct = asUnitRate(
-    bag.shootingPct != null ? bag.shootingPct : bag.shootingPercentage,
-    'shoot'
-  );
-  if (shotsFor == null || shotsAgainst == null || savePct == null) return null;
-  if (shootingPct == null) shootingPct = LG_SHOOT;
-  if (savePct < 0.85 || savePct > 0.95) return null;
-  if (shootingPct < 0.05 || shootingPct > 0.16) return null;
-  if (shotsFor < 20 || shotsFor > 42 || shotsAgainst < 20 || shotsAgainst > 42) return null;
-  return { shotsFor, shotsAgainst, savePct, shootingPct };
+  const hasFor = shotsFor != null;
+  const hasAgainst = shotsAgainst != null;
+  if (hasFor || hasAgainst) {
+    if (!hasFor || !hasAgainst) return null;
+    if (shotsFor < 20 || shotsFor > 42 || shotsAgainst < 20 || shotsAgainst > 42) return null;
+    const share = shotsFor / (shotsFor + shotsAgainst);
+    if (!Number.isFinite(share)) return null;
+    return { shotsFor, shotsAgainst, share };
+  }
+  return shotShareOnly(bag);
 }
 
 function espnSideBag(espnGame, side) {
@@ -216,22 +252,18 @@ function espnSideBag(espnGame, side) {
   return espnGame.awayStats || espnGame.awayTeamStats || null;
 }
 
-function shotResidual(homeSt, awaySt, espnGame, baseHome, baseAway, cfg) {
+function shotResidual(homeSt, awaySt, espnGame, _baseHome, _baseAway, cfg) {
   const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
-  const h = shotProfile(homeSt, nhlGames(homeSt)) || shotProfile(espnSideBag(espnGame, 'home'), nhlGames(homeSt));
-  const a = shotProfile(awaySt, nhlGames(awaySt)) || shotProfile(espnSideBag(espnGame, 'away'), nhlGames(awaySt));
+  const h = shotBag(homeSt, nhlGames(homeSt)) || shotBag(espnSideBag(espnGame, 'home'), nhlGames(homeSt));
+  const a = shotBag(awaySt, nhlGames(awaySt)) || shotBag(espnSideBag(espnGame, 'away'), nhlGames(awaySt));
   if (!h || !a) return none;
-  const homeExpShots = (h.shotsFor + a.shotsAgainst) / 2;
-  const awayExpShots = (a.shotsFor + h.shotsAgainst) / 2;
-  const denom = 1 - LG_SAVE;
-  if (!(denom > 0)) return none;
-  const homeFactor = clamp((1 - a.savePct) / denom, 0.70, 1.40);
-  const awayFactor = clamp((1 - h.savePct) / denom, 0.70, 1.40);
-  const effHome = homeExpShots * h.shootingPct * homeFactor;
-  const effAway = awayExpShots * a.shootingPct * awayFactor;
-  if (!Number.isFinite(effHome) || !Number.isFinite(effAway)) return none;
-  const rawM = (effHome - effAway) - (baseHome - baseAway);
-  const rawT = (effHome + effAway) - (baseHome + baseAway);
+  const rawM = (h.share - a.share) * SHOT_SHARE_MARGIN;
+  let rawT = 0;
+  if (h.shotsFor != null && h.shotsAgainst != null && a.shotsFor != null && a.shotsAgainst != null) {
+    const expShots = (h.shotsFor + h.shotsAgainst + a.shotsFor + a.shotsAgainst) / 2;
+    rawT = (expShots - (2 * LEAGUE_SHOTS_PG)) * SHOT_VOLUME_TOTAL;
+  }
+  if (!Number.isFinite(rawM) || !Number.isFinite(rawT)) return none;
   const piece = capPiece(rawM, rawT, cfg.maxAbsMarginAdj, cfg.maxAbsTotalAdj);
   const used = Math.abs(piece.marginAdj) > 1e-9 || Math.abs(piece.totalAdj) > 1e-9;
   return { ...piece, used };
@@ -257,26 +289,49 @@ function regressSavePct(sv, shotsAgainst) {
   return (rate * shots + LG_SAVE * PHANTOM_SHOTS) / (shots + PHANTOM_SHOTS);
 }
 
+/**
+ * Full weight when confirmation is omitted or true. A probable flag
+ * scales the save edge. An explicit unconfirmed goalie with no probable
+ * flag contributes nothing, which keeps the previous zero.
+ */
+function goalieTrust(g) {
+  if (!g || typeof g !== 'object') return 0;
+  const status = String(g.status || '').toLowerCase();
+  const explicitProbable = g.probable === true || status === 'probable';
+  if (g.confirmed === false && !explicitProbable) return 0;
+  if (explicitProbable && g.confirmed !== true && status !== 'confirmed') return PROBABLE_GOALIE_WEIGHT;
+  return 1;
+}
+
 function goalieResidual(espnGame, cfg) {
   const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
   const hg = goalieOf(espnGame, 'home');
   const ag = goalieOf(espnGame, 'away');
   if (!hg || !ag) return none;
-  if (hg.confirmed === false || ag.confirmed === false) return none;
+  const trustH = goalieTrust(hg);
+  const trustA = goalieTrust(ag);
+  if (!(trustH > 0) || !(trustA > 0)) return none;
   const hsRaw = asUnitRate(hg.savePct != null ? hg.savePct : hg.svPct, 'save');
   const asRaw = asUnitRate(ag.savePct != null ? ag.savePct : ag.svPct, 'save');
   if (hsRaw == null || asRaw == null) return none;
-  if (hsRaw < 0.85 || hsRaw > 0.95 || asRaw < 0.85 || asRaw > 0.95) return none;
+  if (hsRaw < 0.80 || hsRaw > 0.97 || asRaw < 0.80 || asRaw > 0.97) return none;
   const hs = regressSavePct(hsRaw, hg.shotsAgainst != null ? hg.shotsAgainst : hg.shots);
   const asv = regressSavePct(asRaw, ag.shotsAgainst != null ? ag.shotsAgainst : ag.shots);
   if (hs == null || asv == null) return none;
+  // Band the regressed rate. A short bad sample (.812 on 197 shots) comes
+  // back toward .905 and can count. A rate that stays outside .85–.95 is dropped.
+  if (hs < 0.85 || hs > 0.95 || asv < 0.85 || asv > 0.95) return none;
   const perM = Number.isFinite(Number(cfg.goalieMarginPerSave)) ? Number(cfg.goalieMarginPerSave) : 8;
   const perT = Number.isFinite(Number(cfg.goalieTotalPerSave)) ? Number(cfg.goalieTotalPerSave) : 6;
   const capM = Number.isFinite(Number(cfg.goalieMaxAbsMarginAdj)) ? Number(cfg.goalieMaxAbsMarginAdj) : 0.12;
   const capT = Number.isFinite(Number(cfg.goalieMaxAbsTotalAdj)) ? Number(cfg.goalieMaxAbsTotalAdj) : 0.10;
-  // Better home save → fewer away goals. Both above-average saves trim the total.
-  const rawM = (hs - asv) * perM;
-  const rawT = -((hs - LG_SAVE) + (asv - LG_SAVE)) * perT;
+  // Better home save → fewer away goals. Trust scales each edge vs the league.
+  // Both above-average saves trim the total. Confirmed trust is 1, so this
+  // matches the unweighted (save − league) residual.
+  const homeEdge = (hs - LG_SAVE) * trustH;
+  const awayEdge = (asv - LG_SAVE) * trustA;
+  const rawM = (homeEdge - awayEdge) * perM;
+  const rawT = -(homeEdge + awayEdge) * perT;
   const piece = capPiece(rawM, rawT, capM, capT);
   const used = Math.abs(piece.marginAdj) > 1e-9 || Math.abs(piece.totalAdj) > 1e-9;
   return { ...piece, used };
@@ -616,6 +671,189 @@ function project({ oddsEvents, standings, gameDay, espnGames } = {}) {
   });
 }
 
+function numOrNull(v) {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).replace(/[% ,]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function statFromList(stats, names) {
+  const want = new Set(names.map((n) => String(n).toLowerCase()));
+  for (const s of stats || []) {
+    const name = String((s && (s.name || s.abbreviation)) || '').toLowerCase();
+    if (!want.has(name)) continue;
+    const n = numOrNull(s.value != null ? s.value : s.displayValue);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+function positionAbbr(pos) {
+  if (pos == null) return '';
+  if (typeof pos === 'string') return pos;
+  return pos.abbreviation || pos.name || '';
+}
+
+function isSkaterPos(pos) {
+  const p = String(pos || '').toUpperCase();
+  return p === 'C' || p === 'LW' || p === 'RW' || p === 'D' || p === 'F' || p === 'W';
+}
+
+/**
+ * One probable/confirmed starter from an ESPN competitor probable.
+ * Save% may be missing. The caller fills it from the athlete overview.
+ * Returns null for a skater or an empty slot.
+ */
+function goalieFromProbable(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const athlete = raw.athlete || {};
+  const pos = positionAbbr(athlete.position);
+  if (isSkaterPos(pos)) return null;
+  const name = athlete.displayName || athlete.fullName || raw.displayName || null;
+  let savePct = raw.savePct != null ? raw.savePct : raw.svPct;
+  if (savePct == null) savePct = statFromList(raw.statistics, ['savePct', 'savePercentage', 'svPct']);
+  let shots = raw.shotsAgainst != null ? raw.shotsAgainst : raw.shots;
+  if (shots == null) shots = statFromList(raw.statistics, ['shotsAgainst', 'shots']);
+  const statusObj = raw.status && typeof raw.status === 'object' ? raw.status : null;
+  const statusStr = String(
+    (statusObj && (statusObj.type || statusObj.name)) || (typeof raw.status === 'string' ? raw.status : '')
+  ).toLowerCase();
+  const confirmed = raw.starter === true || raw.confirmed === true
+    || statusStr === 'confirmed' || statusStr === 'starter';
+  if (!name && savePct == null) return null;
+  const id = athlete.id != null ? athlete.id : (raw.playerId != null ? raw.playerId : raw.id);
+  const shotN = numOrNull(shots);
+  return {
+    id: id != null ? String(id) : null,
+    name,
+    savePct: savePct != null ? savePct : null,
+    shotsAgainst: shotN != null && shotN > 0 ? shotN : null,
+    confirmed,
+    probable: !confirmed,
+    status: confirmed ? 'confirmed' : 'probable',
+  };
+}
+
+function firstGoalieFromCompetitor(competitor) {
+  const list = competitor && Array.isArray(competitor.probables) ? competitor.probables : [];
+  for (const raw of list) {
+    const g = goalieFromProbable(raw);
+    if (g) return g;
+  }
+  return null;
+}
+
+function goaliesFromSummary(summary) {
+  const competitions = summary && summary.header && summary.header.competitions;
+  const comp = Array.isArray(competitions) ? competitions[0] : null;
+  const competitors = (comp && comp.competitors) || [];
+  const home = competitors.find((c) => c && c.homeAway === 'home') || null;
+  const away = competitors.find((c) => c && c.homeAway === 'away') || null;
+  return {
+    home: firstGoalieFromCompetitor(home),
+    away: firstGoalieFromCompetitor(away),
+  };
+}
+
+/**
+ * Season goalie line from the public athlete overview.
+ * Regular season only. Career and projected splits are ignored.
+ */
+function parseAthleteGoalieOverview(overview) {
+  const stats = overview && overview.statistics;
+  const block = Array.isArray(stats)
+    ? stats.find((b) => b && Array.isArray(b.names) && Array.isArray(b.splits))
+    : (stats && Array.isArray(stats.names) ? stats : null);
+  if (!block) return null;
+  const split = (block.splits || []).find((s) => /regular season/i.test(String(s && s.displayName || '')));
+  if (!split || !Array.isArray(split.stats)) return null;
+  const read = (name) => {
+    const i = block.names.indexOf(name);
+    if (i < 0) return null;
+    return split.stats[i];
+  };
+  const savePct = read('savePct');
+  const shots = numOrNull(read('shotsAgainst'));
+  if (savePct == null && !(shots > 0)) return null;
+  return {
+    savePct: savePct != null ? savePct : null,
+    shotsAgainst: shots > 0 ? shots : null,
+  };
+}
+
+/** Roster row keyed by athlete id. Used when the overview shape is a roster. */
+function parseRosterGoalie(doc, athleteId) {
+  const roster = doc && (doc.roster || doc.athletes);
+  if (!Array.isArray(roster) || athleteId == null) return null;
+  const row = roster.find((r) => {
+    const id = (r && r.athlete && r.athlete.id) || (r && r.id);
+    return String(id) === String(athleteId);
+  });
+  if (!row) return null;
+  const pos = positionAbbr(row.athlete && row.athlete.position);
+  if (isSkaterPos(pos)) return null;
+  const shots = numOrNull(row.shotsAgainst != null ? row.shotsAgainst : row.shots);
+  return {
+    savePct: row.savePct != null ? row.savePct : (row.svPct != null ? row.svPct : null),
+    shotsAgainst: shots > 0 ? shots : null,
+  };
+}
+
+function mergeGoalieStats(base, extra) {
+  if (!base || typeof base !== 'object') return null;
+  const g = { ...base };
+  if (extra && typeof extra === 'object') {
+    if ((g.savePct == null || g.savePct === '') && extra.savePct != null) g.savePct = extra.savePct;
+    const shots = numOrNull(g.shotsAgainst != null ? g.shotsAgainst : g.shots);
+    const extraShots = numOrNull(extra.shotsAgainst != null ? extra.shotsAgainst : extra.shots);
+    if (!(shots > 0) && extraShots > 0) g.shotsAgainst = extraShots;
+  }
+  const rate = asUnitRate(g.savePct != null ? g.savePct : g.svPct, 'save');
+  if (rate == null) return null;
+  g.savePct = rate;
+  return g;
+}
+
+/**
+ * Team shot profile from the public team statistics payload, or a flat bag.
+ * Season totals (shots above 42) are divided by games. Under 5 games → null.
+ */
+function parseTeamShotStats(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  let bag = payload;
+  const cats = payload.results && payload.results.stats && payload.results.stats.categories;
+  if (Array.isArray(cats)) {
+    bag = {};
+    for (const cat of cats) {
+      for (const s of (cat && cat.stats) || []) {
+        if (!s || !s.name) continue;
+        const n = numOrNull(s.value != null ? s.value : s.displayValue);
+        if (n != null) bag[s.name] = n;
+      }
+    }
+  }
+  const games = numOrNull(bag.games != null ? bag.games : bag.gamesPlayed);
+  let shotsFor = numOrNull(bag.shotsTotal != null ? bag.shotsTotal : (bag.shotsFor != null ? bag.shotsFor : bag.shots));
+  let shotsAgainst = numOrNull(bag.shotsAgainst);
+  if (shotsFor == null || shotsAgainst == null) return null;
+  if (shotsFor > 42 || shotsAgainst > 42) {
+    if (!(games >= NHL_MIN_GAMES)) return null;
+    shotsFor /= games;
+    shotsAgainst /= games;
+  }
+  if (shotsFor < 20 || shotsFor > 42 || shotsAgainst < 20 || shotsAgainst > 42) return null;
+  const share = shotsFor / (shotsFor + shotsAgainst);
+  if (!Number.isFinite(share)) return null;
+  return {
+    shotsFor,
+    shotsAgainst,
+    shotShare: share,
+    savePct: bag.savePct != null ? bag.savePct : (bag.savePercentage != null ? bag.savePercentage : null),
+    shootingPct: bag.shootingPct != null ? bag.shootingPct : (bag.shootingPercentage != null ? bag.shootingPercentage : null),
+    games: games != null ? games : null,
+  };
+}
+
 module.exports = {
   project,
   SPORT,
@@ -624,8 +862,21 @@ module.exports = {
   teamGpg,
   nhlMarketProb,
   regressSavePct,
+  goalieFromProbable,
+  firstGoalieFromCompetitor,
+  goaliesFromSummary,
+  parseAthleteGoalieOverview,
+  parseRosterGoalie,
+  mergeGoalieStats,
+  parseTeamShotStats,
+  goalieTrust,
   OT_HOME,
   PHANTOM_SHOTS,
+  SHOT_SHARE_MARGIN,
+  SHOT_VOLUME_TOTAL,
+  LEAGUE_SHOTS_PG,
+  PROBABLE_GOALIE_WEIGHT,
+  LG_SAVE,
   NHL_MARGIN_CAP,
   NHL_TOTAL_MIN,
   NHL_TOTAL_MAX,

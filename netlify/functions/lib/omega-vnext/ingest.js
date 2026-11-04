@@ -5,6 +5,7 @@ const {
 } = require('./config');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
+const nhl = require('./sports/nhl');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -84,6 +85,39 @@ function filterEventsSameEtDay(events, dateISO) {
 
 
 
+function slimProbables(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  return list.slice(0, 4).map((p) => {
+    const athlete = p && p.athlete;
+    const status = p && p.status;
+    return {
+      name: (p && p.name) || null,
+      starter: !!(p && p.starter),
+      confirmed: !!(p && p.confirmed),
+      probable: !!(p && p.probable),
+      savePct: p && p.savePct != null ? p.savePct : null,
+      shotsAgainst: p && p.shotsAgainst != null ? p.shotsAgainst : null,
+      playerId: p && p.playerId != null ? p.playerId : null,
+      status: status && typeof status === 'object'
+        ? { type: status.type || null, name: status.name || null }
+        : (typeof status === 'string' ? status : null),
+      statistics: Array.isArray(p && p.statistics)
+        ? p.statistics.slice(0, 8).map((s) => ({
+          name: s && s.name,
+          value: s && (s.value != null ? s.value : s.displayValue),
+        }))
+        : [],
+      athlete: athlete ? {
+        id: athlete.id != null ? athlete.id : null,
+        displayName: athlete.displayName || athlete.fullName || null,
+        position: typeof athlete.position === 'string'
+          ? athlete.position
+          : (athlete.position && (athlete.position.abbreviation || athlete.position.name)) || null,
+      } : null,
+    };
+  });
+}
+
 function extractProbable(competitor) {
   if (!competitor) return null;
   const probs = competitor.probables || competitor.probablePitchers || [];
@@ -126,6 +160,10 @@ async function fetchEspnScoreboard(label, dateISO) {
         awayScore: away.score != null ? Number(away.score) : null,
         homeProbable: homeProb,
         awayProbable: awayProb,
+        homeTeamId: (home.team && home.team.id != null) ? String(home.team.id) : null,
+        awayTeamId: (away.team && away.team.id != null) ? String(away.team.id) : null,
+        homeProbablesRaw: slimProbables(home.probables),
+        awayProbablesRaw: slimProbables(away.probables),
         weather: extractWeather(comp),
       };
     });
@@ -261,6 +299,7 @@ async function fetchEspnStandings(label) {
           losses: losses ? Number(losses.value) : null,
         };
         if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
+        if (label === 'NHL' && e.team && e.team.id != null) ratings[team].espnId = String(e.team.id);
       }
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
@@ -524,6 +563,149 @@ async function loadSportEngines(dateISO, deps) {
   return { efficiencyBySport, parkFactors, mlbPitcherStats };
 }
 
+const NHL_ESPN_HOST = /^https:\/\/site\.(?:api|web\.api)\.espn\.com\//i;
+
+function nhlTeamStatsUrl(id) {
+  return `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/${encodeURIComponent(id)}/statistics`;
+}
+
+function nhlSummaryUrl(eventId) {
+  return `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event=${encodeURIComponent(eventId)}`;
+}
+
+function nhlGoalieUrl(athleteId) {
+  return `https://site.web.api.espn.com/apis/common/v3/sports/hockey/nhl/athletes/${encodeURIComponent(athleteId)}/overview`;
+}
+
+async function mapPool(items, limit, fn) {
+  const list = items || [];
+  const n = Math.min(Math.max(limit, 0), list.length);
+  if (!n) return;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < list.length) {
+      const idx = cursor;
+      cursor += 1;
+      try {
+        await fn(list[idx], idx);
+      } catch (e) {
+        console.error(`[omega-vnext/ingest] NHL public soft-fail: ${e.message}`);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: n }, () => worker()));
+}
+
+function writeShotFields(target, parsed) {
+  if (!target || !parsed) return false;
+  target.shotsFor = parsed.shotsFor;
+  target.shotsAgainst = parsed.shotsAgainst;
+  target.shotShare = parsed.shotShare;
+  if (parsed.savePct != null) target.savePct = parsed.savePct;
+  if (parsed.shootingPct != null) target.shootingPct = parsed.shootingPct;
+  return true;
+}
+
+async function fillNhlGoalie(goalie, getter) {
+  if (!goalie) return null;
+  const needShots = !(Number(goalie.shotsAgainst) > 0);
+  const needSave = goalie.savePct == null || goalie.savePct === '';
+  let extra = null;
+  if (goalie.id && (needShots || needSave)) {
+    const overview = await getter(nhlGoalieUrl(goalie.id));
+    extra = nhl.parseAthleteGoalieOverview(overview) || nhl.parseRosterGoalie(overview, goalie.id);
+  }
+  return nhl.mergeGoalieStats(goalie, extra);
+}
+
+async function attachNhlGameGoalies(game, getter) {
+  if (!game || typeof game !== 'object') return;
+  let home = nhl.firstGoalieFromCompetitor({ probables: game.homeProbablesRaw });
+  let away = nhl.firstGoalieFromCompetitor({ probables: game.awayProbablesRaw });
+  if ((!home || !away) && game.id) {
+    const summary = await getter(nhlSummaryUrl(game.id));
+    const parsed = nhl.goaliesFromSummary(summary) || {};
+    if (!home && parsed.home) home = parsed.home;
+    if (!away && parsed.away) away = parsed.away;
+  }
+  home = await fillNhlGoalie(home, getter);
+  away = await fillNhlGoalie(away, getter);
+  if (home && home.savePct != null) game.homeGoalie = home;
+  if (away && away.savePct != null) game.awayGoalie = away;
+}
+
+/**
+ * NHL shots and starting goalies from ESPN public endpoints only.
+ * Any failure leaves that team or game on the standings path. Never throws.
+ * fetchJson is injectable for tests. Production uses the module fetch.
+ */
+async function enrichNhlPublicInputs({ games, standings, fetchJson: fetchImpl } = {}) {
+  const boardGames = Array.isArray(games) ? games : [];
+  const table = standings && typeof standings === 'object' && !Array.isArray(standings) ? standings : {};
+  const load = fetchImpl || fetchJson;
+  const getter = async (url) => {
+    if (!NHL_ESPN_HOST.test(String(url || ''))) return null;
+    try {
+      return await load(url, 8000);
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] NHL public soft-fail: ${e.message}`);
+      return null;
+    }
+  };
+  const ids = new Set();
+  for (const row of Object.values(table)) {
+    if (row && row.espnId != null) ids.add(String(row.espnId));
+  }
+  for (const game of boardGames) {
+    if (!game) continue;
+    if (game.homeTeamId != null) ids.add(String(game.homeTeamId));
+    if (game.awayTeamId != null) ids.add(String(game.awayTeamId));
+  }
+  const cache = new Map();
+  let shotTeams = 0;
+  let goalieSides = 0;
+  await Promise.all([
+    mapPool([...ids], 6, async (id) => {
+      const data = await getter(nhlTeamStatsUrl(id));
+      cache.set(id, nhl.parseTeamShotStats(data));
+    }),
+    mapPool(boardGames, 4, async (game) => {
+      await attachNhlGameGoalies(game, getter);
+      if (game && game.homeGoalie) goalieSides += 1;
+      if (game && game.awayGoalie) goalieSides += 1;
+    }),
+  ]);
+  for (const row of Object.values(table)) {
+    if (!row || row.espnId == null) continue;
+    if (writeShotFields(row, cache.get(String(row.espnId)))) shotTeams += 1;
+  }
+  for (const game of boardGames) {
+    if (!game) continue;
+    const home = game.homeTeamId != null ? cache.get(String(game.homeTeamId)) : null;
+    const away = game.awayTeamId != null ? cache.get(String(game.awayTeamId)) : null;
+    if (home) {
+      game.homeStats = {
+        shotsFor: home.shotsFor,
+        shotsAgainst: home.shotsAgainst,
+        shotShare: home.shotShare,
+        savePct: home.savePct,
+        shootingPct: home.shootingPct,
+      };
+    }
+    if (away) {
+      game.awayStats = {
+        shotsFor: away.shotsFor,
+        shotsAgainst: away.shotsAgainst,
+        shotShare: away.shotShare,
+        savePct: away.savePct,
+        shootingPct: away.shootingPct,
+      };
+    }
+  }
+  console.log(`[omega-vnext/ingest] NHL public shots=${shotTeams} goalieSides=${goalieSides}`);
+  return { games: boardGames, standings: table };
+}
+
 async function ingest(dateISO, opts = {}) {
   const labels = enabledSportLabels();
   // Also fetch standings for disabled sports? No — only enabled.
@@ -543,6 +725,17 @@ async function ingest(dateISO, opts = {}) {
     gameDay = await loadGameDayContext(dateISO, labels, espnBySport);
   } catch (e) {
     console.error(`[omega-vnext/ingest] gameDay soft-fail: ${e.message}`);
+  }
+
+  if (espnBySport.NHL || standingsBySport.NHL) {
+    try {
+      await enrichNhlPublicInputs({
+        games: (espnBySport.NHL && espnBySport.NHL.games) || [],
+        standings: standingsBySport.NHL || {},
+      });
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] NHL public inputs soft-fail: ${e.message}`);
+    }
   }
 
   return {
@@ -573,6 +766,7 @@ module.exports = {
   loadSportEngines,
   loadGameDayContext,
   applyNhlStandingStats,
+  enrichNhlPublicInputs,
   fetchFootballQbStatusMap,
   enabledSportLabels,
   filterEventsSameEtDay,

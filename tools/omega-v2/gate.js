@@ -319,6 +319,13 @@ async function main() {
 
   console.log('PASS omega-v2 gate');
 
+  const nhlInputs = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-nhl-inputs.js')],
+    { stdio: 'inherit' }
+  );
+  if (nhlInputs.status !== 0) throw new Error('nhl public-input gate failed');
+
   // Math gate: replay stored v2 cards against the approved GATE_SPEC rules.
   const math = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'math-gate.js')], { stdio: 'inherit' });
   if (math.status !== 0) throw new Error('omega-v2 math gate failed');

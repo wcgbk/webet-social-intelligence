@@ -15,6 +15,7 @@ const { sizeParlay, legEvSkips, legFailsPriceEv, legBookSkips, quotedLeg } = req
 const { americanToImplied } = require('../omega-vnext/odds_math');
 const { applySportCoverage, stampQualified } = require('./coverage');
 const { dkHrLineAgrees, quotePoint } = require('./board');
+const { inputsLoggingEnabled, recordCandidateInputs } = require('./candidate_inputs');
 
 const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
@@ -402,6 +403,28 @@ async function publishFromOmegaCandidates(input) {
     stageCounts: input.stageCounts || null,
     boardBySport: input.boardBySport || null,
   });
+  // Context log only. The card object above is already final.
+  try {
+    if (input && inputsLoggingEnabled(input)) {
+      const logged = await recordCandidateInputs({
+        candidates: Array.isArray(input.scoredCandidates) ? input.scoredCandidates : raw,
+        snap: input.snap || null,
+        history: input.history || [],
+        dateISO: input.date,
+        fetchJson: typeof input.inputsFetch === 'function' ? input.inputsFetch : null,
+        skipFetch: !!(input.skipInputFetch || input.replayLike || input.historicalSnapshot),
+        scheduleGames: input.scheduleGames || null,
+        injuriesBySport: input.injuriesBySport || null,
+        injuries: input.injuries || null,
+      });
+      if (logged && typeof input === 'object') {
+        try { input.candidateInputsResult = logged; } catch (_) { /* caller may freeze input */ }
+      }
+    }
+  } catch (err) {
+    const msg = String(err && err.message || 'error');
+    console.warn(`[candidate-inputs] skipped: ${/bearer|token|authorization|api[_-]?key/i.test(msg) ? 'unavailable' : msg.slice(0, 180)}`);
+  }
   return card;
 }
 

@@ -1060,6 +1060,7 @@ exports.handler = async (event) => {
         await attachCandidateCloses(clvData, {
           dateISO,
           existingCandidates: existingClv && existingClv.candidates,
+          existingInputs: existingClv && existingClv.candidateInputs,
           picksData,
           bulkCache,
           nowIso: new Date().toISOString(),

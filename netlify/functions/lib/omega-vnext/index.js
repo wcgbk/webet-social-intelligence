@@ -535,6 +535,7 @@ async function generateOmegaVnext(opts = {}) {
   let built = publishFrom(open, stillRaw, qa.yesPoolRemaining || yesPool, qa.picks);
   // v2 is the live card. OMEGA_PIPELINE_V2=0 keeps the v1 fill, narration, and caps.
   const usePipelineV2 = pipelineV2Enabled(opts);
+  let publishInput = null;
   if (usePipelineV2) {
     let history = [];
     if (Array.isArray(opts.walkForwardHistory)) history = opts.walkForwardHistory;
@@ -558,10 +559,11 @@ async function generateOmegaVnext(opts = {}) {
       dryRun: dryRun || shadow,
       modelVersion: OMEGA_V2_MODEL_VERSION,
     });
-    built = await publishFromOmegaCandidates({
+    publishInput = {
       date: dateISO,
       dateFormatted,
       candidates: open,
+      scoredCandidates: candidates,
       parlayPool: open,
       v1Qualified: stillRaw,
       history,
@@ -577,7 +579,13 @@ async function generateOmegaVnext(opts = {}) {
         gated: countBySport(open),
       },
       boardBySport: (snap && snap.oddsBySport) || null,
-    });
+      snap,
+      replayLike,
+      skipInputFetch: !!replayLike,
+    };
+    if (Object.prototype.hasOwnProperty.call(opts, 'logInputs')) publishInput.logInputs = opts.logInputs;
+    if (typeof opts.inputsFetch === 'function') publishInput.inputsFetch = opts.inputsFetch;
+    built = await publishFromOmegaCandidates(publishInput);
     built.morningBoard = boardSave;
   }
   const publishedVersion = usePipelineV2 && built.modelVersion ? built.modelVersion : MODEL_VERSION;
@@ -886,6 +894,7 @@ async function generateOmegaVnext(opts = {}) {
         masterBoard,
         linePathMeta,
         betAt: now.toISOString(),
+        inputs: publishInput && publishInput.candidateInputsResult,
         readJson: (key) => readJson(key),
         writeJson: (key, data) => storeJson(key, data),
       });

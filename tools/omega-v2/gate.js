@@ -364,6 +364,13 @@ async function main() {
   );
   if (candidateClv.status !== 0) throw new Error('candidate clv gate failed');
 
+  const candidateInputs = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-candidate-inputs.js')],
+    { stdio: 'inherit' }
+  );
+  if (candidateInputs.status !== 0) throw new Error('candidate inputs gate failed');
+
   const placeParlay = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-place-parlay.js')],

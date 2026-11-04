@@ -726,6 +726,14 @@ async function seedCandidateClv(opts = {}) {
     doc.candidates = bounded.rows;
     doc.candidateClv = summarize(graded, bounded);
     try {
+      const { packInputs } = require('./candidate_inputs');
+      const packed = packInputs(opts.inputs);
+      if (packed) {
+        doc.candidateInputs = packed.rows;
+        doc.candidateInputsMeta = packed.meta;
+      }
+    } catch (_) { /* input log is optional */ }
+    try {
       await opts.writeJson(`clv-${dateISO}`, doc);
     } catch (_) {
       return { saved: false, reason: 'write-failed' };
@@ -737,9 +745,17 @@ async function seedCandidateClv(opts = {}) {
   }
 }
 
+function keepStoredInputs(clvData, opts) {
+  try {
+    const { applyStoredInputs } = require('./candidate_inputs');
+    applyStoredInputs(clvData, opts && opts.existingInputs);
+  } catch (_) { /* leave the document unchanged */ }
+}
+
 async function attachCandidateCloses(clvData, opts = {}) {
   try {
     if (!clvData || typeof clvData !== 'object') return clvData;
+    keepStoredInputs(clvData, opts);
     const dateISO = opts.dateISO;
     let candidates = Array.isArray(opts.candidates) ? opts.candidates : null;
     if (!candidates && dateISO && typeof opts.readJson === 'function') {
@@ -781,6 +797,7 @@ async function attachCandidateCloses(clvData, opts = {}) {
         clvData.candidates = boundCandidates(opts.existingCandidates, opts.existingCandidates.length).rows;
       }
     } catch (_) { /* leave the document unchanged */ }
+    keepStoredInputs(clvData, opts);
     return clvData;
   }
 }

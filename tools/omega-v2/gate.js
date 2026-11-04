@@ -343,6 +343,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (placeParlay.status !== 0) throw new Error('place and parlay gate failed');
+
+  const replayDkhr = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-replay-dkhr.js')],
+    { stdio: 'inherit' }
+  );
+  if (replayDkhr.status !== 0) throw new Error('replay dkhr gate failed');
 }
 
 main().catch((err) => {

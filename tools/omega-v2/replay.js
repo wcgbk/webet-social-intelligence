@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Walk-forward replay of Omega pipeline v2 against the live card.
+ * Walk-forward replay of pipeline v2 against the live card.
  * Reads the reconciled sizing-v2 derived set (pick-time pMkt, latest close,
- * exact-line CLV). Does not call The Odds API and does not write to Supabase.
+ * exact-line CLV). Joins stored DraftKings and Hard Rock quotes before a
+ * row can be priced. Does not call The Odds API and does not write to Supabase.
  *
  * Dollars and units in the report are whole numbers, rounded away from zero.
  */
@@ -12,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const v2 = require('../../netlify/functions/lib/omega-v2');
 const { americanToDecimal } = require('../../netlify/functions/lib/omega-vnext/odds_math');
+const { joinStoredDkHr } = require('./dkhr-quotes');
 
 const DERIVED = process.env.OMEGA_V2_DERIVED
   || '/workspace/omega-sizing-v2/tools/sizing-v2/derived.json';
@@ -47,8 +49,8 @@ function legKey(row) {
   return `${v2.gameKey(row.matchup)}|${String(row.pick || '').toLowerCase()}`;
 }
 
-function candidateFrom(row) {
-  return {
+function candidateFrom(row, quote) {
+  const base = {
     sport: row.sport,
     matchup: row.matchup,
     pick: row.pick,
@@ -61,6 +63,19 @@ function candidateFrom(row) {
     result: row.result || null,
     clvPp: row.clvPp != null ? row.clvPp : null,
     book: row.book || null,
+  };
+  if (!quote || !Number.isFinite(quote.american) || !quote.book) return base;
+  const px = { american: quote.american, book: quote.book };
+  if (quote.point != null && Number.isFinite(Number(quote.point))) {
+    px.point = Number(quote.point);
+    px.line = Number(quote.point);
+  }
+  return {
+    ...base,
+    odds: quote.american,
+    book: quote.book,
+    bestDkHr: px,
+    dkHrSource: quote.source || null,
   };
 }
 
@@ -219,13 +234,14 @@ function liveBets(derived) {
   return bets;
 }
 
-async function v2Bets(derived) {
+async function v2Bets(derived, quotes) {
   const bets = [];
   const cards = [];
+  const quoteFor = quotes || new Map();
   for (const day of derived.days) {
     const card = await v2.buildCard({
       date: day.date,
-      candidates: dayPool(day).map(candidateFrom),
+      candidates: dayPool(day).map((row) => candidateFrom(row, quoteFor.get(`${day.date}|${legKey(row)}`))),
       history: historyBefore(derived, day.date),
       recheck: null,
       pregameAsOfMs: replayPregameAsOfMs(day),
@@ -252,6 +268,8 @@ async function v2Bets(derived) {
         pMkt: pick.pMkt,
         units: pick.unitsNum,
         commenceTime: pick.commenceTime,
+        book: pick.book || null,
+        dkHrSource: (quoteFor.get(`${day.date}|${legKey(pick)}`) || {}).source || null,
       });
     }
     let parlayHit = null;
@@ -495,6 +513,45 @@ function pct(x) {
   return `${Math.round(x * 1000) / 10}%`;
 }
 
+function replayStatusLines(dkhr) {
+  const quoted = dkhr && Number(dkhr.quotedRows);
+  if (!(quoted > 0)) return ['no stored DK/HR quotes'];
+  const lines = [`stored DK/HR quotes: ${quoted} of ${dkhr.candidateRows} candidate rows`];
+  if (!dkhr.sufficient && dkhr.primaryReplay) {
+    lines.push(`primary 30-day replay for ship decisions: ${dkhr.primaryReplay}`);
+  }
+  return lines;
+}
+
+function sourceLabel(key) {
+  const labels = {
+    'line-snap': 'line snaps',
+    stakeaudit: 'stakeaudit cards',
+    'odds-master-1000': 'odds-master 10:00 board',
+    'odds-master-0300': 'odds-master 3:00 board',
+    urgent1103: 'urgent1103 boards',
+  };
+  return labels[key] || key;
+}
+
+function coverageLines(dkhr) {
+  if (!dkhr) return [];
+  const lines = [];
+  if (dkhr.status === 'no stored DK/HR quotes') lines.push('no stored DK/HR quotes');
+  const sources = Object.entries(dkhr.bySource || {})
+    .filter(([, n]) => n > 0)
+    .map(([key, n]) => `${sourceLabel(key)} ${n}`)
+    .join(', ');
+  lines.push(`Stored DraftKings and Hard Rock quotes, joined on game, market, side, and line: ${dkhr.quotedRows} of ${dkhr.candidateRows} candidate rows (${dkhr.quotedStoredRows} of ${dkhr.storedRows} stored rows).${sources ? ` Sources: ${sources}.` : ''}`);
+  if (!dkhr.sufficient) {
+    const missing = (dkhr.unquotedDates || []).length
+      ? ` Dates with candidate rows and no stored quote: ${(dkhr.unquotedDates || []).join(', ')}.`
+      : '';
+    lines.push(`Coverage is short of the full candidate pool.${missing} The primary 30-day replay used for ship decisions is tools/omega-v2/replay-bp1104.js. This replay prices a row only from a stored DraftKings or Hard Rock quote.`);
+  }
+  return lines;
+}
+
 function buildMarkdown(report) {
   const L = report.live;
   const V = report.v2;
@@ -502,7 +559,11 @@ function buildMarkdown(report) {
   const lines = [];
   lines.push('# Pipeline v2 replay');
   lines.push('');
-  lines.push(`Walk-forward on the stored card, ${report.window[0]} to ${report.window[1]} (${report.days} days). 1u = $150. Profit dollars and units are whole numbers rounded away from zero. The close is used only for CLV. Prices and win/loss grades are the stored card.`);
+  for (const line of coverageLines(report.dkhr)) {
+    lines.push(line);
+    lines.push('');
+  }
+  lines.push(`Walk-forward on the stored card, ${report.window[0]} to ${report.window[1]} (${report.days} days). 1u = $150. Profit dollars and units are whole numbers rounded away from zero. The close is used only for CLV. Prices and win/loss grades are the stored card. A bet price is the stored DraftKings or Hard Rock quote when one matches the row.`);
   lines.push('');
   lines.push('The candidate pool each day is the published straights plus that day\'s parlay legs. Full morning boards are not stored, so v2 can drop or resize a published leg. It cannot add a bet that never made the card.');
   lines.push('');
@@ -584,24 +645,16 @@ function recommend(live, next, boot, calibration) {
 
 async function main() {
   const derived = loadDerived();
+  const joined = await joinStoredDkHr(derived);
+  const dkhr = joined.summary;
   const days = derived.days.map((day) => day.date);
   const errors = scanErrors(derived);
   const live = liveBets(derived);
-  const replay = await v2Bets(derived);
+  const replay = await v2Bets(derived, joined.quotes);
   const quoted = new Map();
-  // Rebuild quotes for the all-straight Brier. buildCard is deterministic.
+  // Score every straight with the same fit, including ones v2 did not bet.
   for (const day of derived.days) {
-    const card = await v2.buildCard({
-      date: day.date,
-      candidates: dayPool(day).map(candidateFrom),
-      history: historyBefore(derived, day.date),
-      pregameAsOfMs: replayPregameAsOfMs(day),
-    });
     const map = new Map();
-    for (const row of card.parlayPool) {
-      // parlayPool is qualified only. Calibration of every straight is on the picks or we need pCal for non-bets too.
-    }
-    // Score every straight with the same fit, including ones v2 did not bet.
     const fit = v2.fitWalkForward(historyBefore(derived, day.date), day.date);
     for (const row of day.straights || []) {
       const cand = v2.normalizeCandidate(candidateFrom(row));
@@ -631,7 +684,15 @@ async function main() {
   const liveSummary = summarize('live', live, liveCards(derived), days);
   const v2Summary = summarize('v2', replay.bets, replay.cards, days);
   const boot = bootstrap(live, replay.bets, days);
-  const recommendation = recommend(liveSummary, v2Summary, boot, calibration);
+  let recommendation = recommend(liveSummary, v2Summary, boot, calibration);
+  if (!dkhr.sufficient) {
+    recommendation = {
+      ship: false,
+      text: dkhr.status === 'no stored DK/HR quotes'
+        ? 'no stored DK/HR quotes. Ship decisions use tools/omega-v2/replay-bp1104.js for this window.'
+        : `Stored DraftKings and Hard Rock quotes cover ${dkhr.quotedRows} of ${dkhr.candidateRows} candidate rows. Ship decisions use tools/omega-v2/replay-bp1104.js for this window.`,
+    };
+  }
   const report = {
     generatedAt: new Date().toISOString(),
     window: derived.window,
@@ -639,6 +700,7 @@ async function main() {
     unitDollars: v2.UNIT_DOLLARS,
     modelVersion: v2.MODEL_VERSION,
     pool: 'Published straights plus parlay legs on each stored card. Not the full morning board.',
+    dkhr,
     live: liveSummary,
     v2: v2Summary,
     calibration,
@@ -677,6 +739,8 @@ async function main() {
       riskUsd: bet.riskUsd,
       clvPp: bet.clvPp == null ? null : bet.clvPp,
       commenceTime: bet.commenceTime || null,
+      book: bet.book || null,
+      dkHrSource: bet.dkHrSource || null,
     })),
   };
   // markdown wants the nested error arrays' lengths via report.errors shape used above.
@@ -696,7 +760,9 @@ async function main() {
   };
   fs.writeFileSync(JSON_OUT, `${JSON.stringify(report, null, 2)}\n`);
   fs.writeFileSync(MD_OUT, buildMarkdown(mdReport));
+  for (const line of replayStatusLines(dkhr)) console.log(line);
   console.log(JSON.stringify({
+    dkhr,
     live: liveSummary.overall,
     v2: v2Summary.overall,
     straights: { live: liveSummary.straights.wl, v2: v2Summary.straights.wl },
@@ -712,7 +778,11 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { replayStatusLines };

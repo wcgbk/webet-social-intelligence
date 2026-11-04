@@ -1,13 +1,90 @@
 {
-  "generatedAt": "2026-10-30T22:48:48.672Z",
+  "generatedAt": "2026-11-04T05:23:45.744Z",
   "window": [
     "2026-09-30",
     "2026-10-29"
   ],
   "days": 30,
   "unitDollars": 150,
-  "modelVersion": "omega-pipeline-v2.0",
+  "modelVersion": "omega-v2-sharp-2026-11-01-dkhr",
   "pool": "Published straights plus parlay legs on each stored card. Not the full morning board.",
+  "dkhr": {
+    "candidateRows": 87,
+    "quotedRows": 66,
+    "storedRows": 150,
+    "quotedStoredRows": 109,
+    "bySource": {
+      "line-snap": 48,
+      "odds-master-1000": 3,
+      "stakeaudit": 15
+    },
+    "unquotedDates": [
+      "2026-10-10",
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-24"
+    ],
+    "examples": [
+      {
+        "date": "2026-09-30",
+        "pick": "Over 7.5",
+        "matchup": "Chicago White Sox @ Houston Astros",
+        "book": "draftkings",
+        "american": -108,
+        "line": 7.5,
+        "source": "line-snap-0915"
+      },
+      {
+        "date": "2026-09-30",
+        "pick": "Over 6.5",
+        "matchup": "Boston Red Sox @ New York Yankees",
+        "book": "draftkings",
+        "american": -117,
+        "line": 6.5,
+        "source": "line-snap-0915"
+      },
+      {
+        "date": "2026-10-01",
+        "pick": "New Mexico State Aggies -2.5",
+        "matchup": "Western Kentucky Hilltoppers @ New Mexico State Aggies",
+        "book": "draftkings",
+        "american": -108,
+        "line": -2.5,
+        "source": "line-snap-0915"
+      },
+      {
+        "date": "2026-10-01",
+        "pick": "Over 7.5",
+        "matchup": "Philadelphia Phillies @ Atlanta Braves",
+        "book": "hardrockbet",
+        "american": 100,
+        "line": 7.5,
+        "source": "line-snap-0915"
+      },
+      {
+        "date": "2026-10-01",
+        "pick": "Chicago Blackhawks +1.5",
+        "matchup": "Chicago Blackhawks @ Utah Mammoth",
+        "book": "draftkings",
+        "american": -142,
+        "line": 1.5,
+        "source": "line-snap-0915"
+      }
+    ],
+    "conflicts": 0,
+    "searched": {
+      "lineSnapFiles": 219,
+      "oddsMasterBoards": 1,
+      "cardFiles": 10,
+      "urgentFiles": 5
+    },
+    "sufficient": false,
+    "status": "insufficient",
+    "realQuotes": true,
+    "primaryReplay": "tools/omega-v2/replay-bp1104.js"
+  },
   "live": {
     "name": "live",
     "straights": {
@@ -58,48 +135,48 @@
   "v2": {
     "name": "v2",
     "straights": {
-      "wl": "1-6-0",
-      "bets": 7,
-      "profitUsd": -870,
-      "units": -6,
-      "roiPct": -80,
-      "rawProfitUsd": -870,
-      "rawUnits": -5.8,
-      "rawRoi": -0.7974335472043996
+      "wl": "4-9-0",
+      "bets": 13,
+      "profitUsd": -398,
+      "units": -3,
+      "roiPct": -49,
+      "rawProfitUsd": -398,
+      "rawUnits": -2.65,
+      "rawRoi": -0.4806763285024155
     },
     "parlays": {
-      "wl": "0-0-0",
-      "bets": 0,
-      "profitUsd": 0,
-      "units": 0,
-      "roiPct": null,
-      "rawProfitUsd": 0,
-      "rawUnits": 0,
-      "rawRoi": null,
-      "hitRate": null
+      "wl": "0-1-0",
+      "bets": 1,
+      "profitUsd": -38,
+      "units": -1,
+      "roiPct": -100,
+      "rawProfitUsd": -38,
+      "rawUnits": -0.25,
+      "rawRoi": -1,
+      "hitRate": 0
     },
     "overall": {
-      "wl": "1-6-0",
-      "bets": 7,
-      "profitUsd": -870,
-      "units": -6,
-      "roiPct": -80,
-      "rawProfitUsd": -870,
-      "rawUnits": -5.8,
-      "rawRoi": -0.7974335472043996
+      "wl": "4-10-0",
+      "bets": 14,
+      "profitUsd": -436,
+      "units": -3,
+      "roiPct": -51,
+      "rawProfitUsd": -436,
+      "rawUnits": -2.91,
+      "rawRoi": -0.5034642032332564
     },
     "clv": {
-      "n": 7,
-      "cents": 2.46,
-      "beatClose": 1
+      "n": 10,
+      "cents": 0.8,
+      "beatClose": 0.8
     },
-    "brier": 0.2727,
-    "logLoss": 0.7386,
-    "probN": 7,
-    "maxDrawdownUsd": 870,
-    "maxDrawdownUnits": 6,
-    "passDays": 25,
-    "shortDays": 4,
+    "brier": 0.2515,
+    "logLoss": 0.6962,
+    "probN": 13,
+    "maxDrawdownUsd": 602,
+    "maxDrawdownUnits": 5,
+    "passDays": 18,
+    "shortDays": 12,
     "days": 30
   },
   "calibration": {
@@ -110,8 +187,8 @@
     },
     "v2": {
       "n": 75,
-      "brier": 0.2561,
-      "logLoss": 0.706
+      "brier": 0.2556,
+      "logLoss": 0.705
     },
     "market": {
       "n": 75,
@@ -122,24 +199,23 @@
   "bootstrap": {
     "n": 10000,
     "seed": 1030,
-    "observedProfit": -1025,
+    "observedProfit": -591,
     "profit": {
-      "lo": -5750,
-      "hi": 3193,
-      "p": 0.676,
+      "lo": -5249,
+      "hi": 3475,
+      "p": 0.809,
       "sig": false
     },
     "roi": {
-      "lo": -1.3199,
-      "hi": 0.0411,
-      "p": 0.056,
-      "sig": false
+      "lo": -0.8836,
+      "hi": -0.0544,
+      "p": 0.031,
+      "sig": true
     }
   },
   "recommendation": {
     "ship": false,
-    "text": "The profit gap is not significant. v2 is the cleaner process (no forced fill, walk-forward calibration, ML+total parlays only), but this 30-day pool does not justify replacing the live card. Leave OMEGA_PIPELINE_V2 off and keep the shadow.",
-    "brierBetter": false
+    "text": "Stored DraftKings and Hard Rock quotes cover 66 of 87 candidate rows. Ship decisions use tools/omega-v2/replay-bp1104.js for this window."
   },
   "errors": {
     "unmatched": [
@@ -904,20 +980,20 @@
   "cards": [
     {
       "date": "2026-09-30",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 0,
       "method": "prior",
       "parlayResult": null
     },
     {
       "date": "2026-10-01",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 2,
       "method": "prior",
       "parlayResult": null
@@ -934,23 +1010,23 @@
     },
     {
       "date": "2026-10-03",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 7,
       "method": "prior",
       "parlayResult": null
     },
     {
       "date": "2026-10-04",
-      "straights": 3,
-      "parlay": 0,
+      "straights": 2,
+      "parlay": 2,
       "pass": false,
-      "short": false,
+      "short": true,
       "trainN": 13,
       "method": "shrink",
-      "parlayResult": null
+      "parlayResult": "loss"
     },
     {
       "date": "2026-10-05",
@@ -964,20 +1040,20 @@
     },
     {
       "date": "2026-10-06",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 19,
       "method": "prior",
       "parlayResult": null
     },
     {
       "date": "2026-10-07",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 21,
       "method": "prior",
       "parlayResult": null
@@ -1004,10 +1080,10 @@
     },
     {
       "date": "2026-10-10",
-      "straights": 1,
+      "straights": 0,
       "parlay": 0,
-      "pass": false,
-      "short": true,
+      "pass": true,
+      "short": false,
       "trainN": 29,
       "method": "prior",
       "parlayResult": null
@@ -1044,10 +1120,10 @@
     },
     {
       "date": "2026-10-14",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 39,
       "method": "prior",
       "parlayResult": null
@@ -1074,30 +1150,30 @@
     },
     {
       "date": "2026-10-17",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 45,
       "method": "platt",
       "parlayResult": null
     },
     {
       "date": "2026-10-18",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 48,
       "method": "platt",
       "parlayResult": null
     },
     {
       "date": "2026-10-19",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 53,
       "method": "platt",
       "parlayResult": null
@@ -1134,10 +1210,10 @@
     },
     {
       "date": "2026-10-23",
-      "straights": 1,
+      "straights": 0,
       "parlay": 0,
-      "pass": false,
-      "short": true,
+      "pass": true,
+      "short": false,
       "trainN": 65,
       "method": "prior",
       "parlayResult": null
@@ -1154,10 +1230,10 @@
     },
     {
       "date": "2026-10-25",
-      "straights": 1,
+      "straights": 0,
       "parlay": 0,
-      "pass": false,
-      "short": true,
+      "pass": true,
+      "short": false,
       "trainN": 71,
       "method": "prior",
       "parlayResult": null
@@ -1174,10 +1250,10 @@
     },
     {
       "date": "2026-10-27",
-      "straights": 0,
+      "straights": 1,
       "parlay": 0,
-      "pass": true,
-      "short": false,
+      "pass": false,
+      "short": true,
       "trainN": 77,
       "method": "prior",
       "parlayResult": null
@@ -1205,6 +1281,51 @@
   ],
   "v2Bets": [
     {
+      "date": "2026-09-30",
+      "kind": "straight",
+      "pick": "Over 6.5",
+      "matchup": "Boston Red Sox @ New York Yankees",
+      "sport": "MLB",
+      "odds": "-117",
+      "result": "win",
+      "profitUsd": 65,
+      "riskUsd": 75,
+      "clvPp": 0.2,
+      "commenceTime": "2026-10-01T00:00:00Z",
+      "book": "draftkings",
+      "dkHrSource": "line-snap-0915"
+    },
+    {
+      "date": "2026-10-01",
+      "kind": "straight",
+      "pick": "Over 7.5",
+      "matchup": "Philadelphia Phillies @ Atlanta Braves",
+      "sport": "MLB",
+      "odds": "+100",
+      "result": "win",
+      "profitUsd": 38,
+      "riskUsd": 38,
+      "clvPp": 0.24,
+      "commenceTime": "2026-10-02T00:11:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-0915"
+    },
+    {
+      "date": "2026-10-03",
+      "kind": "straight",
+      "pick": "McNeese State Cowboys +53.5",
+      "matchup": "McNeese State Cowboys @ LSU Tigers",
+      "sport": "NCAAF",
+      "odds": "-110",
+      "result": "win",
+      "profitUsd": 35,
+      "riskUsd": 38,
+      "clvPp": -0.4,
+      "commenceTime": "2026-10-03T23:45:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-0915"
+    },
+    {
       "date": "2026-10-04",
       "kind": "straight",
       "pick": "Over 46.5",
@@ -1212,10 +1333,12 @@
       "sport": "NFL",
       "odds": "-108",
       "result": "loss",
-      "profitUsd": -188,
-      "riskUsd": 188,
+      "profitUsd": -75,
+      "riskUsd": 75,
       "clvPp": 2.13,
-      "commenceTime": "2026-10-04T13:30:00Z"
+      "commenceTime": "2026-10-04T13:30:00Z",
+      "book": "draftkings",
+      "dkHrSource": "line-snap-0915"
     },
     {
       "date": "2026-10-04",
@@ -1223,77 +1346,149 @@
       "pick": "Philadelphia Eagles +3.5",
       "matchup": "Los Angeles Rams @ Philadelphia Eagles",
       "sport": "NFL",
-      "odds": "-105",
+      "odds": "-108",
       "result": "loss",
-      "profitUsd": -188,
-      "riskUsd": 188,
+      "profitUsd": -38,
+      "riskUsd": 38,
       "clvPp": 0.69,
-      "commenceTime": "2026-10-04T17:00:00Z"
+      "commenceTime": "2026-10-04T17:00:00Z",
+      "book": "draftkings",
+      "dkHrSource": "line-snap-0915"
     },
     {
       "date": "2026-10-04",
-      "kind": "straight",
-      "pick": "Over 38.5",
-      "matchup": "Green Bay Packers @ Tampa Bay Buccaneers",
-      "sport": "NFL",
-      "odds": "-114",
+      "kind": "parlay",
+      "pick": "2-leg",
+      "matchup": null,
+      "sport": null,
+      "odds": null,
       "result": "loss",
-      "profitUsd": -113,
-      "riskUsd": 113,
-      "clvPp": 0.86,
-      "commenceTime": "2026-10-04T17:00:00Z"
+      "profitUsd": -38,
+      "riskUsd": 38,
+      "clvPp": null,
+      "commenceTime": null,
+      "book": null,
+      "dkHrSource": null
+    },
+    {
+      "date": "2026-10-06",
+      "kind": "straight",
+      "pick": "Over 6.5",
+      "matchup": "Los Angeles Dodgers @ Atlanta Braves",
+      "sport": "MLB",
+      "odds": "+100",
+      "result": "loss",
+      "profitUsd": -75,
+      "riskUsd": 75,
+      "clvPp": 1.14,
+      "commenceTime": "2026-10-06T22:00:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-0915"
+    },
+    {
+      "date": "2026-10-07",
+      "kind": "straight",
+      "pick": "Over 7.5",
+      "matchup": "Tampa Bay Rays @ New York Yankees",
+      "sport": "MLB",
+      "odds": "+110",
+      "result": "loss",
+      "profitUsd": -75,
+      "riskUsd": 75,
+      "clvPp": 0.66,
+      "commenceTime": "2026-10-08T00:00:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-0915"
     },
     {
       "date": "2026-10-08",
       "kind": "straight",
-      "pick": "Calgary Flames +1.5",
-      "matchup": "Colorado Avalanche @ Calgary Flames",
+      "pick": "Vancouver Canucks +1.5",
+      "matchup": "Vancouver Canucks @ Carolina Hurricanes",
       "sport": "NHL",
-      "odds": "-120",
+      "odds": "+115",
       "result": "loss",
-      "profitUsd": -113,
-      "riskUsd": 113,
-      "clvPp": 0.79,
-      "commenceTime": "2026-10-09T01:10:00Z"
+      "profitUsd": -38,
+      "riskUsd": 38,
+      "clvPp": null,
+      "commenceTime": "2026-10-08T23:10:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-0915"
     },
     {
-      "date": "2026-10-10",
+      "date": "2026-10-14",
       "kind": "straight",
-      "pick": "Over 40.5",
-      "matchup": "Texas Longhorns @ Oklahoma Sooners",
-      "sport": "NCAAF",
-      "odds": "-105",
-      "result": "win",
-      "profitUsd": 108,
-      "riskUsd": 113,
-      "clvPp": 2.39,
-      "commenceTime": "2026-10-10T19:30:00Z"
+      "pick": "Under 7.5",
+      "matchup": "Milwaukee Brewers @ Los Angeles Dodgers",
+      "sport": "MLB",
+      "odds": "-115",
+      "result": "loss",
+      "profitUsd": -150,
+      "riskUsd": 150,
+      "clvPp": null,
+      "commenceTime": "2026-10-15T00:00:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-1000"
     },
     {
-      "date": "2026-10-23",
+      "date": "2026-10-17",
       "kind": "straight",
-      "pick": "Over 44.5",
-      "matchup": "Air Force Falcons @ Wyoming Cowboys",
+      "pick": "Over 42.5",
+      "matchup": "Wisconsin Badgers @ UCLA Bruins",
       "sport": "NCAAF",
       "odds": "-115",
       "result": "loss",
-      "profitUsd": -188,
-      "riskUsd": 188,
-      "clvPp": 4.38,
-      "commenceTime": "2026-10-24T01:00:00Z"
+      "profitUsd": -75,
+      "riskUsd": 75,
+      "clvPp": -0.93,
+      "commenceTime": "2026-10-17T23:30:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-1000"
     },
     {
-      "date": "2026-10-25",
+      "date": "2026-10-18",
       "kind": "straight",
-      "pick": "New Orleans Saints ML",
-      "matchup": "Pittsburgh Steelers @ New Orleans Saints",
+      "pick": "Philadelphia Eagles +3",
+      "matchup": "Carolina Panthers @ Philadelphia Eagles",
       "sport": "NFL",
-      "odds": "+180",
+      "odds": "-105",
       "result": "loss",
-      "profitUsd": -188,
-      "riskUsd": 188,
-      "clvPp": 5.97,
-      "commenceTime": "2026-10-25T13:32:50Z"
+      "profitUsd": -38,
+      "riskUsd": 38,
+      "clvPp": 1.84,
+      "commenceTime": "2026-10-18T17:00:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-1000"
+    },
+    {
+      "date": "2026-10-19",
+      "kind": "straight",
+      "pick": "Over 6.5",
+      "matchup": "Cleveland Guardians @ Tampa Bay Rays",
+      "sport": "MLB",
+      "odds": "-115",
+      "result": "win",
+      "profitUsd": 66,
+      "riskUsd": 75,
+      "clvPp": null,
+      "commenceTime": "2026-10-20T00:10:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "line-snap-1000"
+    },
+    {
+      "date": "2026-10-27",
+      "kind": "straight",
+      "pick": "Over 7.5",
+      "matchup": "Milwaukee Brewers @ Tampa Bay Rays",
+      "sport": "MLB",
+      "odds": "+115",
+      "result": "loss",
+      "profitUsd": -38,
+      "riskUsd": 38,
+      "clvPp": 2.44,
+      "commenceTime": "2026-10-28T00:00:00Z",
+      "book": "hardrockbet",
+      "dkHrSource": "stakeaudit-card-2026-10-27.json"
     }
   ]
 }

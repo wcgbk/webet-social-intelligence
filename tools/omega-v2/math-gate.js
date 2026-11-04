@@ -36,10 +36,13 @@ const EFFECTIVE = {
   units: V2_FIRST_DAY,
   bcap: '2026-11-03',
   parlay: V2_FIRST_DAY,
+  parlayBook: '2026-11-03',
   confidence: '2026-11-03',
   dollars: '2026-11-04',
 };
 const BOOKS = new Set(['draftkings', 'hardrockbet']);
+/** Parlay legs accept the same aliases straights canonicalize (hardrock, hardrockbet_oh). */
+const PARLAY_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
 const num = (v) => Number(String(v == null ? '' : v).replace(/[−–]/g, '-').replace(/[^0-9.+-]/g, ''));
 const roundQuarter = (n) => Math.round((Number(n) + 1e-12) * 4) / 4;
@@ -106,6 +109,11 @@ function checkCard(card, date) {
     if (!(Math.abs(prod - Number(t.combinedDecimal)) <= 0.01)) add('parlay', `combined ${t.combinedDecimal} vs leg product ${prod.toFixed(4)}`);
     const tu = num(t.unitsNum != null ? t.unitsNum : t.units);
     if (tu > PARLAY_STAKE_CAP + 1e-9) add('parlay', `ticket ${t.units} over ${PARLAY_STAKE_CAP}u cap`);
+    for (const l of legs) {
+      const posted = String(l.book || '').toLowerCase();
+      if (!posted) continue;
+      if (!PARLAY_BOOKS.has(posted)) add('parlayBook', `${l.pick} book ${l.book} is not DK/Hard Rock`);
+    }
     let joint = 1;
     for (const l of legs) {
       const pc = pCalOf(l);
@@ -114,8 +122,15 @@ function checkCard(card, date) {
     }
     if (!Number.isFinite(joint)) add('parlay', 'a leg has no stored pCal');
     else {
+      const b = prod - 1;
+      const full = b > 0 ? (b * joint - (1 - joint)) / b : 0;
+      const raw = full > 0 ? full * KELLY_FRACTION * BANKROLL_UNITS : 0;
+      const stepped = full > 0 ? roundQuarter(raw) : 0;
       const k = quarterKelly(joint, prod, PARLAY_STAKE_CAP);
-      if (Math.abs(k - tu) > 1e-9) add('parlay', `ticket ${t.units} vs quarter-Kelly ${k}u on joint ${(joint * 100).toFixed(1)}%`);
+      // Nearest 0.25u. A positive quarter-Kelly that steps to 0 must not be published at 0.25u.
+      if (raw > 0 && stepped < 0.25 && tu >= 0.25) {
+        add('parlay', `ticket ${t.units} floors sub-0.25u quarter-Kelly (raw ${raw.toFixed(3)}u rounds to 0)`);
+      } else if (Math.abs(k - tu) > 1e-9) add('parlay', `ticket ${t.units} vs quarter-Kelly ${k}u on joint ${(joint * 100).toFixed(1)}%`);
     }
     if (t.stakeUsd == null) add('dollars', 'ticket has no stakeUsd');
     else if (Number(t.stakeUsd) !== dollars(tu)) add('dollars', `ticket stakeUsd ${t.stakeUsd}, want ${dollars(tu)}`);
@@ -317,6 +332,10 @@ function checkPublished(doc, date, card, meta) {
   for (const ticket of (doc && doc.parlayLegs) || []) {
     checkStake(ticket, 'parlay', card, add);
     for (const leg of ticket.legs || []) {
+      const posted = String(leg && leg.book || '').toLowerCase();
+      if (posted && !PARLAY_BOOKS.has(posted)) {
+        add('parlayBook', `${leg.pick || leg.side} book ${leg.book} is not DK/Hard Rock`);
+      }
       if (!isParlayRow(leg)) checkStraight(leg, card, add, { leg: true });
     }
   }
@@ -415,7 +434,11 @@ async function buildCheck() {
     if (!Array.isArray(card.picks)) fails.push({ rule: 'build', msg: 'buildCard returned no picks array', blocking: true });
     // New builds must carry whole-dollar stakes.
     for (const f of checkCard(card, '9999-12-31')) {
-      if (f.rule === 'dollars' || f.rule === 'bcap' || f.rule === 'confidence') fails.push({ ...f, msg: `fresh build: ${f.msg}` });
+      const freshBook = f.rule === 'parlayBook';
+      const freshFloor = f.rule === 'parlay' && /floors sub-0\.25u/.test(f.msg);
+      if (f.rule === 'dollars' || f.rule === 'bcap' || f.rule === 'confidence' || freshBook || freshFloor) {
+        fails.push({ ...f, msg: `fresh build: ${f.msg}` });
+      }
     }
   } catch (err) {
     fails.push({ rule: 'build', msg: `card build threw: ${err && err.message}`, blocking: true });

@@ -5,6 +5,56 @@ const {
 } = require('./constants');
 const { marketFamily, gameKey, pastPregameCutoff, pregameClockMs } = require('./select');
 const { roundQuarter, stakeUsd, sumUnits, quarterKellyFromDecimal } = require('./size');
+
+/**
+ * Same placeable list as straights (pipeline placeableDkHr).
+ * hardrock aliases publish as hardrockbet. Any other posted book is not a leg.
+ */
+const PLACEABLE_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
+
+function canonicalPlaceBook(book) {
+  const key = String(book || '').toLowerCase();
+  if (key === 'hardrock' || key === 'hardrockbet' || key === 'hardrockbet_oh') return 'hardrockbet';
+  if (key === 'draftkings') return 'draftkings';
+  return key;
+}
+
+function finiteAmerican(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+/**
+ * Price a parlay leg at DraftKings or Hard Rock.
+ * bestDkHr wins, same as a straight, even when the posted book is a longer
+ * number somewhere else (tipico_de, onexbet). No bestDkHr and a non-placeable
+ * posted book returns null: the leg is dropped and the next +EV DK/HR leg
+ * is used. A missing book is left as-is so an already-priced candidate
+ * (the straight path already rejected no-dk-hr-price) still scores.
+ */
+function quotedLeg(leg) {
+  if (!leg) return null;
+  const px = leg.bestDkHr;
+  const pxAmerican = px && typeof px === 'object' ? finiteAmerican(px.american) : null;
+  const pxBook = px && typeof px === 'object' ? String(px.book || '').toLowerCase() : '';
+  if (pxAmerican != null && PLACEABLE_BOOKS.has(pxBook)) {
+    return {
+      ...leg,
+      odds: pxAmerican,
+      book: canonicalPlaceBook(pxBook),
+      decimal: americanToDecimal(pxAmerican),
+    };
+  }
+  const posted = String(leg.book || '').toLowerCase();
+  if (!posted) return { ...leg };
+  if (!PLACEABLE_BOOKS.has(posted)) return null;
+  const odds = finiteAmerican(leg.odds);
+  return {
+    ...leg,
+    book: canonicalPlaceBook(posted),
+    ...(odds != null ? { odds, decimal: americanToDecimal(odds) } : {}),
+  };
+}
 const {
   americanToDecimal, decimalToAmerican, formatAmerican,
 } = require('../omega-vnext/odds_math');
@@ -241,16 +291,46 @@ function legEvSkips(pool) {
   return skips;
 }
 
+/**
+ * A posted book that is not DraftKings or Hard Rock. Other skips
+ * (no calibration, no no-vig edge) are not this reason.
+ */
+function legBookSkips(pool) {
+  const skips = [];
+  for (const leg of pool || []) {
+    if (!leg || leg.parlayQualified === false) continue;
+    if (quotedLeg(leg)) continue;
+    const posted = String(leg.book || '').toLowerCase();
+    if (!posted) continue;
+    skips.push({
+      matchup: leg.matchup || null,
+      side: leg.pick || leg.side || null,
+      market: leg.market || null,
+      sport: leg.sport || null,
+      reason: 'no-dk-hr-price',
+      odds: leg.odds,
+      book: leg.book,
+      edgeNovig: leg.edgeNovig != null ? leg.edgeNovig : null,
+    });
+  }
+  return skips;
+}
+
 function usableLegs(pool, opts) {
   const asOfMs = pregameClockMs(opts);
-  return (pool || []).filter((leg) => {
-    if (pastPregameCutoff(leg.commenceTime, asOfMs)) return false;
-    if (leg.parlayQualified === false) return false;
+  const out = [];
+  for (const raw of pool || []) {
+    const leg = quotedLeg(raw);
+    if (!leg) continue;
+    if (pastPregameCutoff(leg.commenceTime, asOfMs)) continue;
+    if (leg.parlayQualified === false) continue;
     const p = Number(leg.calibration && leg.calibration.pCal);
     const dec = americanToDecimal(leg.odds);
-    if (!(p > 0 && p < 1 && dec != null && (leg.edgeNovig > 0))) return false;
-    return legPriceEv(leg) > 0;
-  });
+    if (!(p > 0 && p < 1 && dec != null && (leg.edgeNovig > 0))) continue;
+    if (!(legPriceEv(leg) > 0)) continue;
+    out.push(leg);
+  }
+  return out;
 }
 
 /**
@@ -285,20 +365,26 @@ function chooseTicket(pool, opts) {
 }
 
 /**
- * Quarter-Kelly on the joint decimal, cap 1u, 0.25u steps.
- * A result under 0.25u does not publish. There is no 0.5u floor.
+ * Quarter-Kelly on the joint decimal, cap 1u, nearest 0.25u.
+ * A result that rounds under 0.25u does not publish. It is not floored
+ * up to 0.25u (kellyToUnits does that; this path must not).
  * Room left under the card budget can shrink the stake. It cannot raise it.
+ * A leg priced off DraftKings and Hard Rock is not in the search. The next
+ * positive-EV DK/HR ticket is, including a shorter ticket when the longer
+ * one was the non-placeable leg.
  */
 function sizeParlay(pool, straights, opts) {
   const asOfMs = pregameClockMs(opts);
   const pregame = (pool || []).filter((leg) => !pastPregameCutoff(leg.commenceTime, asOfMs));
   const filtered = pregame.filter((leg) => !conflictsWithAnyStraight(leg, straights));
-  const ranked = rankedTickets(filtered, opts);
+  const placeable = filtered.filter((leg) => quotedLeg(leg));
+  const ranked = rankedTickets(placeable, opts);
   if (!ranked.tickets.length) {
     const hadPair = pregame.length >= 2;
     let skipReason = 'no ticket with positive joint EV';
     if (pregame.length < 2) skipReason = 'fewer than 2 qualifying legs';
     else if (hadPair && filtered.length < 2) skipReason = 'fewer than 2 legs after straight conflicts';
+    else if (filtered.length >= 2 && placeable.length < 2) skipReason = 'no-dk-hr-price';
     else if (ranked.positiveEv > 0) skipReason = 'parlay stake rounded below 0.25u';
     return {
       publish: false,
@@ -348,4 +434,8 @@ module.exports = {
   legPriceEv,
   legFailsPriceEv,
   legEvSkips,
+  legBookSkips,
+  quotedLeg,
+  canonicalPlaceBook,
+  PLACEABLE_BOOKS,
 };

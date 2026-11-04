@@ -5,8 +5,9 @@ const {
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
 const { marketFamily, pastPregameCutoff, pregameClockMs } = require('./select');
-const { bannedPairReason } = require('./parlay');
-const { americanJuiceDelta, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
+const { bannedPairReason, sizeParlay, quotedLeg, canonicalPlaceBook, PLACEABLE_BOOKS } = require('./parlay');
+const { quarterKellyFromDecimal } = require('./size');
+const { americanJuiceDelta, americanToDecimal, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
 const { letterFromPrintedEdge } = require('./letter');
 
 const STALE_CENTS = 15;
@@ -232,12 +233,134 @@ function removeStartedLegs(card, opts) {
   return { picks, parlayLegs, notes };
 }
 
+function rowId(row) {
+  return `${String(row && row.matchup || '').toLowerCase()}|${String((row && (row.pick || row.side)) || '').toLowerCase()}`;
+}
+
+function pCalOfRow(row, pool) {
+  if (!row) return null;
+  if (Number.isFinite(Number(row.pCal))) return Number(row.pCal);
+  if (row.calibration && Number.isFinite(Number(row.calibration.pCal))) return Number(row.calibration.pCal);
+  const hit = (pool || []).find((r) => r && r.pick === row.pick && r.matchup === row.matchup);
+  return hit && Number.isFinite(Number(hit.pCal)) ? Number(hit.pCal) : null;
+}
+
+/**
+ * Quarter-Kelly units for a stored ticket, or null when a leg has no pCal.
+ * Null leaves the printed stake alone. 0 means the nearest step is no bet.
+ */
+function parlayQuarterKellyUnits(ticket, pool) {
+  const legs = (ticket && ticket.legs) || [];
+  if (legs.length < 2) return null;
+  let joint = 1;
+  let dec = 1;
+  for (const leg of legs) {
+    const p = pCalOfRow(leg, pool);
+    const d = americanToDecimal(parseAmerican(leg.odds));
+    if (!(p > 0 && p < 1) || d == null) return null;
+    joint *= p;
+    dec *= d;
+  }
+  return quarterKellyFromDecimal(joint, dec, PARLAY_STAKE_CAP).units;
+}
+
+/** A DK/HR quote that is actually on the row. A missing book is not one. */
+function explicitQuoted(row) {
+  if (!row) return null;
+  const px = row.bestDkHr;
+  const pxBook = px && typeof px === 'object' ? String(px.book || '').toLowerCase() : '';
+  const pxAmerican = px && typeof px === 'object' ? parseAmerican(px.american) : null;
+  const hasBest = pxAmerican != null && PLACEABLE_BOOKS.has(pxBook);
+  const posted = String(row.book || '').toLowerCase();
+  if (!hasBest && !PLACEABLE_BOOKS.has(posted)) return null;
+  const quoted = quotedLeg(row);
+  if (!quoted || !PLACEABLE_BOOKS.has(String(quoted.book || '').toLowerCase())) return null;
+  return quoted;
+}
+
+function needsPlaceableRepair(legs) {
+  return (legs || []).some((leg) => {
+    const quoted = quotedLeg(leg);
+    if (!quoted) return String(leg && leg.book || '').length > 0;
+    const posted = String(leg.book || '').toLowerCase();
+    if (!posted) return false;
+    if (quoted.book !== canonicalPlaceBook(posted)) return true;
+    const postedOdds = parseAmerican(leg.odds);
+    const quotedOdds = parseAmerican(quoted.odds);
+    return postedOdds != null && quotedOdds != null && postedOdds !== quotedOdds;
+  });
+}
+
+/**
+ * Drop a leg whose posted book is not DraftKings or Hard Rock and rebuild
+ * from the remaining DK/HR prices (straights and ticket legs that quote).
+ * A pool row with no book is not treated as placeable. No replacement
+ * means the ticket comes off.
+ */
+function replaceIllegalParlayBooks(card, picks, clockOpts, notes) {
+  const ticket = card.parlayLegs && card.parlayLegs[0];
+  if (!ticket || !needsPlaceableRepair(ticket.legs)) return;
+  const illegal = (ticket.legs || []).filter((leg) => !explicitQuoted(leg) && String(leg.book || '').length > 0);
+  const poolRows = Array.isArray(card.parlayPool) ? card.parlayPool : [];
+  const poolById = new Map();
+  for (const row of poolRows) poolById.set(rowId(row), row);
+  const seen = new Set();
+  const pool = [];
+  const consider = (row) => {
+    const quoted = explicitQuoted(row);
+    if (!quoted) return;
+    const id = rowId(quoted);
+    if (!id || seen.has(id)) return;
+    const pooled = poolById.get(id);
+    const p = pCalOfRow(quoted, poolRows);
+    const edgeNovig = Number.isFinite(Number(quoted.edgeNovig))
+      ? Number(quoted.edgeNovig)
+      : (pooled && Number(pooled.edgeNovig));
+    const odds = parseAmerican(quoted.odds);
+    if (!(p > 0 && p < 1) || !(edgeNovig > 0) || odds == null) return;
+    const dec = americanToDecimal(odds);
+    seen.add(id);
+    pool.push({
+      sport: quoted.sport || (pooled && pooled.sport) || null,
+      matchup: quoted.matchup,
+      pick: quoted.pick || quoted.side,
+      market: quoted.market || quoted.betType || (pooled && pooled.market) || null,
+      odds,
+      book: quoted.book,
+      edgeNovig,
+      parlayQualified: true,
+      commenceTime: quoted.commenceTime || (pooled && pooled.commenceTime) || '',
+      calibration: {
+        pCal: p,
+        pMkt: quoted.pMkt != null ? quoted.pMkt : (pooled && pooled.pMkt != null ? pooled.pMkt : null),
+      },
+      homeTeam: quoted.homeTeam || null,
+      awayTeam: quoted.awayTeam || null,
+      line: quoted.line != null ? quoted.line : null,
+      ev: dec != null ? p * dec - 1 : null,
+    });
+  };
+  for (const pick of picks || []) consider(pick);
+  for (const leg of ticket.legs || []) consider(leg);
+  const sized = sizeParlay(pool, picks, clockOpts);
+  const dropped = illegal.map((leg) => `${leg.pick || leg.side} ${leg.book}`).join(', ') || 'non-DK/HR leg';
+  if (!sized.publish) {
+    notes.push(`dropped non-DK/HR parlay (${dropped})`);
+    card.parlayLegs = [];
+    return;
+  }
+  card.parlayLegs = toParlay(sized, ticket.candidatesScanned);
+  notes.push(`replaced non-DK/HR parlay leg ${dropped}`);
+}
+
 /**
  * QA never withholds a straight card. Round stakes, cap them, drop a
  * duplicate game. The letter is the printed edgePct tenth. A true B above
- * 0.5u is capped after that rewrite. A parlay whose stake rounds under
- * 0.25u is removed. It is not floored back up to 0.25u. A started leg is
- * removed here. That correction is not a validation error.
+ * 0.5u is capped after that rewrite. A parlay leg off DraftKings and Hard
+ * Rock is replaced with the next +EV DK/HR leg, or the ticket is dropped.
+ * A parlay whose quarter-Kelly rounds under 0.25u is removed. It is not
+ * floored back up to 0.25u. A started leg is removed here. That correction
+ * is not a validation error.
  */
 function autoCorrectCard(card, opts) {
   const notes = [];
@@ -330,6 +453,7 @@ function autoCorrectCard(card, opts) {
     notes.push('kept one parlay');
     out.parlayLegs = out.parlayLegs.slice(0, 1);
   }
+  replaceIllegalParlayBooks(out, picks, clockOpts, notes);
   if (out.parlayLegs[0]) {
     const pl = {
       ...out.parlayLegs[0],
@@ -341,15 +465,25 @@ function autoCorrectCard(card, opts) {
     };
     let u = Math.round(unitsOf(pl) * 4) / 4;
     if (u > PARLAY_STAKE_CAP) u = PARLAY_STAKE_CAP;
-    if (!(u >= 0.25)) {
+    const kelly = parlayQuarterKellyUnits(pl, out.parlayPool);
+    if (kelly != null && !(kelly >= 0.25)) {
       notes.push('parlay stake rounded to 0');
       out.parlayLegs = [];
     } else {
-      pl.unitsNum = u;
-      pl.units = `${u}u`;
-      pl.modelVersion = MODEL_VERSION;
-      pl.stakeUsd = Math.ceil(u * 150 - 1e-9);
-      out.parlayLegs = [pl];
+      if (kelly != null && u > kelly + 1e-9) {
+        notes.push(`parlay stake snapped to quarter-Kelly ${kelly}u`);
+        u = kelly;
+      }
+      if (!(u >= 0.25)) {
+        notes.push('parlay stake rounded to 0');
+        out.parlayLegs = [];
+      } else {
+        pl.unitsNum = u;
+        pl.units = `${u}u`;
+        pl.modelVersion = MODEL_VERSION;
+        pl.stakeUsd = Math.ceil(u * 150 - 1e-9);
+        out.parlayLegs = [pl];
+      }
     }
   }
   // Whole-dollar stake on every straight and the ticket: final units x $150, rounded up.
@@ -392,9 +526,18 @@ function validateCard(card) {
     const u = unitsOf(parlay);
     if (!(u >= 0.25)) errors.push('parlay stake is below 0.25u');
     if (u > PARLAY_STAKE_CAP + 1e-9) errors.push('parlay stake is above the cap');
+    const kelly = parlayQuarterKellyUnits(parlay, card.parlayPool);
+    if (kelly === 0 && u >= 0.25) errors.push('parlay stake floors sub-0.25u quarter-Kelly');
+    else if (kelly != null && kelly >= 0.25 && u > kelly + 1e-9) {
+      errors.push(`parlay stake ${u}u is above quarter-Kelly ${kelly}u`);
+    }
     const banned = bannedPairReason(parlay.legs);
     if (banned) errors.push(banned);
     for (const leg of parlay.legs || []) {
+      const posted = String(leg.book || '').toLowerCase();
+      if (posted && !PLACEABLE_BOOKS.has(posted)) {
+        errors.push(`parlay leg book is not DK/Hard Rock (${leg.pick} ${leg.book})`);
+      }
       const edge = Number(leg.edgeNovig != null ? leg.edgeNovig : leg.edge);
       if (Number.isFinite(edge) && !(edge > 0)) errors.push(`parlay leg edge is not positive (${leg.pick})`);
     }

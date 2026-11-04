@@ -285,6 +285,75 @@ function quoteLeg(book) {
     assert.strictEqual(await offshore(quoteLeg(book)), null, `${book} must not reprice a leg`);
   }
 
+  const dkLeg = (matchup, pick, edgeNovig, pCal, book) => ({
+    ...leg(matchup, pick, edgeNovig, pCal, -110),
+    book,
+    market: /Over/.test(pick) ? 'Total' : 'Spread',
+  });
+  const cardinals = {
+    sport: 'NFL',
+    matchup: 'Arizona Cardinals @ Dallas Cowboys',
+    pick: 'Arizona Cardinals +6.5',
+    market: 'Spread',
+    odds: 100,
+    book: 'tipico_de',
+    edgeNovig: 0.09,
+    parlayQualified: true,
+    calibration: { pCal: 0.58 },
+  };
+  const steel = dkLeg('Cleveland Browns @ Pittsburgh Steelers', 'Pittsburgh Steelers -3.5', 0.04, 0.58, 'hardrockbet');
+  const over41 = dkLeg('New England Patriots @ Miami Dolphins', 'Over 41.5', 0.03, 0.57, 'draftkings');
+  const over54 = dkLeg('Baltimore Ravens @ Buffalo Bills', 'Over 54.5', 0.02, 0.56, 'draftkings');
+  const replaced = v2.sizeParlay([cardinals, steel, over41, over54], []);
+  assert.strictEqual(replaced.publish, true);
+  assert.strictEqual(replaced.legs.length, 3);
+  assert.ok(replaced.legs.every((row) => row.pick !== 'Arizona Cardinals +6.5'));
+  assert.ok(replaced.legs.every((row) => row.book === 'draftkings' || row.book === 'hardrockbet'));
+  assert.ok(replaced.legs.some((row) => row.pick === 'Over 54.5'), 'the next DK/HR leg fills the tipico spot');
+
+  const repricedCardinals = {
+    ...cardinals,
+    bestDkHr: { book: 'draftkings', american: -110 },
+  };
+  const quoted = v2.quotedLeg(repricedCardinals);
+  assert.strictEqual(quoted.book, 'draftkings');
+  assert.strictEqual(quoted.odds, -110);
+  const atDk = v2.sizeParlay([repricedCardinals, steel, over41], []);
+  assert.ok(atDk.legs.some((row) => row.pick === 'Arizona Cardinals +6.5' && row.book === 'draftkings' && row.odds === -110));
+  assert.ok(atDk.legs.every((row) => row.odds !== 100 && row.book !== 'tipico_de'));
+
+  const floorCard = {
+    modelVersion: v2.MODEL_VERSION,
+    leakageChecked: true,
+    picks: [],
+    parlayLegs: [{
+      type: '2-leg',
+      units: '0.25u',
+      unitsNum: 0.25,
+      stakeUsd: 38,
+      modelVersion: v2.MODEL_VERSION,
+      legs: [0, 1].map((i) => ({
+        pick: `Dust ${i} ML`,
+        matchup: `Dust ${i} Away @ Dust ${i} Home`,
+        market: 'Moneyline',
+        odds: '+100',
+        book: 'draftkings',
+        units: '0.25u',
+        unitsNum: 0.25,
+        pCal: 0.502,
+        edgeNovig: 0.01,
+        edgePct: '1.0%',
+        commenceTime: '2026-12-01T00:00:00Z',
+        modelVersion: v2.MODEL_VERSION,
+      })),
+    }],
+  };
+  assert.ok(v2.validateCard(floorCard).some((msg) => /floors sub-0\.25u/.test(msg)));
+  const floored = v2.autoCorrectCard(floorCard, { pregameAsOfMs: PREGAME });
+  assert.strictEqual(floored.parlayLegs.length, 0);
+  assert.ok(floored.qaNotes.some((note) => /parlay stake rounded to 0/.test(note)));
+  assert.deepStrictEqual(v2.validateCard(floored), []);
+
   console.log('PASS test-omega-v2-dkhr-price');
 })().catch((err) => {
   console.error(err);

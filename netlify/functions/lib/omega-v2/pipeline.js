@@ -11,7 +11,7 @@ const { sizeStraights, sumUnits } = require('./size');
 const { recheckPrices, validateCard, autoCorrectCard, parseAmerican, toParlay, toPick } = require('./guards');
 const { summaryFrom } = require('../omega-vnext/assemble');
 const { publishEdgeCard } = require('../omega-vnext/assemble');
-const { sizeParlay, legEvSkips, legFailsPriceEv } = require('./parlay');
+const { sizeParlay, legEvSkips, legFailsPriceEv, legBookSkips, quotedLeg } = require('./parlay');
 const { americanToImplied } = require('../omega-vnext/odds_math');
 const { applySportCoverage, stampQualified } = require('./coverage');
 
@@ -206,7 +206,8 @@ async function buildCard(input) {
   const straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified), pregameOpts));
   const parlayKept = kept.filter((cand) => cand.parlayQualified);
   for (const skip of legEvSkips(parlayKept)) rejections.push(skip);
-  const parlayPoolLegs = parlayKept.filter((cand) => !legFailsPriceEv(cand));
+  for (const skip of legBookSkips(parlayKept)) rejections.push(skip);
+  const parlayPoolLegs = parlayKept.filter((cand) => !legFailsPriceEv(cand) && quotedLeg(cand));
   const sizedParlay = sizeParlay(parlayKept, straights, pregameOpts);
   if (!sizedParlay.publish && sizedParlay.skipReason) {
     rejections.push({
@@ -245,6 +246,7 @@ async function buildCard(input) {
       pCal: cand.calibration.pCal,
       pMkt: cand.calibration.pMkt,
       edgeNovig: cand.edgeNovig,
+      book: cand.book || null,
     })),
     rejections,
     chosen: picks,

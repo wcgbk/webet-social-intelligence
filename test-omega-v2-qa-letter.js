@@ -300,25 +300,46 @@ function runFixtures() {
       if (want === 'b') assert.ok(u <= 0.5 + 1e-9, `${date} ${published.pick} B cap`);
       assert.strictEqual(out.picks[i].pick, published.pick, `${date} order`);
     });
-    assert.strictEqual(out.parlayLegs.length, before.parlayLegs.length, `${date} parlay count`);
-    before.parlayLegs.forEach((ticket, i) => {
-      const next = out.parlayLegs[i];
-      assert.strictEqual(next.units, ticket.units, `${date} parlay units`);
-      assert.strictEqual(next.combinedOdds, ticket.combinedOdds, `${date} parlay odds`);
-      const u = parseFloat(String(next.units).replace(/[^0-9.]/g, ''));
-      assert.strictEqual(next.stakeUsd, dollars(u), `${date} parlay stakeUsd`);
-      (ticket.legs || []).forEach((leg) => {
-        const got = (next.legs || []).find((row) => row.pick === leg.pick && row.matchup === leg.matchup);
-        assert.ok(got, `${date} missing leg ${leg.pick}`);
-        assert.strictEqual(got.units, leg.units, `${date} leg ${leg.pick} units`);
-        assert.strictEqual(got.odds, leg.odds);
-        if (leg.edgePct != null && leg.edgePct !== '') {
-          const want = letterFromPrintedEdge(leg.edgePct);
-          assert.strictEqual(got.rating, want, `${date} leg ${leg.pick} letter`);
-          assert.strictEqual(got.confidence, CONF[want]);
-        }
+    if (date === '2026-11-01') {
+      // Cardinals +6.5 was tipico_de. QA replaces it with the next DK/HR leg (Over 54.5).
+      assert.strictEqual(out.parlayLegs.length, 1, `${date} parlay count`);
+      const next = out.parlayLegs[0];
+      const names = (next.legs || []).map((leg) => leg.pick).sort();
+      assert.deepStrictEqual(names, ['Over 41.5', 'Over 54.5', 'Pittsburgh Steelers -3.5'].sort());
+      assert.ok(!(next.legs || []).some((leg) => leg.book === 'tipico_de' || /Cardinals/.test(leg.pick)));
+      const steel = next.legs.find((leg) => leg.pick === 'Pittsburgh Steelers -3.5');
+      const over41 = next.legs.find((leg) => leg.pick === 'Over 41.5');
+      const over54 = next.legs.find((leg) => leg.pick === 'Over 54.5');
+      assert.strictEqual(steel.book, 'hardrockbet');
+      assert.strictEqual(steel.odds, '-105');
+      assert.strictEqual(over41.book, 'draftkings');
+      assert.strictEqual(over41.odds, '-108');
+      assert.strictEqual(over54.book, 'draftkings');
+      assert.strictEqual(over54.odds, '-110');
+      assert.strictEqual(next.units, '0.25u', `${date} parlay units`);
+      assert.strictEqual(next.stakeUsd, dollars(0.25), `${date} parlay stakeUsd`);
+      assert.ok(out.qaNotes.some((note) => /tipico_de/.test(note) && /Cardinals/.test(note)));
+    } else {
+      assert.strictEqual(out.parlayLegs.length, before.parlayLegs.length, `${date} parlay count`);
+      before.parlayLegs.forEach((ticket, i) => {
+        const next = out.parlayLegs[i];
+        assert.strictEqual(next.units, ticket.units, `${date} parlay units`);
+        assert.strictEqual(next.combinedOdds, ticket.combinedOdds, `${date} parlay odds`);
+        const u = parseFloat(String(next.units).replace(/[^0-9.]/g, ''));
+        assert.strictEqual(next.stakeUsd, dollars(u), `${date} parlay stakeUsd`);
+        (ticket.legs || []).forEach((leg) => {
+          const got = (next.legs || []).find((row) => row.pick === leg.pick && row.matchup === leg.matchup);
+          assert.ok(got, `${date} missing leg ${leg.pick}`);
+          assert.strictEqual(got.units, leg.units, `${date} leg ${leg.pick} units`);
+          assert.strictEqual(got.odds, leg.odds);
+          if (leg.edgePct != null && leg.edgePct !== '') {
+            const want = letterFromPrintedEdge(leg.edgePct);
+            assert.strictEqual(got.rating, want, `${date} leg ${leg.pick} letter`);
+            assert.strictEqual(got.confidence, CONF[want]);
+          }
+        });
       });
-    });
+    }
 
     const qaCard = JSON.parse(JSON.stringify(raw));
     const qa = verify.autoCorrectCard(qaCard);

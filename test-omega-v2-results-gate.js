@@ -250,4 +250,55 @@ function runGate(resultsFile) {
   }
 }
 
+{
+  const tipico = {
+    picks: [],
+    parlayLegs: [{
+      units: '0.25u',
+      unitsNum: 0.25,
+      stakeUsd: 38,
+      combinedDecimal: 3.8095,
+      legs: [
+        { pick: 'Arizona Cardinals +6.5', matchup: 'Arizona Cardinals @ Dallas Cowboys', book: 'tipico_de', odds: '+100', pCal: 0.55 },
+        { pick: 'Pittsburgh Steelers -3.5', matchup: 'Cleveland Browns @ Pittsburgh Steelers', book: 'hardrockbet', odds: '-105', pCal: 0.55 },
+      ],
+    }],
+  };
+  const earlyBook = gate.checkCard(tipico, '2026-11-01').filter((f) => f.rule === 'parlayBook');
+  assert.strictEqual(earlyBook.length, 1);
+  assert.strictEqual(earlyBook[0].blocking, false, '11/01 tipico is a report, not a block');
+  assert.ok(/tipico_de/.test(earlyBook[0].msg));
+  const lateBook = gate.checkCard(tipico, '2026-11-03').filter((f) => f.rule === 'parlayBook');
+  assert.ok(lateBook.some((f) => f.blocking), 'tipico blocks on and after 2026-11-03');
+  const alias = gate.checkCard({
+    picks: [],
+    parlayLegs: [{
+      units: '0.25u',
+      unitsNum: 0.25,
+      stakeUsd: 38,
+      combinedDecimal: 4,
+      legs: [
+        { pick: 'A', matchup: 'A @ B', book: 'hardrock', odds: '+100', pCal: 0.6 },
+        { pick: 'C', matchup: 'C @ D', odds: '+100', pCal: 0.6 },
+      ],
+    }],
+  }, '2026-11-03');
+  assert.ok(!alias.some((f) => f.rule === 'parlayBook'), 'hardrock alias and a missing book are placeable / not a book fail');
+
+  const floored = gate.checkCard({
+    picks: [],
+    parlayLegs: [{
+      units: '0.25u',
+      unitsNum: 0.25,
+      stakeUsd: 38,
+      combinedDecimal: 4,
+      legs: [
+        { pick: 'Dust 0 ML', matchup: 'Dust 0 Away @ Dust 0 Home', book: 'draftkings', odds: '+100', pCal: 0.502 },
+        { pick: 'Dust 1 ML', matchup: 'Dust 1 Away @ Dust 1 Home', book: 'draftkings', odds: '+100', pCal: 0.502 },
+      ],
+    }],
+  }, '2026-10-31');
+  assert.ok(floored.some((f) => f.rule === 'parlay' && f.blocking && /floors sub-0\.25u/.test(f.msg)));
+}
+
 console.log('PASS test-omega-v2-results-gate');

@@ -9,7 +9,7 @@
 const assert = require('assert');
 const v2 = require('./netlify/functions/lib/omega-v2');
 const { publishEdgeCard } = require('./netlify/functions/lib/omega-vnext/assemble');
-const { kellyFraction, americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');
+const { kellyFraction, americanToDecimal, kellyToUnits } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
 const DATE = '2026-10-30';
 const COMMENCE = '2026-10-30T23:00:00Z';
@@ -279,6 +279,49 @@ function novig(pick) {
   assert.ok(longshot.legs.some((leg) => /Bulls/.test(leg.pick)), 'the higher no-vig edge pair still includes the longshot');
   assert.strictEqual(longshot.units, 0.25);
   assert.ok(longshot.ev > 0);
+
+  // Raw quarter-Kelly under ~0.125u steps to 0. It is not floored up to 0.25u.
+  const dustP = 0.502;
+  const dustLegs = [0, 1].map((i) => ({
+    sport: 'NFL',
+    matchup: `Dust ${i} Away @ Dust ${i} Home`,
+    pick: `Dust ${i} ML`,
+    market: 'Moneyline',
+    odds: 100,
+    book: 'draftkings',
+    edgeNovig: 0.01,
+    parlayQualified: true,
+    calibration: { pCal: dustP },
+  }));
+  const dustStake = v2.sizeParlay(dustLegs, []);
+  const dustJoint = dustP * dustP;
+  const dustFull = ((4 - 1) * dustJoint - (1 - dustJoint)) / (4 - 1);
+  const dustFrac = dustFull * 0.25;
+  assert.ok(dustFrac * 100 < 0.125, `raw ${dustFrac * 100}u should step to 0`);
+  assert.strictEqual(dustStake.publish, false);
+  assert.strictEqual(dustStake.units, 0);
+  assert.strictEqual(dustStake.skipReason, 'parlay stake rounded below 0.25u');
+  assert.strictEqual(kellyToUnits(dustFrac, 1), 0.25, 'kellyToUnits would floor this; sizeParlay must not');
+
+  // Raw ~0.20u is nearer 0.25u than 0. That stake still publishes.
+  const nearP = Math.sqrt(0.256);
+  const nearLegs = [0, 1].map((i) => ({
+    sport: 'NFL',
+    matchup: `Near ${i} Away @ Near ${i} Home`,
+    pick: `Near ${i} ML`,
+    market: 'Moneyline',
+    odds: 100,
+    book: 'draftkings',
+    edgeNovig: 0.02,
+    parlayQualified: true,
+    calibration: { pCal: nearP },
+  }));
+  const nearStake = v2.sizeParlay(nearLegs, []);
+  const nearFull = ((4 - 1) * 0.256 - (1 - 0.256)) / (4 - 1);
+  const nearRaw = nearFull * 0.25 * 100;
+  assert.ok(nearRaw > 0.125 && nearRaw < 0.25, `raw ${nearRaw}u`);
+  assert.strictEqual(nearStake.publish, true);
+  assert.strictEqual(nearStake.units, 0.25);
 
   const dec = dec290;
   const pClear = pKent;

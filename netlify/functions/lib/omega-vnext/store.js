@@ -15,20 +15,43 @@ async function blobFetch(path, { method = 'GET', body } = {}) {
   return resp;
 }
 
-async function readPicks(dateISO) {
+/**
+ * Same lookup as readPicks, plus where the card came from.
+ * via 'sdk': getStore(BLOB_STORE) did not throw (store is that instance).
+ * via 'rest': SDK threw and the card, if any, came from blobFetch.
+ * card is null when that place has no object.
+ */
+async function readPicksLocated(dateISO) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await store.get(`picks-${dateISO}`, { type: 'json' });
+    const card = await store.get(`picks-${dateISO}`, { type: 'json' });
+    return { card, via: 'sdk', store };
   } catch (_) {
     try {
       const resp = await blobFetch(`picks-${dateISO}`);
-      if (!resp.ok) return null;
-      return await resp.json();
+      if (!resp.ok) return { card: null, via: 'rest', store: null };
+      return { card: await resp.json(), via: 'rest', store: null };
     } catch (e) {
-      return null;
+      return { card: null, via: 'rest', store: null };
     }
   }
+}
+
+async function readPicks(dateISO) {
+  const found = await readPicksLocated(dateISO);
+  return found ? found.card : null;
+}
+
+/**
+ * PUT picks-{date} through the readPicks REST URL only.
+ * Does not touch latest-date or picks-dates.
+ */
+async function writePicksRaw(dateISO, data) {
+  const key = `picks-${dateISO}`;
+  const resp = await blobFetch(key, { method: 'PUT', body: data });
+  if (!resp.ok) throw new Error(`blob PUT ${key} → ${resp.status}`);
+  return true;
 }
 
 /**
@@ -419,7 +442,7 @@ async function readHealthLatest() {
 module.exports = {
   readHealthRecord,
   readHealthLatest,
-  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson,
+  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, readPicksLocated, writePicksRaw, storeJson, readJson,
   storePmObserver, readPmObserver, storePmObserverOpen, readPmObserverOpen,
   pmObserverStorageKey, pmObserverAliasKey,
   WALKFORWARD_KEY_RE, assertWalkforwardKey,

@@ -10,9 +10,14 @@
  * to a percentage from 2.0 up to but not including 3.5 become aminus on
  * rating, grade, and qualityGrade. Stake, units, odds, result, and
  * confidence stay as stored. Writes only when dryRun is boolean false.
+ *
+ * Live cards are read with readPicksLocated: getStore(BLOB_STORE), then the
+ * REST picks-{date} blob. The write goes back to that same place (the SDK
+ * store's setJSON, or writePicksRaw). latest-date and picks-dates stay put.
  */
 
 const { BLOB_STORE } = require('./lib/omega-vnext/config');
+const { readPicksLocated, writePicksRaw } = require('./lib/omega-vnext/store');
 
 const ALLOWED_DATES = Object.freeze(['2026-10-31', '2026-11-01', '2026-11-02']);
 const ALLOWED = new Set(ALLOWED_DATES);
@@ -88,22 +93,49 @@ function readBody(event) {
   return JSON.parse(event.body);
 }
 
-async function openStore() {
-  const { getStore } = await import('@netlify/blobs');
-  const token = process.env.NETLIFY_AUTH_TOKEN;
-  if (token) {
-    return getStore({
-      name: BLOB_STORE,
-      siteID: process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606',
-      token,
-    });
+/**
+ * Fake store (tests) or the live readPicks location.
+ * @returns {Promise<{ card: any, write: (data: object) => Promise<void> }>}
+ */
+async function loadCard(date, opts) {
+  if (opts && opts.store) {
+    const store = opts.store;
+    if (typeof store.get !== 'function' || typeof store.setJSON !== 'function') {
+      const err = new Error('edge-picks-omega store unavailable');
+      err.statusCode = 500;
+      throw err;
+    }
+    const key = `picks-${date}`;
+    const card = await store.get(key, { type: 'json' });
+    return {
+      card,
+      write: (data) => store.setJSON(key, data),
+    };
   }
-  return getStore(BLOB_STORE);
+
+  const located = await readPicksLocated(date);
+  const via = located && located.via;
+  const sdkStore = located && located.store;
+  return {
+    card: located ? located.card : null,
+    write: async (data) => {
+      if (via === 'sdk') {
+        if (!sdkStore || typeof sdkStore.setJSON !== 'function') {
+          const err = new Error('edge-picks-omega store unavailable');
+          err.statusCode = 500;
+          throw err;
+        }
+        await sdkStore.setJSON(`picks-${date}`, data);
+        return;
+      }
+      await writePicksRaw(date, data);
+    },
+  };
 }
 
 /**
- * @param {{ date: string, dryRun?: boolean, store: { get: Function, setJSON: Function } }} opts
- * dryRun defaults to true. store is the edge-picks-omega blob store.
+ * @param {{ date: string, dryRun?: boolean, store?: { get: Function, setJSON: Function } }} opts
+ * dryRun defaults to true. store is optional and only for tests.
  */
 async function regradeOmegaLetters(opts) {
   const date = opts && opts.date;
@@ -113,14 +145,8 @@ async function regradeOmegaLetters(opts) {
     err.statusCode = 400;
     throw err;
   }
-  const store = opts.store;
-  if (!store || typeof store.get !== 'function' || typeof store.setJSON !== 'function') {
-    const err = new Error('edge-picks-omega store unavailable');
-    err.statusCode = 500;
-    throw err;
-  }
-  const key = `picks-${date}`;
-  const card = await store.get(key, { type: 'json' });
+  const loaded = await loadCard(date, opts);
+  const card = loaded.card;
   if (!card || typeof card !== 'object' || Array.isArray(card)) {
     const err = new Error(`no card for ${date}`);
     err.statusCode = 404;
@@ -128,7 +154,7 @@ async function regradeOmegaLetters(opts) {
   }
   const applied = applyRegrade(card);
   const wrote = !dryRun && applied.changes.length > 0;
-  if (wrote) await store.setJSON(key, applied.card);
+  if (wrote) await loaded.write(applied.card);
   return {
     date,
     dryRun,
@@ -154,11 +180,10 @@ async function handle(event, deps) {
   if (!ALLOWED.has(body.date)) return json(400, { error: `date must be ${ALLOWED_DATES.join(', ')}` });
 
   try {
-    const store = deps && deps.store ? deps.store : await openStore();
     const result = await regradeOmegaLetters({
       date: body.date,
       dryRun: body.dryRun,
-      store,
+      store: deps && deps.store,
     });
     return json(200, result);
   } catch (err) {

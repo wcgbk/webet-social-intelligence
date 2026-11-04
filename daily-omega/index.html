@@ -463,6 +463,15 @@
       .logo { gap: .375rem; }
       .header-badge { font-size: .625rem; padding: .15rem .45rem; white-space: nowrap; }
       .badge-full { display: none; }
+      .logo { flex-shrink: 0; min-width: 0; }
+      .logo svg { width: 26px !important; height: 23px !important; }
+      .logo-text { font-size: .9375rem; }
+      .header .wb-site-share-btn { padding: 5px 10px !important; font-size: 11px !important; margin-right: 0 !important; margin-left: auto !important; }
+      .header-auth { margin-left: 0; }
+      .header-auth .wb-signin { padding: 5px 10px !important; font-size: 11px !important; }
+      .header-auth .wb-chip-wrap { gap: 4px !important; }
+      .header .mobile-menu-btn { padding: 2px !important; margin-left: 0 !important; }
+      .header { padding-left: .625rem; padding-right: .625rem; }
     }
     @media(max-width: 420px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
@@ -2017,7 +2026,7 @@
     const parlay = data.parlay || {};
 
     // Record & Accuracy = STRAIGHT PICKS ONLY
-    document.getElementById('cum-record').textContent = `${straight.wins || 0}-${straight.losses || 0}`;
+    document.getElementById('cum-record').textContent = `${straight.wins || 0}-${straight.losses || 0}-${straight.pushes || 0}`;
     document.getElementById('cum-accuracy').textContent = straight.accuracy || '0%';
 
     // Update hero accuracy

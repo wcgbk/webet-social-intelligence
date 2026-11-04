@@ -339,39 +339,90 @@ function predictRow(model, row) {
   return pPlatt;
 }
 
-function scoreModel(model, rows) {
-  const ps = rows.map((row) => predictRow(model, row));
-  return brier(ps, rows.map((row) => yOf(row)));
+function oneLogLoss(p, y) {
+  const pc = clipP(p);
+  return -(y * Math.log(pc) + (1 - y) * Math.log(1 - pc));
 }
 
 /**
- * Pick prior, shrink, Platt, or isotonic on a chronological holdout inside
- * the training rows, then refit that method on every row before the card.
- * In-sample isotonic is not allowed to nominate itself.
+ * Expanding-window log-loss. A row is scored only from bets dated before it,
+ * so a same-day holdout cannot nominate the map. Means are over that same
+ * set of rows. Platt is a candidate once 16 earlier rows exist. Isotonic
+ * joins once the earlier rows clear ISOTONIC_MIN.
+ */
+function walkForwardScores(sorted) {
+  const groups = [];
+  for (const row of sorted) {
+    const last = groups[groups.length - 1];
+    if (!last || last.date !== String(row.date)) groups.push({ date: String(row.date), rows: [row] });
+    else last.rows.push(row);
+  }
+  const acc = { shrink: 0, platt: 0, market: 0, n: 0, iso: 0, isoShrink: 0, isoPlatt: 0, isoMarket: 0, isoN: 0 };
+  let train = [];
+  for (const group of groups) {
+    if (train.length >= 16) {
+      const shrinkModel = fitShrinkOnly(train);
+      const plattModel = fitPlattModel(train);
+      const isoModel = train.length >= ISOTONIC_MIN ? fitIsoModel(train) : null;
+      for (const row of group.rows) {
+        const y = yOf(row);
+        if (y == null) continue;
+        const marketLl = oneLogLoss(row.pMkt, y);
+        const shrinkLl = oneLogLoss(predictRow(shrinkModel, row), y);
+        const plattLl = oneLogLoss(predictRow(plattModel, row), y);
+        acc.market += marketLl;
+        acc.shrink += shrinkLl;
+        acc.platt += plattLl;
+        acc.n += 1;
+        if (isoModel) {
+          acc.iso += oneLogLoss(predictRow(isoModel, row), y);
+          acc.isoShrink += shrinkLl;
+          acc.isoPlatt += plattLl;
+          acc.isoMarket += marketLl;
+          acc.isoN += 1;
+        }
+      }
+    }
+    train = train.concat(group.rows);
+  }
+  const n = acc.n;
+  const isoN = acc.isoN;
+  return {
+    n,
+    isoN,
+    market: n ? acc.market / n : null,
+    shrink: n ? acc.shrink / n : null,
+    platt: n ? acc.platt / n : null,
+    iso: isoN ? acc.iso / isoN : null,
+    isoShrink: isoN ? acc.isoShrink / isoN : null,
+    isoPlatt: isoN ? acc.isoPlatt / isoN : null,
+    isoMarket: isoN ? acc.isoMarket / isoN : null,
+  };
+}
+
+/**
+ * Pick shrink, Platt, or isotonic by walk-forward log-loss, then refit that
+ * method on every row before the card. A curve is kept only when it beats
+ * both the shrink and the no-vig price on rows it did not fit. Otherwise the
+ * sport stays on the shrink. A single tail holdout is not enough: that split
+ * nominated Platt on 24 NCAAF rows and the refit printed a 4.4pp edge the
+ * shrink did not have.
  */
 function fitSelected(rows) {
   const sorted = rows.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (sorted.length < MIN_POOLED) return priorModel(sorted.length);
   if (sorted.length < 16) return fitShrinkOnly(sorted);
-  const holdN = Math.max(8, Math.floor(sorted.length * 0.3));
-  const train = sorted.slice(0, sorted.length - holdN);
-  const test = sorted.slice(sorted.length - holdN);
-  if (train.length < MIN_POOLED) return fitShrinkOnly(sorted);
-  const options = [priorModel(train.length), fitShrinkOnly(train), fitPlattModel(train)];
-  if (train.length >= ISOTONIC_MIN) options.push(fitIsoModel(train));
-  let best = options[0];
-  let bestScore = scoreModel(best, test);
-  for (const model of options.slice(1)) {
-    const score = scoreModel(model, test);
-    if (score < bestScore - 1e-6) {
-      best = model;
-      bestScore = score;
-    }
+  const wf = walkForwardScores(sorted);
+  let method = 'shrink';
+  if (wf.isoN >= 5 && wf.iso < wf.isoPlatt - 1e-6 && wf.iso < wf.isoShrink - 1e-6 && wf.iso < wf.isoMarket - 1e-6) {
+    method = 'platt+isotonic';
+  } else if (wf.n >= 5 && wf.platt < wf.shrink - 1e-6 && wf.platt < wf.market - 1e-6) {
+    method = 'platt';
   }
-  if (best.method === 'prior') return priorModel(sorted.length);
-  if (best.method === 'shrink') return fitShrinkOnly(sorted);
-  if (best.method === 'platt') return fitPlattModel(sorted);
-  return fitIsoModel(sorted);
+  const fitted = method === 'platt+isotonic'
+    ? fitIsoModel(sorted)
+    : (method === 'platt' ? fitPlattModel(sorted) : fitShrinkOnly(sorted));
+  return { ...fitted, wfLogLoss: wf };
 }
 
 function usable(row) {
@@ -396,7 +447,8 @@ function estimationUncertainty(rows) {
 }
 
 /**
- * Fit per-sport shrink + Platt (isotonic blend once n >= 40).
+ * Fit per-sport shrink. Platt or isotonic is kept only when its
+ * walk-forward log-loss beats the shrink and the no-vig price.
  * Uses only rows dated before cardDate. Empty history returns the prior.
  * A sport under its floor is counted and then left out of bySport.
  * The pooled fit is kept for the card stamp. It is not an applied map
@@ -414,7 +466,7 @@ function fitWalkForward(history, cardDate) {
   for (const sport of sports) {
     const subset = trainRows.filter((r) => String(r.sport || '').toUpperCase() === sport);
     sportN[sport] = subset.length;
-    // Own holdout only. A thinner pooled fit must not fill this in.
+    // Own rows only. A thinner pooled fit must not fill this in.
     if (subset.length >= sportFloor(sport)) bySport[sport] = fitSelected(subset);
   }
   const uncertainty = { default: estimationUncertainty(rows) };

@@ -317,6 +317,33 @@ async function main() {
   assert.ok(!rechecked.picks.some((p) => p.pick === 'A ML'), 'worse price must drop');
   assert.strictEqual(rechecked.priceRecheck.checked, true);
 
+  // A sport at the 24-row floor does not take a Platt map unless the
+  // walk-forward log-loss beats the shrink and the no-vig price. Hits at
+  // the price, with the model sitting above it, are not that beat.
+  const mapHist = [];
+  for (let i = 0; i < 24; i += 1) {
+    mapHist.push({
+      date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+      sport: 'NCAAF',
+      market: 'Total',
+      pick: 'Over 44.5',
+      pModel: 0.80,
+      pMkt: 0.50,
+      result: i % 2 ? 'win' : 'loss',
+    });
+  }
+  const mapFit = v2.fitWalkForward(mapHist, '2026-11-03');
+  const mapModel = mapFit.bySport && mapFit.bySport.NCAAF;
+  assert.ok(mapModel, '24 graded rows clear the sport floor');
+  assert.strictEqual(mapModel.method, 'shrink', 'walk-forward log-loss keeps the shrink');
+  assert.ok(mapModel.wfLogLoss && mapModel.wfLogLoss.n >= 5, 'walk-forward scored a tail');
+  assert.ok(!(mapModel.wfLogLoss.platt < mapModel.wfLogLoss.market), 'Platt does not beat the no-vig price');
+  const mapCal = v2.applyCalibration({
+    sport: 'NCAAF', market: 'Total', pick: 'Over 44.5', pModel: 0.80, pMkt: 0.50,
+  }, mapFit);
+  assert.strictEqual(mapCal.mapApplied, false, 'a losing map is not applied');
+  assert.ok(Math.abs(mapCal.pCal - mapCal.pShrink) < 1e-12, 'pCal stays on the shrink');
+
   console.log('PASS omega-v2 gate');
 
   const nhlInputs = require('child_process').spawnSync(

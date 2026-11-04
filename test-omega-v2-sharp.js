@@ -15,6 +15,31 @@ const DATE = '2026-10-30';
 const COMMENCE = '2026-10-30T23:00:00Z';
 const PREGAME = Date.parse('2026-10-30T16:00:00Z');
 
+/**
+ * Model probability whose log-odds blend at k lands on pCal.
+ * Empty history uses intercept 0, so this is the preimage of shrinkP.
+ */
+function pModelFor(pCal, pMkt, k) {
+  const clip = (p) => Math.max(0.02, Math.min(0.98, Number(p)));
+  const logit = (p) => {
+    const x = clip(p);
+    return Math.log(x / (1 - x));
+  };
+  const z = (logit(pCal) - k * logit(pMkt)) / (1 - k);
+  let pModel = 1 / (1 + Math.exp(-z));
+  const got = v2.shrinkP(pModel, pMkt, k, 0);
+  if (Math.abs(got - pCal) <= 1e-12) return pModel;
+  let lo = 0.02;
+  let hi = 0.98;
+  for (let i = 0; i < 80; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (v2.shrinkP(mid, pMkt, k, 0) < pCal) lo = mid;
+    else hi = mid;
+  }
+  pModel = (lo + hi) / 2;
+  return pModel;
+}
+
 function side(over) {
   const row = {
     sport: 'NFL',
@@ -142,7 +167,7 @@ function novig(pick) {
   assert.strictEqual(pair.parlayLegs[0].legs.length, 2);
   assert.strictEqual(pair.parlaySource, 'calibrated-edge');
   for (const leg of pair.parlayLegs[0].legs) novig(leg);
-  const pCal = 0.3 * 0.62 + 0.7 * 0.52;
+  const pCal = v2.shrinkP(0.62, 0.52, v2.priorKFor('NFL'), 0);
   const jointDec = (americanToDecimal(-110) ** 2);
   const jointSized = v2.quarterKellyFromDecimal(pCal * pCal, jointDec, 1);
   assert.strictEqual(pair.parlayLegs[0].unitsNum, jointSized.units);
@@ -340,7 +365,7 @@ function novig(pick) {
       odds: -290,
       oddsStr: '-290',
       pMkt: pMktClear,
-      pModel: (pClear - kNcaaf * pMktClear) / (1 - kNcaaf),
+      pModel: pModelFor(pClear, pMktClear, kNcaaf),
     })],
     history: [],
   });
@@ -365,7 +390,7 @@ function novig(pick) {
       odds: -290,
       oddsStr: '-290',
       pMkt: pMktNoise,
-      pModel: (pKent - kNcaaf * pMktNoise) / (1 - kNcaaf),
+      pModel: pModelFor(pKent, pMktNoise, kNcaaf),
       coverProb: 0.77,
       ev: 0.035,
       edgePct: 0.026,
@@ -383,7 +408,7 @@ function novig(pick) {
       odds: 575,
       oddsStr: '+575',
       pMkt: 0.140,
-      pModel: (0.167 - 0.70 * 0.140) / 0.30,
+      pModel: pModelFor(0.167, 0.140, v2.priorKFor('NFL')),
       coverProb: 0.167,
     })],
     history: [],
@@ -441,7 +466,7 @@ function novig(pick) {
       odds: -290,
       oddsStr: '-290',
       pMkt: pMktNoise,
-      pModel: (pKent - kNcaaf * pMktNoise) / (1 - kNcaaf),
+      pModel: pModelFor(pKent, pMktNoise, kNcaaf),
       coverProb: 0.77,
       ev: 0.035,
     }),
@@ -470,7 +495,7 @@ function novig(pick) {
     date: DATE,
     pregameAsOfMs: PREGAME,
     candidates: [side({
-      pModel: 0.82,
+      pModel: pModelFor(0.3 * 0.82 + 0.7 * 0.52, 0.52, v2.priorKFor('NFL')),
       pMkt: 0.52,
       coverProb: 0.61,
       ev: 0.08,

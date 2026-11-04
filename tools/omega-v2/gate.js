@@ -355,6 +355,13 @@ async function main() {
   );
   if (fnLoad.status !== 0) throw new Error('netlify functions load gate failed');
 
+  const regradeLetters = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-regrade-omega-letters.js')],
+    { stdio: 'inherit' }
+  );
+  if (regradeLetters.status !== 0) throw new Error('regrade omega letters gate failed');
+
   const nhlInputs = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-nhl-inputs.js')],

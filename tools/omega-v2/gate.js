@@ -348,6 +348,13 @@ async function main() {
 
   console.log('PASS omega-v2 gate');
 
+  const fnLoad = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-netlify-functions-load.js')],
+    { stdio: 'inherit' }
+  );
+  if (fnLoad.status !== 0) throw new Error('netlify functions load gate failed');
+
   const nhlInputs = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-nhl-inputs.js')],

@@ -1,0 +1,549 @@
+{
+  "_meta": {
+    "generatedAt": "2026-10-07T00:00:00.000Z",
+    "source": "Stored ESPN scoreboards in the omega replay inputs (09-21..10-06). Hand aliases for Odds API name variants. No Odds API call.",
+    "oddsSport": "icehockey_nhl",
+    "sport": "NHL",
+    "teamCount": 32,
+    "lookupCount": 102,
+    "seasonLabel": "identity is stable across seasons",
+    "matching": "normalize (lowercase, strip accents, delete apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback."
+  },
+  "teams": {
+    "1": {
+      "espnId": "1",
+      "displayName": "Boston Bruins",
+      "shortDisplayName": "Bruins",
+      "abbreviation": "BOS",
+      "location": "Boston",
+      "nickname": "Bruins",
+      "name": "Bruins",
+      "oddsNames": [
+        "Boston Bruins"
+      ],
+      "aliases": []
+    },
+    "2": {
+      "espnId": "2",
+      "displayName": "Buffalo Sabres",
+      "shortDisplayName": "Sabres",
+      "abbreviation": "BUF",
+      "location": "Buffalo",
+      "nickname": "Sabres",
+      "name": "Sabres",
+      "oddsNames": [
+        "Buffalo Sabres"
+      ],
+      "aliases": []
+    },
+    "3": {
+      "espnId": "3",
+      "displayName": "Calgary Flames",
+      "shortDisplayName": "Flames",
+      "abbreviation": "CGY",
+      "location": "Calgary",
+      "nickname": "Flames",
+      "name": "Flames",
+      "oddsNames": [
+        "Calgary Flames"
+      ],
+      "aliases": []
+    },
+    "4": {
+      "espnId": "4",
+      "displayName": "Chicago Blackhawks",
+      "shortDisplayName": "Blackhawks",
+      "abbreviation": "CHI",
+      "location": "Chicago",
+      "nickname": "Blackhawks",
+      "name": "Blackhawks",
+      "oddsNames": [
+        "Chicago Blackhawks"
+      ],
+      "aliases": []
+    },
+    "5": {
+      "espnId": "5",
+      "displayName": "Detroit Red Wings",
+      "shortDisplayName": "Red Wings",
+      "abbreviation": "DET",
+      "location": "Detroit",
+      "nickname": "Red Wings",
+      "name": "Red Wings",
+      "oddsNames": [
+        "Detroit Red Wings"
+      ],
+      "aliases": []
+    },
+    "6": {
+      "espnId": "6",
+      "displayName": "Edmonton Oilers",
+      "shortDisplayName": "Oilers",
+      "abbreviation": "EDM",
+      "location": "Edmonton",
+      "nickname": "Oilers",
+      "name": "Oilers",
+      "oddsNames": [
+        "Edmonton Oilers"
+      ],
+      "aliases": []
+    },
+    "7": {
+      "espnId": "7",
+      "displayName": "Carolina Hurricanes",
+      "shortDisplayName": "Hurricanes",
+      "abbreviation": "CAR",
+      "location": "Carolina",
+      "nickname": "Hurricanes",
+      "name": "Hurricanes",
+      "oddsNames": [
+        "Carolina Hurricanes"
+      ],
+      "aliases": []
+    },
+    "8": {
+      "espnId": "8",
+      "displayName": "Los Angeles Kings",
+      "shortDisplayName": "Kings",
+      "abbreviation": "LA",
+      "location": "Los Angeles",
+      "nickname": "Kings",
+      "name": "Kings",
+      "oddsNames": [
+        "Los Angeles Kings",
+        "LA Kings",
+        "L.A. Kings"
+      ],
+      "aliases": [
+        "LA Kings",
+        "L.A. Kings"
+      ]
+    },
+    "9": {
+      "espnId": "9",
+      "displayName": "Dallas Stars",
+      "shortDisplayName": "Stars",
+      "abbreviation": "DAL",
+      "location": "Dallas",
+      "nickname": "Stars",
+      "name": "Stars",
+      "oddsNames": [
+        "Dallas Stars"
+      ],
+      "aliases": []
+    },
+    "10": {
+      "espnId": "10",
+      "displayName": "Montreal Canadiens",
+      "shortDisplayName": "Canadiens",
+      "abbreviation": "MTL",
+      "location": "Montreal",
+      "nickname": "Canadiens",
+      "name": "Canadiens",
+      "oddsNames": [
+        "Montreal Canadiens"
+      ],
+      "aliases": []
+    },
+    "11": {
+      "espnId": "11",
+      "displayName": "New Jersey Devils",
+      "shortDisplayName": "Devils",
+      "abbreviation": "NJ",
+      "location": "New Jersey",
+      "nickname": "Devils",
+      "name": "Devils",
+      "oddsNames": [
+        "New Jersey Devils"
+      ],
+      "aliases": []
+    },
+    "12": {
+      "espnId": "12",
+      "displayName": "New York Islanders",
+      "shortDisplayName": "Islanders",
+      "abbreviation": "NYI",
+      "location": "New York",
+      "nickname": "Islanders",
+      "name": "Islanders",
+      "oddsNames": [
+        "New York Islanders"
+      ],
+      "aliases": []
+    },
+    "13": {
+      "espnId": "13",
+      "displayName": "New York Rangers",
+      "shortDisplayName": "Rangers",
+      "abbreviation": "NYR",
+      "location": "New York",
+      "nickname": "Rangers",
+      "name": "Rangers",
+      "oddsNames": [
+        "New York Rangers"
+      ],
+      "aliases": []
+    },
+    "14": {
+      "espnId": "14",
+      "displayName": "Ottawa Senators",
+      "shortDisplayName": "Senators",
+      "abbreviation": "OTT",
+      "location": "Ottawa",
+      "nickname": "Senators",
+      "name": "Senators",
+      "oddsNames": [
+        "Ottawa Senators"
+      ],
+      "aliases": []
+    },
+    "15": {
+      "espnId": "15",
+      "displayName": "Philadelphia Flyers",
+      "shortDisplayName": "Flyers",
+      "abbreviation": "PHI",
+      "location": "Philadelphia",
+      "nickname": "Flyers",
+      "name": "Flyers",
+      "oddsNames": [
+        "Philadelphia Flyers"
+      ],
+      "aliases": []
+    },
+    "16": {
+      "espnId": "16",
+      "displayName": "Pittsburgh Penguins",
+      "shortDisplayName": "Penguins",
+      "abbreviation": "PIT",
+      "location": "Pittsburgh",
+      "nickname": "Penguins",
+      "name": "Penguins",
+      "oddsNames": [
+        "Pittsburgh Penguins"
+      ],
+      "aliases": []
+    },
+    "17": {
+      "espnId": "17",
+      "displayName": "Colorado Avalanche",
+      "shortDisplayName": "Avalanche",
+      "abbreviation": "COL",
+      "location": "Colorado",
+      "nickname": "Avalanche",
+      "name": "Avalanche",
+      "oddsNames": [
+        "Colorado Avalanche"
+      ],
+      "aliases": []
+    },
+    "18": {
+      "espnId": "18",
+      "displayName": "San Jose Sharks",
+      "shortDisplayName": "Sharks",
+      "abbreviation": "SJ",
+      "location": "San Jose",
+      "nickname": "Sharks",
+      "name": "Sharks",
+      "oddsNames": [
+        "San Jose Sharks"
+      ],
+      "aliases": []
+    },
+    "19": {
+      "espnId": "19",
+      "displayName": "St. Louis Blues",
+      "shortDisplayName": "Blues",
+      "abbreviation": "STL",
+      "location": "St. Louis",
+      "nickname": "Blues",
+      "name": "Blues",
+      "oddsNames": [
+        "St. Louis Blues",
+        "St. Louis",
+        "St Louis"
+      ],
+      "aliases": [
+        "St. Louis",
+        "St Louis"
+      ]
+    },
+    "20": {
+      "espnId": "20",
+      "displayName": "Tampa Bay Lightning",
+      "shortDisplayName": "Lightning",
+      "abbreviation": "TB",
+      "location": "Tampa Bay",
+      "nickname": "Lightning",
+      "name": "Lightning",
+      "oddsNames": [
+        "Tampa Bay Lightning"
+      ],
+      "aliases": []
+    },
+    "21": {
+      "espnId": "21",
+      "displayName": "Toronto Maple Leafs",
+      "shortDisplayName": "Maple Leafs",
+      "abbreviation": "TOR",
+      "location": "Toronto",
+      "nickname": "Maple Leafs",
+      "name": "Maple Leafs",
+      "oddsNames": [
+        "Toronto Maple Leafs"
+      ],
+      "aliases": []
+    },
+    "22": {
+      "espnId": "22",
+      "displayName": "Vancouver Canucks",
+      "shortDisplayName": "Canucks",
+      "abbreviation": "VAN",
+      "location": "Vancouver",
+      "nickname": "Canucks",
+      "name": "Canucks",
+      "oddsNames": [
+        "Vancouver Canucks"
+      ],
+      "aliases": []
+    },
+    "23": {
+      "espnId": "23",
+      "displayName": "Washington Capitals",
+      "shortDisplayName": "Capitals",
+      "abbreviation": "WSH",
+      "location": "Washington",
+      "nickname": "Capitals",
+      "name": "Capitals",
+      "oddsNames": [
+        "Washington Capitals"
+      ],
+      "aliases": []
+    },
+    "25": {
+      "espnId": "25",
+      "displayName": "Anaheim Ducks",
+      "shortDisplayName": "Ducks",
+      "abbreviation": "ANA",
+      "location": "Anaheim",
+      "nickname": "Ducks",
+      "name": "Ducks",
+      "oddsNames": [
+        "Anaheim Ducks"
+      ],
+      "aliases": []
+    },
+    "26": {
+      "espnId": "26",
+      "displayName": "Florida Panthers",
+      "shortDisplayName": "Panthers",
+      "abbreviation": "FLA",
+      "location": "Florida",
+      "nickname": "Panthers",
+      "name": "Panthers",
+      "oddsNames": [
+        "Florida Panthers"
+      ],
+      "aliases": []
+    },
+    "27": {
+      "espnId": "27",
+      "displayName": "Nashville Predators",
+      "shortDisplayName": "Predators",
+      "abbreviation": "NSH",
+      "location": "Nashville",
+      "nickname": "Predators",
+      "name": "Predators",
+      "oddsNames": [
+        "Nashville Predators"
+      ],
+      "aliases": []
+    },
+    "28": {
+      "espnId": "28",
+      "displayName": "Winnipeg Jets",
+      "shortDisplayName": "Jets",
+      "abbreviation": "WPG",
+      "location": "Winnipeg",
+      "nickname": "Jets",
+      "name": "Jets",
+      "oddsNames": [
+        "Winnipeg Jets"
+      ],
+      "aliases": []
+    },
+    "29": {
+      "espnId": "29",
+      "displayName": "Columbus Blue Jackets",
+      "shortDisplayName": "Blue Jackets",
+      "abbreviation": "CBJ",
+      "location": "Columbus",
+      "nickname": "Blue Jackets",
+      "name": "Blue Jackets",
+      "oddsNames": [
+        "Columbus Blue Jackets"
+      ],
+      "aliases": []
+    },
+    "30": {
+      "espnId": "30",
+      "displayName": "Minnesota Wild",
+      "shortDisplayName": "Wild",
+      "abbreviation": "MIN",
+      "location": "Minnesota",
+      "nickname": "Wild",
+      "name": "Wild",
+      "oddsNames": [
+        "Minnesota Wild"
+      ],
+      "aliases": []
+    },
+    "37": {
+      "espnId": "37",
+      "displayName": "Vegas Golden Knights",
+      "shortDisplayName": "Golden Knights",
+      "abbreviation": "VGK",
+      "location": "Vegas",
+      "nickname": "Golden Knights",
+      "name": "Golden Knights",
+      "oddsNames": [
+        "Vegas Golden Knights"
+      ],
+      "aliases": []
+    },
+    "124292": {
+      "espnId": "124292",
+      "displayName": "Seattle Kraken",
+      "shortDisplayName": "Kraken",
+      "abbreviation": "SEA",
+      "location": "Seattle",
+      "nickname": "Kraken",
+      "name": "Kraken",
+      "oddsNames": [
+        "Seattle Kraken"
+      ],
+      "aliases": []
+    },
+    "129764": {
+      "espnId": "129764",
+      "displayName": "Utah Mammoth",
+      "shortDisplayName": "Mammoth",
+      "abbreviation": "UTA",
+      "location": "Utah",
+      "nickname": "Mammoth",
+      "name": "Mammoth",
+      "oddsNames": [
+        "Utah Mammoth",
+        "Utah Hockey Club",
+        "Utah HC"
+      ],
+      "aliases": [
+        "Utah Hockey Club",
+        "Utah HC"
+      ]
+    }
+  },
+  "lookup": {
+    "boston bruins": "1",
+    "buffalo sabres": "2",
+    "calgary flames": "3",
+    "chicago blackhawks": "4",
+    "detroit red wings": "5",
+    "edmonton oilers": "6",
+    "carolina hurricanes": "7",
+    "los angeles kings": "8",
+    "dallas stars": "9",
+    "montreal canadiens": "10",
+    "new jersey devils": "11",
+    "new york islanders": "12",
+    "new york rangers": "13",
+    "ottawa senators": "14",
+    "philadelphia flyers": "15",
+    "pittsburgh penguins": "16",
+    "colorado avalanche": "17",
+    "san jose sharks": "18",
+    "st louis blues": "19",
+    "tampa bay lightning": "20",
+    "toronto maple leafs": "21",
+    "vancouver canucks": "22",
+    "washington capitals": "23",
+    "anaheim ducks": "25",
+    "florida panthers": "26",
+    "nashville predators": "27",
+    "winnipeg jets": "28",
+    "columbus blue jackets": "29",
+    "minnesota wild": "30",
+    "vegas golden knights": "37",
+    "seattle kraken": "124292",
+    "utah mammoth": "129764",
+    "boston": "1",
+    "buffalo": "2",
+    "calgary": "3",
+    "chicago": "4",
+    "detroit": "5",
+    "edmonton": "6",
+    "carolina": "7",
+    "los angeles": "8",
+    "dallas": "9",
+    "montreal": "10",
+    "new jersey": "11",
+    "ottawa": "14",
+    "philadelphia": "15",
+    "pittsburgh": "16",
+    "colorado": "17",
+    "san jose": "18",
+    "st louis": "19",
+    "tampa bay": "20",
+    "toronto": "21",
+    "vancouver": "22",
+    "washington": "23",
+    "anaheim": "25",
+    "florida": "26",
+    "nashville": "27",
+    "winnipeg": "28",
+    "columbus": "29",
+    "minnesota": "30",
+    "vegas": "37",
+    "seattle": "124292",
+    "utah": "129764",
+    "bos": "1",
+    "buf": "2",
+    "cgy": "3",
+    "chi": "4",
+    "det": "5",
+    "edm": "6",
+    "car": "7",
+    "la": "8",
+    "dal": "9",
+    "mtl": "10",
+    "nj": "11",
+    "nyi": "12",
+    "nyr": "13",
+    "ott": "14",
+    "phi": "15",
+    "pit": "16",
+    "col": "17",
+    "sj": "18",
+    "stl": "19",
+    "tb": "20",
+    "tor": "21",
+    "van": "22",
+    "wsh": "23",
+    "ana": "25",
+    "fla": "26",
+    "nsh": "27",
+    "wpg": "28",
+    "cbj": "29",
+    "min": "30",
+    "vgk": "37",
+    "sea": "124292",
+    "uta": "129764",
+    "red wings": "5",
+    "maple leafs": "21",
+    "blue jackets": "29",
+    "golden knights": "37",
+    "la kings": "8",
+    "l a kings": "8",
+    "utah hockey club": "129764",
+    "utah hc": "129764"
+  }
+}

@@ -1,0 +1,657 @@
+{
+  "_meta": {
+    "generatedAt": "2026-10-06T03:46:46.040Z",
+    "source": "ESPN site teams API + The Odds API participants",
+    "oddsSport": "americanfootball_nfl",
+    "groups": null,
+    "allowUnresolved": [],
+    "sport": "NFL",
+    "teamCount": 32,
+    "lookupCount": 188,
+    "matching": "normalize (lowercase, strip accents, delete okina/apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback."
+  },
+  "teams": {
+    "1": {
+      "espnId": "1",
+      "division": "nfl",
+      "displayName": "Atlanta Falcons",
+      "shortDisplayName": "Falcons",
+      "abbreviation": "ATL",
+      "location": "Atlanta",
+      "nickname": "Falcons",
+      "name": "Falcons",
+      "oddsNames": [
+        "Atlanta Falcons"
+      ],
+      "aliases": []
+    },
+    "2": {
+      "espnId": "2",
+      "division": "nfl",
+      "displayName": "Buffalo Bills",
+      "shortDisplayName": "Bills",
+      "abbreviation": "BUF",
+      "location": "Buffalo",
+      "nickname": "Bills",
+      "name": "Bills",
+      "oddsNames": [
+        "Buffalo Bills"
+      ],
+      "aliases": []
+    },
+    "3": {
+      "espnId": "3",
+      "division": "nfl",
+      "displayName": "Chicago Bears",
+      "shortDisplayName": "Bears",
+      "abbreviation": "CHI",
+      "location": "Chicago",
+      "nickname": "Bears",
+      "name": "Bears",
+      "oddsNames": [
+        "Chicago Bears"
+      ],
+      "aliases": []
+    },
+    "4": {
+      "espnId": "4",
+      "division": "nfl",
+      "displayName": "Cincinnati Bengals",
+      "shortDisplayName": "Bengals",
+      "abbreviation": "CIN",
+      "location": "Cincinnati",
+      "nickname": "Bengals",
+      "name": "Bengals",
+      "oddsNames": [
+        "Cincinnati Bengals"
+      ],
+      "aliases": []
+    },
+    "5": {
+      "espnId": "5",
+      "division": "nfl",
+      "displayName": "Cleveland Browns",
+      "shortDisplayName": "Browns",
+      "abbreviation": "CLE",
+      "location": "Cleveland",
+      "nickname": "Browns",
+      "name": "Browns",
+      "oddsNames": [
+        "Cleveland Browns"
+      ],
+      "aliases": []
+    },
+    "6": {
+      "espnId": "6",
+      "division": "nfl",
+      "displayName": "Dallas Cowboys",
+      "shortDisplayName": "Cowboys",
+      "abbreviation": "DAL",
+      "location": "Dallas",
+      "nickname": "Cowboys",
+      "name": "Cowboys",
+      "oddsNames": [
+        "Dallas Cowboys"
+      ],
+      "aliases": []
+    },
+    "7": {
+      "espnId": "7",
+      "division": "nfl",
+      "displayName": "Denver Broncos",
+      "shortDisplayName": "Broncos",
+      "abbreviation": "DEN",
+      "location": "Denver",
+      "nickname": "Broncos",
+      "name": "Broncos",
+      "oddsNames": [
+        "Denver Broncos"
+      ],
+      "aliases": []
+    },
+    "8": {
+      "espnId": "8",
+      "division": "nfl",
+      "displayName": "Detroit Lions",
+      "shortDisplayName": "Lions",
+      "abbreviation": "DET",
+      "location": "Detroit",
+      "nickname": "Lions",
+      "name": "Lions",
+      "oddsNames": [
+        "Detroit Lions"
+      ],
+      "aliases": []
+    },
+    "9": {
+      "espnId": "9",
+      "division": "nfl",
+      "displayName": "Green Bay Packers",
+      "shortDisplayName": "Packers",
+      "abbreviation": "GB",
+      "location": "Green Bay",
+      "nickname": "Packers",
+      "name": "Packers",
+      "oddsNames": [
+        "Green Bay Packers"
+      ],
+      "aliases": []
+    },
+    "10": {
+      "espnId": "10",
+      "division": "nfl",
+      "displayName": "Tennessee Titans",
+      "shortDisplayName": "Titans",
+      "abbreviation": "TEN",
+      "location": "Tennessee",
+      "nickname": "Titans",
+      "name": "Titans",
+      "oddsNames": [
+        "Tennessee Titans"
+      ],
+      "aliases": []
+    },
+    "11": {
+      "espnId": "11",
+      "division": "nfl",
+      "displayName": "Indianapolis Colts",
+      "shortDisplayName": "Colts",
+      "abbreviation": "IND",
+      "location": "Indianapolis",
+      "nickname": "Colts",
+      "name": "Colts",
+      "oddsNames": [
+        "Indianapolis Colts"
+      ],
+      "aliases": []
+    },
+    "12": {
+      "espnId": "12",
+      "division": "nfl",
+      "displayName": "Kansas City Chiefs",
+      "shortDisplayName": "Chiefs",
+      "abbreviation": "KC",
+      "location": "Kansas City",
+      "nickname": "Chiefs",
+      "name": "Chiefs",
+      "oddsNames": [
+        "Kansas City Chiefs"
+      ],
+      "aliases": []
+    },
+    "13": {
+      "espnId": "13",
+      "division": "nfl",
+      "displayName": "Las Vegas Raiders",
+      "shortDisplayName": "Raiders",
+      "abbreviation": "LV",
+      "location": "Las Vegas",
+      "nickname": "Raiders",
+      "name": "Raiders",
+      "oddsNames": [
+        "Las Vegas Raiders"
+      ],
+      "aliases": [
+        "Las Vegas Raiders"
+      ]
+    },
+    "14": {
+      "espnId": "14",
+      "division": "nfl",
+      "displayName": "Los Angeles Rams",
+      "shortDisplayName": "Rams",
+      "abbreviation": "LAR",
+      "location": "Los Angeles",
+      "nickname": "Rams",
+      "name": "Rams",
+      "oddsNames": [
+        "Los Angeles Rams"
+      ],
+      "aliases": []
+    },
+    "15": {
+      "espnId": "15",
+      "division": "nfl",
+      "displayName": "Miami Dolphins",
+      "shortDisplayName": "Dolphins",
+      "abbreviation": "MIA",
+      "location": "Miami",
+      "nickname": "Dolphins",
+      "name": "Dolphins",
+      "oddsNames": [
+        "Miami Dolphins"
+      ],
+      "aliases": []
+    },
+    "16": {
+      "espnId": "16",
+      "division": "nfl",
+      "displayName": "Minnesota Vikings",
+      "shortDisplayName": "Vikings",
+      "abbreviation": "MIN",
+      "location": "Minnesota",
+      "nickname": "Vikings",
+      "name": "Vikings",
+      "oddsNames": [
+        "Minnesota Vikings"
+      ],
+      "aliases": []
+    },
+    "17": {
+      "espnId": "17",
+      "division": "nfl",
+      "displayName": "New England Patriots",
+      "shortDisplayName": "Patriots",
+      "abbreviation": "NE",
+      "location": "New England",
+      "nickname": "Patriots",
+      "name": "Patriots",
+      "oddsNames": [
+        "New England Patriots"
+      ],
+      "aliases": []
+    },
+    "18": {
+      "espnId": "18",
+      "division": "nfl",
+      "displayName": "New Orleans Saints",
+      "shortDisplayName": "Saints",
+      "abbreviation": "NO",
+      "location": "New Orleans",
+      "nickname": "Saints",
+      "name": "Saints",
+      "oddsNames": [
+        "New Orleans Saints"
+      ],
+      "aliases": []
+    },
+    "19": {
+      "espnId": "19",
+      "division": "nfl",
+      "displayName": "New York Giants",
+      "shortDisplayName": "Giants",
+      "abbreviation": "NYG",
+      "location": "New York",
+      "nickname": "Giants",
+      "name": "Giants",
+      "oddsNames": [
+        "New York Giants"
+      ],
+      "aliases": []
+    },
+    "20": {
+      "espnId": "20",
+      "division": "nfl",
+      "displayName": "New York Jets",
+      "shortDisplayName": "Jets",
+      "abbreviation": "NYJ",
+      "location": "New York",
+      "nickname": "Jets",
+      "name": "Jets",
+      "oddsNames": [
+        "New York Jets"
+      ],
+      "aliases": []
+    },
+    "21": {
+      "espnId": "21",
+      "division": "nfl",
+      "displayName": "Philadelphia Eagles",
+      "shortDisplayName": "Eagles",
+      "abbreviation": "PHI",
+      "location": "Philadelphia",
+      "nickname": "Eagles",
+      "name": "Eagles",
+      "oddsNames": [
+        "Philadelphia Eagles"
+      ],
+      "aliases": []
+    },
+    "22": {
+      "espnId": "22",
+      "division": "nfl",
+      "displayName": "Arizona Cardinals",
+      "shortDisplayName": "Cardinals",
+      "abbreviation": "ARI",
+      "location": "Arizona",
+      "nickname": "Cardinals",
+      "name": "Cardinals",
+      "oddsNames": [
+        "Arizona Cardinals"
+      ],
+      "aliases": []
+    },
+    "23": {
+      "espnId": "23",
+      "division": "nfl",
+      "displayName": "Pittsburgh Steelers",
+      "shortDisplayName": "Steelers",
+      "abbreviation": "PIT",
+      "location": "Pittsburgh",
+      "nickname": "Steelers",
+      "name": "Steelers",
+      "oddsNames": [
+        "Pittsburgh Steelers"
+      ],
+      "aliases": []
+    },
+    "24": {
+      "espnId": "24",
+      "division": "nfl",
+      "displayName": "Los Angeles Chargers",
+      "shortDisplayName": "Chargers",
+      "abbreviation": "LAC",
+      "location": "Los Angeles",
+      "nickname": "Chargers",
+      "name": "Chargers",
+      "oddsNames": [
+        "Los Angeles Chargers"
+      ],
+      "aliases": []
+    },
+    "25": {
+      "espnId": "25",
+      "division": "nfl",
+      "displayName": "San Francisco 49ers",
+      "shortDisplayName": "49ers",
+      "abbreviation": "SF",
+      "location": "San Francisco",
+      "nickname": "49ers",
+      "name": "49ers",
+      "oddsNames": [
+        "San Francisco 49ers"
+      ],
+      "aliases": []
+    },
+    "26": {
+      "espnId": "26",
+      "division": "nfl",
+      "displayName": "Seattle Seahawks",
+      "shortDisplayName": "Seahawks",
+      "abbreviation": "SEA",
+      "location": "Seattle",
+      "nickname": "Seahawks",
+      "name": "Seahawks",
+      "oddsNames": [
+        "Seattle Seahawks"
+      ],
+      "aliases": []
+    },
+    "27": {
+      "espnId": "27",
+      "division": "nfl",
+      "displayName": "Tampa Bay Buccaneers",
+      "shortDisplayName": "Buccaneers",
+      "abbreviation": "TB",
+      "location": "Tampa Bay",
+      "nickname": "Buccaneers",
+      "name": "Buccaneers",
+      "oddsNames": [
+        "Tampa Bay Buccaneers"
+      ],
+      "aliases": []
+    },
+    "28": {
+      "espnId": "28",
+      "division": "nfl",
+      "displayName": "Washington Commanders",
+      "shortDisplayName": "Commanders",
+      "abbreviation": "WSH",
+      "location": "Washington",
+      "nickname": "Commanders",
+      "name": "Commanders",
+      "oddsNames": [
+        "Washington Commanders"
+      ],
+      "aliases": [
+        "Washington"
+      ]
+    },
+    "29": {
+      "espnId": "29",
+      "division": "nfl",
+      "displayName": "Carolina Panthers",
+      "shortDisplayName": "Panthers",
+      "abbreviation": "CAR",
+      "location": "Carolina",
+      "nickname": "Panthers",
+      "name": "Panthers",
+      "oddsNames": [
+        "Carolina Panthers"
+      ],
+      "aliases": []
+    },
+    "30": {
+      "espnId": "30",
+      "division": "nfl",
+      "displayName": "Jacksonville Jaguars",
+      "shortDisplayName": "Jaguars",
+      "abbreviation": "JAX",
+      "location": "Jacksonville",
+      "nickname": "Jaguars",
+      "name": "Jaguars",
+      "oddsNames": [
+        "Jacksonville Jaguars"
+      ],
+      "aliases": []
+    },
+    "33": {
+      "espnId": "33",
+      "division": "nfl",
+      "displayName": "Baltimore Ravens",
+      "shortDisplayName": "Ravens",
+      "abbreviation": "BAL",
+      "location": "Baltimore",
+      "nickname": "Ravens",
+      "name": "Ravens",
+      "oddsNames": [
+        "Baltimore Ravens"
+      ],
+      "aliases": []
+    },
+    "34": {
+      "espnId": "34",
+      "division": "nfl",
+      "displayName": "Houston Texans",
+      "shortDisplayName": "Texans",
+      "abbreviation": "HOU",
+      "location": "Houston",
+      "nickname": "Texans",
+      "name": "Texans",
+      "oddsNames": [
+        "Houston Texans"
+      ],
+      "aliases": []
+    }
+  },
+  "lookup": {
+    "49ers 49ers": "25",
+    "ari": "22",
+    "arizona": "22",
+    "arizona cardinals": "22",
+    "arizona st cardinals": "22",
+    "arizona state cardinals": "22",
+    "atl": "1",
+    "atlanta": "1",
+    "atlanta falcons": "1",
+    "atlanta st falcons": "1",
+    "atlanta state falcons": "1",
+    "bal": "33",
+    "baltimore": "33",
+    "baltimore ravens": "33",
+    "baltimore st ravens": "33",
+    "baltimore state ravens": "33",
+    "bears bears": "3",
+    "bengals bengals": "4",
+    "bills bills": "2",
+    "broncos broncos": "7",
+    "browns browns": "5",
+    "buccaneers buccaneers": "27",
+    "buf": "2",
+    "buffalo": "2",
+    "buffalo bills": "2",
+    "buffalo st bills": "2",
+    "buffalo state bills": "2",
+    "car": "29",
+    "cardinals cardinals": "22",
+    "carolina": "29",
+    "carolina panthers": "29",
+    "carolina st panthers": "29",
+    "carolina state panthers": "29",
+    "chargers chargers": "24",
+    "chi": "3",
+    "chicago": "3",
+    "chicago bears": "3",
+    "chicago st bears": "3",
+    "chicago state bears": "3",
+    "chiefs chiefs": "12",
+    "cin": "4",
+    "cincinnati": "4",
+    "cincinnati bengals": "4",
+    "cincinnati st bengals": "4",
+    "cincinnati state bengals": "4",
+    "cle": "5",
+    "cleveland": "5",
+    "cleveland browns": "5",
+    "cleveland st browns": "5",
+    "cleveland state browns": "5",
+    "colts colts": "11",
+    "commanders commanders": "28",
+    "cowboys cowboys": "6",
+    "dal": "6",
+    "dallas": "6",
+    "dallas cowboys": "6",
+    "dallas st cowboys": "6",
+    "dallas state cowboys": "6",
+    "den": "7",
+    "denver": "7",
+    "denver broncos": "7",
+    "denver st broncos": "7",
+    "denver state broncos": "7",
+    "det": "8",
+    "detroit": "8",
+    "detroit lions": "8",
+    "detroit st lions": "8",
+    "detroit state lions": "8",
+    "dolphins dolphins": "15",
+    "eagles eagles": "21",
+    "falcons falcons": "1",
+    "gb": "9",
+    "giants giants": "19",
+    "green bay": "9",
+    "green bay packers": "9",
+    "green bay st packers": "9",
+    "green bay state packers": "9",
+    "hou": "34",
+    "houston": "34",
+    "houston st texans": "34",
+    "houston state texans": "34",
+    "houston texans": "34",
+    "ind": "11",
+    "indianapolis": "11",
+    "indianapolis colts": "11",
+    "indianapolis st colts": "11",
+    "indianapolis state colts": "11",
+    "jacksonville": "30",
+    "jacksonville jaguars": "30",
+    "jacksonville st jaguars": "30",
+    "jacksonville state jaguars": "30",
+    "jaguars jaguars": "30",
+    "jax": "30",
+    "jets jets": "20",
+    "kansas city": "12",
+    "kansas city chiefs": "12",
+    "kansas city st chiefs": "12",
+    "kansas city state chiefs": "12",
+    "kc": "12",
+    "lac": "24",
+    "lar": "14",
+    "las vegas": "13",
+    "las vegas raiders": "13",
+    "las vegas st raiders": "13",
+    "las vegas state raiders": "13",
+    "lions lions": "8",
+    "los angeles chargers": "24",
+    "los angeles rams": "14",
+    "los angeles st chargers": "24",
+    "los angeles st rams": "14",
+    "los angeles state chargers": "24",
+    "los angeles state rams": "14",
+    "lv": "13",
+    "mia": "15",
+    "miami": "15",
+    "miami dolphins": "15",
+    "miami st dolphins": "15",
+    "miami state dolphins": "15",
+    "min": "16",
+    "minnesota": "16",
+    "minnesota st vikings": "16",
+    "minnesota state vikings": "16",
+    "minnesota vikings": "16",
+    "ne": "17",
+    "new england": "17",
+    "new england patriots": "17",
+    "new england st patriots": "17",
+    "new england state patriots": "17",
+    "new orleans": "18",
+    "new orleans saints": "18",
+    "new orleans st saints": "18",
+    "new orleans state saints": "18",
+    "new york giants": "19",
+    "new york jets": "20",
+    "new york st giants": "19",
+    "new york st jets": "20",
+    "new york state giants": "19",
+    "new york state jets": "20",
+    "no": "18",
+    "nyg": "19",
+    "nyj": "20",
+    "packers packers": "9",
+    "panthers panthers": "29",
+    "patriots patriots": "17",
+    "phi": "21",
+    "philadelphia": "21",
+    "philadelphia eagles": "21",
+    "philadelphia st eagles": "21",
+    "philadelphia state eagles": "21",
+    "pit": "23",
+    "pittsburgh": "23",
+    "pittsburgh st steelers": "23",
+    "pittsburgh state steelers": "23",
+    "pittsburgh steelers": "23",
+    "raiders raiders": "13",
+    "rams rams": "14",
+    "ravens ravens": "33",
+    "saints saints": "18",
+    "san francisco": "25",
+    "san francisco 49ers": "25",
+    "san francisco st 49ers": "25",
+    "san francisco state 49ers": "25",
+    "sea": "26",
+    "seahawks seahawks": "26",
+    "seattle": "26",
+    "seattle seahawks": "26",
+    "seattle st seahawks": "26",
+    "seattle state seahawks": "26",
+    "sf": "25",
+    "steelers steelers": "23",
+    "tampa bay": "27",
+    "tampa bay buccaneers": "27",
+    "tampa bay st buccaneers": "27",
+    "tampa bay state buccaneers": "27",
+    "tb": "27",
+    "ten": "10",
+    "tennessee": "10",
+    "tennessee st titans": "10",
+    "tennessee state titans": "10",
+    "tennessee titans": "10",
+    "texans texans": "34",
+    "titans titans": "10",
+    "vikings vikings": "16",
+    "washington": "28",
+    "washington commanders": "28",
+    "washington st commanders": "28",
+    "washington state commanders": "28",
+    "wsh": "28"
+  }
+}

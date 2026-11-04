@@ -1,0 +1,552 @@
+{
+  "_meta": {
+    "generatedAt": "2026-10-07T00:00:00.000Z",
+    "source": "Stored ESPN scoreboards in the omega replay inputs (09-21..10-06). Hand aliases for Odds API name variants. No Odds API call.",
+    "oddsSport": "baseball_mlb",
+    "sport": "MLB",
+    "teamCount": 30,
+    "lookupCount": 102,
+    "seasonLabel": "identity is stable across seasons",
+    "matching": "normalize (lowercase, strip accents, delete apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback."
+  },
+  "teams": {
+    "1": {
+      "espnId": "1",
+      "displayName": "Baltimore Orioles",
+      "shortDisplayName": "Orioles",
+      "abbreviation": "BAL",
+      "location": "Baltimore",
+      "nickname": "Orioles",
+      "name": "Orioles",
+      "oddsNames": [
+        "Baltimore Orioles"
+      ],
+      "aliases": []
+    },
+    "2": {
+      "espnId": "2",
+      "displayName": "Boston Red Sox",
+      "shortDisplayName": "Red Sox",
+      "abbreviation": "BOS",
+      "location": "Boston",
+      "nickname": "Red Sox",
+      "name": "Red Sox",
+      "oddsNames": [
+        "Boston Red Sox"
+      ],
+      "aliases": []
+    },
+    "3": {
+      "espnId": "3",
+      "displayName": "Los Angeles Angels",
+      "shortDisplayName": "Angels",
+      "abbreviation": "LAA",
+      "location": "Los Angeles",
+      "nickname": "Angels",
+      "name": "Angels",
+      "oddsNames": [
+        "Los Angeles Angels",
+        "LA Angels",
+        "L.A. Angels",
+        "Los Angeles Angels of Anaheim",
+        "Anaheim Angels"
+      ],
+      "aliases": [
+        "LA Angels",
+        "L.A. Angels",
+        "Los Angeles Angels of Anaheim",
+        "Anaheim Angels"
+      ]
+    },
+    "4": {
+      "espnId": "4",
+      "displayName": "Chicago White Sox",
+      "shortDisplayName": "White Sox",
+      "abbreviation": "CHW",
+      "location": "Chicago",
+      "nickname": "White Sox",
+      "name": "White Sox",
+      "oddsNames": [
+        "Chicago White Sox",
+        "CWS",
+        "Chi White Sox"
+      ],
+      "aliases": [
+        "CWS",
+        "Chi White Sox"
+      ]
+    },
+    "5": {
+      "espnId": "5",
+      "displayName": "Cleveland Guardians",
+      "shortDisplayName": "Guardians",
+      "abbreviation": "CLE",
+      "location": "Cleveland",
+      "nickname": "Guardians",
+      "name": "Guardians",
+      "oddsNames": [
+        "Cleveland Guardians"
+      ],
+      "aliases": []
+    },
+    "6": {
+      "espnId": "6",
+      "displayName": "Detroit Tigers",
+      "shortDisplayName": "Tigers",
+      "abbreviation": "DET",
+      "location": "Detroit",
+      "nickname": "Tigers",
+      "name": "Tigers",
+      "oddsNames": [
+        "Detroit Tigers"
+      ],
+      "aliases": []
+    },
+    "7": {
+      "espnId": "7",
+      "displayName": "Kansas City Royals",
+      "shortDisplayName": "Royals",
+      "abbreviation": "KC",
+      "location": "Kansas City",
+      "nickname": "Royals",
+      "name": "Royals",
+      "oddsNames": [
+        "Kansas City Royals"
+      ],
+      "aliases": []
+    },
+    "8": {
+      "espnId": "8",
+      "displayName": "Milwaukee Brewers",
+      "shortDisplayName": "Brewers",
+      "abbreviation": "MIL",
+      "location": "Milwaukee",
+      "nickname": "Brewers",
+      "name": "Brewers",
+      "oddsNames": [
+        "Milwaukee Brewers"
+      ],
+      "aliases": []
+    },
+    "9": {
+      "espnId": "9",
+      "displayName": "Minnesota Twins",
+      "shortDisplayName": "Twins",
+      "abbreviation": "MIN",
+      "location": "Minnesota",
+      "nickname": "Twins",
+      "name": "Twins",
+      "oddsNames": [
+        "Minnesota Twins"
+      ],
+      "aliases": []
+    },
+    "10": {
+      "espnId": "10",
+      "displayName": "New York Yankees",
+      "shortDisplayName": "Yankees",
+      "abbreviation": "NYY",
+      "location": "New York",
+      "nickname": "Yankees",
+      "name": "Yankees",
+      "oddsNames": [
+        "New York Yankees"
+      ],
+      "aliases": []
+    },
+    "11": {
+      "espnId": "11",
+      "displayName": "Athletics",
+      "shortDisplayName": "Athletics",
+      "abbreviation": "ATH",
+      "location": "Athletics",
+      "nickname": "Athletics",
+      "name": "Athletics",
+      "oddsNames": [
+        "Athletics",
+        "Oakland Athletics",
+        "Sacramento Athletics",
+        "A's",
+        "As",
+        "Oakland A's"
+      ],
+      "aliases": [
+        "Oakland Athletics",
+        "Sacramento Athletics",
+        "A's",
+        "As",
+        "Oakland A's"
+      ]
+    },
+    "12": {
+      "espnId": "12",
+      "displayName": "Seattle Mariners",
+      "shortDisplayName": "Mariners",
+      "abbreviation": "SEA",
+      "location": "Seattle",
+      "nickname": "Mariners",
+      "name": "Mariners",
+      "oddsNames": [
+        "Seattle Mariners"
+      ],
+      "aliases": []
+    },
+    "13": {
+      "espnId": "13",
+      "displayName": "Texas Rangers",
+      "shortDisplayName": "Rangers",
+      "abbreviation": "TEX",
+      "location": "Texas",
+      "nickname": "Rangers",
+      "name": "Rangers",
+      "oddsNames": [
+        "Texas Rangers"
+      ],
+      "aliases": []
+    },
+    "14": {
+      "espnId": "14",
+      "displayName": "Toronto Blue Jays",
+      "shortDisplayName": "Blue Jays",
+      "abbreviation": "TOR",
+      "location": "Toronto",
+      "nickname": "Blue Jays",
+      "name": "Blue Jays",
+      "oddsNames": [
+        "Toronto Blue Jays"
+      ],
+      "aliases": []
+    },
+    "15": {
+      "espnId": "15",
+      "displayName": "Atlanta Braves",
+      "shortDisplayName": "Braves",
+      "abbreviation": "ATL",
+      "location": "Atlanta",
+      "nickname": "Braves",
+      "name": "Braves",
+      "oddsNames": [
+        "Atlanta Braves"
+      ],
+      "aliases": []
+    },
+    "16": {
+      "espnId": "16",
+      "displayName": "Chicago Cubs",
+      "shortDisplayName": "Cubs",
+      "abbreviation": "CHC",
+      "location": "Chicago",
+      "nickname": "Cubs",
+      "name": "Cubs",
+      "oddsNames": [
+        "Chicago Cubs"
+      ],
+      "aliases": []
+    },
+    "17": {
+      "espnId": "17",
+      "displayName": "Cincinnati Reds",
+      "shortDisplayName": "Reds",
+      "abbreviation": "CIN",
+      "location": "Cincinnati",
+      "nickname": "Reds",
+      "name": "Reds",
+      "oddsNames": [
+        "Cincinnati Reds"
+      ],
+      "aliases": []
+    },
+    "18": {
+      "espnId": "18",
+      "displayName": "Houston Astros",
+      "shortDisplayName": "Astros",
+      "abbreviation": "HOU",
+      "location": "Houston",
+      "nickname": "Astros",
+      "name": "Astros",
+      "oddsNames": [
+        "Houston Astros"
+      ],
+      "aliases": []
+    },
+    "19": {
+      "espnId": "19",
+      "displayName": "Los Angeles Dodgers",
+      "shortDisplayName": "Dodgers",
+      "abbreviation": "LAD",
+      "location": "Los Angeles",
+      "nickname": "Dodgers",
+      "name": "Dodgers",
+      "oddsNames": [
+        "Los Angeles Dodgers",
+        "LA Dodgers",
+        "L.A. Dodgers"
+      ],
+      "aliases": [
+        "LA Dodgers",
+        "L.A. Dodgers"
+      ]
+    },
+    "20": {
+      "espnId": "20",
+      "displayName": "Washington Nationals",
+      "shortDisplayName": "Nationals",
+      "abbreviation": "WSH",
+      "location": "Washington",
+      "nickname": "Nationals",
+      "name": "Nationals",
+      "oddsNames": [
+        "Washington Nationals"
+      ],
+      "aliases": []
+    },
+    "21": {
+      "espnId": "21",
+      "displayName": "New York Mets",
+      "shortDisplayName": "Mets",
+      "abbreviation": "NYM",
+      "location": "New York",
+      "nickname": "Mets",
+      "name": "Mets",
+      "oddsNames": [
+        "New York Mets"
+      ],
+      "aliases": []
+    },
+    "22": {
+      "espnId": "22",
+      "displayName": "Philadelphia Phillies",
+      "shortDisplayName": "Phillies",
+      "abbreviation": "PHI",
+      "location": "Philadelphia",
+      "nickname": "Phillies",
+      "name": "Phillies",
+      "oddsNames": [
+        "Philadelphia Phillies"
+      ],
+      "aliases": []
+    },
+    "23": {
+      "espnId": "23",
+      "displayName": "Pittsburgh Pirates",
+      "shortDisplayName": "Pirates",
+      "abbreviation": "PIT",
+      "location": "Pittsburgh",
+      "nickname": "Pirates",
+      "name": "Pirates",
+      "oddsNames": [
+        "Pittsburgh Pirates"
+      ],
+      "aliases": []
+    },
+    "24": {
+      "espnId": "24",
+      "displayName": "St. Louis Cardinals",
+      "shortDisplayName": "Cardinals",
+      "abbreviation": "STL",
+      "location": "St. Louis",
+      "nickname": "Cardinals",
+      "name": "Cardinals",
+      "oddsNames": [
+        "St. Louis Cardinals",
+        "St. Louis",
+        "St Louis"
+      ],
+      "aliases": [
+        "St. Louis",
+        "St Louis"
+      ]
+    },
+    "25": {
+      "espnId": "25",
+      "displayName": "San Diego Padres",
+      "shortDisplayName": "Padres",
+      "abbreviation": "SD",
+      "location": "San Diego",
+      "nickname": "Padres",
+      "name": "Padres",
+      "oddsNames": [
+        "San Diego Padres"
+      ],
+      "aliases": []
+    },
+    "26": {
+      "espnId": "26",
+      "displayName": "San Francisco Giants",
+      "shortDisplayName": "Giants",
+      "abbreviation": "SF",
+      "location": "San Francisco",
+      "nickname": "Giants",
+      "name": "Giants",
+      "oddsNames": [
+        "San Francisco Giants"
+      ],
+      "aliases": []
+    },
+    "27": {
+      "espnId": "27",
+      "displayName": "Colorado Rockies",
+      "shortDisplayName": "Rockies",
+      "abbreviation": "COL",
+      "location": "Colorado",
+      "nickname": "Rockies",
+      "name": "Rockies",
+      "oddsNames": [
+        "Colorado Rockies"
+      ],
+      "aliases": []
+    },
+    "28": {
+      "espnId": "28",
+      "displayName": "Miami Marlins",
+      "shortDisplayName": "Marlins",
+      "abbreviation": "MIA",
+      "location": "Miami",
+      "nickname": "Marlins",
+      "name": "Marlins",
+      "oddsNames": [
+        "Miami Marlins"
+      ],
+      "aliases": []
+    },
+    "29": {
+      "espnId": "29",
+      "displayName": "Arizona Diamondbacks",
+      "shortDisplayName": "Diamondbacks",
+      "abbreviation": "ARI",
+      "location": "Arizona",
+      "nickname": "Diamondbacks",
+      "name": "Diamondbacks",
+      "oddsNames": [
+        "Arizona Diamondbacks",
+        "Arizona D-backs",
+        "D-backs",
+        "Dbacks",
+        "Arizona Dbacks"
+      ],
+      "aliases": [
+        "Arizona D-backs",
+        "D-backs",
+        "Dbacks",
+        "Arizona Dbacks"
+      ]
+    },
+    "30": {
+      "espnId": "30",
+      "displayName": "Tampa Bay Rays",
+      "shortDisplayName": "Rays",
+      "abbreviation": "TB",
+      "location": "Tampa Bay",
+      "nickname": "Rays",
+      "name": "Rays",
+      "oddsNames": [
+        "Tampa Bay Rays"
+      ],
+      "aliases": []
+    }
+  },
+  "lookup": {
+    "baltimore orioles": "1",
+    "boston red sox": "2",
+    "los angeles angels": "3",
+    "chicago white sox": "4",
+    "cleveland guardians": "5",
+    "detroit tigers": "6",
+    "kansas city royals": "7",
+    "milwaukee brewers": "8",
+    "minnesota twins": "9",
+    "new york yankees": "10",
+    "athletics": "11",
+    "seattle mariners": "12",
+    "texas rangers": "13",
+    "toronto blue jays": "14",
+    "atlanta braves": "15",
+    "chicago cubs": "16",
+    "cincinnati reds": "17",
+    "houston astros": "18",
+    "los angeles dodgers": "19",
+    "washington nationals": "20",
+    "new york mets": "21",
+    "philadelphia phillies": "22",
+    "pittsburgh pirates": "23",
+    "st louis cardinals": "24",
+    "san diego padres": "25",
+    "san francisco giants": "26",
+    "colorado rockies": "27",
+    "miami marlins": "28",
+    "arizona diamondbacks": "29",
+    "tampa bay rays": "30",
+    "baltimore": "1",
+    "boston": "2",
+    "cleveland": "5",
+    "detroit": "6",
+    "kansas city": "7",
+    "milwaukee": "8",
+    "minnesota": "9",
+    "seattle": "12",
+    "texas": "13",
+    "toronto": "14",
+    "atlanta": "15",
+    "cincinnati": "17",
+    "houston": "18",
+    "washington": "20",
+    "philadelphia": "22",
+    "pittsburgh": "23",
+    "st louis": "24",
+    "san diego": "25",
+    "san francisco": "26",
+    "colorado": "27",
+    "miami": "28",
+    "arizona": "29",
+    "tampa bay": "30",
+    "bal": "1",
+    "bos": "2",
+    "laa": "3",
+    "chw": "4",
+    "cle": "5",
+    "det": "6",
+    "kc": "7",
+    "mil": "8",
+    "min": "9",
+    "nyy": "10",
+    "ath": "11",
+    "sea": "12",
+    "tex": "13",
+    "tor": "14",
+    "atl": "15",
+    "chc": "16",
+    "cin": "17",
+    "hou": "18",
+    "lad": "19",
+    "wsh": "20",
+    "nym": "21",
+    "phi": "22",
+    "pit": "23",
+    "stl": "24",
+    "sd": "25",
+    "sf": "26",
+    "col": "27",
+    "mia": "28",
+    "ari": "29",
+    "tb": "30",
+    "red sox": "2",
+    "white sox": "4",
+    "blue jays": "14",
+    "la angels": "3",
+    "l a angels": "3",
+    "los angeles angels of anaheim": "3",
+    "anaheim angels": "3",
+    "cws": "4",
+    "chi white sox": "4",
+    "oakland athletics": "11",
+    "sacramento athletics": "11",
+    "as": "11",
+    "oakland as": "11",
+    "la dodgers": "19",
+    "l a dodgers": "19",
+    "arizona d backs": "29",
+    "d backs": "29",
+    "dbacks": "29",
+    "arizona dbacks": "29"
+  }
+}

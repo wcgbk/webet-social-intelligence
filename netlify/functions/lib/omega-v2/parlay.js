@@ -232,19 +232,19 @@ function edgeSum(legs) {
   return legs.reduce((sum, leg) => sum + (Number(leg.edgeNovig) || 0), 0);
 }
 
-/** Historical ML+total pattern. Tiebreak only, after leg count and edge. */
+/** Historical ML+total pattern. Last tiebreak, after EV, leg count, and edge. */
 function mlTotalMix(legs) {
   const names = legs.map(legMarket);
   return names.includes('Moneyline') && names.includes('Total') ? 1 : 0;
 }
 
 function betterTicket(a, b) {
+  const evGap = a.scored.ev - b.scored.ev;
+  if (Math.abs(evGap) > 1e-12) return evGap;
   if (a.legs.length !== b.legs.length) return a.legs.length - b.legs.length;
   const edgeGap = edgeSum(a.legs) - edgeSum(b.legs);
   if (Math.abs(edgeGap) > 1e-12) return edgeGap;
-  const mixGap = mlTotalMix(a.legs) - mlTotalMix(b.legs);
-  if (mixGap) return mixGap;
-  return a.scored.ev - b.scored.ev;
+  return mlTotalMix(a.legs) - mlTotalMix(b.legs);
 }
 
 /**
@@ -337,7 +337,8 @@ function usableLegs(pool, opts) {
  * Ranked tickets with positive joint EV.
  * A ticket whose quarter-Kelly rounds below 0.25u is not a candidate.
  * The next ticket is, so a 3-leg that cannot be staked falls through
- * to a 2-leg that can. 3 legs still rank ahead of 2.
+ * to a 2-leg that can. The higher joint EV ranks first. Leg count
+ * breaks a tie.
  */
 function rankedTickets(pool, opts) {
   const usable = usableLegs(pool, opts);

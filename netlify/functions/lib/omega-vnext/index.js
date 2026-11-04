@@ -214,7 +214,10 @@ async function generateOmegaVnext(opts = {}) {
   // Historical replay has no morning snap series. Do not retry live Odds into
   // the line-path store and do not hard-fail the eval day.
   const fixtureCandidates = Array.isArray(opts.fixtureCandidates) ? opts.fixtureCandidates : null;
-  const replayLike = !!(opts.historicalSnapshot || opts.replay || fixtureCandidates);
+  const offlineOdds = opts.offlineOddsBySport && typeof opts.offlineOddsBySport === 'object'
+    ? opts.offlineOddsBySport
+    : null;
+  const replayLike = !!(opts.historicalSnapshot || opts.replay || fixtureCandidates || offlineOdds);
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow}`);
 
@@ -223,15 +226,18 @@ async function generateOmegaVnext(opts = {}) {
   // replay keeps its snapshot path. No live Odds API call in generate.
   // fixtureCandidates is a local card replay: no board, no odds, no ESPN.
   let masterBoard = null;
-  if (!opts.historicalSnapshot && !opts.replay && !fixtureCandidates) {
+  let storedOddsBySport = null;
+  if (offlineOdds) {
+    storedOddsBySport = offlineOdds;
+  } else if (!opts.historicalSnapshot && !opts.replay && !fixtureCandidates) {
     try {
       const { loadMasterBoard } = require('../odds-master/board');
       masterBoard = await loadMasterBoard(dateISO);
     } catch (e) { console.error(`[omega-vnext] odds-master board load failed: ${e.message}`); }
+    storedOddsBySport = masterBoard && Object.keys(masterBoard.eventsBySport || {}).length
+      ? Object.fromEntries(Object.entries(masterBoard.eventsBySport).map(([k, v]) => [k, v.map(ev => ({ ...ev, sport_key: (require('./config').ODDS_SPORT_KEYS || {})[k] || ev.sport_key }))]))
+      : null;
   }
-  const storedOddsBySport = masterBoard && Object.keys(masterBoard.eventsBySport || {}).length
-    ? Object.fromEntries(Object.entries(masterBoard.eventsBySport).map(([k, v]) => [k, v.map(ev => ({ ...ev, sport_key: (require('./config').ODDS_SPORT_KEYS || {})[k] || ev.sport_key }))]))
-    : null;
   let snap;
   let candidates;
   let preMiscalibrated = [];
@@ -570,6 +576,7 @@ async function generateOmegaVnext(opts = {}) {
         afterMiscal: afterMiscalCounts,
         gated: countBySport(open),
       },
+      boardBySport: (snap && snap.oddsBySport) || null,
     });
     built.morningBoard = boardSave;
   }

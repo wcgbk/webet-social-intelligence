@@ -27,11 +27,13 @@ function sigmoid(z) {
 }
 
 /**
- * Prior count for a sport x market intercept. The fitted mean residual is
- * shrunk toward 0 by n / (n + BIAS_N0). Thin cells stay on the market.
- * This is not a blend weight.
+ * Prior count for a sport x market intercept. Zero: the shift is the
+ * value that centers the log-odds blend on the no-vig price. It is not
+ * shrunk toward 0. A prior of 8 left every cell about half a point to
+ * a point and a half high. A market with no rows of its own stays at 0.
+ * It does not borrow another cell.
  */
-const BIAS_N0 = 8;
+const BIAS_N0 = 0;
 
 /** origin/main blend, probability space. Replay uses it as CURRENT. */
 let mathMode = 'logodds';
@@ -75,27 +77,83 @@ function biasFor(bias, row) {
 }
 
 /**
- * Mean (pModel - pFair) per sport x market, shrunk toward 0.
- * Rows without a market are skipped so they do not land on Moneyline.
+ * Shift that makes the mean log-odds blend sit on the no-vig price.
+ * shrinkP falls as the shift rises, so the residual is monotone.
+ * k = 1 ignores the model. The shift is then 0.
  */
+function solveShift(rows, kOf) {
+  const usableRows = (rows || []).filter((row) => {
+    const pModel = Number(row.pModel);
+    const pMkt = Number(row.pMkt);
+    return pModel > 0 && pModel < 1 && pMkt > 0 && pMkt < 1;
+  });
+  if (!usableRows.length) return 0;
+  const residual = (shift) => {
+    let sum = 0;
+    for (const row of usableRows) {
+      const k = kOf(row);
+      sum += shrinkP(row.pModel, row.pMkt, k, shift) - Number(row.pMkt);
+    }
+    return sum / usableRows.length;
+  };
+  if (usableRows.every((row) => {
+    const k = Number(kOf(row));
+    return Number.isFinite(k) && k >= 1 - 1e-12;
+  })) return 0;
+  if (Math.abs(residual(0)) < 1e-8) return 0;
+  let lo = -0.5;
+  let hi = 0.5;
+  for (let i = 0; i < 8 && residual(lo) < 0; i += 1) lo -= 0.25;
+  for (let i = 0; i < 8 && residual(hi) > 0; i += 1) hi += 0.25;
+  if (residual(lo) < 0) return lo;
+  if (residual(hi) > 0) return hi;
+  for (let i = 0; i < 48; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (residual(mid) > 0) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Per sport x market shift, with no shrink toward 0.
+ * NHL moneylines are left out. That cell is locked to the no-vig price
+ * at apply time. Rows without a market are skipped. An unseen market
+ * stays at shift 0.
+ */
+let biasMode = 'center';
+
+function setBiasMode(mode) {
+  biasMode = mode === 'shrink8' ? 'shrink8' : 'center';
+  return biasMode;
+}
+
 function fitCellBias(rows) {
   const groups = {};
   for (const row of rows || []) {
+    if (nhlMoneylineLocked(row.sport, row.market || row.betType, row.pick || row.side)) continue;
     const key = cellKey(row);
     if (!key) continue;
     const pModel = Number(row.pModel);
     const pMkt = Number(row.pMkt);
-    if (!Number.isFinite(pModel) || !Number.isFinite(pMkt)) continue;
-    if (!groups[key]) groups[key] = { n: 0, sum: 0 };
-    groups[key].n += 1;
-    groups[key].sum += pModel - pMkt;
+    if (!(pModel > 0 && pModel < 1) || !(pMkt > 0 && pMkt < 1)) continue;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
   }
   const bias = {};
+  if (biasMode === 'shrink8') {
+    for (const key of Object.keys(groups)) {
+      const g = groups[key];
+      let sum = 0;
+      for (const row of g) sum += Number(row.pModel) - Number(row.pMkt);
+      const mean = sum / g.length;
+      bias[key] = (g.length / (g.length + 8)) * mean;
+    }
+    return bias;
+  }
   for (const key of Object.keys(groups)) {
-    const g = groups[key];
-    const mean = g.sum / g.n;
-    const w = g.n / (g.n + BIAS_N0);
-    bias[key] = w * mean;
+    const sport = key.split('|')[0];
+    bias[key] = solveShift(groups[key], () => priorKFor(sport));
   }
   return bias;
 }
@@ -538,6 +596,7 @@ module.exports = {
   biasFor,
   cellKey,
   BIAS_N0,
+  setBiasMode,
   modelFor,
   priorKFor,
   sportFloor,

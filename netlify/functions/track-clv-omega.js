@@ -5,6 +5,7 @@ const {
   summarizeBySportMarket,
   etIsoWeekKey,
   isSundayET,
+  gradePowerClv,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 
@@ -324,7 +325,29 @@ function extractClose(gameObj, sideInfo, pick) {
     if (sidePrice == null) return null;
     const sideRaw = impliedProbability(sidePrice);
     if (sideRaw == null) return null;
-    return { sidePrice, sideRaw, line, overround: allRaw.reduce((a, c) => a + c, 0) };
+    const others = outcomes.filter((o) => o.price !== sidePrice || (o.point !== undefined ? o.point : null) !== line);
+    // Price+line can collide. Fall back to "not the matched name" when the
+    // filter kept every row or dropped none of the other side.
+    let oppRows = others;
+    if (outcomes.length === 2) {
+      oppRows = outcomes.filter((o) => {
+        const n = (o.name || '').toLowerCase();
+        if (sideInfo.marketBase === 'totals') {
+          const hit = (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
+          return !hit;
+        }
+        if (sideInfo.isDraw) return n !== 'draw';
+        const hit = (pickedHome && teamsMatch(o.name, gameObj.home_team)) || (pickedAway && teamsMatch(o.name, gameObj.away_team));
+        return !hit;
+      });
+    }
+    return {
+      sidePrice,
+      sideRaw,
+      line,
+      overround: allRaw.reduce((a, c) => a + c, 0),
+      oppPrice: oppRows.length === 1 ? oppRows[0].price : null,
+    };
   };
 
   // 1) Single sharp book by priority (Pinnacle first)
@@ -334,6 +357,7 @@ function extractClose(gameObj, sideInfo, pick) {
     const s = selectFrom(b.outcomes);
     if (s) return {
       sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
+      oppOdds: s.oppPrice != null ? s.oppPrice : null,
       anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
     };
   }
@@ -835,12 +859,13 @@ exports.handler = async (event) => {
         };
       } else {
         const betRaw = impliedProbability(pick.odds);
-        const closingNoVig = +(close.sideRaw / close.overround).toFixed(4);
-        // De-vig the price we bet with the close market's two-sided overround as the
-        // entry-overround proxy (vig is ~stable intraday). This is a real two-sided
-        // de-vig, not a flat haircut — the haircut is the actual per-game/market overround.
-        const pickTimeNoVig = betRaw != null ? +(betRaw / close.overround).toFixed(4) : null;
-        const clv = (pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null;
+        const powered = close.oppOdds != null ? gradePowerClv(pick.odds, close.sideOdds, close.oppOdds) : null;
+        const closingNoVig = powered ? powered.closingNoVig : +(close.sideRaw / close.overround).toFixed(4);
+        // No second close price: proportional split. A two-sided close uses power.
+        // The bet's other side is not on the ticket, so the power path rebuilds it
+        // from this close overround. It does not copy the bet price into the fair.
+        const pickTimeNoVig = powered ? powered.pickTimeNoVig : (betRaw != null ? +(betRaw / close.overround).toFixed(4) : null);
+        const clv = powered ? powered.clv : ((pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null);
         const clvRaw = (betRaw != null && close.sideRaw != null) ? +(close.sideRaw - betRaw).toFixed(4) : null;
 
         rec = {
@@ -854,7 +879,7 @@ exports.handler = async (event) => {
           pickTimeNoVig,
           closingNoVig,
           closingOverround: +close.overround.toFixed(4),
-          betDevigMethod: 'closing-overround',
+          betDevigMethod: powered ? 'power' : 'closing-overround',
           // 'clv' is the TRUE two-sided no-vig CLV. Field name preserved for the generator's
           // CLV-feedback loop and get-analytics, which both read pick.clv numerically.
           clv,

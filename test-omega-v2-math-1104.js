@@ -25,9 +25,10 @@ function close(a, b, eps, msg) {
   assert.ok(centered < v2.shrinkP(0.6, 0.5, 0.68), 'a positive intercept pulls the model down');
 }
 
-// Walk-forward intercept is the shrunk mean residual, and it is not applied
-// to a locked NHL moneyline.
+// Walk-forward intercept removes the cell mean. It is not shrunk toward 0,
+// and it is not applied to a locked NHL moneyline.
 {
+  assert.strictEqual(v2.BIAS_N0, 0, 'intercept prior count is 0');
   const history = [];
   for (let i = 0; i < 12; i += 1) {
     history.push({
@@ -41,19 +42,48 @@ function close(a, b, eps, msg) {
     });
   }
   const fit = v2.fitWalkForward(history, '2026-11-03');
-  const mean = 0.07;
-  const w = 12 / (12 + v2.BIAS_N0);
-  close(fit.bias['NHL|Spread'], w * mean, 1e-9, 'spread intercept');
   const spread = v2.applyCalibration({
     sport: 'NHL', market: 'Spread', pick: 'Road +1.5', pModel: 0.62, pMkt: 0.55,
   }, fit);
-  close(spread.intercept, w * mean, 1e-9, 'applied intercept');
+  close(spread.pCal, 0.55, 1e-6, 'cell blend sits on the no-vig price');
+  close(spread.intercept, 0.07, 1e-4, 'unshrunk gap is the shift');
   assert.ok(spread.pCal < v2.shrinkP(0.62, 0.55, spread.shrinkK), 'centered pCal is below the raw blend');
   const ml = v2.applyCalibration({
     sport: 'NHL', market: 'Moneyline', pick: 'Oilers', pModel: 0.62, pMkt: 0.55,
   }, fit);
   assert.strictEqual(ml.intercept, 0);
   close(ml.pCal, 0.55, 1e-12, 'NHL moneyline stays on the no-vig price');
+  // A market with no rows of its own is not borrowed from another cell.
+  const nba = v2.applyCalibration({
+    sport: 'NBA', market: 'Total', pick: 'Over 220.5', pModel: 0.62, pMkt: 0.55,
+  }, fit);
+  assert.strictEqual(nba.intercept, 0);
+}
+
+// Uneven gaps: the solved shift centers the blend, not the raw mean.
+{
+  const history = [];
+  const gaps = [0.02, 0.04, 0.09, 0.03, 0.08, 0.05, 0.07, 0.01, 0.06, 0.04, 0.11, 0.02];
+  gaps.forEach((gap, i) => {
+    history.push({
+      date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+      sport: 'NFL',
+      market: 'Total',
+      pick: 'Over 45.5',
+      pModel: 0.5 + gap,
+      pMkt: 0.5,
+      result: i % 2 ? 'win' : 'loss',
+    });
+  });
+  const fit = v2.fitWalkForward(history, '2026-11-03');
+  let sum = 0;
+  for (const gap of gaps) {
+    const row = v2.applyCalibration({
+      sport: 'NFL', market: 'Total', pick: 'Over 45.5', pModel: 0.5 + gap, pMkt: 0.5,
+    }, fit);
+    sum += row.pCal - row.pMkt;
+  }
+  close(sum / gaps.length, 0, 1e-4, 'cell mean residual');
 }
 
 // The sharp prior is the power de-vig. A longshot fair sits inside proportional.

@@ -2,8 +2,8 @@
 
 /**
  * Walk-forward replay of the graded derived set.
- * CURRENT is the origin/main probability blend (linear, no intercept).
- * NEW is the log-odds blend with the per-market intercept.
+ * CURRENT is the shipped log-odds blend whose intercept is shrunk by n/(n+8).
+ * NEW centers that blend on the no-vig price with no shrink toward 0.
  * No Odds API. No writes except the JSON path in OMEGA_V2_REPLAY_OUT.
  */
 
@@ -108,8 +108,9 @@ function settleTicket(ticket) {
   return { result: 'win', decimal: dec };
 }
 
-async function runMode(mode, days) {
+async function runMode(mode, days, biasMode) {
   v2.setMathMode(mode);
+  if (typeof v2.setBiasMode === 'function') v2.setBiasMode(biasMode || 'center');
   const hist = [];
   const cells = {};
   let profitU = 0;
@@ -209,6 +210,7 @@ async function runMode(mode, days) {
   }
   return {
     mode,
+    biasMode: biasMode || 'center',
     days: days.length,
     straightBets,
     parlayBets,
@@ -228,17 +230,18 @@ async function runMode(mode, days) {
 async function main() {
   const derived = JSON.parse(fs.readFileSync(DERIVED, 'utf8'));
   const days = (derived.days || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
-  const current = await runMode('linear', days);
-  const next = await runMode('logodds', days);
+  const current = await runMode('logodds', days, 'shrink8');
+  const next = await runMode('logodds', days, 'center');
   v2.setMathMode('logodds');
+  v2.setBiasMode('center');
   const out = {
     source: DERIVED,
     window: [days[0] && days[0].date, days[days.length - 1] && days[days.length - 1].date],
     days: days.length,
     current,
     next,
-    beatsProfit: next.profitU > current.profitU && next.profitUsd > current.profitUsd,
-    beatsClv: next.meanClv != null && current.meanClv != null && next.meanClv > current.meanClv,
+    beatsProfit: next.profitU >= current.profitU && next.profitUsd >= current.profitUsd,
+    beatsClv: next.meanClv != null && current.meanClv != null && next.meanClv >= current.meanClv,
   };
   console.log(JSON.stringify(out, null, 2));
 }

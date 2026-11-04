@@ -283,6 +283,19 @@ function novig(pick) {
     { ...ml('G @ H', 'Over 50', 0.01), market: 'Total', pick: 'Over 50' },
   ]);
   assert.strictEqual(v2.mlTotalMix(edged.legs), 0, 'a higher edge sum beats the ML+total pattern');
+  const leg = (matchup, pick, odds, pCal) => ({
+    sport: 'NFL', matchup, pick, market: 'Moneyline', odds, edgeNovig: 0.02,
+    parlayQualified: true, calibration: { pCal },
+  });
+  const byEv = v2.chooseTicket([
+    leg('A @ B', 'A ML', -110, 0.51),
+    leg('C @ D', 'C ML', -110, 0.51),
+    leg('E @ F', 'E ML', -110, 0.51),
+    leg('G @ H', 'G ML', 300, 0.35),
+    leg('I @ J', 'I ML', 300, 0.35),
+  ]);
+  assert.strictEqual(byEv.legs.length, 2, 'higher joint EV beats a longer ticket');
+  assert.ok(byEv.legs.every((row) => row.odds === 300));
 
   const longshot = v2.sizeParlay([
     {
@@ -300,8 +313,9 @@ function novig(pick) {
   ], []);
   assert.strictEqual(longshot.publish, true);
   assert.strictEqual(longshot.legs.length, 2, 'a 3-leg that rounds to 0u falls through to a 2-leg');
-  assert.ok(longshot.legs.some((leg) => /Under 231/.test(leg.pick)));
-  assert.ok(longshot.legs.some((leg) => /Bulls/.test(leg.pick)), 'the higher no-vig edge pair still includes the longshot');
+  assert.ok(longshot.legs.some((leg) => /Hornets/.test(leg.pick)), 'higher joint EV is Bulls + Hornets');
+  assert.ok(longshot.legs.some((leg) => /Bulls/.test(leg.pick)), 'higher joint EV still includes the longshot');
+  assert.ok(!longshot.legs.some((leg) => /Under 231/.test(leg.pick)));
   assert.strictEqual(longshot.units, 0.25);
   assert.ok(longshot.ev > 0);
 

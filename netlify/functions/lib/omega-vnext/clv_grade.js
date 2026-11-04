@@ -11,6 +11,42 @@ function americanToImplied(american) {
   return a > 0 ? 100 / (a + 100) : Math.abs(a) / (Math.abs(a) + 100);
 }
 
+function impliedToAmerican(p) {
+  if (!(p > 0 && p < 1)) return null;
+  const american = p >= 0.5 ? (-100 * p) / (1 - p) : (100 * (1 - p)) / p;
+  const rounded = Math.round(american);
+  return rounded === 0 ? null : rounded;
+}
+
+/**
+ * Power de-vig CLV when the close has both American prices.
+ * The bet stores one side. The other side is rebuilt so the pair sums to
+ * the close overround, then both fairs use the power split. A one-sided
+ * close returns null and is not filled with the bet price.
+ * @returns {{ clv, clvCents, clvPct, beatClose, pickTimeNoVig, closingNoVig, method }|null}
+ */
+function gradePowerClv(betAmerican, closeAmerican, closeOppAmerican) {
+  const { noVigTwoWay } = require('./odds_math');
+  const close = noVigTwoWay(closeAmerican, closeOppAmerican);
+  const closeRaw = americanToImplied(closeAmerican);
+  const oppRaw = americanToImplied(closeOppAmerican);
+  const betRaw = americanToImplied(betAmerican);
+  if (!close || closeRaw == null || oppRaw == null || betRaw == null) return null;
+  const betOpp = impliedToAmerican(closeRaw + oppRaw - betRaw);
+  const bet = betOpp == null ? null : noVigTwoWay(betAmerican, betOpp);
+  if (!bet || !Number.isFinite(close.p1) || !Number.isFinite(bet.p1)) return null;
+  const clv = +(close.p1 - bet.p1).toFixed(4);
+  return {
+    clv,
+    clvCents: +(clv * 100).toFixed(2),
+    clvPct: +(clv * 100).toFixed(4),
+    beatClose: clv > 0,
+    pickTimeNoVig: +bet.p1.toFixed(4),
+    closingNoVig: +close.p1.toFixed(4),
+    method: 'power',
+  };
+}
+
 /**
  * @param {number|string} betAmerican
  * @param {number|string} closeAmerican
@@ -120,6 +156,7 @@ function isSundayET(d = new Date()) {
 module.exports = {
   americanToImplied,
   gradeNoVigClv,
+  gradePowerClv,
   attachRealizedAliases,
   summarizeBySportMarket,
   etIsoWeekKey,

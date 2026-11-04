@@ -59,7 +59,16 @@ const closeGame = {
 const closePick = { pick: 'Los Angeles Dodgers ML', betType: 'Moneyline', sport: 'MLB' };
 const close = track.extractClose(closeGame, track.pickSideInfo(closePick), closePick);
 assert.strictEqual(close.sideOdds, -125);
+assert.strictEqual(close.oppOdds, 105);
 assert.ok(/circa/i.test(close.anchorBook));
+const powerEven = grade.gradePowerClv(-110, -110, -110);
+assert.ok(powerEven && Math.abs(powerEven.closingNoVig - 0.5) < 1e-3, powerEven && powerEven.closingNoVig);
+const powerDog = grade.gradePowerClv(145, 160, -180);
+assert.strictEqual(powerDog.method, 'power');
+assert.strictEqual(powerDog.beatClose, false);
+const propDog = (100 / 260) / ((100 / 260) + (180 / 280));
+assert.ok(powerDog.closingNoVig < propDog, `${powerDog.closingNoVig} vs ${propDog}`);
+assert.strictEqual(grade.gradePowerClv(145, 160, null), null);
 
 const aliases = grade.attachRealizedAliases({
   clv: 0.0123,

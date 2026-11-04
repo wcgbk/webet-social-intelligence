@@ -17,6 +17,7 @@ const { narrateTextOnly } = require('./narrate_text');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, readJson } = require('./store');
+const { buildHealthRecord } = require('./health_record');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, cardCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
@@ -801,6 +802,23 @@ async function generateOmegaVnext(opts = {}) {
     await storeShadowPicks(dateISO, picksData);
   } else if (!dryRun) {
     await storePicks(dateISO, picksData, { force, simMode });
+    // Private generate-time health. Soft-fail only; never changes the card or the return value.
+    if (process.env.OMEGA_REPLAY_NO_WRITE !== '1') {
+      try {
+        const healthRecord = buildHealthRecord(picksData, {
+          writtenAt: new Date().toISOString(),
+          captureHealth,
+        });
+        await storeJson(`omega-health-${dateISO}`, healthRecord);
+        await storeJson('omega-health-latest', healthRecord);
+      } catch (e) {
+        console.warn(JSON.stringify({
+          event: 'omegaHealthWriteSoftFail',
+          date: dateISO,
+          error: e && e.message ? e.message : String(e),
+        }));
+      }
+    }
   }
 
   // Prediction-market OBSERVER sidecar — non-blocking, never mutates locked picks.

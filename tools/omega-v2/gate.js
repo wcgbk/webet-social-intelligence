@@ -87,6 +87,8 @@ function weak(i) {
 }
 
 async function main() {
+  // Replay reports go to a temp dir unless the caller asks for repo copies.
+  if (!process.env.OMEGA_V2_GATE) process.env.OMEGA_V2_GATE = '1';
   const savedFlag = process.env.OMEGA_PIPELINE_V2;
   delete process.env.OMEGA_PIPELINE_V2;
   assert.strictEqual(v2.pipelineV2Enabled({}), true, 'flag defaults on');

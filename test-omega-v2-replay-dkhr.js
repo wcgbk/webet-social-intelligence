@@ -7,11 +7,17 @@
 
 const assert = require('assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { replayStatusLines } = require('./tools/omega-v2/replay');
+const { replayStatusLines, replayOutputDir } = require('./tools/omega-v2/replay');
 
 const root = __dirname;
+const outDir = replayOutputDir();
+if (process.env.OMEGA_V2_GATE === '1' && process.env.REPLAY_V2_WRITE_REPO !== '1' && !process.env.REPLAY_V2_OUT_DIR) {
+  assert.ok(outDir.startsWith(os.tmpdir()), `gate replay wrote inside the repo: ${outDir}`);
+  assert.ok(path.resolve(outDir) !== path.resolve(root), 'gate replay dir is the repo root');
+}
 const PLACEABLE = new Set(['draftkings', 'hardrockbet']);
 
 const none = replayStatusLines({ quotedRows: 0, candidateRows: 4, status: 'insufficient' });
@@ -44,7 +50,7 @@ assert.ok(jsonAt >= 0, 'replay.js did not print a JSON summary');
 const summary = JSON.parse(stdout.slice(jsonAt));
 const quoted = summary && summary.dkhr && summary.dkhr.quotedRows;
 const bets = summary && summary.v2 && summary.v2.bets;
-const md = fs.readFileSync(path.join(root, 'REPLAY-V2.md'), 'utf8');
+const md = fs.readFileSync(path.join(outDir, 'REPLAY-V2.md'), 'utf8');
 const readme = fs.readFileSync(path.join(root, 'tools/omega-v2/README.md'), 'utf8');
 
 assert.ok(!/\bAlpha\b/.test(readme), 'readme uses a product name');
@@ -62,7 +68,7 @@ if (noQuotes) {
   assert.strictEqual(summary.dkhr.realQuotes, true);
   assert.ok(md.includes('tools/omega-v2/replay-bp1104.js'));
   assert.ok(md.includes(`${quoted} of ${summary.dkhr.candidateRows}`));
-  const report = JSON.parse(fs.readFileSync(path.join(root, 'REPLAY-V2.json'), 'utf8'));
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'REPLAY-V2.json'), 'utf8'));
   const straights = (report.v2Bets || []).filter((bet) => bet.kind === 'straight');
   assert.ok(straights.length > 0, 'no straight bets from stored quotes');
   for (const bet of straights) {

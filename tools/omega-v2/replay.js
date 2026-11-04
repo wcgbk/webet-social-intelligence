@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const v2 = require('../../netlify/functions/lib/omega-v2');
 const { americanToDecimal } = require('../../netlify/functions/lib/omega-vnext/odds_math');
@@ -17,10 +18,36 @@ const { joinStoredDkHr } = require('./dkhr-quotes');
 
 const DERIVED = process.env.OMEGA_V2_DERIVED
   || '/workspace/omega-sizing-v2/tools/sizing-v2/derived.json';
-const JSON_OUT = path.join(__dirname, '../../REPLAY-V2.json');
-const MD_OUT = path.join(__dirname, '../../REPLAY-V2.md');
+const REPO_ROOT = path.join(__dirname, '../..');
 const BOOT_N = 10000;
 const BOOT_SEED = 1030;
+
+/**
+ * Where REPLAY-V2.json and REPLAY-V2.md are written.
+ * Direct `npm run omega-v2:replay` still writes the repo copies.
+ * The deploy gate (`OMEGA_V2_GATE=1`) writes under os.tmpdir() so the
+ * working tree stays clean. REPLAY_V2_OUT_DIR overrides that directory.
+ * REPLAY_V2_WRITE_REPO=1 forces the repo copies even from the gate.
+ */
+function replayOutputDir() {
+  if (process.env.REPLAY_V2_WRITE_REPO === '1') return REPO_ROOT;
+  if (process.env.REPLAY_V2_OUT_DIR) return process.env.REPLAY_V2_OUT_DIR;
+  if (process.env.OMEGA_V2_GATE === '1') {
+    const dir = path.join(os.tmpdir(), 'omega-replay-v2-gate');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+  return REPO_ROOT;
+}
+
+function replayOutputPaths() {
+  const dir = replayOutputDir();
+  return {
+    dir,
+    json: path.join(dir, 'REPLAY-V2.json'),
+    md: path.join(dir, 'REPLAY-V2.md'),
+  };
+}
 
 function ceilAway(x) {
   if (!Number.isFinite(x)) return null;
@@ -758,8 +785,11 @@ async function main() {
       other: errors.other,
     },
   };
-  fs.writeFileSync(JSON_OUT, `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(MD_OUT, buildMarkdown(mdReport));
+  const outs = replayOutputPaths();
+  fs.mkdirSync(outs.dir, { recursive: true });
+  fs.writeFileSync(outs.json, `${JSON.stringify(report, null, 2)}\n`);
+  fs.writeFileSync(outs.md, buildMarkdown(mdReport));
+  console.log(`replay out: ${outs.dir}`);
   for (const line of replayStatusLines(dkhr)) console.log(line);
   console.log(JSON.stringify({
     dkhr,
@@ -785,4 +815,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { replayStatusLines };
+module.exports = { replayStatusLines, replayOutputDir, replayOutputPaths };

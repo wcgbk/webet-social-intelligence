@@ -346,6 +346,8 @@ async function main() {
   assert.strictEqual(mapCal.mapApplied, false, 'a losing map is not applied');
   assert.ok(Math.abs(mapCal.pCal - mapCal.pShrink) < 1e-12, 'pCal stays on the shrink');
 
+  await testFixOmegaCard1103();
+
   console.log('PASS omega-v2 gate');
 
   const fnLoad = require('child_process').spawnSync(
@@ -421,6 +423,371 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (captureDegraded.status !== 0) throw new Error('capture degraded gate failed');
+}
+
+/**
+ * Fake-store correction for the 2026-11-03 card. Sharks +1.5 was listed a
+ * day early. The grader (get-results-omega gradeDay) is not modified: the
+ * corrected card is what it reads after the results cache is deleted.
+ */
+async function testFixOmegaCard1103() {
+  const {
+    handle,
+    fixOmegaCard1103,
+    isSharksEarly,
+    DATE,
+    CORRECTION_NOTE,
+    CACHE_KEYS,
+    BLOB_STORE,
+  } = require('../../netlify/functions/fix-omega-card-1103');
+  const { americanToDecimal, decimalToAmerican, formatAmerican } = require('../../netlify/functions/lib/omega-vnext/odds_math');
+  const grader = require('../../netlify/functions/get-results-omega')._test;
+
+  assert.strictEqual(DATE, '2026-11-03');
+  assert.strictEqual(BLOB_STORE, 'edge-picks-omega');
+  assert.deepStrictEqual(CACHE_KEYS, [
+    'results-omega-cache-v9-kpi1030',
+    'results-omega-cache-v10-parlay-legs',
+  ]);
+
+  const fnSrc = fs.readFileSync(path.join(root, 'netlify/functions/fix-omega-card-1103.js'), 'utf8');
+  const resultsSrc = fs.readFileSync(path.join(root, 'netlify/functions/get-results-omega.js'), 'utf8');
+  const trackingSrc = fs.readFileSync(path.join(root, 'netlify/functions/lib/tracking-report.js'), 'utf8');
+  const clvSrc = fs.readFileSync(path.join(root, 'netlify/functions/track-clv-omega.js'), 'utf8');
+  assert.ok(resultsSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v9-kpi1030'"));
+  assert.ok(trackingSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v10-parlay-legs'"));
+  assert.ok(/readPicksLocated\(/.test(fnSrc));
+  assert.ok(/writePicksRaw\(/.test(fnSrc));
+  assert.ok(/\.setJSON\(/.test(fnSrc));
+  assert.ok(/PICKS_SECRET_KEY/.test(fnSrc));
+  assert.ok(!/getStore\(\s*\{/.test(fnSrc), 'fix must not open getStore({ siteID, token })');
+  assert.ok(!/storePicks\s*\(/.test(fnSrc), 'fix must not call storePicks');
+  assert.ok(!/the-odds-api|api\.the-odds-api|odds-api\.com/i.test(fnSrc));
+  assert.ok(/for \(const pick of picksData\.picks\)/.test(clvSrc), 'track-clv rebuilds rows from the card picks');
+  assert.ok(/merged\.published = !!\(prev\.published \|\| row\.published\)/.test(
+    fs.readFileSync(path.join(root, 'netlify/functions/lib/omega-v2/candidate_clv.js'), 'utf8')
+  ), 'an old published candidate is kept until the row is removed');
+
+  function memoryStore(seed) {
+    const data = Object.assign({}, seed);
+    const writes = [];
+    const deletes = [];
+    return {
+      writes,
+      deletes,
+      data,
+      async get(key) {
+        return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null;
+      },
+      async setJSON(key, value) {
+        writes.push(key);
+        data[key] = value;
+      },
+      async delete(key) {
+        deletes.push(key);
+        delete data[key];
+      },
+    };
+  }
+
+  function leg(extra) {
+    return Object.assign({
+      sport: 'NHL',
+      betType: 'Spread',
+      units: '0.25u',
+      stakeUsd: 38,
+      winProbability: '50.0%',
+    }, extra);
+  }
+
+  const canucks = leg({
+    pick: 'Vancouver Canucks +1.5',
+    matchup: 'Vancouver Canucks @ Seattle Kraken',
+    odds: '-145',
+    book: 'hardrockbet',
+    winProbability: '60.0%',
+  });
+  const oilers = leg({
+    pick: 'Edmonton Oilers +1.5',
+    matchup: 'Edmonton Oilers @ Calgary Flames',
+    odds: '-185',
+    book: 'draftkings',
+    winProbability: '50.0%',
+  });
+  const sharks = leg({
+    pick: 'San Jose Sharks +1.5',
+    pickDisplay: 'San Jose Sharks +1.5',
+    matchup: 'San Jose Sharks @ Los Angeles Kings',
+    odds: '-180',
+    book: 'draftkings',
+    winProbability: '70.0%',
+  });
+  assert.strictEqual(isSharksEarly(sharks), true);
+  assert.strictEqual(isSharksEarly(canucks), false);
+  assert.strictEqual(isSharksEarly(oilers), false);
+
+  const original = {
+    date: DATE,
+    dateFormatted: 'Tuesday, November 3, 2026',
+    model: 'omega-v2-sharp-2026-11-01-dkhr',
+    picks: [
+      Object.assign({}, canucks, { units: '0.5u', unitsNum: 0.5, stakeUsd: 75 }),
+      Object.assign({}, oilers, { units: '0.75u', unitsNum: 0.75, stakeUsd: 113 }),
+      Object.assign({}, sharks, { units: '0.25u', unitsNum: 0.25, stakeUsd: 38, result: 'pending' }),
+    ],
+    parlayLegs: [{
+      type: '3-leg',
+      units: '0.25u',
+      unitsNum: 0.25,
+      stakeUsd: 38,
+      combinedOdds: '+450',
+      combinedDecimal: 5.5,
+      combinedProb: '21.0%',
+      uniqueGames: 3,
+      legMarkets: ['Spread', 'Spread', 'Spread'],
+      legs: [canucks, oilers, sharks],
+    }],
+    parlayPool: [canucks, oilers, sharks],
+    chosen: [sharks],
+    candidateTable: [sharks, { pick: 'San Jose Sharks ML', matchup: 'San Jose Sharks @ Los Angeles Kings', odds: '+140' }],
+    straightUnits: 1.5,
+    parlayUnits: 0.25,
+    totalUnits: 1.75,
+    summary: {
+      totalPicks: 3,
+      totalStraightBets: 3,
+      totalUnits: '1.75u',
+      sportsCovered: ['NHL'],
+      modelVersion: 'omega-v2-sharp-2026-11-01-dkhr',
+      aplusLocks: 0,
+    },
+    edgeSummary: 'Tuesday, November 3, 2026: 3 straights cleared a positive calibrated edge.',
+  };
+
+  const games = [
+    {
+      awayTeam: 'Vancouver Canucks',
+      homeTeam: 'Seattle Kraken',
+      awayScore: 5,
+      homeScore: 4,
+      state: 'post',
+      completed: true,
+      statusName: 'Final',
+      _sport: 'NHL',
+    },
+    {
+      awayTeam: 'Edmonton Oilers',
+      homeTeam: 'Calgary Flames',
+      awayScore: 4,
+      homeScore: 2,
+      state: 'post',
+      completed: true,
+      statusName: 'Final',
+      _sport: 'NHL',
+    },
+  ];
+
+  const listedEarly = await grader.gradeDay(DATE, original, { games });
+  assert.ok(listedEarly.picks.some((pick) => /Sharks \+1\.5/.test(pick.pick)));
+  assert.strictEqual(listedEarly.picks.find((pick) => /Sharks \+1\.5/.test(pick.pick)).result, 'pending');
+  assert.strictEqual(listedEarly.parlayResult, 'pending');
+  assert.ok(listedEarly.pending >= 1);
+
+  const clv = {
+    date: DATE,
+    picks: [
+      { pick: 'Vancouver Canucks +1.5', matchup: canucks.matchup, odds: '-145', result: 'win', profit: 52, clv: 0.01, beatClosing: true },
+      { pick: 'San Jose Sharks +1.5', matchup: sharks.matchup, odds: '-180', result: 'pending', profit: 0, clv: 0.02, beatClosing: false },
+    ],
+    parlayLegs: [
+      { pick: 'San Jose Sharks +1.5', matchup: sharks.matchup, odds: '-180', isParlayLeg: true },
+      { pick: 'Vancouver Canucks +1.5', matchup: canucks.matchup, odds: '-145', isParlayLeg: true },
+    ],
+    candidates: [
+      { pick: 'San Jose Sharks +1.5', matchup: sharks.matchup, odds: '-180', published: true, result: 'pending' },
+      { side: 'San Jose Sharks ML', matchup: sharks.matchup, odds: '+140', clvPct: 1.1 },
+    ],
+    wins: 1,
+    losses: 0,
+    pushes: 0,
+    totalProfit: 52,
+    totalPicks: 2,
+    settled: 1,
+    pending: 1,
+    avgCLV: 0.015,
+    totalTracked: 2,
+  };
+  const cache = {
+    cachedAt: 1,
+    days: [{
+      date: DATE,
+      picks: [{ pick: 'San Jose Sharks +1.5', matchup: sharks.matchup, odds: '-180', sport: 'NHL', result: 'pending' }],
+      pending: 1,
+    }],
+  };
+  const nov4 = { date: '2026-11-04', picks: [{ pick: 'Stay off 11/4', odds: '-110' }], parlayLegs: [] };
+
+  const store = memoryStore({
+    [`picks-${DATE}`]: JSON.parse(JSON.stringify(original)),
+    'picks-2026-11-04': nov4,
+    'latest-date': DATE,
+    'picks-dates': [DATE],
+    [`clv-${DATE}`]: clv,
+    'clv-candidates-v2/2026-11-03': {
+      candidates: [{ pick: 'San Jose Sharks +1.5', matchup: sharks.matchup, odds: '-180', result: 'pending', published: true }],
+    },
+    [CACHE_KEYS[0]]: JSON.parse(JSON.stringify(cache)),
+    [CACHE_KEYS[1]]: JSON.parse(JSON.stringify(cache)),
+  });
+  const snapshot = JSON.parse(JSON.stringify(store.data[`picks-${DATE}`]));
+
+  const dry = await fixOmegaCard1103({ date: DATE, store });
+  assert.strictEqual(dry.dryRun, true);
+  assert.strictEqual(dry.wrote, false);
+  assert.strictEqual(dry.alreadyCorrect, false);
+  assert.strictEqual(store.writes.length, 0);
+  assert.strictEqual(store.deletes.length, 0);
+  assert.deepStrictEqual(store.data[`picks-${DATE}`], snapshot, 'dry run must not mutate the stored card');
+  assert.ok(dry.cacheKeys.includes(CACHE_KEYS[0]) && dry.cacheKeys.includes(CACHE_KEYS[1]));
+  assert.ok(dry.settlement.some((row) => row.key === `clv-${DATE}` && row.removed >= 2));
+  assert.strictEqual(dry.after.parlay.type, '2-leg');
+  assert.strictEqual(dry.after.parlay.units, '0.25u');
+  assert.strictEqual(dry.after.parlay.stakeUsd, 38);
+  assert.strictEqual(dry.before.parlay.type, '3-leg');
+  assert.ok(dry.before.picks.some((pick) => /Sharks/.test(pick.pick)));
+  assert.ok(!dry.after.picks.some((pick) => /Sharks/.test(pick.pick)));
+
+  const asString = await fixOmegaCard1103({ date: DATE, dryRun: 'false', store });
+  assert.strictEqual(asString.dryRun, true);
+  assert.strictEqual(store.writes.length, 0);
+
+  const savedKey = process.env.PICKS_SECRET_KEY;
+  process.env.PICKS_SECRET_KEY = 'test-secret';
+  const denied = await handle({ httpMethod: 'POST', queryStringParameters: {}, body: JSON.stringify({ date: DATE, dryRun: false }) }, { store });
+  assert.strictEqual(denied.statusCode, 401);
+  const badDate = await handle({
+    httpMethod: 'POST',
+    queryStringParameters: { key: 'test-secret' },
+    body: JSON.stringify({ date: '2026-11-04', dryRun: true }),
+  }, { store });
+  assert.strictEqual(badDate.statusCode, 400);
+  const wrongMethod = await handle({ httpMethod: 'GET', queryStringParameters: { key: 'test-secret' } }, { store });
+  assert.strictEqual(wrongMethod.statusCode, 405);
+  if (savedKey == null) delete process.env.PICKS_SECRET_KEY;
+  else process.env.PICKS_SECRET_KEY = savedKey;
+  assert.strictEqual(store.writes.length, 0);
+
+  const live = await fixOmegaCard1103({ date: DATE, dryRun: false, store });
+  assert.strictEqual(live.dryRun, false);
+  assert.strictEqual(live.wrote, true);
+  assert.strictEqual(live.alreadyCorrect, false);
+  assert.ok(store.writes.includes(`picks-${DATE}`));
+  assert.ok(store.writes.includes(`clv-${DATE}`));
+  assert.ok(store.writes.includes('clv-candidates-v2/2026-11-03'));
+  assert.deepStrictEqual(store.deletes.slice().sort(), CACHE_KEYS.slice().sort());
+  assert.strictEqual(store.data['picks-2026-11-04'], nov4);
+  assert.strictEqual(store.data['latest-date'], DATE);
+  assert.deepStrictEqual(store.data['picks-dates'], [DATE]);
+  assert.strictEqual(store.data[CACHE_KEYS[0]], undefined);
+  assert.strictEqual(store.data[CACHE_KEYS[1]], undefined);
+
+  const written = store.data[`picks-${DATE}`];
+  const product = americanToDecimal(-145) * americanToDecimal(-185);
+  const ticket = written.parlayLegs[0];
+  assert.strictEqual(ticket.type, '2-leg');
+  assert.strictEqual(ticket.units, '0.25u');
+  assert.strictEqual(ticket.stakeUsd, 38);
+  assert.strictEqual(ticket.combinedDecimal, +product.toFixed(4));
+  assert.strictEqual(ticket.combinedDecimal, 2.603);
+  assert.strictEqual(ticket.combinedOdds, formatAmerican(decimalToAmerican(ticket.combinedDecimal)));
+  assert.strictEqual(ticket.combinedOdds, '+160');
+  assert.strictEqual(ticket.combinedProb, '30.0%');
+  assert.strictEqual(ticket.uniqueGames, 2);
+  assert.deepStrictEqual(ticket.legMarkets, ['Spread', 'Spread']);
+  assert.deepStrictEqual(ticket.legs.map((row) => row.pick), [canucks.pick, oilers.pick]);
+  assert.deepStrictEqual(written.picks.map((row) => row.pick), [canucks.pick, oilers.pick]);
+  assert.strictEqual(written.straightUnits, 1.25);
+  assert.strictEqual(written.parlayUnits, 0.25);
+  assert.strictEqual(written.totalUnits, 1.5);
+  assert.strictEqual(written.summary.totalPicks, 2);
+  assert.strictEqual(written.summary.totalStraightBets, 2);
+  assert.strictEqual(written.summary.totalUnits, '1.5u');
+  assert.deepStrictEqual(written.summary.sportsCovered, ['NHL']);
+  assert.strictEqual(written.summary.modelVersion, original.summary.modelVersion);
+  assert.strictEqual(written.summary.aplusLocks, 0);
+  assert.strictEqual(written.correctionNote, CORRECTION_NOTE);
+  assert.ok(/2 straights/.test(written.edgeSummary));
+  assert.ok(!written.parlayPool.some((row) => /Sharks \+1\.5/.test(row.pick)));
+  assert.ok(!written.chosen.some(isSharksEarly));
+  assert.ok(written.candidateTable.some((row) => row.pick === 'San Jose Sharks ML'));
+  assert.ok(!written.candidateTable.some(isSharksEarly));
+  assert.strictEqual(written.picks[0].units, '0.5u');
+  assert.strictEqual(written.picks[0].stakeUsd, 75);
+  assert.strictEqual(written.picks[1].odds, '-185');
+
+  const clvAfter = store.data[`clv-${DATE}`];
+  assert.ok(!clvAfter.picks.some(isSharksEarly));
+  assert.ok(!clvAfter.parlayLegs.some(isSharksEarly));
+  assert.ok(!clvAfter.candidates.some(isSharksEarly));
+  assert.ok(clvAfter.candidates.some((row) => row.side === 'San Jose Sharks ML'));
+  assert.strictEqual(clvAfter.totalPicks, 1);
+  assert.strictEqual(clvAfter.wins, 1);
+  assert.strictEqual(clvAfter.pending, 0);
+  assert.strictEqual(clvAfter.totalProfit, 52);
+  const closes = store.data['clv-candidates-v2/2026-11-03'];
+  assert.deepStrictEqual(closes.candidates, []);
+
+  const graded = await grader.gradeDay(DATE, written, { games });
+  const straights = graded.picks.filter((pick) => pick.sport !== 'PARLAY');
+  assert.strictEqual(straights.length, 2);
+  assert.ok(straights.every((pick) => pick.result === 'win'));
+  assert.strictEqual(straights.find((pick) => /Canucks/.test(pick.pick)).score, '5-4');
+  assert.strictEqual(straights.find((pick) => /Oilers/.test(pick.pick)).result, 'win');
+  assert.strictEqual(graded.wins, 2);
+  assert.strictEqual(graded.losses, 0);
+  assert.strictEqual(graded.pending, 0);
+  const parlay = graded.picks.find((pick) => pick.sport === 'PARLAY');
+  assert.strictEqual(parlay.result, 'win');
+  assert.strictEqual(parlay.units, '0.25u');
+  const stake = grader.wholeUp(0.25 * grader.DOLLAR_PER_UNIT);
+  assert.strictEqual(stake, 38);
+  assert.strictEqual(parlay.stakeDollars, 38);
+  // wholeUp rounds the stake and the win up to the next dollar (ceil, dust guard).
+  const profit = grader.wholeUp(stake * (product - 1));
+  assert.strictEqual(profit, 61);
+  assert.strictEqual(parlay.profit, profit);
+  assert.ok(!graded.picks.some((pick) => /Shark/i.test(pick.pick)));
+
+  const writesAfter = store.writes.length;
+  const deletesAfter = store.deletes.length;
+  const again = await fixOmegaCard1103({ date: DATE, dryRun: false, store });
+  assert.strictEqual(again.wrote, false);
+  assert.strictEqual(again.alreadyCorrect, true);
+  assert.deepStrictEqual(again.before, {});
+  assert.deepStrictEqual(again.after, {});
+  assert.strictEqual(store.writes.length, writesAfter);
+  assert.strictEqual(store.deletes.length, deletesAfter);
+
+  const corrected = JSON.parse(JSON.stringify(written));
+  const stale = memoryStore({
+    [`picks-${DATE}`]: corrected,
+    [CACHE_KEYS[0]]: JSON.parse(JSON.stringify(cache)),
+  });
+  const bustOnly = await fixOmegaCard1103({ date: DATE, dryRun: false, store: stale });
+  assert.strictEqual(bustOnly.wrote, true);
+  assert.ok(!stale.writes.includes(`picks-${DATE}`));
+  assert.deepStrictEqual(stale.deletes, [CACHE_KEYS[0]]);
+  assert.strictEqual(stale.data[CACHE_KEYS[0]], undefined);
+  assert.strictEqual(stale.data[`picks-${DATE}`].correctionNote, CORRECTION_NOTE);
+
+  let refused = false;
+  try {
+    await fixOmegaCard1103({ date: '2026-11-04', dryRun: false, store });
+  } catch (err) {
+    refused = err.statusCode === 400;
+  }
+  assert.ok(refused, 'other dates are refused');
+  assert.strictEqual(store.data['picks-2026-11-04'], nov4);
 }
 
 main().catch((err) => {

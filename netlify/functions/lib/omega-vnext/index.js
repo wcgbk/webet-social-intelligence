@@ -30,6 +30,17 @@ const nfl = require('./sports/nfl');
 const cfb = require('./sports/cfb');
 const nba = require('./sports/nba');
 const nhl = require('./sports/nhl');
+const ncaam = require('./sports/ncaam');
+
+function countBySport(rows) {
+  const out = {};
+  for (const row of rows || []) {
+    const sport = String(row && row.sport || '').toUpperCase();
+    if (!sport) continue;
+    out[sport] = (out[sport] || 0) + 1;
+  }
+  return out;
+}
 
 function todayET() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -51,7 +62,7 @@ function formatDateLong(dateISO) {
 function slateCountsFor(snap) {
   const bySport = {};
   let espn = 0, odds = 0;
-  for (const s of ['MLB', 'NFL', 'NCAAF']) {
+  for (const s of ['MLB', 'NFL', 'NCAAF', 'NBA', 'NHL', 'NCAAM']) {
     if (!SPORTS_ENABLED[s]) { bySport[s] = 0; continue; }
     const e = snap && snap.espnBySport && snap.espnBySport[s] && Array.isArray(snap.espnBySport[s].games)
       ? snap.espnBySport[s].games.length : 0;
@@ -108,6 +119,12 @@ function projectAll(snap) {
       standings: snap.standingsBySport.NHL || {},
       gameDay,
       espnGames: snap.espnBySport && snap.espnBySport.NHL,
+    }));
+  }
+  if (SPORTS_ENABLED.NCAAM) {
+    raw.push(...ncaam.project({
+      oddsEvents: (snap.oddsBySport && snap.oddsBySport.NCAAM) || [],
+      standings: (snap.standingsBySport && snap.standingsBySport.NCAAM) || {},
     }));
   }
   return raw;
@@ -218,6 +235,9 @@ async function generateOmegaVnext(opts = {}) {
   let snap;
   let candidates;
   let preMiscalibrated = [];
+  let boardCounts = {};
+  let rawCounts = {};
+  let afterMiscalCounts = {};
   if (fixtureCandidates) {
     snap = { dateISO, oddsBySport: {}, espnBySport: {} };
     candidates = fixtureCandidates.map(c => ({ ...c }));
@@ -230,13 +250,19 @@ async function generateOmegaVnext(opts = {}) {
     });
     console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
 
+    boardCounts = {};
+    for (const [sport, events] of Object.entries((snap && snap.oddsBySport) || {})) {
+      boardCounts[String(sport).toUpperCase()] = Array.isArray(events) ? events.length : 0;
+    }
     candidates = projectAll(snap);
+    rawCounts = countBySport(candidates);
     console.log(`[omega-vnext] raw candidates=${candidates.length}`);
 
     // Raw modelRawP vs fair above 10pp is miscalibration before shrink can hide it.
     const rawSplit = splitRawMiscalibrated(candidates);
     preMiscalibrated = rawSplit.miscalibrated;
     candidates = rawSplit.candidates;
+    afterMiscalCounts = countBySport(candidates);
     console.log(`[omega-vnext] pre-calibration miscalibrated=${preMiscalibrated.length}`);
     candidates = calibrateAll(candidates).map(attachEv);
     candidates = annotateMajorBooks(candidates, snap);
@@ -538,6 +564,12 @@ async function generateOmegaVnext(opts = {}) {
         : recheckFromCachedBoard(snap && snap.oddsBySport),
       hardFails,
       pregameAsOfMs: gateOpts.asOfMs,
+      stageCounts: {
+        board: boardCounts,
+        raw: rawCounts,
+        afterMiscal: afterMiscalCounts,
+        gated: countBySport(open),
+      },
     });
     built.morningBoard = boardSave;
   }
@@ -732,6 +764,7 @@ async function generateOmegaVnext(opts = {}) {
       parlaySource: built.parlaySource || null,
       morningBoard: built.morningBoard || null,
     };
+    picksData.sportCoverage = built.sportCoverage || null;
     picksData.v1WouldParlay = built.v1WouldParlay === true;
     picksData.meta.pipelineV2 = true;
     picksData.narration = narr.narration || { status: skipNarrate ? 'skipped' : 'none', vetoesIgnored: 0 };

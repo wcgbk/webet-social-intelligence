@@ -21,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   KELLY_FRACTION, BANKROLL_UNITS, PER_BET_CAP, STRAIGHT_BUDGET, PARLAY_STAKE_CAP, UNIT_DOLLARS,
+  MODEL_SPORTS,
 } = require('../../netlify/functions/lib/omega-v2/constants');
 const { americanToDecimal, ratingToConfidence, EDGE_B_UNIT_CAP } = require('../../netlify/functions/lib/omega-vnext/odds_math');
 
@@ -431,6 +432,70 @@ function logFails(date, fails) {
   return blocking;
 }
 
+/**
+ * Every enabled model sport must receive a calibrated probability on a
+ * one-row replay. A thin NCAAM slate must leave the projector on the sharp fair.
+ */
+async function sportReachCheck() {
+  const fails = [];
+  const { SPORTS_ENABLED } = require('../../netlify/functions/lib/omega-vnext/config');
+  const ncaam = require('../../netlify/functions/lib/omega-vnext/sports/ncaam');
+  const v2 = require('../../netlify/functions/lib/omega-v2');
+  for (const sport of MODEL_SPORTS) {
+    if (SPORTS_ENABLED[sport] !== true) {
+      fails.push({ rule: 'sports', msg: `${sport} is not enabled`, blocking: true });
+    }
+  }
+  const event = {
+    home_team: 'Home College',
+    away_team: 'Away College',
+    commence_time: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
+    bookmakers: ['pinnacle', 'draftkings'].map((key) => ({
+      key,
+      markets: [
+        { key: 'h2h', outcomes: [{ name: 'Away College', price: 150 }, { name: 'Home College', price: -170 }] },
+        { key: 'spreads', outcomes: [{ name: 'Away College', price: -110, point: 4.5 }, { name: 'Home College', price: -110, point: -4.5 }] },
+        { key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 145.5 }, { name: 'Under', price: -110, point: 145.5 }] },
+      ],
+    })),
+  };
+  const projected = ncaam.project({ oddsEvents: [event], standings: {} });
+  if (!projected.length) {
+    fails.push({ rule: 'sports', msg: 'NCAAM projector returned no rows', blocking: true });
+  } else {
+    const ml = projected.find((row) => row.market === 'Moneyline' && row.side === 'Away College');
+    if (!ml || !Number.isFinite(Number(ml.modelRawP)) || !Number.isFinite(Number(ml.fair_sharp_p))) {
+      fails.push({ rule: 'sports', msg: 'NCAAM moneyline has no model or Pinnacle fair', blocking: true });
+    } else if (Math.abs(Number(ml.modelRawP) - Number(ml.fair_sharp_p)) > 0.02) {
+      fails.push({ rule: 'sports', msg: 'thin NCAAM slate did not anchor to the sharp fair', blocking: true });
+    }
+  }
+  const future = new Date(Date.now() + 6 * 3600 * 1000).toISOString();
+  for (const sport of MODEL_SPORTS) {
+    const card = await v2.buildCard({
+      date: '2026-11-04',
+      candidates: [{
+        sport,
+        matchup: 'Away @ Home',
+        pick: 'Away ML',
+        market: 'Moneyline',
+        odds: '-110',
+        book: 'draftkings',
+        pModel: 0.56,
+        pMkt: 0.50,
+        commenceTime: future,
+      }],
+      history: [],
+    });
+    const rows = [...(card.picks || []), ...(card.rejections || [])].filter((row) => row.sport === sport);
+    const scored = rows.some((row) => Number.isFinite(Number(row.pCal)) && row.reason !== 'missing-prob' && row.reason !== 'no-dk-hr-price');
+    if (!scored) {
+      fails.push({ rule: 'sports', msg: `${sport} did not reach scoring on replay`, blocking: true });
+    }
+  }
+  return fails;
+}
+
 async function main() {
   const days = loadDays(FIXTURES);
   const cards = new Map();
@@ -471,6 +536,8 @@ async function main() {
     else blocking += logFails(item.date, fails);
   }
   const build = await buildCheck();
+  const sports = await sportReachCheck();
+  build.push(...sports);
   if (!build.length) console.log('build PASS');
   for (const f of build) {
     console.log(`build ${f.blocking ? 'BLOCK' : 'REPORT'} [${f.rule}] ${f.msg}`);

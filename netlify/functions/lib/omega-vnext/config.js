@@ -31,6 +31,7 @@ const SPORTS_ENABLED = {
   NCAAF: true,
   NBA: true, // basketball_nba on the daily card. OMEGA_NBA=0 turns it off.
   NHL: true, // WeBet voice order 2026-09-30 — v12.3.13 NHL engine live
+  NCAAM: true, // basketball_ncaab. Same 3 AM/10 AM board. Sharp-anchored until a sport fit.
 };
 
 /**
@@ -64,6 +65,7 @@ const ODDS_SPORT_KEYS = {
   NCAAF: 'americanfootball_ncaaf',
   NBA: 'basketball_nba',
   NHL: 'icehockey_nhl',
+  NCAAM: 'basketball_ncaab',
 };
 
 const ESPN_LEAGUES = {
@@ -72,6 +74,7 @@ const ESPN_LEAGUES = {
   NCAAF: { sport: 'football', league: 'college-football', label: 'NCAAF' },
   NBA: { sport: 'basketball', league: 'nba', label: 'NBA' },
   NHL: { sport: 'hockey', league: 'nhl', label: 'NHL' },
+  NCAAM: { sport: 'basketball', league: 'mens-college-basketball', label: 'NCAAM' },
 };
 
 const SHARP_BOOKS = ['pinnacle', 'circa', 'circasports', 'bookmaker', 'betonlineag', 'lowvig'];
@@ -315,10 +318,10 @@ const SELECT_WEIGHTS = {
   softSportMixBonus: 0.02,
 };
 
-const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 };
-const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 14.0, NHL: 1.8, MLB: 3.5 };
+const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2, NCAAM: 11.0 };
+const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 14.0, NHL: 1.8, MLB: 3.5, NCAAM: 13.5 };
 /** HFA base; game_day.js applies soft rest/B2B deltas on top. */
-const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
+const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15, NCAAM: 3.1 };
 
 const CLV_KPI_FLOOR = '2026-09-22';
 

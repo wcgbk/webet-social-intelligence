@@ -8,7 +8,9 @@
  *  price blobs + the raw event), so no slice is dropped at write time.
  *  Expected cost by the Odds API credit formula (markets x regions per
  *  request): 3 x 3 = 9 credits per sport, 6 sports = ~54 credits per
- *  pull, ~108/day. Stated, not measured — no live pull was fired to
+ *  pull, ~108/day. NCAAM (basketball_ncaab) is already in SPORTS, so the
+ *  NCAAM projector adds 0 credits. One extra sport would be 9 per pull,
+ *  18 per day. Stated, not measured — no live pull was fired to
  *  write this code. Games stored are the pull date's ET slate. */
 const { readJson, writeJson } = require('./store');
 const SPORTS = [

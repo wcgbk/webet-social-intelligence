@@ -79,6 +79,8 @@ const SPORT_PRIOR_K = {
   NCAAF: 0.72,
   NBA: 0.75,
   NHL: 0.68,
+  // No NCAAM walk-forward. Trust the no-vig price more than the NBA prior.
+  NCAAM: 0.85,
 };
 const SHRINK_GRID = [0.40, 0.55, 0.70, 0.85, 0.95];
 const MIN_POOLED = 8;
@@ -101,7 +103,10 @@ const SPORT_MIN_GAMES = {
   NCAAF: MIN_SPORT,
   NBA: MIN_SPORT,
   NHL: MIN_SPORT,
+  NCAAM: MIN_SPORT,
 };
+/** Daily model sports. MLB stays enabled for the summer and is not in this list. */
+const MODEL_SPORTS = ['NBA', 'NHL', 'NCAAM', 'NFL', 'NCAAF'];
 /**
  * Prior strength for the shrink weight. Weight on the sport prior is
  *   w = clamp(SHRINK_N0 / (SHRINK_N0 + n_sport), 0, 1)
@@ -174,6 +179,7 @@ module.exports = {
   PAIR_PHI,
   PRIOR_SHRINK_K,
   SPORT_PRIOR_K,
+  MODEL_SPORTS,
   SHRINK_GRID,
   MIN_POOLED,
   MIN_SPORT,

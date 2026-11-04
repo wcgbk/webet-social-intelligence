@@ -13,6 +13,7 @@ const { summaryFrom } = require('../omega-vnext/assemble');
 const { publishEdgeCard } = require('../omega-vnext/assemble');
 const { sizeParlay, legEvSkips, legFailsPriceEv } = require('./parlay');
 const { americanToImplied } = require('../omega-vnext/odds_math');
+const { applySportCoverage, stampQualified } = require('./coverage');
 
 const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
@@ -176,7 +177,12 @@ async function buildCard(input) {
     const calibration = applyCalibration(cand, fit);
     prepared.push({ ...cand, calibration });
   }
+  const sportCoverage = stampQualified(
+    applySportCoverage(prepared, input.stageCounts),
+    null,
+  );
   const annotated = prepared.map((cand) => annotateCandidate(cand));
+  stampQualified(sportCoverage, annotated);
   for (const cand of annotated) {
     if (!cand.qualified && !cand.parlayQualified) {
       rejections.push({
@@ -274,6 +280,7 @@ async function buildCard(input) {
     short: picks.length > 0 && picks.length < 3,
     v1WouldParlay: false,
     parlaySource: sizedParlay.publish ? 'calibrated-edge' : null,
+    sportCoverage,
   };
   const published = autoCorrectCard(card, pregameOpts);
   const errors = validateCard(published);
@@ -330,6 +337,7 @@ async function publishFromOmegaCandidates(input) {
     recheck: input.recheck || null,
     hardFails: input.hardFails || [],
     pregameAsOfMs: input.pregameAsOfMs,
+    stageCounts: input.stageCounts || null,
   });
   return card;
 }

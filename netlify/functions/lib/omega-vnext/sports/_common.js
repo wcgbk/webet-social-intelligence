@@ -24,7 +24,7 @@ function fuzzyTeam(name, ratings) {
 }
 
 /** League scoring per game. Used only to tell season totals from per-game rates. */
-const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1 };
+const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1, NCAAM: 73 };
 
 function gamesPlayed(st) {
   if (!st || typeof st !== 'object') return 0;

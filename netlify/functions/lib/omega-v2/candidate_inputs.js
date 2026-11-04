@@ -243,7 +243,11 @@ function pCalOf(cand, fit) {
 
 function safeFit(history, dateISO) {
   try {
-    return fitWalkForward(Array.isArray(history) ? history : [], dateISO);
+    // Walk-forward reads pModel. Give it copies so a fit cannot rewrite the card's history.
+    const rows = (Array.isArray(history) ? history : []).map((row) => (
+      row && typeof row === 'object' ? { ...row } : row
+    ));
+    return fitWalkForward(rows, dateISO);
   } catch (_) {
     return null;
   }
@@ -482,13 +486,13 @@ function addTeamDate(index, sport, team, date, road) {
 
 function datesFor(index, sport, team) {
   const direct = index.get(`${sport}|${fold(team)}`);
-  if (direct) return direct;
+  if (direct) return direct.slice();
   const target = fold(team);
   if (!target) return [];
   for (const [key, rows] of index) {
     if (!key.startsWith(`${sport}|`)) continue;
     const name = key.slice(sport.length + 1);
-    if (sameTeam(name, target)) return rows;
+    if (sameTeam(name, target)) return rows.slice();
   }
   return [];
 }
@@ -720,26 +724,33 @@ async function loadContext(candidates, opts) {
   const dateISO = /^\d{4}-\d{2}-\d{2}$/.test(String(opts.dateISO || '')) ? String(opts.dateISO) : null;
   const espnGames = espnGamesOf(opts.snap);
   const schedule = [];
-  for (const game of opts.scheduleGames || []) schedule.push(game);
-  for (const game of espnGames) {
+  const pushSchedule = (game) => {
+    if (!game || typeof game !== 'object') return;
     const date = game.date || etCalendarDate(game.commenceTime);
-    if (!date || !game.homeTeam && !game.home) continue;
+    const home = game.homeTeam || game.home || null;
+    const away = game.awayTeam || game.away || null;
+    // A row with no home was never indexed. Copy the fields either way.
+    if (!date || !home) return;
     schedule.push({
       sport: sportOf(game),
       date,
-      home: game.homeTeam || game.home,
-      away: game.awayTeam || game.away,
+      home,
+      away,
     });
-  }
+  };
+  for (const game of opts.scheduleGames || []) pushSchedule(game);
+  for (const game of espnGames) pushSchedule(game);
   const injuries = {};
   for (const [sport, list] of Object.entries(opts.injuriesBySport || {})) {
-    injuries[String(sport).toUpperCase()] = Array.isArray(list) ? list : [];
+    injuries[String(sport).toUpperCase()] = Array.isArray(list)
+      ? list.map((row) => (row && typeof row === 'object' ? { ...row } : row))
+      : [];
   }
   if (Array.isArray(opts.injuries)) {
     for (const row of opts.injuries) {
       const sport = sportOf(row) || 'ALL';
       if (!injuries[sport]) injuries[sport] = [];
-      injuries[sport].push(row);
+      injuries[sport].push(row && typeof row === 'object' ? { ...row } : row);
     }
   }
   const sports = [...new Set((candidates || []).map(sportOf).filter((s) => ESPN_PATH[s]))];
@@ -774,6 +785,12 @@ async function loadContext(candidates, opts) {
       for (const game of gamesFromScoreboard(data, job.sport, job.day)) schedule.push(game);
     });
   }
+  schedule.sort((a, b) => (
+    String(a.date).localeCompare(String(b.date))
+    || String(a.sport).localeCompare(String(b.sport))
+    || String(a.home).localeCompare(String(b.home))
+    || String(a.away).localeCompare(String(b.away))
+  ));
   const index = indexSchedule(schedule);
   const restBySport = (opts.snap && opts.snap.gameDay && opts.snap.gameDay.restByTeam) || {};
   if (dateISO && restBySport && typeof restBySport === 'object') {
@@ -785,7 +802,9 @@ async function loadContext(candidates, opts) {
 
 async function recordCandidateInputs(opts = {}) {
   try {
-    const candidates = Array.isArray(opts.candidates) ? opts.candidates : [];
+    const candidates = (Array.isArray(opts.candidates) ? opts.candidates : []).map((cand) => (
+      cand && typeof cand === 'object' ? { ...cand } : cand
+    ));
     if (!candidates.length) {
       return { rows: [], bySport: {}, total: 0, scored: 0, capped: false };
     }

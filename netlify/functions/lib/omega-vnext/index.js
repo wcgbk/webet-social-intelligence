@@ -22,7 +22,8 @@ const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, cardCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 const {
-  pipelineV2Enabled, publishFromOmegaCandidates, saveMorningBoard, loadGradedHistory, recheckFromCachedBoard,
+  pipelineV2Enabled, publishFromOmegaCandidates, saveMorningBoard, loadGradedHistory, loadBoardHistory,
+  biasSourceOf, recheckFromCachedBoard,
   MODEL_VERSION: OMEGA_V2_MODEL_VERSION,
 } = require('../omega-v2');
 
@@ -529,22 +530,45 @@ async function generateOmegaVnext(opts = {}) {
   let publishInput = null;
   if (usePipelineV2) {
     let history = [];
+    let boardRows = [];
+    const biasSource = biasSourceOf({ biasSource: opts.biasSource });
     if (Array.isArray(opts.walkForwardHistory)) history = opts.walkForwardHistory;
-    else if (!fixtureCandidates) {
-      let timer;
-      try {
-        history = await Promise.race([
-          loadGradedHistory(dateISO),
+    if (Array.isArray(opts.boardHistory)) boardRows = opts.boardHistory;
+    const wantHistory = !Array.isArray(opts.walkForwardHistory) && !fixtureCandidates;
+    // Same window as graded history, and only when the shift is the board fit.
+    const wantBoards = wantHistory && biasSource !== 'picks' && !Array.isArray(opts.boardHistory);
+    if (wantHistory || wantBoards) {
+      const raced = (promise, label) => {
+        let timer;
+        return Promise.race([
+          promise,
           new Promise((_, reject) => {
-            timer = setTimeout(() => reject(new Error('history timeout')), 20000);
+            timer = setTimeout(() => reject(new Error(label)), 20000);
           }),
-        ]);
-      } catch (e) {
-        console.warn(`[omega-v2] graded history skipped: ${e.message}`);
-        history = [];
-      } finally {
-        if (timer) clearTimeout(timer);
+        ]).finally(() => {
+          if (timer) clearTimeout(timer);
+        });
+      };
+      const jobs = [];
+      if (wantHistory) {
+        jobs.push(raced(loadGradedHistory(dateISO), 'history timeout').then(
+          (rows) => { history = Array.isArray(rows) ? rows : []; },
+          (e) => {
+            console.warn(`[omega-v2] graded history skipped: ${e.message}`);
+            history = [];
+          },
+        ));
       }
+      if (wantBoards) {
+        jobs.push(raced(loadBoardHistory(dateISO), 'board history timeout').then(
+          (rows) => { boardRows = Array.isArray(rows) ? rows : []; },
+          (e) => {
+            console.warn(`[omega-v2] board history skipped: ${e.message}`);
+            boardRows = [];
+          },
+        ));
+      }
+      await Promise.all(jobs);
     }
     const boardSave = await saveMorningBoard(dateISO, candidates, {
       dryRun: dryRun || shadow,
@@ -558,6 +582,8 @@ async function generateOmegaVnext(opts = {}) {
       parlayPool: open,
       v1Qualified: stillRaw,
       history,
+      boardRows,
+      biasSource,
       recheck: typeof opts.priceRecheck === 'function'
         ? opts.priceRecheck
         : recheckFromCachedBoard(snap && snap.oddsBySport),

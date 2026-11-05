@@ -26,22 +26,28 @@ function close(a, b, eps, msg) {
 }
 
 // Walk-forward intercept removes the cell mean. It is not shrunk toward 0,
-// and it is not applied to a locked NHL moneyline.
+// and it is not applied to a locked NHL moneyline. The shift is fit on the
+// morning board (both sides). Graded picks stay under the sport floor.
 {
   assert.strictEqual(v2.BIAS_N0, 0, 'intercept prior count is 0');
+  assert.strictEqual(v2.BOARD_BIAS_MIN, 40);
   const history = [];
-  for (let i = 0; i < 12; i += 1) {
-    history.push({
-      date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+  const boardRows = [];
+  for (let i = 0; i < 40; i += 1) {
+    const row = {
+      date: `2026-10-${String((i % 27) + 1).padStart(2, '0')}`,
       sport: 'NHL',
       market: 'Spread',
       pick: 'Road +1.5',
       pModel: 0.62,
       pMkt: 0.55,
-      result: i % 2 ? 'win' : 'loss',
-    });
+    };
+    boardRows.push(row);
+    if (i < 12) history.push({ ...row, result: i % 2 ? 'win' : 'loss' });
   }
-  const fit = v2.fitWalkForward(history, '2026-11-03');
+  const fit = v2.fitWalkForward(history, '2026-11-03', { boardRows, biasSource: 'board' });
+  assert.strictEqual(fit.trainN, 12, 'graded picks still set trainN');
+  assert.strictEqual(fit.biasSource, 'board');
   const spread = v2.applyCalibration({
     sport: 'NHL', market: 'Spread', pick: 'Road +1.5', pModel: 0.62, pMkt: 0.55,
   }, fit);
@@ -63,6 +69,7 @@ function close(a, b, eps, msg) {
 // Uneven gaps: the solved shift centers the blend, not the raw mean.
 {
   const history = [];
+  const boardRows = [];
   const gaps = [0.02, 0.04, 0.09, 0.03, 0.08, 0.05, 0.07, 0.01, 0.06, 0.04, 0.11, 0.02];
   gaps.forEach((gap, i) => {
     history.push({
@@ -75,7 +82,19 @@ function close(a, b, eps, msg) {
       result: i % 2 ? 'win' : 'loss',
     });
   });
-  const fit = v2.fitWalkForward(history, '2026-11-03');
+  for (let copy = 0; copy < 4; copy += 1) {
+    gaps.forEach((gap, i) => {
+      boardRows.push({
+        date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+        sport: 'NFL',
+        market: 'Total',
+        pick: 'Over 45.5',
+        pModel: 0.5 + gap,
+        pMkt: 0.5,
+      });
+    });
+  }
+  const fit = v2.fitWalkForward(history, '2026-11-03', { boardRows, biasSource: 'board' });
   let sum = 0;
   for (const gap of gaps) {
     const row = v2.applyCalibration({

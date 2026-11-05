@@ -38,6 +38,38 @@ const BIAS_N0 = 0;
 /** origin/main blend, probability space. Replay uses it as CURRENT. */
 let mathMode = 'logodds';
 
+/**
+ * Rows in one sport x market before a morning-board shift is used.
+ * Published picks are the side already chosen, so a shift fit on them
+ * is the average edge and then gets taken off both sides of the next
+ * card. The morning board is both sides. Under 40 rows the cell is one
+ * or two slates, and the solved shift is noise. It stays 0. It does not
+ * fall back to the published-pick shift.
+ */
+const BOARD_BIAS_MIN = 40;
+const BIAS_SOURCE_ENV = 'OMEGA_V2_BIAS_SOURCE';
+
+/** 'board' (default) fits the shift on morning boards. 'picks' is the old fit. */
+function biasSourceOf(opts) {
+  const hasOpt = !!(opts && Object.prototype.hasOwnProperty.call(opts, 'biasSource')
+    && opts.biasSource != null && String(opts.biasSource).trim() !== '');
+  const raw = hasOpt ? opts.biasSource : process.env[BIAS_SOURCE_ENV];
+  const text = String(raw == null || String(raw).trim() === '' ? 'board' : raw).trim().toLowerCase();
+  return text === 'picks' ? 'picks' : 'board';
+}
+
+/** Board rows dated on or after the card are dropped. A bad date is dropped. */
+function priorBoardRows(rows, cardDate) {
+  const card = String(cardDate || '');
+  const out = [];
+  for (const row of rows || []) {
+    const d = row && row.date != null ? String(row.date).slice(0, 10) : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d >= card) continue;
+    out.push(row);
+  }
+  return out;
+}
+
 function setMathMode(mode) {
   mathMode = mode === 'linear' ? 'linear' : 'logodds';
   return mathMode;
@@ -128,7 +160,7 @@ function setBiasMode(mode) {
   return biasMode;
 }
 
-function fitCellBias(rows) {
+function groupBiasRows(rows) {
   const groups = {};
   for (const row of rows || []) {
     if (nhlMoneylineLocked(row.sport, row.market || row.betType, row.pick || row.side)) continue;
@@ -140,10 +172,21 @@ function fitCellBias(rows) {
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   }
+  return groups;
+}
+
+/**
+ * `minRows` drops a cell instead of solving it. The board fit passes
+ * BOARD_BIAS_MIN. The picks fit passes 0, which is the old behaviour.
+ */
+function fitCellBias(rows, opts) {
+  const groups = groupBiasRows(rows);
+  const minRows = opts && Number.isFinite(Number(opts.minRows)) ? Number(opts.minRows) : 0;
   const bias = {};
   if (biasMode === 'shrink8') {
     for (const key of Object.keys(groups)) {
       const g = groups[key];
+      if (g.length < minRows) continue;
       let sum = 0;
       for (const row of g) sum += Number(row.pModel) - Number(row.pMkt);
       const mean = sum / g.length;
@@ -152,8 +195,10 @@ function fitCellBias(rows) {
     return bias;
   }
   for (const key of Object.keys(groups)) {
+    const g = groups[key];
+    if (g.length < minRows) continue;
     const sport = key.split('|')[0];
-    bias[key] = solveShift(groups[key], () => priorKFor(sport));
+    bias[key] = solveShift(g, () => priorKFor(sport));
   }
   return bias;
 }
@@ -453,11 +498,28 @@ function estimationUncertainty(rows) {
  * A sport under its floor is counted and then left out of bySport.
  * The pooled fit is kept for the card stamp. It is not an applied map
  * for a sport under the floor, and applyCalibration does not read it.
+ *
+ * The cell shift is separate. Default source is prior morning-board rows
+ * (`opts.boardRows`), both sides, dated before the card. Published picks
+ * still train Platt, isotonic, sportN, and trainN. OMEGA_V2_BIAS_SOURCE=picks
+ * fits the shift on those picks, which is the old behaviour.
  */
-function fitWalkForward(history, cardDate) {
+function fitWalkForward(history, cardDate, opts) {
+  const options = opts && typeof opts === 'object' ? opts : {};
   const rows = (history || []).filter(usable);
   assertNoLeakage(rows, cardDate);
-  const bias = mathMode === 'linear' ? {} : fitCellBias(rows);
+  const biasSource = biasSourceOf(options);
+  const biasRows = biasSource === 'picks' ? rows : priorBoardRows(options.boardRows, cardDate);
+  const groups = groupBiasRows(biasRows);
+  const biasN = {};
+  for (const key of Object.keys(groups)) biasN[key] = groups[key].length;
+  const minRows = biasSource === 'board' ? BOARD_BIAS_MIN : 0;
+  const bias = mathMode === 'linear' ? {} : fitCellBias(biasRows, { minRows });
+  if (mathMode !== 'linear' && minRows > 0) {
+    for (const key of Object.keys(biasN)) {
+      if (biasN[key] < minRows) bias[key] = 0;
+    }
+  }
   const trainRows = mathMode === 'linear' ? rows : centerRows(rows, bias);
   const pooled = fitSelected(trainRows);
   const bySport = {};
@@ -486,6 +548,9 @@ function fitWalkForward(history, cardDate) {
     bySport,
     sportN,
     bias,
+    biasN,
+    biasSource,
+    biasMin: biasSource === 'board' ? BOARD_BIAS_MIN : 0,
     uncertainty,
     leakageChecked: true,
     mathMode,
@@ -646,8 +711,10 @@ module.exports = {
   setMathMode,
   fitCellBias,
   biasFor,
+  biasSourceOf,
   cellKey,
   BIAS_N0,
+  BOARD_BIAS_MIN,
   setBiasMode,
   modelFor,
   priorKFor,

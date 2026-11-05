@@ -120,6 +120,65 @@ function historyRow(date, pick) {
 }
 
 /**
+ * One scored morning-board side. Both sides are kept. A row with no
+ * probability is dropped. `pick` is the side, matching graded history.
+ */
+function boardHistoryRow(date, cand) {
+  if (!cand || typeof cand !== 'object') return null;
+  const pModel = numOrNull(cand.pModel != null ? cand.pModel : (cand.modelRawP != null ? cand.modelRawP : cand.p_model));
+  const pMkt = numOrNull(cand.pMkt != null ? cand.pMkt : (cand.fair_sharp_p != null ? cand.fair_sharp_p : cand.sharpFairP));
+  if (pModel == null || pMkt == null) return null;
+  const sport = cand.sport || null;
+  const market = cand.market || cand.betType || null;
+  const pick = cand.side || cand.pick || null;
+  if (!sport || !market || !pick) return null;
+  return {
+    date: String(date),
+    sport,
+    market,
+    pick: String(pick),
+    pModel,
+    pMkt,
+  };
+}
+
+function cardDay(value) {
+  const d = String(value || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
+/** Past dates and board bodies. One process re-reads the same blob once. */
+const boardStoreCache = {
+  dates: undefined,
+  boards: new Map(),
+};
+
+async function defaultPickDates() {
+  if (boardStoreCache.dates !== undefined) return boardStoreCache.dates;
+  try {
+    const { readJson } = require('../omega-vnext/store');
+    const stored = await readJson('picks-dates');
+    boardStoreCache.dates = Array.isArray(stored) ? stored : [];
+  } catch (_) {
+    boardStoreCache.dates = [];
+  }
+  return boardStoreCache.dates;
+}
+
+async function defaultMorningBoard(date) {
+  if (boardStoreCache.boards.has(date)) return boardStoreCache.boards.get(date);
+  let body = null;
+  try {
+    const { readJson } = require('../omega-vnext/store');
+    body = await readJson(boardKey(date));
+  } catch (_) {
+    body = null;
+  }
+  boardStoreCache.boards.set(date, body);
+  return body;
+}
+
+/**
  * Graded straight rows from stored cards dated before cardDate.
  * Read-only. A missing store returns []. Never includes cardDate or later.
  */
@@ -162,11 +221,58 @@ async function loadGradedHistory(cardDate, opts = {}) {
   return rows;
 }
 
+/**
+ * Unselected morning-board rows strictly before cardDate.
+ * Same date list as loadGradedHistory: the last 20 card dates before
+ * this one. A missing blob is skipped, so a date in that window with no
+ * board contributes nothing. Both sides. Read-only. A missing store
+ * returns []. The caller races this with a timeout, same as graded history.
+ * A board whose own date is on or after cardDate is dropped.
+ */
+async function loadBoardHistory(cardDate, opts = {}) {
+  const card = cardDay(cardDate);
+  if (!card) return [];
+  const readBoard = opts.readBoard;
+  const readDates = opts.readDates;
+  let dates = [];
+  try {
+    if (readDates) dates = await readDates();
+    else dates = await defaultPickDates();
+  } catch (_) {
+    return [];
+  }
+  const prior = (Array.isArray(dates) ? dates : [])
+    .map((d) => cardDay(d))
+    .filter((d) => d && d < card)
+    .sort()
+    .slice(-20);
+  const rows = [];
+  for (const date of prior) {
+    let body = null;
+    try {
+      body = readBoard ? await readBoard(date) : await defaultMorningBoard(date);
+    } catch (_) {
+      body = null;
+    }
+    if (!body || typeof body !== 'object') continue;
+    const stamped = cardDay(body.date) || date;
+    if (!stamped || stamped >= card) continue;
+    const cands = Array.isArray(body.candidates) ? body.candidates : [];
+    for (const cand of cands) {
+      const row = boardHistoryRow(stamped, cand);
+      if (row) rows.push(row);
+    }
+  }
+  return rows;
+}
+
 module.exports = {
   boardKey,
   slimCandidate,
   saveMorningBoard,
   loadGradedHistory,
+  loadBoardHistory,
+  boardHistoryRow,
   historyRow,
   finitePoint,
   quotePoint,

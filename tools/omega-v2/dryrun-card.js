@@ -161,6 +161,23 @@ function cardSlim(card) {
     parlaySource: pipe ? pipe.parlaySource : null,
     leakageChecked: pipe ? pipe.leakageChecked === true : null,
     morningBoard: pipe ? pipe.morningBoard : null,
+    calibration: pipe && pipe.calibration ? {
+      biasSource: pipe.calibration.biasSource || null,
+      bias: pipe.calibration.bias || null,
+      biasN: pipe.calibration.biasN || null,
+      biasMin: pipe.calibration.biasMin != null ? pipe.calibration.biasMin : null,
+      trainN: pipe.calibration.trainN != null ? pipe.calibration.trainN : null,
+    } : null,
+    sportCoverage: card.sportCoverage && Array.isArray(card.sportCoverage.rows)
+      ? card.sportCoverage.rows.map((row) => ({
+        sport: row.sport,
+        scored: row.scored,
+        qualified: row.qualified,
+        meanBias: row.meanBias,
+        meanBiasAfter: row.meanBiasAfter,
+        action: row.action,
+      }))
+      : null,
     captureHealth: card.captureHealth ? {
       ok: card.captureHealth.ok,
       hardFail: card.captureHealth.hardFail,

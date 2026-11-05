@@ -203,7 +203,11 @@ function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
 async function buildCard(input) {
   const date = input && input.date;
   const history = Array.isArray(input && input.history) ? input.history : [];
-  const fit = fitWalkForward(history, date);
+  const boardRows = Array.isArray(input && input.boardRows) ? input.boardRows : [];
+  const fit = fitWalkForward(history, date, {
+    boardRows,
+    biasSource: input && input.biasSource,
+  });
   const asOfMs = pregameClockMs(input);
   const pregameOpts = { pregameAsOfMs: asOfMs };
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
@@ -328,6 +332,10 @@ async function buildCard(input) {
       shrinkN0: SHRINK_N0,
       nhlMlShrinkK: NHL_ML_SHRINK_K,
       nhlMlWalkforwardBeatsNovig: NHL_ML_WALKFORWARD_BEATS_NOVIG,
+      biasSource: fit.biasSource,
+      bias: fit.bias || {},
+      biasN: fit.biasN || {},
+      biasMin: fit.biasMin,
       bySport: Object.fromEntries(Object.entries(fit.bySport).map(([sport, model]) => [sport, {
         n: model.n,
         k: model.k,
@@ -397,6 +405,8 @@ async function publishFromOmegaCandidates(input) {
     parlayPool: input.parlayPool || raw,
     v1Qualified: input.v1Qualified || [],
     history: input.history || [],
+    boardRows: input.boardRows || [],
+    biasSource: input.biasSource,
     recheck: input.recheck || null,
     hardFails: input.hardFails || [],
     pregameAsOfMs: input.pregameAsOfMs,
@@ -410,6 +420,7 @@ async function publishFromOmegaCandidates(input) {
         candidates: Array.isArray(input.scoredCandidates) ? input.scoredCandidates : raw,
         snap: input.snap || null,
         history: input.history || [],
+        boardRows: input.boardRows || [],
         dateISO: input.date,
         fetchJson: typeof input.inputsFetch === 'function' ? input.inputsFetch : null,
         skipFetch: !!(input.skipInputFetch || input.replayLike || input.historicalSnapshot),

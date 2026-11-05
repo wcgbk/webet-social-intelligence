@@ -371,6 +371,13 @@ async function main() {
   );
   if (nhlInputs.status !== 0) throw new Error('nhl public-input gate failed');
 
+  const biasBoard = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-bias-board.js')],
+    { stdio: 'inherit' }
+  );
+  if (biasBoard.status !== 0) throw new Error('board bias gate failed');
+
   // Math gate: replay stored v2 cards against the approved GATE_SPEC rules.
   const math = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'math-gate.js')], { stdio: 'inherit' });
   if (math.status !== 0) throw new Error('omega-v2 math gate failed');

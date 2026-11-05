@@ -241,13 +241,16 @@ function pCalOf(cand, fit) {
   }
 }
 
-function safeFit(history, dateISO) {
+function safeFit(history, dateISO, boardRows) {
   try {
     // Walk-forward reads pModel. Give it copies so a fit cannot rewrite the card's history.
     const rows = (Array.isArray(history) ? history : []).map((row) => (
       row && typeof row === 'object' ? { ...row } : row
     ));
-    return fitWalkForward(rows, dateISO);
+    const boards = (Array.isArray(boardRows) ? boardRows : []).map((row) => (
+      row && typeof row === 'object' ? { ...row } : row
+    ));
+    return fitWalkForward(rows, dateISO, { boardRows: boards });
   } catch (_) {
     return null;
   }
@@ -810,7 +813,7 @@ async function recordCandidateInputs(opts = {}) {
     }
     const dateISO = String(opts.dateISO || opts.date || '');
     const ctx = await loadContext(candidates, { ...opts, dateISO });
-    const fit = safeFit(opts.history, dateISO);
+    const fit = safeFit(opts.history, dateISO, opts.boardRows);
     const rows = candidates.map((cand, idx) => {
       try { return oneInput(cand, idx, ctx, fit); } catch (_) { return blankRow(cand, idx); }
     });

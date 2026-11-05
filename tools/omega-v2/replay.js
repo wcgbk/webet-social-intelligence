@@ -216,6 +216,56 @@ function historyBefore(derived, cardDate) {
   return rows;
 }
 
+function loadNetlifyToken() {
+  if (process.env.NETLIFY_AUTH_TOKEN) return 'env';
+  const tokenPath = '/home/box/.config/netlify/config.json';
+  let raw;
+  try { raw = fs.readFileSync(tokenPath, 'utf8'); } catch (_) { return 'missing-file'; }
+  let json;
+  try { json = JSON.parse(raw); } catch (_) { return 'bad-json'; }
+  const users = json && json.users;
+  if (!users || typeof users !== 'object') return 'no-users';
+  for (const user of Object.values(users)) {
+    const token = user && user.auth && user.auth.token;
+    if (typeof token === 'string' && token.length > 0) {
+      process.env.NETLIFY_AUTH_TOKEN = token;
+      return 'config';
+    }
+  }
+  return 'no-token';
+}
+
+const boardMemo = new Map();
+
+/** Morning boards dated before cardDate. Picks mode does not read them. */
+async function boardRowsBefore(cardDate) {
+  const key = String(cardDate || '');
+  if (boardMemo.has(key)) return boardMemo.get(key);
+  const source = String(process.env.OMEGA_V2_BIAS_SOURCE || 'board').trim().toLowerCase();
+  if (source === 'picks') {
+    boardMemo.set(key, []);
+    return [];
+  }
+  let timer;
+  let rows = [];
+  try {
+    rows = await Promise.race([
+      v2.loadBoardHistory(key),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('board history timeout')), 20000);
+      }),
+    ]);
+  } catch (err) {
+    console.error(`[replay] board history skipped for ${key}: ${err && err.message ? err.message : err}`);
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  if (!Array.isArray(rows)) rows = [];
+  boardMemo.set(key, rows);
+  return rows;
+}
+
 function liveBets(derived) {
   const bets = [];
   for (const day of derived.days) {
@@ -266,10 +316,12 @@ async function v2Bets(derived, quotes) {
   const cards = [];
   const quoteFor = quotes || new Map();
   for (const day of derived.days) {
+    const boardRows = await boardRowsBefore(day.date);
     const card = await v2.buildCard({
       date: day.date,
       candidates: dayPool(day).map((row) => candidateFrom(row, quoteFor.get(`${day.date}|${legKey(row)}`))),
       history: historyBefore(derived, day.date),
+      boardRows,
       recheck: null,
       pregameAsOfMs: replayPregameAsOfMs(day),
     });
@@ -671,6 +723,8 @@ function recommend(live, next, boot, calibration) {
 }
 
 async function main() {
+  const tokenSource = loadNetlifyToken();
+  console.error(`[replay] tokenSource=${tokenSource}`);
   const derived = loadDerived();
   const joined = await joinStoredDkHr(derived);
   const dkhr = joined.summary;
@@ -682,7 +736,9 @@ async function main() {
   // Score every straight with the same fit, including ones v2 did not bet.
   for (const day of derived.days) {
     const map = new Map();
-    const fit = v2.fitWalkForward(historyBefore(derived, day.date), day.date);
+    const fit = v2.fitWalkForward(historyBefore(derived, day.date), day.date, {
+      boardRows: await boardRowsBefore(day.date),
+    });
     for (const row of day.straights || []) {
       const cand = v2.normalizeCandidate(candidateFrom(row));
       const cal = cand.pModel != null && cand.pMkt != null ? v2.applyCalibration(cand, fit) : null;

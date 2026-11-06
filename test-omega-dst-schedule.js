@@ -100,4 +100,39 @@ for (const name of NAMES) {
   assert.ok(awaitAt === -1 || callAt < awaitAt, `${name} guard is before the first await`);
 }
 
+// Display observers dropped from netlify.toml in the 2026-10-18 V1 reset.
+// Same 09:15 ET dual-hour cron. etGuard keeps one copy year-round.
+// These handlers guard inside handle(event, when), so they stay out of EXPECTED.
+const DISPLAY_0915 = ['report-clv-omega', 'report-tracking-omega'];
+const displayCron = '15 13,14 * * *';
+const allSchedules = activeTomlSchedules(toml);
+for (const name of DISPLAY_0915) {
+  const rows = allSchedules.filter((row) => row.functionName === name);
+  assert.strictEqual(rows.length, 1, `${name} has one active schedule`);
+  assert.strictEqual(rows[0].cron, displayCron, `${name} cron is 15 13,14 * * *`);
+  const spec = ET_SCHEDULE[name];
+  assert.ok(spec, `${name} is in ET_SCHEDULE`);
+  assert.deepStrictEqual(spec.etTimes, ['09:15'], `${name} ET wall time`);
+  const { minute, hours } = utcHoursForEt('09:15');
+  assert.strictEqual(displayCron, `${minute} ${hours.join(',')} * * *`, `${name} cron is the EDT/EST pair`);
+
+  for (const day of DAYS) {
+    const [year, month, date] = day.split('-').map(Number);
+    const fires = hours.map((utcHour) => {
+      const now = new Date(Date.UTC(year, month - 1, date, utcHour, minute, 0));
+      const skip = rejectUnlessEtSlot(name, schedulerEvent(now.toISOString()), now);
+      return { utcHour, skip, et: etParts(now).et };
+    });
+    const passed = fires.filter((fire) => fire.skip == null);
+    assert.strictEqual(passed.length, 1, `${name} ${day} passes once`);
+    assert.strictEqual(passed[0].et, '09:15', `${name} ${day} passes at 09:15 ET`);
+    const rejected = fires.filter((fire) => fire.skip != null);
+    assert.strictEqual(rejected.length, 1, `${name} ${day} rejects the other copy`);
+    const body = JSON.parse(rejected[0].skip.body);
+    assert.strictEqual(body.skipped, 'et-guard');
+    assert.strictEqual(body.function, name);
+    assert.strictEqual(body.reason, 'outside-et-slot');
+  }
+}
+
 console.log('test-omega-dst-schedule: ALL PASS');

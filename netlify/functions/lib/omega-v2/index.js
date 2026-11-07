@@ -8,6 +8,7 @@ const parlay = require('./parlay');
 const guards = require('./guards');
 const pipeline = require('./pipeline');
 const board = require('./board');
+const marketSkill = require('./market_skill');
 
 module.exports = {
   ...constants,
@@ -18,4 +19,5 @@ module.exports = {
   ...guards,
   ...pipeline,
   ...board,
+  ...marketSkill,
 };

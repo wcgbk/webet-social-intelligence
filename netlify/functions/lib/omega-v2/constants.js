@@ -119,6 +119,19 @@ const MODEL_SPORTS = ['NBA', 'NHL', 'NCAAM', 'NFL', 'NCAAF'];
  */
 const SHRINK_N0 = 80;
 /**
+ * Market-skill weight prior. The live card trusts the model's deviation
+ * from the no-vig price only to the extent that deviation has beaten the
+ * market on earlier, unselected morning-board rows:
+ *   wHat = argmin log loss of sigmoid(logit(pMkt) + w*(logit(pCal) - logit(pMkt)))
+ *   w = (n * wHat + N0 * 1) / (n + N0)
+ * Shrink is toward 1, which is today's behaviour (use pCal as-is).
+ * N0 = 150 rows is about one week of a single sport's morning board,
+ * both sides. n = 0 keeps w = 1, so a sport with no graded board does
+ * not move. OMEGA_V2_MARKET_SKILL=off forces w = 1 and skips the grade.
+ */
+const MARKET_SKILL_N0 = 150;
+const MARKET_SKILL_ENV = 'OMEGA_V2_MARKET_SKILL';
+/**
  * NHL moneyline shrink toward the Pinnacle no-vig fair.
  * Stored walk-forward (tools/omega-calibration/out/walkforward-cal4.md,
  * window 2026-09-22 through 2026-10-08): NHL|Moneyline K = 1.00, kMle = 1.00,
@@ -186,6 +199,8 @@ module.exports = {
   MIN_SPORT,
   SPORT_MIN_GAMES,
   SHRINK_N0,
+  MARKET_SKILL_N0,
+  MARKET_SKILL_ENV,
   NHL_ML_SHRINK_K,
   NHL_ML_WALKFORWARD_BEATS_NOVIG,
   ISOTONIC_MIN,

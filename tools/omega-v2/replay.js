@@ -13,6 +13,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const v2 = require('../../netlify/functions/lib/omega-v2');
+const GRADED_BOARD = process.env.OMEGA_V2_GRADED_BOARD || '/workspace/qa-1107/graded.json';
+let gradedBoardMemo = null;
+function localGradedBoards() {
+  if (gradedBoardMemo) return gradedBoardMemo;
+  gradedBoardMemo = v2.readGradedFile(GRADED_BOARD);
+  return gradedBoardMemo;
+}
 const { americanToDecimal } = require('../../netlify/functions/lib/omega-vnext/odds_math');
 const { joinStoredDkHr } = require('./dkhr-quotes');
 
@@ -322,6 +329,8 @@ async function v2Bets(derived, quotes) {
       candidates: dayPool(day).map((row) => candidateFrom(row, quoteFor.get(`${day.date}|${legKey(row)}`))),
       history: historyBefore(derived, day.date),
       boardRows,
+      // Full file is safe: fitMarketSkill drops rows dated on or after day.date.
+      gradedBoardRows: localGradedBoards(),
       recheck: null,
       pregameAsOfMs: replayPregameAsOfMs(day),
     });
@@ -739,9 +748,13 @@ async function main() {
     const fit = v2.fitWalkForward(historyBefore(derived, day.date), day.date, {
       boardRows: await boardRowsBefore(day.date),
     });
+    const skill = v2.marketSkillEnabled()
+      ? v2.fitMarketSkill(localGradedBoards(), day.date)
+      : v2.disabledMarketSkill();
     for (const row of day.straights || []) {
       const cand = v2.normalizeCandidate(candidateFrom(row));
-      const cal = cand.pModel != null && cand.pMkt != null ? v2.applyCalibration(cand, fit) : null;
+      const cal0 = cand.pModel != null && cand.pMkt != null ? v2.applyCalibration(cand, fit) : null;
+      const cal = cal0 ? v2.applyMarketSkill({ ...cal0, pCalRaw: cal0.pCal }, skill, cand.sport) : null;
       if (cal) map.set(legKey(row), { pCal: cal.pCal });
     }
     quoted.set(day.date, { quoted: map });

@@ -5,6 +5,10 @@ const {
 } = require('./constants');
 const { fitWalkForward, applyCalibration } = require('./calibrate');
 const {
+  marketSkillEnabled, fitMarketSkill, disabledMarketSkill, applyMarketSkill,
+  attachMarketSkillReport, publicMarketSkill, boardProbKey,
+} = require('./market_skill');
+const {
   gameKey, marketFamily, annotateCandidate, selectStraights, pastPregameCutoff, pregameClockMs,
 } = require('./select');
 const { sizeStraights, sumUnits } = require('./size');
@@ -193,6 +197,7 @@ function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
     return;
   }
   const calibration = applyCalibration(cand, fit);
+  if (calibration && calibration.pCalRaw == null) calibration.pCalRaw = calibration.pCal;
   prepared.push({ ...cand, calibration });
 }
 
@@ -200,6 +205,8 @@ function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
  * Build one v2 card. Flag-off callers should use runPipeline, which delegates
  * to the production publisher and does not enter this function.
  */
+const boardStampState = new WeakMap();
+
 async function buildCard(input) {
   const date = input && input.date;
   const history = Array.isArray(input && input.history) ? input.history : [];
@@ -208,6 +215,16 @@ async function buildCard(input) {
     boardRows,
     biasSource: input && input.biasSource,
   });
+  let marketSkill;
+  try {
+    marketSkill = marketSkillEnabled(input)
+      ? fitMarketSkill(input && input.gradedBoardRows, date)
+      : disabledMarketSkill();
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.warn(`[omega-v2] market skill fit skipped: ${msg}`);
+    marketSkill = disabledMarketSkill();
+  }
   const asOfMs = pregameClockMs(input);
   const pregameOpts = { pregameAsOfMs: asOfMs };
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
@@ -235,6 +252,7 @@ async function buildCard(input) {
   if (sportCoverage && Object.prototype.hasOwnProperty.call(sportCoverage, 'added')) {
     delete sportCoverage.added;
   }
+  attachMarketSkillReport(sportCoverage, marketSkill);
   for (const raw of rescued) {
     try {
       const cand = normalizeCandidate(raw);
@@ -246,6 +264,13 @@ async function buildCard(input) {
     }
   }
   stampQualified(sportCoverage, null);
+  // Coverage may replace pCal with an anchor. The weight runs on whatever
+  // probability is about to be bet, and it keeps pCalRaw as the pre-weight
+  // model probability so a later board fit does not compound.
+  for (const cand of prepared) {
+    if (!cand.calibration) continue;
+    cand.calibration = applyMarketSkill(cand.calibration, marketSkill, cand.sport);
+  }
   const annotated = prepared.map((cand) => annotateCandidate(cand));
   stampQualified(sportCoverage, annotated);
   for (const cand of annotated) {
@@ -336,6 +361,7 @@ async function buildCard(input) {
       bias: fit.bias || {},
       biasN: fit.biasN || {},
       biasMin: fit.biasMin,
+      marketSkill: publicMarketSkill(marketSkill),
       bySport: Object.fromEntries(Object.entries(fit.bySport).map(([sport, model]) => [sport, {
         n: model.n,
         k: model.k,
@@ -363,7 +389,69 @@ async function buildCard(input) {
     modelVersion: MODEL_VERSION,
     aplusLocks: (published.picks || []).filter((p) => p.rating === 'aplus').length,
   });
+  const overlay = [];
+  for (const cand of prepared) {
+    if (!cand.calibration) continue;
+    overlay.push({
+      key: boardProbKey(cand),
+      pCal: cand.calibration.pCal,
+      pCalRaw: cand.calibration.pCalRaw,
+    });
+  }
+  boardStampState.set(published, { fit, skill: marketSkill, overlay });
   return published;
+}
+
+/**
+ * Morning-board rows for the day. coverProb is the probability the card
+ * bets with. pCalRaw is the calibrated probability before the market-skill
+ * weight. Flag off leaves the rows untouched. A row the card calibrated
+ * uses that result. Any other row is calibrated with the same fit.
+ */
+function stampBoardCandidates(candidates, cardOrState) {
+  const state = cardOrState && cardOrState.fit
+    ? cardOrState
+    : boardStampState.get(cardOrState);
+  if (cardOrState && !cardOrState.fit) boardStampState.delete(cardOrState);
+  const skill = state && state.skill;
+  if (!skill || skill.enabled === false) {
+    return (candidates || []).map((c) => ({ ...c }));
+  }
+  const fit = state.fit;
+  const map = new Map();
+  for (const row of state.overlay || []) {
+    if (row && row.key) map.set(row.key, row);
+  }
+  return (candidates || []).map((cand) => {
+    const copy = { ...cand };
+    const hit = map.get(boardProbKey(cand));
+    if (hit && Number.isFinite(Number(hit.pCal))) {
+      copy.coverProb = Number(hit.pCal);
+      const raw = Number(hit.pCalRaw);
+      copy.pCalRaw = Number.isFinite(raw) ? raw : Number(hit.pCal);
+      return copy;
+    }
+    if (!fit) return copy;
+    let cal = null;
+    try {
+      const mapped = fromOmegaCandidate(cand);
+      cal = applyCalibration({
+        sport: mapped.sport,
+        market: mapped.market,
+        pick: mapped.pick,
+        pModel: mapped.pModel,
+        pMkt: mapped.pMkt,
+      }, fit);
+    } catch (_) {
+      cal = null;
+    }
+    if (!cal || !Number.isFinite(Number(cal.pCal))) return copy;
+    const weighted = applyMarketSkill({ ...cal, pCalRaw: cal.pCal }, skill, cand.sport);
+    if (!weighted || !Number.isFinite(Number(weighted.pCal))) return copy;
+    copy.coverProb = weighted.pCal;
+    copy.pCalRaw = weighted.pCalRaw;
+    return copy;
+  });
 }
 
 function fromOmegaCandidate(c) {
@@ -406,6 +494,8 @@ async function publishFromOmegaCandidates(input) {
     v1Qualified: input.v1Qualified || [],
     history: input.history || [],
     boardRows: input.boardRows || [],
+    gradedBoardRows: input.gradedBoardRows || [],
+    marketSkill: input.marketSkill,
     biasSource: input.biasSource,
     recheck: input.recheck || null,
     hardFails: input.hardFails || [],
@@ -457,4 +547,5 @@ module.exports = {
   runPipeline,
   normalizeCandidate,
   fromOmegaCandidate,
+  stampBoardCandidates,
 };

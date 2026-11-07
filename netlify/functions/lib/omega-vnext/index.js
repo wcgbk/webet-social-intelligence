@@ -23,6 +23,7 @@ const { loadLinePath, annotateLineMoves, assessCaptureHealth, cardCaptureHealth,
 const { runOmegaLineCapture } = require('./capture_runner');
 const {
   pipelineV2Enabled, publishFromOmegaCandidates, saveMorningBoard, loadGradedHistory, loadBoardHistory,
+  loadMarketSkillRows, shouldLoadMarketSkill, stampBoardCandidates,
   biasSourceOf, recheckFromCachedBoard,
   MODEL_VERSION: OMEGA_V2_MODEL_VERSION,
 } = require('../omega-v2');
@@ -531,13 +532,18 @@ async function generateOmegaVnext(opts = {}) {
   if (usePipelineV2) {
     let history = [];
     let boardRows = [];
+    let gradedBoardRows = [];
     const biasSource = biasSourceOf({ biasSource: opts.biasSource });
     if (Array.isArray(opts.walkForwardHistory)) history = opts.walkForwardHistory;
     if (Array.isArray(opts.boardHistory)) boardRows = opts.boardHistory;
+    if (Array.isArray(opts.gradedBoardRows)) gradedBoardRows = opts.gradedBoardRows;
     const wantHistory = !Array.isArray(opts.walkForwardHistory) && !fixtureCandidates;
     // Same window as graded history, and only when the shift is the board fit.
     const wantBoards = wantHistory && biasSource !== 'picks' && !Array.isArray(opts.boardHistory);
-    if (wantHistory || wantBoards) {
+    // Prior morning boards, graded once and cached. Flag off skips the call.
+    // An injected gradedBoardRows list (offline replay) skips it too.
+    const wantSkill = shouldLoadMarketSkill(opts) && !fixtureCandidates;
+    if (wantHistory || wantBoards || wantSkill) {
       const raced = (promise, label) => {
         let timer;
         return Promise.race([
@@ -568,12 +574,19 @@ async function generateOmegaVnext(opts = {}) {
           },
         ));
       }
+      if (wantSkill) {
+        jobs.push(raced(loadMarketSkillRows(dateISO, {
+          noWrite: !!(dryRun || shadow),
+        }), 'market skill timeout').then(
+          (rows) => { gradedBoardRows = Array.isArray(rows) ? rows : []; },
+          (e) => {
+            console.warn(`[omega-v2] market skill skipped: ${e.message}`);
+            gradedBoardRows = [];
+          },
+        ));
+      }
       await Promise.all(jobs);
     }
-    const boardSave = await saveMorningBoard(dateISO, candidates, {
-      dryRun: dryRun || shadow,
-      modelVersion: OMEGA_V2_MODEL_VERSION,
-    });
     publishInput = {
       date: dateISO,
       dateFormatted,
@@ -583,6 +596,8 @@ async function generateOmegaVnext(opts = {}) {
       v1Qualified: stillRaw,
       history,
       boardRows,
+      gradedBoardRows,
+      marketSkill: opts.marketSkill,
       biasSource,
       recheck: typeof opts.priceRecheck === 'function'
         ? opts.priceRecheck
@@ -603,6 +618,18 @@ async function generateOmegaVnext(opts = {}) {
     if (Object.prototype.hasOwnProperty.call(opts, 'logInputs')) publishInput.logInputs = opts.logInputs;
     if (typeof opts.inputsFetch === 'function') publishInput.inputsFetch = opts.inputsFetch;
     built = await publishFromOmegaCandidates(publishInput);
+    let boardSource = candidates;
+    try {
+      boardSource = stampBoardCandidates(candidates, built);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      console.warn(`[omega-v2] board probability stamp skipped: ${msg}`);
+      boardSource = candidates;
+    }
+    const boardSave = await saveMorningBoard(dateISO, boardSource, {
+      dryRun: dryRun || shadow,
+      modelVersion: OMEGA_V2_MODEL_VERSION,
+    });
     built.morningBoard = boardSave;
   }
   const publishedVersion = usePipelineV2 && built.modelVersion ? built.modelVersion : MODEL_VERSION;

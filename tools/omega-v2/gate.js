@@ -347,6 +347,7 @@ async function main() {
   assert.ok(Math.abs(mapCal.pCal - mapCal.pShrink) < 1e-12, 'pCal stays on the shrink');
 
   await testFixOmegaCard1103();
+  await testMarketSkill();
 
   console.log('PASS omega-v2 gate');
 
@@ -430,6 +431,241 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (captureDegraded.status !== 0) throw new Error('capture degraded gate failed');
+}
+
+function pickSlim(card) {
+  return {
+    picks: (card.picks || []).map((p) => ({
+      pick: p.pick,
+      odds: p.odds,
+      units: p.units,
+      unitsNum: p.unitsNum,
+      pCal: p.pCal,
+      edgePct: p.edgePct,
+      ev: p.ev,
+    })),
+    parlay: (card.parlayLegs || []).map((ticket) => ({
+      odds: ticket.combinedOdds,
+      units: ticket.units,
+      legs: (ticket.legs || []).map((leg) => ({ pick: leg.pick, odds: leg.odds, pCal: leg.pCal })),
+    })),
+  };
+}
+
+function antiRows(n, sport, date) {
+  const rows = [];
+  for (let i = 0; i < n; i += 1) {
+    rows.push({
+      date,
+      sport,
+      market: 'Moneyline',
+      y: 0,
+      pMkt: 0.5,
+      pCal: 0.8,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Market-skill weight. The fit trusts the model only where graded boards
+ * beat the no-vig price. Flag off is the previous card.
+ */
+async function testMarketSkill() {
+  const anti = antiRows(80, 'NBA', '2026-11-01');
+  const antiFit = v2.fitMarketSkillWeight(anti);
+  assert.strictEqual(antiFit.wHat, 0, 'anti-informative model fits wHat 0');
+  assert.strictEqual(antiFit.n, 80);
+  assert.ok(Math.abs(antiFit.w - ((80 * 0 + 150 * 1) / (80 + 150))) < 1e-12, 'EB shrink toward 1');
+
+  const info = [];
+  for (let i = 0; i < 40; i += 1) {
+    info.push({ pMkt: 0.5, pCal: i % 2 ? 0.82 : 0.18, y: i % 2 ? 1 : 0 });
+  }
+  const infoFit = v2.fitMarketSkillWeight(info);
+  assert.ok(infoFit.wHat >= 0.95, `informative model wHat near 1, got ${infoFit.wHat}`);
+
+  const none = v2.fitMarketSkillWeight([]);
+  assert.strictEqual(none.w, 1);
+  assert.strictEqual(none.wHat, null);
+  assert.strictEqual(none.n, 0);
+  const emptyCard = v2.fitMarketSkill([], '2026-11-06');
+  assert.strictEqual(emptyCard.enabled, true);
+  assert.strictEqual(emptyCard.bySport.NBA.w, 1);
+  assert.strictEqual(emptyCard.bySport.NBA.n, 0);
+  assert.strictEqual(emptyCard.N0, 150);
+
+  const half = v2.fitMarketSkillWeight(antiRows(150, 'NBA', '2026-11-01'));
+  assert.strictEqual(half.wHat, 0);
+  assert.ok(Math.abs(half.w - 0.5) < 1e-12, 'n = N0 and wHat 0 is w 0.5');
+
+  const leaked = v2.fitMarketSkill([
+    { date: '2026-11-06', sport: 'NFL', y: 0, pMkt: 0.5, pCal: 0.9 },
+    { date: '2026-11-07', sport: 'NFL', y: 0, pMkt: 0.5, pCal: 0.9 },
+    { d: '2026-11-05', sport: 'NFL', y: 0, pMkt: 0.5, pCal: 0.9 },
+    { date: 'not-a-date', sport: 'NFL', y: 0, pMkt: 0.5, pCal: 0.9 },
+  ], '2026-11-06');
+  assert.strictEqual(leaked.NFL ? leaked.bySport.NFL.n : leaked.bySport.NFL.n, 1);
+  assert.deepStrictEqual(leaked.bySport.NFL.dates, ['2026-11-05']);
+
+  const rawVsCover = [];
+  for (let i = 0; i < 30; i += 1) {
+    const y = i % 2;
+    rawVsCover.push({
+      date: '2026-11-01',
+      sport: 'NHL',
+      y,
+      pMkt: 0.5,
+      coverProb: y ? 0.85 : 0.15,
+      pCalRaw: y ? 0.15 : 0.85,
+    });
+  }
+  const usedRaw = v2.fitMarketSkill(rawVsCover, '2026-11-04');
+  assert.strictEqual(usedRaw.bySport.NHL.wHat, 0, 'fit reads pCalRaw, not the weighted coverProb');
+  const coverOnly = rawVsCover.map((row) => ({ ...row, pCalRaw: undefined }));
+  const usedCover = v2.fitMarketSkill(coverOnly, '2026-11-04');
+  assert.ok(usedCover.bySport.NHL.wHat >= 0.95, 'without pCalRaw the fit uses coverProb');
+
+  assert.strictEqual(v2.blendMarketSkill(0.42, 0.71, 1), 0.71);
+  assert.strictEqual(v2.blendMarketSkill(0.42, 0.71, 0), 0.42);
+  const mid = v2.blendMarketSkill(0.42, 0.71, 0.5);
+  assert.ok(mid > 0.42 && mid < 0.71);
+
+  const savedFlag = process.env.OMEGA_V2_MARKET_SKILL;
+  const base = {
+    date: '2026-11-06',
+    candidates: [strong('NFL', 'Buffalo Bills @ Kansas City Chiefs', 'Buffalo Bills ML', 'Moneyline')],
+    history: [],
+  };
+  try {
+    process.env.OMEGA_V2_MARKET_SKILL = 'off';
+    assert.strictEqual(v2.marketSkillEnabled({}), false);
+    assert.strictEqual(v2.shouldLoadMarketSkill({}), false);
+    const offEnv = await v2.buildCard(base);
+    const offWithRows = await v2.buildCard({ ...base, gradedBoardRows: antiRows(2000, 'NFL', '2026-11-01') });
+    delete process.env.OMEGA_V2_MARKET_SKILL;
+    const offOpt = await v2.buildCard({ ...base, marketSkill: 'off' });
+    const onEmpty = await v2.buildCard(base);
+    assert.strictEqual(v2.marketSkillEnabled({}), true);
+    assert.ok(offEnv.picks.length === 1, 'flag off still publishes the straight');
+    assert.deepStrictEqual(pickSlim(offEnv), pickSlim(offWithRows), 'flag off ignores graded boards');
+    assert.deepStrictEqual(pickSlim(offEnv), pickSlim(offOpt));
+    assert.deepStrictEqual(pickSlim(offEnv), pickSlim(onEmpty), 'no graded rows keeps w = 1');
+    assert.strictEqual(offEnv.calibration.marketSkill.enabled, false);
+    assert.strictEqual(offEnv.calibration.marketSkill.NFL.w, 1);
+    const nflRow = (offEnv.sportCoverage.rows || []).find((row) => row.sport === 'NFL');
+    assert.ok(nflRow && nflRow.marketSkill && nflRow.marketSkill.w === 1);
+
+    const onAnti = await v2.buildCard({
+      ...base,
+      gradedBoardRows: antiRows(2000, 'NFL', '2026-11-05').concat([
+        { date: '2026-11-06', sport: 'NFL', y: 0, pMkt: 0.5, pCal: 0.99 },
+      ]),
+    });
+    assert.strictEqual(onAnti.picks.length, 0, 'a weight near 0 removes the straight');
+    assert.strictEqual(onAnti.pass, true, 'no straight is a pass, not a throw');
+    assert.strictEqual(onAnti.calibration.marketSkill.enabled, true);
+    assert.strictEqual(onAnti.calibration.marketSkill.NFL.wHat, 0);
+    assert.strictEqual(onAnti.calibration.marketSkill.NFL.n, 2000, 'card-date row is not in the fit');
+    assert.ok(onAnti.calibration.marketSkill.NFL.w < 0.1);
+    const antiNfl = (onAnti.sportCoverage.rows || []).find((row) => row.sport === 'NFL');
+    assert.ok(antiNfl && antiNfl.marketSkill && antiNfl.marketSkill.n === 2000);
+  } finally {
+    if (savedFlag == null) delete process.env.OMEGA_V2_MARKET_SKILL;
+    else process.env.OMEGA_V2_MARKET_SKILL = savedFlag;
+  }
+
+  assert.strictEqual(v2.shouldLoadMarketSkill({ gradedBoardRows: [] }), false);
+  assert.strictEqual(v2.shouldLoadMarketSkill({ fixtureCandidates: [{}] }), false);
+  assert.strictEqual(v2.shouldLoadMarketSkill({}), true);
+
+  const indexSrc = fs.readFileSync(path.join(root, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
+  assert.ok(indexSrc.includes('loadMarketSkillRows'), 'live card grades prior boards');
+  assert.ok(indexSrc.includes('market skill timeout'), 'the grade is raced like graded history');
+  assert.ok(indexSrc.includes('20000'));
+
+  const mem = new Map();
+  let fetches = 0;
+  let writes = 0;
+  let boardReads = 0;
+  const pendingBoard = {
+    date: '2026-11-01',
+    candidates: [
+      {
+        sport: 'NBA', market: 'Moneyline', side: 'Away Team',
+        matchup: 'Away Team @ Home Team', homeTeam: 'Home Team', awayTeam: 'Away Team',
+        pMkt: 0.46, coverProb: 0.7, pCalRaw: 0.25, commenceTime: '2026-11-01T00:00:00Z',
+      },
+      {
+        sport: 'NBA', market: 'Moneyline', side: 'Celtics',
+        matchup: 'Celtics @ Knicks', homeTeam: 'Knicks', awayTeam: 'Celtics',
+        pMkt: 0.52, coverProb: 0.6, commenceTime: '2026-11-01T02:00:00Z',
+      },
+    ],
+  };
+  const finals = [
+    {
+      awayTeam: 'Away Team', homeTeam: 'Home Team', awayAbbr: 'AWY', homeAbbr: 'HOM',
+      awayScore: 90, homeScore: 100, state: 'post', completed: true, statusName: 'STATUS_FINAL',
+      startISO: '2026-11-01T00:00:00Z',
+    },
+    {
+      awayTeam: 'Celtics', homeTeam: 'Knicks', awayAbbr: 'BOS', homeAbbr: 'NYK',
+      awayScore: 10, homeScore: 12, state: 'in', completed: false, statusName: 'STATUS_IN_PROGRESS',
+      startISO: '2026-11-01T02:00:00Z',
+    },
+  ];
+  const loadOpts = {
+    readDates: async () => ['2026-11-01', '2026-11-02', '2026-11-03'],
+    readCache: async (date) => mem.get(date) || null,
+    writeCache: async (date, body) => { writes += 1; mem.set(date, body); },
+    readBoard: async () => { boardReads += 1; return pendingBoard; },
+    fetchScores: async () => { fetches += 1; return finals; },
+    budgetMs: 5000,
+  };
+  const pendingRows = await v2.loadMarketSkillRows('2026-11-02', loadOpts);
+  assert.strictEqual(writes, 0, 'cache is not written while a game is live');
+  assert.strictEqual(pendingRows.length, 0, 'a live slate is not a partial training set');
+  assert.ok(fetches >= 1);
+
+  finals[1] = { ...finals[1], state: 'post', completed: true, statusName: 'STATUS_FINAL', awayScore: 101, homeScore: 99 };
+  const graded = await v2.loadMarketSkillRows('2026-11-02', loadOpts);
+  assert.strictEqual(writes, 1, 'cache is written once every row is final');
+  assert.ok(graded.length >= 1);
+  const away = graded.find((row) => row.pCal === 0.25);
+  assert.ok(away, 'cached pCal is pCalRaw, not coverProb');
+  assert.strictEqual(away.y, 0);
+  assert.strictEqual(away.sport, 'NBA');
+  assert.ok(away.pMkt === 0.46);
+  const stored = mem.get('2026-11-01');
+  assert.strictEqual(stored.complete, true);
+  assert.ok(stored.rows.every((row) => row.pCal !== 0.7));
+  assert.ok(stored.rows.some((row) => row.pCal === 0.25));
+
+  const fetchesAfter = fetches;
+  const readsAfter = boardReads;
+  const again = await v2.loadMarketSkillRows('2026-11-02', loadOpts);
+  assert.strictEqual(fetches, fetchesAfter, 'a complete cache is not re-graded');
+  assert.strictEqual(boardReads, readsAfter, 'a complete cache does not re-read the board');
+  assert.strictEqual(writes, 1);
+  assert.strictEqual(again.length, graded.length);
+
+  writes = 0;
+  mem.clear();
+  const noWriteRows = await v2.loadMarketSkillRows('2026-11-02', { ...loadOpts, noWrite: true });
+  assert.strictEqual(writes, 0, 'noWrite does not store the cache');
+  assert.ok(noWriteRows.length >= 1, 'noWrite still returns the graded rows');
+
+  fetches = 0;
+  const skipped = await v2.loadMarketSkillRows('2026-11-02', {
+    ...loadOpts,
+    budgetMs: 0,
+    readCache: async () => null,
+  });
+  assert.strictEqual(fetches, 0, 'a spent budget skips the date');
+  assert.deepStrictEqual(skipped, []);
+
+  console.log('PASS market-skill weight');
 }
 
 /**

@@ -12,6 +12,10 @@
 
 const fs = require('fs');
 const { MODEL_VERSION } = require('../../netlify/functions/lib/omega-v2/constants');
+const { readGradedFile } = require('../../netlify/functions/lib/omega-v2/market_skill');
+
+const GRADED_FILE = process.env.OMEGA_V2_GRADED_BOARD || '/workspace/qa-1107/graded.json';
+const gradedBoardRows = readGradedFile(GRADED_FILE);
 
 process.env.OMEGA_REPLAY_NO_WRITE = '1';
 process.env.OMEGA_X_AUTOPOST = 'false';
@@ -167,6 +171,7 @@ function cardSlim(card) {
       biasN: pipe.calibration.biasN || null,
       biasMin: pipe.calibration.biasMin != null ? pipe.calibration.biasMin : null,
       trainN: pipe.calibration.trainN != null ? pipe.calibration.trainN : null,
+      marketSkill: pipe.calibration.marketSkill || null,
     } : null,
     sportCoverage: card.sportCoverage && Array.isArray(card.sportCoverage.rows)
       ? card.sportCoverage.rows.map((row) => ({
@@ -176,6 +181,7 @@ function cardSlim(card) {
         meanBias: row.meanBias,
         meanBiasAfter: row.meanBiasAfter,
         action: row.action,
+        marketSkill: row.marketSkill || null,
       }))
       : null,
     captureHealth: card.captureHealth ? {
@@ -197,6 +203,8 @@ async function runOne(date, pipelineV2) {
       skipNarrate: true,
       pipelineV2,
       pregameAsOfMs,
+      // Prior graded boards only. The pipeline drops the card date and later.
+      gradedBoardRows: pipelineV2 ? gradedBoardRows : undefined,
     });
     return { error: null, pregameAsOf: new Date(pregameAsOfMs).toISOString(), card: cardSlim(card) };
   } catch (err) {
@@ -212,7 +220,7 @@ async function runOne(date, pipelineV2) {
 (async () => {
   const dates = argValue('--date', '2026-10-30,2026-10-31').split(',').map((s) => s.trim()).filter(Boolean);
   const outPath = argValue('--out', '/workspace/dryrun-card.json');
-  console.error(`[omega-v2-dryrun] tokenSource=${tokenSource} noWrite=1 oddsApi=blocked dates=${dates.join(',')}`);
+  console.error(`[omega-v2-dryrun] tokenSource=${tokenSource} noWrite=1 oddsApi=blocked dates=${dates.join(',')} gradedFile=${GRADED_FILE} gradedRows=${gradedBoardRows.length} marketSkill=${process.env.OMEGA_V2_MARKET_SKILL || 'on'}`);
   const days = [];
   for (const date of dates) {
     const v2 = await runOne(date, true);

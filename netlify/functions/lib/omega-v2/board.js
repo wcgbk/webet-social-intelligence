@@ -56,6 +56,10 @@ function slimCandidate(c) {
     pModel: numOrNull(c.modelRawP != null ? c.modelRawP : (c.p_model != null ? c.p_model : c.pModel)),
     pMkt: numOrNull(c.fair_sharp_p != null ? c.fair_sharp_p : (c.sharpFairP != null ? c.sharpFairP : c.pMkt)),
     coverProb: numOrNull(c.coverProb),
+    // Pre-weight calibrated probability. Absent on boards saved before the
+    // market-skill weight. A later fit must prefer this over coverProb so
+    // the weight is not applied twice.
+    ...(numOrNull(c.pCalRaw) != null ? { pCalRaw: numOrNull(c.pCalRaw) } : {}),
     ev: numOrNull(c.ev),
     edgePct: c.edgePct != null ? c.edgePct : null,
     uncertainty: numOrNull(c.uncertainty),

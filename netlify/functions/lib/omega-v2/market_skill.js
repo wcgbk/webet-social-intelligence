@@ -26,6 +26,8 @@ const { boardKey } = require('./board');
 
 const GRADED_LIMIT = 20;
 const LOAD_BUDGET_MS = 18000;
+const STALE_PENDING_MS = 36 * 60 * 60 * 1000;
+const NEWEST_SETTLED_FLOOR = 0.9;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function clamp01(x) {
@@ -443,19 +445,22 @@ function withTimeout(promise, ms, label) {
 
 /**
  * Grade one morning board against finals. Pushes and ties are settled and
- * dropped. A game that is not final blocks the cache and drops the date,
- * so a live slate is not frozen half-graded. An unmatched row on a fetched
- * board does not block once every matched game is final: a name miss would
- * otherwise re-pull the same finals forever. A sport whose scoreboard came
- * back empty is a miss, not a final, and the date is skipped.
+ * dropped. Pending rows keep a commence time so the settle window can drop
+ * a postponed game without freezing a live slate. An unmatched row on a
+ * fetched board does not block once every matched game is final: a name
+ * miss would otherwise re-pull the same finals forever. A sport whose
+ * scoreboard came back empty is a miss, not a final, and counts as pending.
  */
 function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
   const rows = [];
-  let pending = 0;
+  const pendingRows = [];
   let settled = 0;
   const list = Array.isArray(candidates) ? candidates : [];
   const unmatched = new Set();
   const gradeable = [];
+  const markPending = (cand) => {
+    pendingRows.push({ commenceTime: cand && cand.commenceTime });
+  };
   for (const cand of list) {
     const market = marketOf(cand);
     if (!market) continue;
@@ -464,7 +469,7 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
     gradeable.push({ cand, market, sport });
     const games = gamesBySport && Array.isArray(gamesBySport[sport]) ? gamesBySport[sport] : null;
     if (!games || !games.length) {
-      pending += 1;
+      markPending(cand);
       continue;
     }
     const pick = {
@@ -483,7 +488,7 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
     }
     const result = gradePick(pick, game);
     if (result === 'pending') {
-      pending += 1;
+      markPending(cand);
       continue;
     }
     settled += 1;
@@ -501,14 +506,80 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
     // A sport that matched nothing is a missed scoreboard, not a final.
     // A sport that matched some games keeps the name misses out of the fit
     // and still caches, so a single alias does not re-pull every card.
-    if (missed.length === sportRows.length) pending += missed.length;
+    if (missed.length === sportRows.length) {
+      for (const row of missed) markPending(row.cand);
+    }
   }
+  const pending = pendingRows.length;
   return {
     rows,
     pending,
+    pendingRows,
     settled,
     complete: pending === 0 && gradeable.length > 0,
   };
+}
+
+function calendarDaysBefore(boardDate, cardDate) {
+  const board = Date.parse(`${boardDate}T00:00:00Z`);
+  const card = Date.parse(`${cardDate}T00:00:00Z`);
+  if (!Number.isFinite(board) || !Number.isFinite(card)) return 0;
+  return Math.round((card - board) / 86400000);
+}
+
+function resolveNow(now) {
+  if (now instanceof Date && Number.isFinite(now.getTime())) return now;
+  if (typeof now === 'number' && Number.isFinite(now)) return new Date(now);
+  if (typeof now === 'string' && now) {
+    const parsed = Date.parse(now);
+    if (Number.isFinite(parsed)) return new Date(parsed);
+  }
+  return new Date();
+}
+
+function commenceMs(value) {
+  if (value == null || value === '') return null;
+  const t = typeof value === 'number' ? value : Date.parse(value);
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * A board two or more calendar days before the card is settled. Pending
+ * rows are postponed or unmatched finals: drop them, keep the graded rows,
+ * and cache the date. The day before the card still skips while a game is
+ * live. A pending commence more than 36h before now is dropped, and the
+ * date is kept when at least 90% of the rows that are not stale have settled.
+ */
+function settleDecision(graded, boardDate, cardDate, now) {
+  const pendingRows = graded && Array.isArray(graded.pendingRows) ? graded.pendingRows : [];
+  const settled = graded && Number.isFinite(graded.settled) ? graded.settled : 0;
+  const gradedRows = graded && Array.isArray(graded.rows) ? graded.rows : [];
+  if (calendarDaysBefore(boardDate, cardDate) >= 2) {
+    if (!(graded && graded.complete) && !gradedRows.length && !pendingRows.length) {
+      return { accept: false, droppedPending: 0 };
+    }
+    return { accept: true, droppedPending: pendingRows.length };
+  }
+  const nowMs = resolveNow(now).getTime();
+  let stale = 0;
+  let recent = 0;
+  for (const row of pendingRows) {
+    const started = commenceMs(row && row.commenceTime);
+    if (started != null && nowMs - started > STALE_PENDING_MS) stale += 1;
+    else recent += 1;
+  }
+  if (!pendingRows.length) {
+    return { accept: !!(graded && graded.complete), droppedPending: 0 };
+  }
+  // Stale commences are already out of `kept`. Compare settled/kept to the
+  // floor in integers so 9/10 passes and 8/9 does not.
+  const kept = settled + recent;
+  const floor = Math.round(NEWEST_SETTLED_FLOOR * 1000);
+  const floorMet = kept > 0 && settled * 1000 >= kept * floor;
+  if (recent === 0 || floorMet) {
+    return { accept: true, droppedPending: stale + recent };
+  }
+  return { accept: false, droppedPending: 0 };
 }
 
 async function gradeBoardDate(dateISO, opts) {
@@ -561,13 +632,15 @@ async function gradeBoardDate(dateISO, opts) {
     return { date, rows: [], skipped: 'scores-missing' };
   }
   const graded = gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame);
-  if (!graded.complete) return { date, rows: [], skipped: 'not-final', complete: false };
+  const decision = settleDecision(graded, date, opts.cardDate, opts.now);
+  if (!decision.accept) return { date, rows: [], skipped: 'not-final', complete: false };
   const rows = graded.rows.map((row) => ({ ...row, date }));
   if (!writesDisabled(opts)) {
     try {
       await writeCache(date, {
         date,
         complete: true,
+        droppedPending: decision.droppedPending,
         gradedAt: new Date().toISOString(),
         rows: graded.rows.map((row) => ({
           sport: row.sport,
@@ -581,16 +654,17 @@ async function gradeBoardDate(dateISO, opts) {
       console.warn(`[omega-v2] board-graded write skipped ${date}: ${err && err.message ? err.message : err}`);
     }
   }
-  return { date, rows, complete: true, fromCache: false };
+  return { date, rows, complete: true, fromCache: false, droppedPending: decision.droppedPending };
 }
 
 /**
  * Graded morning-board rows for dates strictly before cardDate.
  * Same date list as loadBoardHistory: the last 20 card dates before this
- * one. A cached complete date is not graded again. A missing board, a
- * score timeout, or a slate that is not final is skipped. The caller also
- * races this function at 20s. The budget inside stops new dates so a slow
- * scoreboard cannot hold the rows already in hand.
+ * one. A cached complete date returns immediately and is not graded again.
+ * A missing board or a score timeout is skipped. Dates are graded together,
+ * and each one is raced against the budget still left, so one slow
+ * scoreboard does not spend the budget a date at a time. The caller also
+ * races this function at 20s.
  */
 async function loadMarketSkillRows(cardDate, opts = {}) {
   const card = cardDay(cardDate);
@@ -621,13 +695,13 @@ async function loadMarketSkillRows(cardDate, opts = {}) {
     .slice(-GRADED_LIMIT);
   const budget = Number.isFinite(Number(options.budgetMs)) ? Number(options.budgetMs) : LOAD_BUDGET_MS;
   const started = Date.now();
-  const rows = [];
-  for (const date of prior) {
-    const left = budget - (Date.now() - started);
-    if (left <= 0) break;
+  const left = budget - (Date.now() - started);
+  if (left <= 0) return [];
+  const parts = await Promise.all(prior.map(async (date) => {
     try {
-      const part = await withTimeout(gradeBoardDate(date, {
+      return await withTimeout(gradeBoardDate(date, {
         cardDate: card,
+        now: options.now,
         readCache,
         writeCache,
         readBoard,
@@ -638,10 +712,14 @@ async function loadMarketSkillRows(cardDate, opts = {}) {
         dryRun: options.dryRun,
         shadow: options.shadow,
       }), left, 'grade timeout');
-      if (part && Array.isArray(part.rows)) rows.push(...part.rows);
     } catch (err) {
       console.warn(`[omega-v2] board grade skipped ${date}: ${err && err.message ? err.message : err}`);
+      return null;
     }
+  }));
+  const rows = [];
+  for (const part of parts) {
+    if (part && Array.isArray(part.rows)) rows.push(...part.rows);
   }
   return rows;
 }

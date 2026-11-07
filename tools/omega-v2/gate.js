@@ -616,6 +616,9 @@ async function testMarketSkill() {
     },
   ];
   const loadOpts = {
+    // The in-progress game starts at 2026-11-01T02:00Z. Pin now inside 36h
+    // of that so a later real clock does not treat it as postponed.
+    now: '2026-11-02T12:00:00Z',
     readDates: async () => ['2026-11-01', '2026-11-02', '2026-11-03'],
     readCache: async (date) => mem.get(date) || null,
     writeCache: async (date, body) => { writes += 1; mem.set(date, body); },
@@ -664,6 +667,136 @@ async function testMarketSkill() {
   });
   assert.strictEqual(fetches, 0, 'a spent budget skips the date');
   assert.deepStrictEqual(skipped, []);
+
+  function boardCandidate(side, commence) {
+    return {
+      sport: 'NBA',
+      market: 'Moneyline',
+      side,
+      matchup: `${side} @ Home Team`,
+      homeTeam: 'Home Team',
+      awayTeam: side,
+      pMkt: 0.46,
+      pCalRaw: 0.62,
+      commenceTime: commence,
+    };
+  }
+  async function loadScripted(card, dates, boards, gamesByDate, extra = {}) {
+    const store = new Map();
+    let writes = 0;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const rows = await v2.loadMarketSkillRows(card, {
+      now: extra.now,
+      budgetMs: extra.budgetMs == null ? 5000 : extra.budgetMs,
+      readDates: async () => dates,
+      readCache: async (date) => store.get(date) || null,
+      writeCache: async (date, body) => { writes += 1; store.set(date, body); },
+      readBoard: async (date) => boards[date],
+      fetchScores: async (date) => {
+        inFlight += 1;
+        if (inFlight > maxInFlight) maxInFlight = inFlight;
+        if (extra.delayMs) await new Promise((resolve) => setTimeout(resolve, extra.delayMs));
+        inFlight -= 1;
+        return gamesByDate[date] || [];
+      },
+      gradePick: (_pick, game) => game && game.grade,
+      findGame: (pick, games) => (games || []).find((game) => game.side === pick.pick) || null,
+    });
+    return { rows, store, writes, maxInFlight };
+  }
+
+  const oldDate = '2026-11-05';
+  const old = await loadScripted('2026-11-07', [oldDate], {
+    [oldDate]: {
+      date: oldDate,
+      candidates: [
+        boardCandidate('Alpha', '2026-11-05T00:00:00Z'),
+        boardCandidate('Beta', '2026-11-05T02:00:00Z'),
+      ],
+    },
+  }, {
+    [oldDate]: [
+      { side: 'Alpha', grade: 'win' },
+      { side: 'Beta', grade: 'pending' },
+    ],
+  }, { now: '2026-11-07T15:00:00Z' });
+  assert.strictEqual(old.rows.length, 1, 'old date keeps the graded rows');
+  assert.strictEqual(old.rows[0].y, 1);
+  assert.strictEqual(old.rows[0].date, oldDate);
+  assert.strictEqual(old.writes, 1, 'old date writes the cache');
+  assert.strictEqual(old.store.get(oldDate).complete, true);
+  assert.strictEqual(old.store.get(oldDate).droppedPending, 1, 'pending rows on an old date are dropped');
+
+  const newest = '2026-11-06';
+  const live = await loadScripted('2026-11-07', [newest], {
+    [newest]: {
+      date: newest,
+      candidates: [
+        boardCandidate('Alpha', '2026-11-06T23:00:00Z'),
+        boardCandidate('Beta', '2026-11-06T23:30:00Z'),
+      ],
+    },
+  }, {
+    [newest]: [
+      { side: 'Alpha', grade: 'win' },
+      { side: 'Beta', grade: 'pending' },
+    ],
+  }, { now: '2026-11-07T12:00:00Z' });
+  assert.strictEqual(live.rows.length, 0, 'newest date with a pending recent game is skipped');
+  assert.strictEqual(live.writes, 0, 'newest date with a pending recent game is not cached');
+  assert.strictEqual(live.store.size, 0);
+
+  const stale = await loadScripted('2026-11-07', [newest], {
+    [newest]: {
+      date: newest,
+      candidates: [
+        boardCandidate('Alpha', '2026-11-06T00:00:00Z'),
+        boardCandidate('Beta', '2026-11-06T01:00:00Z'),
+      ],
+    },
+  }, {
+    [newest]: [
+      { side: 'Alpha', grade: 'win' },
+      { side: 'Beta', grade: 'pending' },
+    ],
+  }, { now: '2026-11-07T16:00:00Z' });
+  assert.strictEqual(stale.rows.length, 1, 'a pending game more than 36h old is dropped');
+  assert.strictEqual(stale.writes, 1);
+  assert.strictEqual(stale.store.get(newest).complete, true);
+  assert.strictEqual(stale.store.get(newest).droppedPending, 1);
+
+  const sides = Array.from({ length: 10 }, (_, i) => `Side${i}`);
+  const mostly = await loadScripted('2026-11-07', [newest], {
+    [newest]: {
+      date: newest,
+      candidates: sides.map((side, i) => boardCandidate(side, i === 9 ? '2026-11-07T04:00:00Z' : '2026-11-06T18:00:00Z')),
+    },
+  }, {
+    [newest]: sides.map((side, i) => ({ side, grade: i === 9 ? 'pending' : 'win' })),
+  }, { now: '2026-11-07T12:00:00Z' });
+  assert.strictEqual(mostly.rows.length, 9, 'newest date is kept when at least 90% settled');
+  assert.strictEqual(mostly.writes, 1);
+  assert.strictEqual(mostly.store.get(newest).complete, true);
+  assert.strictEqual(mostly.store.get(newest).droppedPending, 1);
+
+  const dates = ['2026-11-03', '2026-11-04', '2026-11-05'];
+  const boards = {};
+  const games = {};
+  for (const date of dates) {
+    boards[date] = { date, candidates: [boardCandidate('Alpha', `${date}T00:00:00Z`)] };
+    games[date] = [{ side: 'Alpha', grade: 'win' }];
+  }
+  const parallel = await loadScripted('2026-11-07', dates, boards, games, {
+    now: '2026-11-07T16:00:00Z',
+    delayMs: 60,
+  });
+  assert.strictEqual(parallel.maxInFlight, dates.length, 'prior dates are graded in parallel');
+  assert.deepStrictEqual(
+    [...new Set(parallel.rows.map((row) => row.date))].sort(),
+    dates,
+    'parallel load returns rows from all dates',
+  );
 
   console.log('PASS market-skill weight');
 }

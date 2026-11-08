@@ -798,6 +798,91 @@ async function testMarketSkill() {
     'parallel load returns rows from all dates',
   );
 
+  // ML, spread, and total of one matchup are one game. The scoreboard
+  // walk is the slow part of a Saturday board, so a second market must
+  // not walk it again. The total is still graded from its own side.
+  let lookups = 0;
+  const sharedBoard = {
+    date: '2026-11-05',
+    candidates: [
+      boardCandidate('Alpha', '2026-11-05T00:00:00Z'),
+      { ...boardCandidate('Alpha', '2026-11-05T00:00:00Z'), market: 'Spread' },
+      { ...boardCandidate('Alpha', '2026-11-05T00:00:00Z'), market: 'Total', side: 'Over 6.5' },
+      { ...boardCandidate('Alpha', '2026-11-05T18:00:00Z'), market: 'Moneyline' },
+    ],
+  };
+  const shared = await v2.loadMarketSkillRows('2026-11-07', {
+    now: '2026-11-07T16:00:00Z',
+    budgetMs: 500,
+    readDates: async () => ['2026-11-05'],
+    readCache: async () => null,
+    writeCache: async () => {},
+    readBoard: async () => sharedBoard,
+    fetchScores: async () => [{ id: 'game' }],
+    gradePick: (pick, game) => {
+      if (!game) return 'pending';
+      return /over/i.test(pick.pick) ? 'loss' : 'win';
+    },
+    findGame: () => {
+      lookups += 1;
+      return { id: 'game' };
+    },
+  });
+  assert.strictEqual(lookups, 2, 'one lookup per matchup and start, not per market');
+  assert.strictEqual(shared.length, 4, 'every market of a located game is still graded');
+  assert.strictEqual(shared.filter((row) => row.y === 0).length, 1, 'the total keeps its own grade');
+  assert.strictEqual(shared.filter((row) => row.y === 1).length, 3);
+
+  // A total has no team name. Caching that miss would drop a later side
+  // of the same matchup when the matchup string itself did not match.
+  let missLookups = 0;
+  const missBoard = {
+    date: '2026-11-05',
+    candidates: [
+      { ...boardCandidate('Alpha', '2026-11-05T00:00:00Z'), market: 'Total', side: 'Over 6.5' },
+      boardCandidate('Alpha', '2026-11-05T00:00:00Z'),
+    ],
+  };
+  const afterMiss = await v2.loadMarketSkillRows('2026-11-07', {
+    now: '2026-11-07T16:00:00Z',
+    budgetMs: 500,
+    readDates: async () => ['2026-11-05'],
+    readCache: async () => null,
+    writeCache: async () => {},
+    readBoard: async () => missBoard,
+    fetchScores: async () => [{ id: 'game' }],
+    gradePick: (_pick, game) => (game ? 'win' : 'pending'),
+    findGame: (pick) => {
+      missLookups += 1;
+      return /over/i.test(pick.pick) ? null : { id: 'game' };
+    },
+  });
+  assert.strictEqual(missLookups, 2, 'a miss is not reused for a later side of the same game');
+  assert.strictEqual(afterMiss.length, 1, 'the side is graded after the total misses');
+
+  let burns = 0;
+  const copies = Array.from({ length: 30 }, () => boardCandidate('Alpha', '2026-11-05T00:00:00Z'));
+  const burnStarted = Date.now();
+  const burned = await v2.loadMarketSkillRows('2026-11-07', {
+    now: '2026-11-07T16:00:00Z',
+    budgetMs: 200,
+    readDates: async () => ['2026-11-05'],
+    readCache: async () => null,
+    writeCache: async () => {},
+    readBoard: async () => ({ date: '2026-11-05', candidates: copies }),
+    fetchScores: async () => [{ side: 'Alpha', grade: 'win' }],
+    gradePick: (_pick, game) => game && game.grade,
+    findGame: (pick, games) => {
+      burns += 1;
+      const until = Date.now() + 15;
+      while (Date.now() < until) { /* a slow school-name walk */ }
+      return (games || []).find((game) => game.side === pick.pick) || null;
+    },
+  });
+  assert.strictEqual(burns, 1, 'thirty markets of one side walk the scoreboard once');
+  assert.ok(Date.now() - burnStarted < 200, 'a repeated side stays inside a short budget');
+  assert.strictEqual(burned.length, 30);
+
   console.log('PASS market-skill weight');
 }
 

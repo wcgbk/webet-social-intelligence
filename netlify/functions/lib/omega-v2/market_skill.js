@@ -458,6 +458,26 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
   const list = Array.isArray(candidates) ? candidates : [];
   const unmatched = new Set();
   const gradeable = [];
+  // NCAAF school matching walks every scoreboard game. A morning board
+  // repeats that walk once per market (ML, spread, total) of the same
+  // game. findGame resolves the game from the matchup and start, then
+  // gradePick applies the side. One lookup per game keeps a Saturday
+  // board inside the card budget. A miss is not cached: a total has no
+  // team name, and caching that miss would hide a later side that matches.
+  const gameCache = new Map();
+  const locateGame = (pick, games) => {
+    const key = [
+      pick.sport,
+      pick.matchup,
+      pick.commenceTime || '',
+      pick.homeTeam || '',
+      pick.awayTeam || '',
+    ].join('\n');
+    if (gameCache.has(key)) return gameCache.get(key);
+    const game = findGame(pick, games);
+    if (game) gameCache.set(key, game);
+    return game;
+  };
   const markPending = (cand) => {
     pendingRows.push({ commenceTime: cand && cand.commenceTime });
   };
@@ -481,7 +501,7 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
       homeTeam: cand.homeTeam,
       awayTeam: cand.awayTeam,
     };
-    const game = findGame(pick, games);
+    const game = locateGame(pick, games);
     if (!game) {
       unmatched.add(cand);
       continue;

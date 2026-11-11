@@ -693,6 +693,14 @@ async function gradeBoardDate(dateISO, opts) {
   const decision = settleDecision(graded, date, opts.cardDate, opts.now);
   if (!decision.accept) return { date, rows: [], skipped: 'not-final', complete: false };
   const rows = graded.rows.map((row) => ({ ...row, date }));
+  // A legacy regrade that settled nothing must not replace a good cache.
+  // An empty scoreboard still accepts a date two or more days old, and
+  // writing that as complete would drop the date on every later card.
+  // A date whose settled rows were all mispaired is a real empty grade.
+  const settledSomething = graded.settled > 0 && (graded.droppedMispaired || 0) > 0;
+  if (opts.keepLegacyOnEmpty && rows.length === 0 && !settledSomething) {
+    return { date, rows: [], complete: false, skipped: 'empty-regrade', fromCache: false };
+  }
   if (!writesDisabled(opts)) {
     try {
       await writeCache(date, {
@@ -735,7 +743,7 @@ async function loadGuardedRows(ctx) {
   }));
   const migrate = states.find((state) => state.kind === 'legacy');
   const left = budget - (Date.now() - started);
-  const gradeOne = async (date, cap) => {
+  const gradeOne = async (date, cap, extra) => {
     if (!(cap > 0)) return null;
     try {
       return await withTimeout(gradeBoardDate(date, {
@@ -750,6 +758,7 @@ async function loadGuardedRows(ctx) {
         noWrite: options.noWrite,
         dryRun: options.dryRun,
         shadow: options.shadow,
+        keepLegacyOnEmpty: !!(extra && extra.keepLegacyOnEmpty),
       }), cap, 'grade timeout');
     } catch (err) {
       console.warn(`[omega-v2] board grade skipped ${date}: ${err && err.message ? err.message : err}`);
@@ -765,7 +774,7 @@ async function loadGuardedRows(ctx) {
     }
     if (!migrate || state.date !== migrate.date) return;
     const cap = Math.min(Math.max(left, 0), MIGRATE_BUDGET_MS);
-    const part = await gradeOne(state.date, cap);
+    const part = await gradeOne(state.date, cap, { keepLegacyOnEmpty: true });
     if (part && part.complete && Array.isArray(part.rows)) gradedByDate.set(state.date, part.rows);
   }));
   const rows = [];

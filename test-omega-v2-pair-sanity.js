@@ -168,6 +168,31 @@ async function main() {
   assert.strictEqual(stalled.length, 1);
   assert.strictEqual(stalled[0].pCal, 0.45, 'a spent budget keeps the old rows');
 
+  const poison = new Map();
+  poison.set(v2.gradedBoardKey('2026-11-08'), {
+    date: '2026-11-08',
+    complete: true,
+    rows: [{ sport: 'NCAAM', market: 'Spread', y: 1, pMkt: 0.52, pCal: 0.48 }],
+  });
+  const poisonWrites = [];
+  const kept = await v2.loadMarketSkillRows('2026-11-11', {
+    budgetMs: 5000,
+    now: '2026-11-11T16:00:00Z',
+    readDates: async () => ['2026-11-08'],
+    readStored: async (key) => poison.get(key) || null,
+    writeStored: async (key, body) => { poisonWrites.push(key); poison.set(key, body); },
+    readBoard: async () => ({
+      date: '2026-11-08',
+      candidates: [nhl({ side: 'ok', odds: '-110', pMkt: 0.52, pCalRaw: 0.48 })],
+    }),
+    fetchScores: async () => [],
+    gradePick: () => 'win',
+    findGame: () => ({ id: 'g' }),
+  });
+  assert.deepStrictEqual(poisonWrites, [], 'an empty scoreboard does not write a v2 cache');
+  assert.strictEqual(kept.length, 1);
+  assert.strictEqual(kept[0].pCal, 0.48, 'an empty scoreboard keeps the legacy rows');
+
   console.log('PASS pair sanity guard');
 }
 

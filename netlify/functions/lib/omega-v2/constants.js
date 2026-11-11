@@ -132,6 +132,13 @@ const SHRINK_N0 = 80;
 const MARKET_SKILL_N0 = 150;
 const MARKET_SKILL_ENV = 'OMEGA_V2_MARKET_SKILL';
 /**
+ * Spread/total opposite-side pairing. Default on.
+ * OMEGA_V2_PAIR_FIX=off restores the pre-2026-11-11 oppositeBundle,
+ * which could pair a spread with the same team at the same point when
+ * alternate lines were present. off / 0 / false disable the fix.
+ */
+const PAIR_FIX_ENV = 'OMEGA_V2_PAIR_FIX';
+/**
  * NHL moneyline shrink toward the Pinnacle no-vig fair.
  * Stored walk-forward (tools/omega-calibration/out/walkforward-cal4.md,
  * window 2026-09-22 through 2026-10-08): NHL|Moneyline K = 1.00, kMle = 1.00,
@@ -201,6 +208,7 @@ module.exports = {
   SHRINK_N0,
   MARKET_SKILL_N0,
   MARKET_SKILL_ENV,
+  PAIR_FIX_ENV,
   NHL_ML_SHRINK_K,
   NHL_ML_WALKFORWARD_BEATS_NOVIG,
   ISOTONIC_MIN,

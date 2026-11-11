@@ -1,6 +1,7 @@
 'use strict';
 
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
+const { PAIR_FIX_ENV } = require('../omega-v2/constants');
 const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
   noVigTwoWay, americanJuiceDelta,
@@ -322,9 +323,37 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
 }
 
 /**
- * Opposite side of a two-way bundle (ML team, spread other side, total Over/Under).
+ * OMEGA_V2_PAIR_FIX=off / 0 / false restores the pre-2026-11-11 pairing.
+ * Unset is on. Read at call time so a dry run can flip it without a reload.
  */
-function oppositeBundle(sideBundles, target) {
+function pairFixEnabled() {
+  const raw = process.env[PAIR_FIX_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/** 0 and -0 are the same pick'em number. */
+function pointsEqual(a, b) {
+  if (a === b) return true;
+  const x = Number(a);
+  const y = Number(b);
+  return Number.isFinite(x) && Number.isFinite(y) && x === y;
+}
+
+function totalKind(side) {
+  const text = String(side || '').trim().toLowerCase();
+  if (text === 'over' || text.startsWith('over ')) return 'over';
+  if (text === 'under' || text.startsWith('under ')) return 'under';
+  return null;
+}
+
+/**
+ * Pre-2026-11-11 pairing. A spread matched the first bundle whose point was
+ * ± the target, including the same team. Kept so OMEGA_V2_PAIR_FIX=off is
+ * the old result, not an approximation.
+ */
+function oppositeBundleLegacy(sideBundles, target) {
   if (!target) return null;
   const targetSide = target.side;
   const targetPoint = target.point;
@@ -333,6 +362,37 @@ function oppositeBundle(sideBundles, target) {
     if (s === target) return false;
     if (/over|under/i.test(targetSide) && /over|under/i.test(s.side)) return s.point === targetPoint;
     return s.point === -targetPoint || s.point === targetPoint;
+  }) || null;
+}
+
+/**
+ * Opposite side of a two-way bundle.
+ * Moneyline: a different side, point null (unchanged).
+ * Spread: a different team and point === -targetPoint. Pick'em 0 pairs
+ * with the other team's 0.
+ * Total: Over pairs with Under at the same point, and the reverse.
+ */
+function oppositeBundle(sideBundles, target) {
+  if (!pairFixEnabled()) return oppositeBundleLegacy(sideBundles, target);
+  if (!target) return null;
+  const targetSide = target.side;
+  const targetPoint = target.point;
+  const bundles = sideBundles || [];
+  if (targetPoint == null) return bundles.find(s => s && s.side !== targetSide) || null;
+  const kind = totalKind(targetSide);
+  if (kind) {
+    const want = kind === 'over' ? 'under' : 'over';
+    return bundles.find(s => {
+      if (!s || s === target) return false;
+      if (totalKind(s.side) !== want) return false;
+      return pointsEqual(s.point, targetPoint);
+    }) || null;
+  }
+  const oppositePoint = -Number(targetPoint);
+  return bundles.find(s => {
+    if (!s || s === target) return false;
+    if (s.side === targetSide) return false;
+    return pointsEqual(s.point, oppositePoint);
   }) || null;
 }
 

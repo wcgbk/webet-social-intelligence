@@ -139,6 +139,26 @@ const MARKET_SKILL_ENV = 'OMEGA_V2_MARKET_SKILL';
  */
 const PAIR_FIX_ENV = 'OMEGA_V2_PAIR_FIX';
 /**
+ * A board row is mispaired when its own American price implies a
+ * probability inside (PAIR_SANITY_LO, PAIR_SANITY_HI) and that implied
+ * probability is more than PAIR_SANITY_PP away from pMkt. On the saved
+ * morning boards 2026-10-31 through 2026-11-10, correctly paired rows in
+ * that band stayed within 6.0pp (p99 4.5pp). Every mispaired alt spread
+ * was at least 9.3pp off. A row with no odds is not checked.
+ * OMEGA_V2_PAIR_FIX=off skips the check.
+ */
+const PAIR_SANITY_PP = 0.08;
+const PAIR_SANITY_LO = 0.10;
+const PAIR_SANITY_HI = 0.90;
+
+function pairFixEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[PAIR_FIX_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+/**
  * NHL moneyline shrink toward the Pinnacle no-vig fair.
  * Stored walk-forward (tools/omega-calibration/out/walkforward-cal4.md,
  * window 2026-09-22 through 2026-10-08): NHL|Moneyline K = 1.00, kMle = 1.00,
@@ -209,6 +229,10 @@ module.exports = {
   MARKET_SKILL_N0,
   MARKET_SKILL_ENV,
   PAIR_FIX_ENV,
+  PAIR_SANITY_PP,
+  PAIR_SANITY_LO,
+  PAIR_SANITY_HI,
+  pairFixEnabled,
   NHL_ML_SHRINK_K,
   NHL_ML_WALKFORWARD_BEATS_NOVIG,
   ISOTONIC_MIN,

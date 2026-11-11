@@ -6,6 +6,7 @@ const {
   NHL_ML_SHRINK_K, NHL_ML_WALKFORWARD_BEATS_NOVIG,
 } = require('./constants');
 const { marketFamily } = require('./select');
+const { mispairedOwnOdds } = require('./board');
 
 function clamp(x, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
@@ -65,6 +66,7 @@ function priorBoardRows(rows, cardDate) {
   for (const row of rows || []) {
     const d = row && row.date != null ? String(row.date).slice(0, 10) : '';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d >= card) continue;
+    if (mispairedOwnOdds(row)) continue;
     out.push(row);
   }
   return out;

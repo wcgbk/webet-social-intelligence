@@ -6,7 +6,10 @@
  * Dry runs and OMEGA_REPLAY_NO_WRITE skip the write.
  */
 
-const { MODEL_VERSION } = require('./constants');
+const {
+  MODEL_VERSION, pairFixEnabled, PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI,
+} = require('./constants');
+const { americanToImplied } = require('../omega-vnext/odds_math');
 
 function boardKey(dateISO) {
   return `omega-v2/morning-board/${dateISO}`;
@@ -123,15 +126,39 @@ function historyRow(date, pick) {
   };
 }
 
+function openUnit(p) {
+  const n = Number(p);
+  if (!Number.isFinite(n) || n <= 0 || n >= 1) return null;
+  return n;
+}
+
+/**
+ * True when the row's own American price is a normal (not longshot) implied
+ * probability and pMkt is more than PAIR_SANITY_PP away from it. Odds-free
+ * rows stay. OMEGA_V2_PAIR_FIX=off keeps every row.
+ */
+function mispairedOwnOdds(row) {
+  if (!pairFixEnabled()) return false;
+  if (!row || row.odds == null || row.odds === '') return false;
+  const implied = americanToImplied(row.odds);
+  if (implied == null) return false;
+  if (!(implied > PAIR_SANITY_LO && implied < PAIR_SANITY_HI)) return false;
+  const pMkt = openUnit(row.pMkt != null ? row.pMkt : (row.fair_sharp_p != null ? row.fair_sharp_p : row.sharpFairP));
+  if (pMkt == null) return false;
+  return Math.abs(pMkt - implied) > PAIR_SANITY_PP;
+}
+
 /**
  * One scored morning-board side. Both sides are kept. A row with no
  * probability is dropped. `pick` is the side, matching graded history.
+ * A mispaired price is dropped while the candidate still carries odds.
  */
 function boardHistoryRow(date, cand) {
   if (!cand || typeof cand !== 'object') return null;
   const pModel = numOrNull(cand.pModel != null ? cand.pModel : (cand.modelRawP != null ? cand.modelRawP : cand.p_model));
   const pMkt = numOrNull(cand.pMkt != null ? cand.pMkt : (cand.fair_sharp_p != null ? cand.fair_sharp_p : cand.sharpFairP));
   if (pModel == null || pMkt == null) return null;
+  if (mispairedOwnOdds(cand)) return null;
   const sport = cand.sport || null;
   const market = cand.market || cand.betType || null;
   const pick = cand.side || cand.pick || null;
@@ -277,6 +304,7 @@ module.exports = {
   loadGradedHistory,
   loadBoardHistory,
   boardHistoryRow,
+  mispairedOwnOdds,
   historyRow,
   finitePoint,
   quotePoint,

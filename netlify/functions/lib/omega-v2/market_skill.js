@@ -21,11 +21,15 @@
  * not compound the weight.
  */
 
-const { MARKET_SKILL_N0, MARKET_SKILL_ENV, MODEL_SPORTS } = require('./constants');
-const { boardKey } = require('./board');
+const { MARKET_SKILL_N0, MARKET_SKILL_ENV, MODEL_SPORTS, pairFixEnabled } = require('./constants');
+const { boardKey, mispairedOwnOdds } = require('./board');
 
 const GRADED_LIMIT = 20;
 const LOAD_BUDGET_MS = 18000;
+// One legacy date per card. A cold regrade of every date before 2026-11-11
+// took 49.8s (NCAAM scoreboards), past this budget, so the old graded key
+// still feeds the fit until that date is rewritten under the v2 key.
+const MIGRATE_BUDGET_MS = 12000;
 const STALE_PENDING_MS = 36 * 60 * 60 * 1000;
 const NEWEST_SETTLED_FLOOR = 0.9;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -321,6 +325,10 @@ function gradedBoardKey(dateISO) {
   return `omega-v2/board-graded/${cardDay(dateISO)}`;
 }
 
+function gradedBoardKeyV2(dateISO) {
+  return `omega-v2/board-graded-v2/${cardDay(dateISO)}`;
+}
+
 function writesDisabled(opts) {
   if (opts && (opts.noWrite || opts.dryRun || opts.shadow)) return true;
   if (process.env.OMEGA_REPLAY_NO_WRITE === '1') return true;
@@ -390,6 +398,25 @@ async function defaultFetchScores(dateISO, sport) {
   return games || [];
 }
 
+async function readStoredKey(key, options) {
+  if (options && typeof options.readStored === 'function') return options.readStored(key);
+  try {
+    const { readJson } = require('../omega-vnext/store');
+    return await readJson(key);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function writeStoredKey(key, body, options) {
+  if (options && typeof options.writeStored === 'function') {
+    await options.writeStored(key, body);
+    return;
+  }
+  const { storeJson } = require('../omega-vnext/store');
+  await storeJson(key, body);
+}
+
 async function defaultReadCache(dateISO) {
   try {
     const { readJson } = require('../omega-vnext/store');
@@ -427,6 +454,18 @@ function cacheIsComplete(body) {
   return !!(body && body.complete === true && Array.isArray(body.rows));
 }
 
+function rowsFromGradedBody(date, body) {
+  if (!cacheIsComplete(body)) return null;
+  return body.rows.map((row) => ({
+    sport: String(row.sport || '').toUpperCase(),
+    market: row.market || null,
+    y: row.y === 1 ? 1 : 0,
+    pMkt: openProb(row.pMkt),
+    pCal: openProb(row.pCal),
+    date,
+  })).filter((row) => row.pMkt != null && row.pCal != null && (row.y === 0 || row.y === 1));
+}
+
 function withTimeout(promise, ms, label) {
   let timer;
   const budget = Number(ms);
@@ -455,6 +494,7 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
   const rows = [];
   const pendingRows = [];
   let settled = 0;
+  let droppedMispaired = 0;
   const list = Array.isArray(candidates) ? candidates : [];
   const unmatched = new Set();
   const gradeable = [];
@@ -516,6 +556,10 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
     const pCal = skillProbability(cand);
     const pMkt = skillMarket(cand);
     if (pCal == null || pMkt == null) continue;
+    if (mispairedOwnOdds(cand)) {
+      droppedMispaired += 1;
+      continue;
+    }
     rows.push({ sport, market, y: result === 'win' ? 1 : 0, pMkt, pCal });
   }
   const sports = [...new Set(gradeable.map((row) => row.sport))];
@@ -536,6 +580,7 @@ function gradeBoardCandidates(candidates, gamesBySport, gradePick, findGame) {
     pending,
     pendingRows,
     settled,
+    droppedMispaired,
     complete: pending === 0 && gradeable.length > 0,
   };
 }
@@ -616,16 +661,9 @@ async function gradeBoardDate(dateISO, opts) {
   } catch (_) {
     cached = null;
   }
-  if (cacheIsComplete(cached)) {
-    const rows = cached.rows.map((row) => ({
-      sport: String(row.sport || '').toUpperCase(),
-      market: row.market || null,
-      y: row.y === 1 ? 1 : 0,
-      pMkt: openProb(row.pMkt),
-      pCal: openProb(row.pCal),
-      date,
-    })).filter((row) => row.pMkt != null && row.pCal != null && (row.y === 0 || row.y === 1));
-    return { date, rows, fromCache: true, complete: true };
+  const cachedRows = rowsFromGradedBody(date, cached);
+  if (cachedRows) {
+    return { date, rows: cachedRows, fromCache: true, complete: true };
   }
   let body = null;
   try {
@@ -661,6 +699,7 @@ async function gradeBoardDate(dateISO, opts) {
         date,
         complete: true,
         droppedPending: decision.droppedPending,
+        droppedMispaired: graded.droppedMispaired || 0,
         gradedAt: new Date().toISOString(),
         rows: graded.rows.map((row) => ({
           sport: row.sport,
@@ -675,6 +714,66 @@ async function gradeBoardDate(dateISO, opts) {
     }
   }
   return { date, rows, complete: true, fromCache: false, droppedPending: decision.droppedPending };
+}
+
+/**
+ * Flag on, production caches. A v2 body is the guarded grade. A date that
+ * only has the old key keeps those rows (they have no odds, so nothing is
+ * removed) and the oldest such date is regraded once. A miss of both keys
+ * is graded the same way as before. A regrade that does not finish leaves
+ * the old rows in place.
+ */
+async function loadGuardedRows(ctx) {
+  const { card, prior, options, readBoard, fetchScores, gradePick, findGame, budget } = ctx;
+  const started = Date.now();
+  const states = await Promise.all(prior.map(async (date) => {
+    const freshRows = rowsFromGradedBody(date, await readStoredKey(gradedBoardKeyV2(date), options));
+    if (freshRows) return { date, kind: 'v2', rows: freshRows };
+    const oldRows = rowsFromGradedBody(date, await readStoredKey(gradedBoardKey(date), options));
+    if (oldRows) return { date, kind: 'legacy', rows: oldRows };
+    return { date, kind: 'miss', rows: [] };
+  }));
+  const migrate = states.find((state) => state.kind === 'legacy');
+  const left = budget - (Date.now() - started);
+  const gradeOne = async (date, cap) => {
+    if (!(cap > 0)) return null;
+    try {
+      return await withTimeout(gradeBoardDate(date, {
+        cardDate: card,
+        now: options.now,
+        readCache: async () => null,
+        writeCache: async (day, body) => writeStoredKey(gradedBoardKeyV2(day), body, options),
+        readBoard,
+        fetchScores,
+        gradePick,
+        findGame,
+        noWrite: options.noWrite,
+        dryRun: options.dryRun,
+        shadow: options.shadow,
+      }), cap, 'grade timeout');
+    } catch (err) {
+      console.warn(`[omega-v2] board grade skipped ${date}: ${err && err.message ? err.message : err}`);
+      return null;
+    }
+  };
+  const gradedByDate = new Map();
+  await Promise.all(states.map(async (state) => {
+    if (state.kind === 'miss') {
+      const part = await gradeOne(state.date, left);
+      if (part && Array.isArray(part.rows) && part.rows.length) gradedByDate.set(state.date, part.rows);
+      return;
+    }
+    if (!migrate || state.date !== migrate.date) return;
+    const cap = Math.min(Math.max(left, 0), MIGRATE_BUDGET_MS);
+    const part = await gradeOne(state.date, cap);
+    if (part && part.complete && Array.isArray(part.rows)) gradedByDate.set(state.date, part.rows);
+  }));
+  const rows = [];
+  for (const state of states) {
+    if (gradedByDate.has(state.date)) rows.push(...gradedByDate.get(state.date));
+    else if (state.kind !== 'miss') rows.push(...state.rows);
+  }
+  return rows;
 }
 
 /**
@@ -714,6 +813,18 @@ async function loadMarketSkillRows(cardDate, opts = {}) {
     .sort()
     .slice(-GRADED_LIMIT);
   const budget = Number.isFinite(Number(options.budgetMs)) ? Number(options.budgetMs) : LOAD_BUDGET_MS;
+  if (pairFixEnabled() && !options.readCache && !options.writeCache) {
+    return loadGuardedRows({
+      card,
+      prior,
+      options,
+      readBoard,
+      fetchScores,
+      gradePick,
+      findGame,
+      budget,
+    });
+  }
   const started = Date.now();
   const left = budget - (Date.now() - started);
   if (left <= 0) return [];
@@ -774,6 +885,7 @@ module.exports = {
   publicMarketSkill,
   boardProbKey,
   gradedBoardKey,
+  gradedBoardKeyV2,
   gradeBoardCandidates,
   gradeBoardDate,
   loadMarketSkillRows,

@@ -1,7 +1,7 @@
 'use strict';
 
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
-const { PAIR_FIX_ENV } = require('../omega-v2/constants');
+const { pairFixEnabled } = require('../omega-v2/constants');
 const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
   noVigTwoWay, americanJuiceDelta,
@@ -320,17 +320,6 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
     }
   }
   return { dropped, parlayCleared };
-}
-
-/**
- * OMEGA_V2_PAIR_FIX=off / 0 / false restores the pre-2026-11-11 pairing.
- * Unset is on. Read at call time so a dry run can flip it without a reload.
- */
-function pairFixEnabled() {
-  const raw = process.env[PAIR_FIX_ENV];
-  if (raw == null || String(raw).trim() === '') return true;
-  const text = String(raw).trim().toLowerCase();
-  return text !== 'off' && text !== '0' && text !== 'false';
 }
 
 /** 0 and -0 are the same pick'em number. */

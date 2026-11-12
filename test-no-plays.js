@@ -64,7 +64,12 @@ const { isPlaceholder } = require('./netlify/functions/lib/last-card');
   assert.ok(/quarterback status/i.test(fixed.insights), fixed.insights);
   assert.ok(!/\b(Omega|Alpha)\b/.test(fixed.insights), fixed.insights);
   assert.strictEqual(fixed.picks.length, 0);
+  assert.strictEqual(fixed.claudeVerified, false);
+  assert.strictEqual(fixed.verified, false);
+  assert.strictEqual(fixed.fallback, true);
+  assert.strictEqual((fixed.narration && fixed.narration.status), 'empty');
   assert.strictEqual(stored.noPlaysReason, badReason, 'read repair must not rewrite the stored blob');
+  assert.strictEqual(stored.claudeVerified, true, 'read repair must not rewrite the stored stamp');
   const mlbKept = np.normalizeEmptyCard({
     picks: [],
     date: '2026-06-01',

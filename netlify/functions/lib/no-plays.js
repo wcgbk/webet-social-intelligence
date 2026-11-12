@@ -237,12 +237,15 @@ function repairOmegaEmptyCard(card) {
   const noGames = counts
     ? sports.length === 0
     : (card.noGames === true || /Games Scheduled/i.test(card.noPlays || ''));
-  return {
+  const repaired = {
     ...card,
     ...noPlaysFields(reason, { noGames }),
     edgeSummary,
     insights,
   };
+  // Read path only: clear a false verify stamp without writing the blob.
+  unstampEmptyCard(repaired);
+  return repaired;
 }
 
 /**

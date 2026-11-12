@@ -570,14 +570,12 @@ async function testMarketSkill() {
     assert.ok(onAnti.calibration.marketSkill.NFL.w < 0.1);
     const antiNfl = (onAnti.sportCoverage.rows || []).find((row) => row.sport === 'NFL');
     assert.ok(antiNfl && antiNfl.marketSkill && antiNfl.marketSkill.n === 2000);
-  } finally {
-    if (savedFlag == null) delete process.env.OMEGA_V2_MARKET_SKILL;
-    else process.env.OMEGA_V2_MARKET_SKILL = savedFlag;
-  }
-
-  assert.strictEqual(v2.shouldLoadMarketSkill({ gradedBoardRows: [] }), false);
-  assert.strictEqual(v2.shouldLoadMarketSkill({ fixtureCandidates: [{}] }), false);
-  assert.strictEqual(v2.shouldLoadMarketSkill({}), true);
+    // Default-on checks below must not see an inherited OMEGA_V2_MARKET_SKILL=off.
+    // Restore the process env in the function's finally, not here.
+    delete process.env.OMEGA_V2_MARKET_SKILL;
+    assert.strictEqual(v2.shouldLoadMarketSkill({ gradedBoardRows: [] }), false);
+    assert.strictEqual(v2.shouldLoadMarketSkill({ fixtureCandidates: [{}] }), false);
+    assert.strictEqual(v2.shouldLoadMarketSkill({}), true);
 
   const indexSrc = fs.readFileSync(path.join(root, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
   assert.ok(indexSrc.includes('loadMarketSkillRows'), 'live card grades prior boards');
@@ -884,6 +882,10 @@ async function testMarketSkill() {
   assert.strictEqual(burned.length, 30);
 
   console.log('PASS market-skill weight');
+  } finally {
+    if (savedFlag == null) delete process.env.OMEGA_V2_MARKET_SKILL;
+    else process.env.OMEGA_V2_MARKET_SKILL = savedFlag;
+  }
 }
 
 /**

@@ -2061,9 +2061,14 @@
     }
 
     let html = '';
+    let renderedLiveCardRow = false;
 
     // ── TODAY'S ROW: show current picks with live times/scores ──
+    // Only skip the matching server day when this live row is actually rendered.
+    // Overnight, get-picks-omega still returns yesterday's card; skipping that date
+    // used to drop Nov 11 while the 11/12 placeholder stayed in the 30-day table.
     if (picksData && picksData.picks && picksData.picks.length > 0) {
+      renderedLiveCardRow = true;
       const todayPicks = picksData.picks;
       let tWins = 0, tLosses = 0, tPushes = 0, tPending = 0;
       const todayDetails = [];
@@ -2101,7 +2106,11 @@
       const todayRecord = `${tWins}W-${tLosses}L${tPushes ? '-' + tPushes + 'P' : ''}`;
       const todayDecided = tWins + tLosses;
       const todayAcc = todayDecided > 0 ? Math.round((tWins / todayDecided) * 100) : '0';
-      const todayDate = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
+      // Label the live row with the card date, not the clock, so a leftover
+      // yesterday card is not shown as today before the 10:15 ET rebuild.
+      const todayDate = picksData.date
+        ? new Date(picksData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
 
       // Today's P/L follows the card grades when ESPN scores are loaded. Historical days stay on the server row.
       const todayServerDay = (data.days || []).find(d => picksData && d.date === picksData.date);
@@ -2134,7 +2143,7 @@
     for (let i = 0; i < days.length; i++) {
       if (shownDays >= dayCap) break;
       const day = days[i];
-      if (picksData && picksData.date === day.date) continue;
+      if (renderedLiveCardRow && picksData && picksData.date === day.date) continue;
       shownDays++;
       const record = `${day.wins}W-${day.losses}L${day.pushes ? '-' + day.pushes + 'P' : ''}`;
       const profitClass = day.profit >= 0 ? 'profit-positive' : 'profit-negative';

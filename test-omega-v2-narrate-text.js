@@ -62,5 +62,29 @@ const hostile = async ({ picks: ps, parlayLegs: pls }) => ({
   const src = fs.readFileSync('./netlify/functions/lib/omega-vnext/index.js', 'utf8');
   assert.ok(/if \(usePipelineV2\) \{[\s\S]*?narrateTextOnly\([\s\S]*?\} else if \(!skipNarrate\) \{[\s\S]*?narr\.rejections\.length/.test(src));
   assert.ok(/if \(!usePipelineV2\) \{\s*const capped = applyDailyUnitCap/.test(src));
+
+  const { narrateAndVerify, buildCardFallbackCopy } = require('./netlify/functions/lib/omega-vnext/narrate');
+  const empty = await narrateAndVerify({
+    picks: [],
+    parlayLegs: [],
+    sports: ['NBA', 'NHL', 'NCAAM'],
+    dateFormatted: 'November 11',
+  });
+  assert.strictEqual(empty.claudeVerified, false);
+  assert.strictEqual(empty.narration.status, 'empty');
+  assert.ok(!/\b(Omega|Alpha)\b/.test(empty.edgeSummary + empty.insights));
+  assert.ok(!/baseball|quarterback/i.test(empty.insights), empty.insights);
+  assert.ok(/injuries and starting lineups/i.test(empty.insights));
+  const neutral = buildCardFallbackCopy({ picks: [] });
+  assert.ok(!/probable starters in baseball/i.test(neutral.insights));
+  const passed = await narrateTextOnly({
+    picks: [],
+    parlayLegs: [],
+    sports: ['NBA', 'NHL'],
+    narrateFn: narrateAndVerify,
+  });
+  assert.strictEqual(passed.claudeVerified, false);
+  assert.strictEqual(passed.narration.status, 'empty');
+  assert.ok(!/baseball/i.test(passed.insights), passed.insights);
   console.log('test-omega-v2-narrate-text: all assertions passed');
 })().catch(e => { console.error(e); process.exit(1); });

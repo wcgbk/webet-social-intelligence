@@ -62,6 +62,8 @@
        (esp. Chrome on iOS) never expose the default white canvas in the
        dynamic toolbar / overscroll region. */
     html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+    /* Clip sideways rubber-band. overflow-y stays auto so the page still scrolls. */
+    html, body { overflow-x: hidden; overflow-y: auto; max-width: 100%; }
 
     body {
       font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
@@ -339,7 +341,7 @@
     .cum-value.negative { color: #c0392b; }
     .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
 
-    .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
+    .results-table { width: 100%; max-width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
     .results-table td {
       padding: .5rem; border-bottom: 1px solid var(--border-lt);
       vertical-align: top; text-align: center;
@@ -395,6 +397,7 @@
       border-radius: .75rem; padding: .5rem .75rem; margin-bottom: .75rem;
       font-size: .75rem; font-weight: 500; color: var(--txt-m);
       white-space: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+      min-width: 0; max-width: 100%;
     }
     .edge-legend-label { font-weight: 700; color: var(--txt-b); flex-shrink: 0; }
     .record-legend-bar > span { display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -459,19 +462,17 @@
       .header-auth { margin-left: auto; }
     }
     @media (max-width: 480px) {
-      .header { padding: .75rem .75rem; gap: .375rem; }
-      .logo { gap: .375rem; }
-      .header-badge { font-size: .625rem; padding: .15rem .45rem; white-space: nowrap; }
+      .header { padding: .5rem .5rem; gap: .25rem; max-width: 100%; min-width: 0; }
+      .logo { gap: .25rem; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+      .header-badge { font-size: .5625rem; padding: .1rem .35rem; white-space: nowrap; flex-shrink: 0; }
       .badge-full { display: none; }
-      .logo { flex-shrink: 0; min-width: 0; }
-      .logo svg { width: 26px !important; height: 23px !important; }
-      .logo-text { font-size: .9375rem; }
-      .header .wb-site-share-btn { padding: 5px 10px !important; font-size: 11px !important; margin-right: 0 !important; margin-left: auto !important; }
-      .header-auth { margin-left: 0; }
-      .header-auth .wb-signin { padding: 5px 10px !important; font-size: 11px !important; }
-      .header-auth .wb-chip-wrap { gap: 4px !important; }
-      .header .mobile-menu-btn { padding: 2px !important; margin-left: 0 !important; }
-      .header { padding-left: .625rem; padding-right: .625rem; }
+      .logo svg { width: 26px !important; height: 23px !important; flex-shrink: 0; }
+      .logo-text { font-size: .8125rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      .header .wb-site-share-btn { padding: 5px 8px !important; font-size: 11px !important; margin-right: 0 !important; margin-left: auto !important; flex-shrink: 0 !important; }
+      .header-auth { margin-left: 0; flex-shrink: 0; }
+      .header-auth .wb-signin { padding: 4px 8px !important; font-size: 11px !important; }
+      .header-auth .wb-chip-wrap { gap: 2px !important; }
+      .header .mobile-menu-btn { padding: 2px !important; margin-left: 0 !important; flex-shrink: 0; }
     }
     @media(max-width: 420px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
@@ -1663,9 +1664,17 @@
       insightsText.textContent = cleanReasoning(data.insights);
       insightsEl.style.display = 'block';
     } else if (picks.length > 0) {
-      const sportSet = [...new Set(picks.map(p => p.sport))];
+      const sportSet = [...new Set(picks.map(p => p.sport).filter(Boolean))];
       const totalUnitsInsight = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
-      insightsText.textContent = `The mix on the card is ${sportSet.join(' and ')}. Straight exposure is ${totalUnitsInsight}u, sized to the price rather than piled onto one game. Before lock, check the starter in any baseball game and the quarterback plus the weather in any football game. The card is a short list on purpose. You do not have to play every line.`;
+      const codes = sportSet.map(s => String(s).toUpperCase());
+      const watchBits = [];
+      if (codes.some(s => s === 'NBA' || s === 'NHL' || s === 'NCAAM' || s === 'NCAAB')) watchBits.push('injuries and starting lineups');
+      if (codes.some(s => s === 'NFL' || s === 'NCAAF' || s === 'CFB')) watchBits.push('quarterback status and outdoor weather');
+      if (codes.some(s => s === 'MLB')) watchBits.push('probable starters');
+      const watch = watchBits.length
+        ? 'Before lock, watch ' + watchBits.join(watchBits.length === 2 ? ' and ' : ', ') + '.'
+        : 'Before lock, watch injuries and lineup news that would move a number.';
+      insightsText.textContent = `The mix on the card is ${sportSet.join(' and ') || 'a short list'}. Straight exposure is ${totalUnitsInsight}u, sized to the price rather than piled onto one game. ${watch} The card is a short list on purpose. You do not have to play every line.`;
       insightsEl.style.display = 'block';
     }
 
@@ -1718,7 +1727,7 @@
         <div class="no-plays-card" style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">${esc(data.noPlaysTitle)}</div>
-          ${data.noPlaysReason ? `<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">${esc(data.noPlaysReason)}</div>` : ''}
+          ${data.noPlaysReason ? `<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">${esc(cleanReasoning(data.noPlaysReason))}</div>` : ''}
         </div>`;
         return;
       }

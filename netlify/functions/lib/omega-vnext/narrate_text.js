@@ -8,7 +8,7 @@ const { narrateAndVerify, ensureNarrative } = require('./narrate');
 const norm = s => String(s || '').trim().toLowerCase();
 const sameRow = (a, b) => a && b && norm(a.pick || a.side) === norm(b.pick || b.side) && norm(a.matchup) === norm(b.matchup);
 
-async function narrateTextOnly({ picks, parlayLegs, dateFormatted, apiKey, timeoutMs = 90000, narrateFn = narrateAndVerify } = {}) {
+async function narrateTextOnly({ picks, parlayLegs, dateFormatted, apiKey, sports, timeoutMs = 90000, narrateFn = narrateAndVerify } = {}) {
   picks = picks || [];
   parlayLegs = parlayLegs || [];
   const clone = x => JSON.parse(JSON.stringify(x));
@@ -17,7 +17,7 @@ async function narrateTextOnly({ picks, parlayLegs, dateFormatted, apiKey, timeo
   let timer;
   try {
     narr = await Promise.race([
-      narrateFn({ picks: clone(picks), parlayLegs: clone(parlayLegs), dateFormatted, apiKey }),
+      narrateFn({ picks: clone(picks), parlayLegs: clone(parlayLegs), dateFormatted, apiKey, sports }),
       new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('narration timeout')), timeoutMs); }),
     ]);
   } catch (e) {
@@ -48,12 +48,15 @@ async function narrateTextOnly({ picks, parlayLegs, dateFormatted, apiKey, timeo
     };
   });
   const vetoes = (narr.rejections || []).filter(r => r && r.matchup !== 'Claude');
+  const explicit = narr.narration && narr.narration.status;
+  if (explicit === 'empty' || explicit === 'fallback') status = explicit;
+  else status = narr.claudeVerified ? 'ok' : 'fallback';
   return {
     picks: outPicks,
     parlayLegs: outLegs,
     insights: String(narr.insights || ''),
     claudeVerified: !!narr.claudeVerified,
-    narration: { status: narr.claudeVerified ? 'ok' : 'fallback', vetoesIgnored: vetoes.length, vetoes },
+    narration: { status, vetoesIgnored: vetoes.length, vetoes },
   };
 }
 

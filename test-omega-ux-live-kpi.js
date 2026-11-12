@@ -103,6 +103,7 @@ check('strips candidateTable / thinkingText / rejections fat', () => {
   assert.strictEqual(pub.candidateTable, undefined);
   assert.strictEqual(pub.thinkingText, undefined);
   assert.deepStrictEqual(pub.rejections, []);
+  assert.deepStrictEqual(pub.rejectionCounts, { no: 1 });
   assert.strictEqual(pub.parlayLegs[0].combinedOdds, '+600');
   assert.strictEqual(pub.parlayLegs[0].legs[0].pick, 'Under 55.5');
   assert.strictEqual(pub.parlayLegs[0].legs[0].kellyCalc, undefined);
@@ -204,6 +205,16 @@ check('nfl/index.html does not use CFB school-only formatter', () => {
   const html = fs.readFileSync(path.join(__dirname, 'nfl/index.html'), 'utf8');
   assert.ok(!html.includes('function formatCfbSchoolName'));
   assert.ok(!html.includes('function displayPick'));
+});
+check('daily-omega clips sideways overflow and lets the header shrink', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'daily-omega/index.html'), 'utf8');
+  assert.ok(html.includes('html, body { overflow-x: hidden; overflow-y: auto; max-width: 100%;'));
+  assert.ok(!/overflow-y:\s*hidden/.test(html), 'vertical scroll stays available');
+  assert.ok(/\.logo\s*\{\s*gap:\s*\.25rem;\s*flex:\s*1\s*1\s*auto;\s*min-width:\s*0;/.test(html));
+  assert.ok(!html.includes('.logo { flex-shrink: 0'));
+  assert.ok(/\.record-legend-bar\s*\{[^}]*min-width:\s*0/.test(html));
+  assert.ok(html.includes('class="header-badge"'));
+  assert.ok(html.includes('wb-site-share-btn'));
 });
 check('nfl/index.html hamburger nav at phone widths (no header overflow)', () => {
   const html = fs.readFileSync(path.join(__dirname, 'nfl/index.html'), 'utf8');

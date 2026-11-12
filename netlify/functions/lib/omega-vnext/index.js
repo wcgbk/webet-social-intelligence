@@ -76,6 +76,16 @@ function slateCountsFor(snap) {
   return { bySport, espn, odds, total: Object.values(bySport).reduce((a, b) => a + b, 0) };
 }
 
+function sportsOnSlate(snap) {
+  const { bySport } = slateCountsFor(snap);
+  const order = ['NBA', 'NHL', 'NCAAM', 'NFL', 'NCAAF', 'MLB'];
+  const on = order.filter((s) => (+bySport[s] || 0) > 0);
+  for (const s of Object.keys(bySport)) {
+    if ((+bySport[s] || 0) > 0 && !on.includes(s)) on.push(s);
+  }
+  return on;
+}
+
 function projectAll(snap) {
   const raw = [];
   const gameDay = snap.gameDay || {};
@@ -645,6 +655,7 @@ async function generateOmegaVnext(opts = {}) {
     insights: '',
     claudeVerified: false,
   };
+  const boardSports = sportsOnSlate(snap);
   if (usePipelineV2) {
     console.log(`[omega-v2] ${publishedVersion} date=${dateISO} straights=${picks.length} parlays=${(parlayLegs || []).length} trainN=${built.calibration ? built.calibration.trainN : 0}`);
     if (!skipNarrate) {
@@ -654,6 +665,7 @@ async function generateOmegaVnext(opts = {}) {
         parlayLegs,
         dateFormatted,
         apiKey: process.env.ANTHROPIC_API_KEY,
+        sports: boardSports,
         narrateFn: typeof opts.narrateFn === 'function' ? opts.narrateFn : undefined,
       });
       picks = t.picks;
@@ -669,6 +681,7 @@ async function generateOmegaVnext(opts = {}) {
       parlayLegs,
       dateFormatted,
       apiKey: process.env.ANTHROPIC_API_KEY,
+      sports: boardSports,
     });
     narrRejections = narrRejections.concat(narr.rejections || []);
     picks = narr.picks;
@@ -700,6 +713,7 @@ async function generateOmegaVnext(opts = {}) {
         parlayLegs,
         dateFormatted,
         apiKey: process.env.ANTHROPIC_API_KEY,
+        sports: boardSports,
       });
       narrRejections = narrRejections.concat(narr.rejections || []);
       picks = narr.picks;
@@ -848,6 +862,14 @@ async function generateOmegaVnext(opts = {}) {
     }), { noGames: slateCounts.total === 0 }));
     picksData.edgeSummary = picksData.noPlaysReason;
     picksData.insights = picksData.insights || '';
+    // Nothing was verified. A zero-pick card must not wear a Claude stamp.
+    picksData.claudeVerified = false;
+    picksData.fallback = true;
+    picksData.narration = {
+      ...(picksData.narration || {}),
+      status: 'empty',
+      vetoesIgnored: (picksData.narration && picksData.narration.vetoesIgnored) || 0,
+    };
   }
 
   // Shadow writes omega-shadow/* only (no live picks, latest-date, picks-dates, or verify unlock).

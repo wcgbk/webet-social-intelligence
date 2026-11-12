@@ -541,7 +541,9 @@ assert.ok(/held/i.test(narrate.steamHintFrom({ lineMove: { lineMovePts: 0, oddsM
 const emptyCopy = narrate.buildCardFallbackCopy({ picks: [], dateFormatted: 'Tuesday, September 22' });
 assertDeskCopy(emptyCopy.edgeSummary, 'empty edge', 3, 5);
 assertDeskCopy(emptyCopy.insights, 'empty insights', 3, 5);
-assert.ok(/starter|quarterback|weather/i.test(emptyCopy.insights));
+assert.ok(/injuries, lineup changes/i.test(emptyCopy.insights));
+assert.ok(!/baseball/i.test(emptyCopy.insights));
+assert.ok(!/\b(Omega|Alpha)\b/.test(`${emptyCopy.edgeSummary} ${emptyCopy.insights}`));
 const cardCopy = narrate.buildCardFallbackCopy({
   picks: [
     { pick: 'Under 45.5', sport: 'NFL', matchup: 'DAL @ NYG', edgePct: '5.5%' },
@@ -785,10 +787,13 @@ console.log('test-omega-vnext 1019 positions: PASS');
     const empty = await narrate.narrateAndVerify({
       picks: [], parlayLegs: [], dateFormatted: 'Tuesday, September 22',
     });
-    assert.strictEqual(empty.claudeVerified, true);
+    assert.strictEqual(empty.claudeVerified, false);
+    assert.strictEqual(empty.narration && empty.narration.status, 'empty');
     assert.strictEqual(empty.picks.length, 0);
     assertDeskCopy(empty.edgeSummary, 'empty narrate edge', 3, 5);
     assertDeskCopy(empty.insights, 'empty narrate insights', 3, 5);
+    assert.ok(!/\b(Omega|Alpha)\b/.test(`${empty.edgeSummary} ${empty.insights}`));
+    assert.ok(!/baseball/i.test(empty.insights));
 
     const out = await narrate.narrateAndVerify({
       picks: [{

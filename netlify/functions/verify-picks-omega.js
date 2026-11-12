@@ -1153,6 +1153,12 @@ exports.handler = async (event) => {
 
     const result = await fetchBetaPicks(dateKey);
     if (!result || !result.data || !result.data.picks || result.data.picks.length === 0) {
+      // A stored empty card can already say claudeVerified: true. Clear that stamp.
+      // Do not invent picks, and do not mark the empty card verified.
+      if (result && result.data && require('./lib/no-plays').unstampEmptyCard(result.data)) {
+        try { await updatePicksBlob(result.dateKey || dateKey, result.data); }
+        catch (e) { console.log(`[verify] empty unstamp skipped: ${e.message}`); }
+      }
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ date: dateKey, verified: false, summary: "No picks found" }) };
     }
 
@@ -1273,7 +1279,7 @@ exports.handler = async (event) => {
         if (kept.length === 0) {
           picksData.parlayLegs = [];
           Object.assign(picksData, require('./lib/no-plays').noPlaysFields(
-            "The line moved against today's candidates after they were priced, so Omega is passing."));
+            "The line moved against today's candidates after they were priced, so the card is a pass."));
           picksData.edgeSummary = picksData.noPlaysReason;
         }
         if (picksData.summary) {

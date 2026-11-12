@@ -55,6 +55,16 @@ function parlayPublic(parlayLegs) {
   });
 }
 
+function rejectionCounts(rows) {
+  const counts = {};
+  for (const row of rows || []) {
+    const reason = row && row.reason != null ? String(row.reason).trim() : '';
+    if (!reason) continue;
+    counts[reason] = (counts[reason] || 0) + 1;
+  }
+  return counts;
+}
+
 function publicPicksPayload(data) {
   if (!data || typeof data !== 'object') return data;
   const clone = { ...data };
@@ -62,6 +72,8 @@ function publicPicksPayload(data) {
   clone.picks = Array.isArray(data.picks) ? data.picks.map(pickPublic) : [];
   clone.parlayLegs = parlayPublic(data.parlayLegs);
   clone.rejections = [];
+  const counts = rejectionCounts(data.rejections);
+  if (Object.keys(counts).length) clone.rejectionCounts = counts;
   return clone;
 }
 

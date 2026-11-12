@@ -9,6 +9,7 @@
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const NARRATIVE_MAX_TOKENS = 5800;
+const { sportWatchSentence } = require('../no-plays');
 
 function resolveAnthropicKey(explicit) {
   return explicit
@@ -193,20 +194,34 @@ function emptyEdgeSummary() {
   return joinSentences([
     "WeBetAI went through today's board and did not lock a side.",
     'The numbers on the screen are already close to where they should be, so there is no soft price worth a stake.',
-    'An empty Omega card is the call on a day like this.',
+    'An empty card is the call on a day like this.',
     'Forcing a pick would turn a pass into a guess.',
     'When a total, spread, or moneyline is actually off, it will show up here with a real reason.',
   ]);
 }
 
-function emptyInsights() {
+function emptyInsights(sports) {
   return joinSentences([
     'Nothing made the card, so there is no sport mix to break down.',
-    'If you are still shopping, watch probable starters in baseball, quarterback status in football, and the weather on outdoor games.',
+    sportWatchSentence(sports),
     'Those are the items that move a number after the morning line.',
     'WeBetAI would rather show a blank card than dress up a coin flip.',
     'Tomorrow is a new board.',
   ]);
+}
+
+function sportsListed(picks, parlayLegs) {
+  const out = [];
+  const add = (s) => {
+    const key = String(s || '').trim().toUpperCase();
+    if (key && !out.includes(key)) out.push(key);
+  };
+  for (const p of picks || []) add(p && p.sport);
+  for (const pl of parlayLegs || []) {
+    add(pl && pl.sport);
+    for (const leg of (pl && pl.legs) || []) add(leg && leg.sport);
+  }
+  return out;
 }
 
 function listLead(names) {
@@ -273,7 +288,7 @@ function templateEdgeSummary(picks, dateFormatted, parlayLegs) {
     where = 'The disagreements are modest and spread out, which is why nothing on the card is sized like a hammer.';
   }
   return joinSentences([
-    `WeBetAI's Omega card${dateBit} covers ${sportBit}, built around ${listLead(names)}.`,
+    `WeBetAI's card${dateBit} covers ${sportBit}, built around ${listLead(names)}.`,
     'The thesis is that the posted prices still give the picked side a cleaner number than the matchup deserves.',
     where,
     stakeSentence(list, parlayLegs),
@@ -308,9 +323,12 @@ function templateInsights(picks) {
   ]);
 }
 
-function buildCardFallbackCopy({ picks, dateFormatted, parlayLegs } = {}) {
+function buildCardFallbackCopy({ picks, dateFormatted, parlayLegs, sports } = {}) {
   if (!picks || !picks.length) {
-    return { edgeSummary: emptyEdgeSummary(), insights: emptyInsights() };
+    const resolved = Array.isArray(sports)
+      ? sports
+      : (sportsListed([], parlayLegs).length ? sportsListed([], parlayLegs) : null);
+    return { edgeSummary: emptyEdgeSummary(), insights: emptyInsights(resolved) };
   }
   return {
     edgeSummary: templateEdgeSummary(picks, dateFormatted, parlayLegs),
@@ -657,17 +675,19 @@ function decorateParlays(parlayLegs) {
  * Narrate + verify straights; narrate each parlay leg.
  * @returns {{ picks, parlayLegs, edgeSummary, insights, claudeVerified, rejections }}
  */
-async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
+async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey, sports }) {
   const key = resolveAnthropicKey(apiKey);
 
   if (!picks || !picks.length) {
-    const copy = buildCardFallbackCopy({ picks: [], parlayLegs, dateFormatted });
+    const copy = buildCardFallbackCopy({ picks: [], parlayLegs, dateFormatted, sports });
     return finishNarration({
       picks: [],
       parlayLegs: parlayLegs || [],
       edgeSummary: copy.edgeSummary,
       insights: copy.insights,
-      claudeVerified: true,
+      claudeVerified: false,
+      fallback: true,
+      narration: { status: 'empty', vetoesIgnored: 0 },
       rejections: [],
     }, dateFormatted);
   }
@@ -801,6 +821,8 @@ module.exports = {
   narrateParlayLegsOnly,
   buildFallbackNarrative,
   buildCardFallbackCopy,
+  emptyEdgeSummary,
+  emptyInsights,
   alignEdgeSummary,
   ensureNarrative,
   ensureExtraFields,

@@ -27,6 +27,9 @@ const WEEK2_SOURCE_URL =
 const WEEK3_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/09/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-3.pdf";
 
+const WEEK10_SOURCE_URL =
+  "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-10.pdf";
+
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
 class ContestLinesError extends Error {
@@ -387,6 +390,84 @@ const WEEK3_GAMES = [
   }),
 ];
 
+// Verified against the official Week 10 Contest Point Spreads PDF (image render,
+// sha256 4411bb3d6be60773d519ea4e9b1fc446923f4c2ddb4070956b8a9a115b2e080c).
+// Spreads are ½ → .5. Top team on the sheet is visitor. Kickoffs are PST (UTC-8).
+// Pinned because live OCR read the Jets "+7½" as "+74".
+const WEEK10_GAMES = [
+  gameRow({
+    away: "Washington Commanders", home: "New York Giants",
+    commenceHint: "Thu Nov 12, 5:15 PM PT", commenceTime: "2026-11-13T01:15:00.000Z",
+    awaySpread: 2, homeSpread: -2, contestIds: { away: 2, home: 1 },
+  }),
+  gameRow({
+    away: "New England Patriots", home: "Detroit Lions",
+    commenceHint: "Sun Nov 15, 6:30 AM PT · Munich", commenceTime: "2026-11-15T14:30:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 4, home: 3 },
+    venueHint: "FC Bayern Munich Stadium, Munich, Germany",
+  }),
+  gameRow({
+    away: "Buffalo Bills", home: "New York Jets",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: -7.5, homeSpread: 7.5, contestIds: { away: 5, home: 6 },
+  }),
+  gameRow({
+    away: "Jacksonville Jaguars", home: "Tennessee Titans",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: -10.5, homeSpread: 10.5, contestIds: { away: 7, home: 8 },
+  }),
+  gameRow({
+    away: "Miami Dolphins", home: "Indianapolis Colts",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: 3.5, homeSpread: -3.5, contestIds: { away: 10, home: 9 },
+  }),
+  gameRow({
+    away: "Kansas City Chiefs", home: "Atlanta Falcons",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: -3.5, homeSpread: 3.5, contestIds: { away: 11, home: 12 },
+  }),
+  gameRow({
+    away: "Houston Texans", home: "Cleveland Browns",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: -4.5, homeSpread: 4.5, contestIds: { away: 13, home: 14 },
+  }),
+  gameRow({
+    away: "Carolina Panthers", home: "New Orleans Saints",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 16, home: 15 },
+  }),
+  gameRow({
+    away: "Minnesota Vikings", home: "Green Bay Packers",
+    commenceHint: "Sun Nov 15, 10:00 AM PT", commenceTime: "2026-11-15T18:00:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 18, home: 17 },
+  }),
+  gameRow({
+    away: "Seattle Seahawks", home: "Las Vegas Raiders",
+    commenceHint: "Sun Nov 15, 1:05 PM PT", commenceTime: "2026-11-15T21:05:00.000Z",
+    awaySpread: -6.5, homeSpread: 6.5, contestIds: { away: 19, home: 20 },
+  }),
+  gameRow({
+    away: "Los Angeles Rams", home: "Arizona Cardinals",
+    commenceHint: "Sun Nov 15, 1:05 PM PT", commenceTime: "2026-11-15T21:05:00.000Z",
+    awaySpread: -9.5, homeSpread: 9.5, contestIds: { away: 21, home: 22 },
+  }),
+  gameRow({
+    away: "San Francisco 49ers", home: "Dallas Cowboys",
+    commenceHint: "Sun Nov 15, 1:25 PM PT", commenceTime: "2026-11-15T21:25:00.000Z",
+    awaySpread: -4, homeSpread: 4, contestIds: { away: 23, home: 24 },
+  }),
+  gameRow({
+    away: "Pittsburgh Steelers", home: "Cincinnati Bengals",
+    commenceHint: "Sun Nov 15, 5:20 PM PT", commenceTime: "2026-11-16T01:20:00.000Z",
+    awaySpread: 3.5, homeSpread: -3.5, contestIds: { away: 26, home: 25 },
+  }),
+  gameRow({
+    away: "Los Angeles Chargers", home: "Baltimore Ravens",
+    commenceHint: "Mon Nov 16, 5:15 PM PT", commenceTime: "2026-11-17T01:15:00.000Z",
+    awaySpread: 4.5, homeSpread: -4.5, contestIds: { away: 28, home: 27 },
+  }),
+];
+
 const WEEK_FIXTURES = {
   1: {
     weekNum: 1,
@@ -408,6 +489,13 @@ const WEEK_FIXTURES = {
     fromFixture: true,
     lineSource: LINE_SOURCE,
     games: WEEK3_GAMES,
+  },
+  10: {
+    weekNum: 10,
+    sourceUrl: WEEK10_SOURCE_URL,
+    fromFixture: true,
+    lineSource: LINE_SOURCE,
+    games: WEEK10_GAMES,
   },
 };
 
@@ -443,7 +531,7 @@ function candidateSpreadUrls(weekNum, now = new Date()) {
     13: [2026, 12], 14: [2026, 12], 15: [2026, 12], 16: [2026, 12],
     17: [2026, 12], 18: [2027, 1],
   };
-  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL };
+  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL, 10: WEEK10_SOURCE_URL };
   if (known[n]) urls.push(known[n]);
   const ym = weekMonth[n];
   if (ym) {
@@ -501,6 +589,18 @@ function sequentialPair(tokens) {
   return games;
 }
 
+// A contest line is printed on both sides of one game (+x / -x). When OCR
+// misreads one side (e.g. "+7½" → "+74"), keep the plausible printed side and
+// mirror it; if neither side is plausible or both disagree, drop the game.
+const MAX_CONTEST_SPREAD = 30;
+function mirroredSpreads(a, h) {
+  const ok = (x) => Number.isFinite(x) && Math.abs(x) <= MAX_CONTEST_SPREAD;
+  if (ok(a) && ok(h) && Math.abs(a + h) <= 0.05) return { away: a, home: h };
+  if (ok(a) && !ok(h)) return { away: a, home: a === 0 ? 0 : -a };
+  if (ok(h) && !ok(a)) return { away: h === 0 ? 0 : -h, home: h };
+  return null;
+}
+
 function pairWithSlate(tokens, slate) {
   if (!Array.isArray(slate) || !slate.length || !tokens.length) return [];
   const byNick = new Map();
@@ -515,9 +615,14 @@ function pairWithSlate(tokens, slate) {
     const ht = byNick.get(nickOf(home));
     const at = byNick.get(nickOf(away));
     if (!ht || !at) continue;
+    const pair = mirroredSpreads(at.spread, ht.spread);
+    if (!pair) {
+      console.log(`[circa-lines] skip ${away} @ ${home}: OCR sides do not mirror (${at.spread} / ${ht.spread})`);
+      continue;
+    }
     games.push(gameRow({
       away, home,
-      awaySpread: at.spread, homeSpread: ht.spread,
+      awaySpread: pair.away, homeSpread: pair.home,
       commenceHint: g.commenceHint || null,
       commenceTime: g.date || g.commenceTime || null,
       venueHint: g.venue || g.venueHint || null,
@@ -812,6 +917,7 @@ module.exports = {
   WEEK1_SOURCE_URL,
   WEEK2_SOURCE_URL,
   WEEK3_SOURCE_URL,
+  WEEK10_SOURCE_URL,
   NICK_TO_FULL,
   ContestLinesError,
   fullTeam,
@@ -827,4 +933,6 @@ module.exports = {
   WEEK1_GAMES,
   WEEK2_GAMES,
   WEEK3_GAMES,
+  WEEK10_GAMES,
+  mirroredSpreads,
 };

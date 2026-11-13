@@ -161,6 +161,10 @@ const ET_SCHEDULE = {
   // 10:50 ET PM observer. Cron "50 14,15 * * *" is 14:50 UTC (EDT) and
   // 15:50 UTC (EST). etGuard keeps 10:50 ET. Audit log only.
   'capture-omega-pm-observer': { etTimes: ['10:50'] },
+  // 11:30 ET graded-board cache. Cron "30 15,16 * * *" is 15:30 UTC (EDT)
+  // and 16:30 UTC (EST). etGuard keeps 11:30 ET. After the 10:15 card and
+  // the 10:45 / 10:50 jobs. No Odds API pull. Does not write the card.
+  'grade-boards-omega': { etTimes: ['11:30'] },
   'capture-omega-walkforward': { etTimes: ['11:15'] },
   'capture-omega-walkforward-evening': { etTimes: ['19:45'] },
   // 'capture-opening-lines' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.

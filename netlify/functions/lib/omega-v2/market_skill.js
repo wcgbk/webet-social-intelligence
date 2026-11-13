@@ -895,6 +895,7 @@ module.exports = {
   boardProbKey,
   gradedBoardKey,
   gradedBoardKeyV2,
+  cacheIsComplete,
   gradeBoardCandidates,
   gradeBoardDate,
   loadMarketSkillRows,

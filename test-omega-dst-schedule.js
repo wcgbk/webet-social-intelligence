@@ -22,6 +22,7 @@ const EXPECTED = {
   'verify-picks-omega': '10:45',
   'trigger-picks-omega-v1': '10:45',
   'capture-omega-pm-observer': '10:50',
+  'grade-boards-omega': '11:30',
 };
 
 const NAMES = Object.keys(EXPECTED);

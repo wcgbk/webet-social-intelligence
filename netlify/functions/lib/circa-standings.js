@@ -127,7 +127,12 @@ function classifyMedia(item) {
     blob.includes("last-place") ||
     blob.includes("booby");
   const isStandings = blob.includes("standings");
-  if (!isLast && !isStandings) return null;
+  // Final quarter results ("2nd Quarter Winners", "2nd Quarter Last Place
+  // Booby Prize") replace that quarter's in-progress "After Week N" sheets.
+  if (!isLast && !isStandings) {
+    if (!isFullSeason(blob) && isQuarterTitle(blob) && /winner/.test(blob)) return "quarterSeason";
+    return null;
+  }
   const quarter = !isFullSeason(blob) && isQuarterTitle(blob);
   if (isLast) return quarter ? "quarterLastPlace" : "lastPlace";
   return quarter ? "quarterSeason" : "season";
@@ -177,6 +182,27 @@ function newerPdf(a, b) {
   return String(a.date || "") > String(b.date || "");
 }
 
+function quarterNumOf(blob) {
+  const m = String(blob || "").toLowerCase().match(/\b(1st|2nd|3rd|4th|first|second|third|fourth)[\s-]+quarter\b/);
+  if (!m) return null;
+  return { "1st": 1, first: 1, "2nd": 2, second: 2, "3rd": 3, third: 3, "4th": 4, fourth: 4 }[m[1]] || null;
+}
+
+function isQuarterFinal(blob) {
+  return /winner|booby/i.test(String(blob || ""));
+}
+
+// Quarter bucket: later quarter wins; within a quarter the final results sheet
+// (Winners / Booby Prize) beats any "After Week N" standings; then newerPdf.
+function newerQuarterPdf(a, b) {
+  if (!b) return true;
+  const aq = Number.isFinite(a.quarter) ? a.quarter : -1;
+  const bq = Number.isFinite(b.quarter) ? b.quarter : -1;
+  if (aq !== bq) return aq > bq;
+  if (!!a.final !== !!b.final) return !!a.final;
+  return newerPdf(a, b);
+}
+
 function pickLatestPdfs(pool) {
   const best = { season: null, lastPlace: null, quarterSeason: null, quarterLastPlace: null };
   for (const item of pool || []) {
@@ -191,6 +217,13 @@ function pickLatestPdfs(pool) {
       date: item.date || item.modified || null,
       week: parseWeekFromTitle(title, item.source_url),
     };
+    if (kind === "quarterSeason" || kind === "quarterLastPlace") {
+      const qb = title + " " + item.source_url;
+      meta.quarter = quarterNumOf(qb);
+      meta.final = isQuarterFinal(qb);
+      if (newerQuarterPdf(meta, best[kind])) best[kind] = meta;
+      continue;
+    }
     if (newerPdf(meta, best[kind])) best[kind] = meta;
   }
   const quarter =
@@ -209,12 +242,14 @@ async function discoverLatestPdfs() {
   const extra = await Promise.all([
     fetchMedia("Million VIII Full Season Standings").catch(() => []),
     fetchMedia("Million VIII Full Season Last Place").catch(() => []),
+    fetchMedia("Million VIII Quarter Winners").catch(() => []),
   ]);
   const pool = []
     .concat(Array.isArray(standings) ? standings : [])
     .concat(Array.isArray(lastPlace) ? lastPlace : [])
     .concat(Array.isArray(extra[0]) ? extra[0] : [])
-    .concat(Array.isArray(extra[1]) ? extra[1] : []);
+    .concat(Array.isArray(extra[1]) ? extra[1] : [])
+    .concat(Array.isArray(extra[2]) ? extra[2] : []);
   return pickLatestPdfs(pool);
 }
 
@@ -674,6 +709,8 @@ function buildPayload(meta, parsed, pointsQuery, aliases) {
       lastPlaceUrl: (meta.quarter.lastPlace && meta.quarter.lastPlace.url) || null,
       lastPlaceTitle: (meta.quarter.lastPlace && meta.quarter.lastPlace.title) || null,
       week: (meta.quarter.season && meta.quarter.season.week) || null,
+      quarter: (meta.quarter.season && meta.quarter.season.quarter) || null,
+      final: !!(meta.quarter.season && meta.quarter.season.final),
     };
   }
   if (pointsQuery != null && pointsQuery !== "") {

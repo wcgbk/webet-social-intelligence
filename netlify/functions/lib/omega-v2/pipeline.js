@@ -2,6 +2,7 @@
 
 const {
   MODEL_VERSION, FLAG_ENV, SHRINK_N0, MIN_SPORT, NHL_ML_SHRINK_K, NHL_ML_WALKFORWARD_BEATS_NOVIG,
+  forceTop3Enabled,
 } = require('./constants');
 const { fitWalkForward, applyCalibration } = require('./calibrate');
 const {
@@ -9,13 +10,13 @@ const {
   attachMarketSkillReport, publicMarketSkill, boardProbKey,
 } = require('./market_skill');
 const {
-  gameKey, marketFamily, annotateCandidate, selectStraights, pastPregameCutoff, pregameClockMs,
+  gameKey, marketFamily, annotateCandidate, selectStraights, selectForcedTop3, pastPregameCutoff, pregameClockMs,
 } = require('./select');
-const { sizeStraights, sumUnits } = require('./size');
+const { sizeStraights, sizeForcedStraights, sumUnits } = require('./size');
 const { recheckPrices, validateCard, autoCorrectCard, parseAmerican, toParlay, toPick } = require('./guards');
 const { summaryFrom } = require('../omega-vnext/assemble');
 const { publishEdgeCard } = require('../omega-vnext/assemble');
-const { sizeParlay, legEvSkips, legFailsPriceEv, legBookSkips, quotedLeg } = require('./parlay');
+const { sizeParlay, buildForcedParlay, legEvSkips, legFailsPriceEv, legBookSkips, quotedLeg } = require('./parlay');
 const { americanToImplied } = require('../omega-vnext/odds_math');
 const { applySportCoverage, stampQualified } = require('./coverage');
 const { dkHrLineAgrees, quotePoint } = require('./board');
@@ -293,12 +294,22 @@ async function buildCard(input) {
   const checked = await recheckPrices(bettable, input.recheck);
   for (const drop of checked.dropped) rejections.push(drop);
   const kept = checked.kept;
-  const straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified), pregameOpts));
-  const parlayKept = kept.filter((cand) => cand.parlayQualified);
-  for (const skip of legEvSkips(parlayKept)) rejections.push(skip);
-  for (const skip of legBookSkips(parlayKept)) rejections.push(skip);
-  const parlayPoolLegs = parlayKept.filter((cand) => !legFailsPriceEv(cand) && quotedLeg(cand));
-  const sizedParlay = sizeParlay(parlayKept, straights, pregameOpts);
+  const forceTop3 = forceTop3Enabled();
+  let straights;
+  let parlayPoolLegs;
+  let sizedParlay;
+  if (forceTop3) {
+    straights = sizeForcedStraights(selectForcedTop3(kept, pregameOpts));
+    sizedParlay = buildForcedParlay(straights);
+    parlayPoolLegs = kept.filter((cand) => cand.parlayQualified && quotedLeg(cand));
+  } else {
+    straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified), pregameOpts));
+    const parlayKept = kept.filter((cand) => cand.parlayQualified);
+    for (const skip of legEvSkips(parlayKept)) rejections.push(skip);
+    for (const skip of legBookSkips(parlayKept)) rejections.push(skip);
+    parlayPoolLegs = parlayKept.filter((cand) => !legFailsPriceEv(cand) && quotedLeg(cand));
+    sizedParlay = sizeParlay(parlayKept, straights, pregameOpts);
+  }
   if (!sizedParlay.publish && sizedParlay.skipReason) {
     rejections.push({
       matchup: null,
@@ -314,11 +325,15 @@ async function buildCard(input) {
   const straightUnits = +sumUnits(straights).toFixed(2);
   const parlayUnits = sizedParlay.publish ? sizedParlay.units : 0;
   const dateFormatted = input.dateFormatted || date;
-  const edgeSummary = picks.length
-    ? `${dateFormatted}: ${picks.length} straight${picks.length === 1 ? '' : 's'} cleared a positive calibrated edge.`
-    : (parlayLegs.length
-      ? `${dateFormatted}: no straight cleared. The parlay is calibrated-edge legs with positive joint EV.`
-      : `${dateFormatted}: no qualifying plays. The card passes.`);
+  const edgeSummary = forceTop3
+    ? (picks.length
+      ? `${dateFormatted}: top ${picks.length} plays by expected growth.`
+      : `${dateFormatted}: no placeable plays.`)
+    : (picks.length
+      ? `${dateFormatted}: ${picks.length} straight${picks.length === 1 ? '' : 's'} cleared a positive calibrated edge.`
+      : (parlayLegs.length
+        ? `${dateFormatted}: no straight cleared. The parlay is calibrated-edge legs with positive joint EV.`
+        : `${dateFormatted}: no qualifying plays. The card passes.`));
   const card = {
     date,
     dateFormatted,
@@ -376,10 +391,20 @@ async function buildCard(input) {
     pass: picks.length === 0 && parlayLegs.length === 0,
     short: picks.length > 0 && picks.length < 3,
     v1WouldParlay: false,
-    parlaySource: sizedParlay.publish ? 'calibrated-edge' : null,
+    parlaySource: forceTop3 ? 'top3-straights' : (sizedParlay.publish ? 'calibrated-edge' : null),
+    ...(forceTop3 ? { selectionRule: 'force-top3' } : {}),
     sportCoverage,
   };
   const published = autoCorrectCard(card, pregameOpts);
+  // Published line names the rank: quarter-Kelly growth, not raw EV.
+  if (published.selectionRule === 'force-top3') {
+    const n = (published.picks || []).length;
+    const label = published.dateFormatted || published.date;
+    published.edgeSummary = n
+      ? `${label}: top ${n} plays by expected growth.`
+      : `${label}: no placeable plays.`;
+    published.parlaySource = 'top3-straights';
+  }
   const errors = validateCard(published);
   if (errors.length) {
     published.qaNotes = (published.qaNotes || []).concat(errors);
@@ -531,7 +556,8 @@ async function publishFromOmegaCandidates(input) {
 
 /**
  * Flag off: production publishEdgeCard, unchanged.
- * Flag on: v2 calibrate / select / size / parlay.
+ * Flag on: v2 calibrate / select / size / parlay. Straights are the top 3
+ * by quarter-Kelly expected growth.
  */
 async function runPipeline(input) {
   if (!pipelineV2Enabled(input)) {

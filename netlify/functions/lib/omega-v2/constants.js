@@ -159,6 +159,58 @@ function pairFixEnabled(env) {
   return text !== 'off' && text !== '0' && text !== 'false';
 }
 /**
+ * Daily card is the top 3 ranked straights, and the parlay is those straights.
+ * Default on. OMEGA_V2_FORCE_TOP3=off / 0 / false restores the positive-edge
+ * gates, the uncertainty floor, and the separate parlay search.
+ */
+const FORCE_TOP3_ENV = 'OMEGA_V2_FORCE_TOP3';
+
+function forceTop3Enabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[FORCE_TOP3_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
+ * Haircut the bet probability by the fitted longshot penalty.
+ * Multiplicative no-vig overstates longshots, so without this the EV rank
+ * fills the card with +1500..+5000 college dogs.
+ * Default on. OMEGA_V2_LONGSHOT_ADJ=off / 0 / false uses p = pCal.
+ */
+const LONGSHOT_ADJ_ENV = 'OMEGA_V2_LONGSHOT_ADJ';
+
+function longshotAdjEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[LONGSHOT_ADJ_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
+ * opts.forceTop3 wins when the caller set it. Otherwise the env flag.
+ * autoCorrect and validate do not use this: they follow card.selectionRule
+ * so an unmarked fixture keeps the old gates while the flag is on.
+ */
+function forceTop3From(opts) {
+  if (opts && Object.prototype.hasOwnProperty.call(opts, 'forceTop3')) return !!opts.forceTop3;
+  return forceTop3Enabled(opts && opts.env);
+}
+
+/**
+ * A stored card is on this rule only when the flag is on AND the card was
+ * stamped. Flag off restores the old drops. An unmarked history card does too.
+ */
+function isForceTop3Card(card, env) {
+  if (!forceTop3Enabled(env)) return false;
+  if (!card || typeof card !== 'object') return false;
+  if (card.selectionRule === 'force-top3') return true;
+  const pipe = card.pipelineV2;
+  return !!(pipe && typeof pipe === 'object' && pipe.selectionRule === 'force-top3');
+}
+/**
  * NHL moneyline shrink toward the Pinnacle no-vig fair.
  * Stored walk-forward (tools/omega-calibration/out/walkforward-cal4.md,
  * window 2026-09-22 through 2026-10-08): NHL|Moneyline K = 1.00, kMle = 1.00,
@@ -233,6 +285,12 @@ module.exports = {
   PAIR_SANITY_LO,
   PAIR_SANITY_HI,
   pairFixEnabled,
+  FORCE_TOP3_ENV,
+  forceTop3Enabled,
+  forceTop3From,
+  isForceTop3Card,
+  LONGSHOT_ADJ_ENV,
+  longshotAdjEnabled,
   NHL_ML_SHRINK_K,
   NHL_ML_WALKFORWARD_BEATS_NOVIG,
   ISOTONIC_MIN,

@@ -1,5 +1,8 @@
 'use strict';
 
+// Legacy positive-edge assertions. The default card is top-3 by EV.
+process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+
 const assert = require('assert');
 const { SPORTS, REGIONS, MARKETS } = require('./netlify/functions/lib/odds-master/pull');
 const config = require('./netlify/functions/lib/omega-vnext/config');

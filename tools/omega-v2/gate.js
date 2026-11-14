@@ -100,6 +100,13 @@ async function main() {
   if (savedFlag == null) delete process.env.OMEGA_PIPELINE_V2;
   else process.env.OMEGA_PIPELINE_V2 = savedFlag;
 
+  // Legacy assertions below are the positive-edge card. The default card is
+  // now the top 3 by expected growth. Turn that off here so those checks stay
+  // the old gates. The force-top3 block further down turns it back on, then
+  // off again so the child tests inherit the legacy flag.
+  process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+  assert.strictEqual(v2.forceTop3Enabled(), false, 'legacy gate runs with force-top3 off');
+
   const positions = [
     prodCandidate({}),
     prodCandidate({
@@ -347,6 +354,52 @@ async function main() {
   assert.ok(Math.abs(mapCal.pCal - mapCal.pShrink) < 1e-12, 'pCal stays on the shrink');
 
   await testFixOmegaCard1103();
+
+  process.env.OMEGA_V2_FORCE_TOP3 = '1';
+  assert.strictEqual(v2.forceTop3Enabled(), true, 'force-top3 flag on');
+  const forcedCard = await v2.buildCard({
+    date: '2026-10-04',
+    dateFormatted: 'Saturday, October 4, 2026',
+    candidates: [0, 1, 2, 3].map(weak),
+    history: [],
+  });
+  assert.strictEqual(forcedCard.selectionRule, 'force-top3');
+  assert.strictEqual(forcedCard.parlaySource, 'top3-straights');
+  assert.strictEqual(forcedCard.picks.length, 3, 'negative-edge slate still publishes the top 3');
+  assert.strictEqual(new Set(forcedCard.picks.map((p) => String(p.matchup).toLowerCase())).size, 3);
+  assert.strictEqual(forcedCard.parlayLegs.length, 1);
+  assert.strictEqual(forcedCard.parlayLegs[0].legs.length, 3);
+  assert.deepStrictEqual(
+    forcedCard.parlayLegs[0].legs.map((leg) => leg.pick).sort(),
+    forcedCard.picks.map((p) => p.pick).sort(),
+  );
+  assert.ok(forcedCard.picks.every((p) => p.unitsNum >= 0.25 && p.unitsNum <= 2));
+  assert.strictEqual(forcedCard.edgeSummary, 'Saturday, October 4, 2026: top 3 plays by expected growth.');
+  assert.ok(!/\b(Alpha|Omega)\b/.test(`${forcedCard.edgeSummary} ${forcedCard.insights || ''}`));
+  const mismatched = await v2.buildCard({
+    date: '2026-10-04',
+    dateFormatted: 'Saturday, October 4, 2026',
+    candidates: [{
+      sport: 'NBA',
+      matchup: 'Mismatch Away @ Mismatch Home',
+      pick: 'Mismatch Away ML',
+      market: 'Moneyline',
+      odds: '-110',
+      book: 'draftkings',
+      pModel: 0.40,
+      pMkt: 0.40,
+      commenceTime: FUTURE_COMMENCE,
+    }],
+    history: [],
+  });
+  assert.ok(mismatched.rejections.some((row) => row.reason === 'price-fair-mismatch'), 'price-fair-mismatch rejects');
+  assert.strictEqual(mismatched.picks.length, 0);
+  assert.strictEqual(mismatched.edgeSummary, 'Saturday, October 4, 2026: no placeable plays.');
+  assert.strictEqual(v2.longshotAdjEnabled(), true, 'longshot adjustment defaults on');
+  // Child tests spawned below inherit this env. Keep the legacy flag off.
+  process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+  assert.strictEqual(v2.forceTop3Enabled(), false);
+
   await testMarketSkill();
 
   console.log('PASS omega-v2 gate');

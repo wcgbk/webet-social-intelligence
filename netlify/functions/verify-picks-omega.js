@@ -190,10 +190,20 @@ function resolveLockedParlay(parlayLegs, opts = {}) {
     return { parlayLegs: [], action: legs.length ? 'cleared' : 'none', rebuilt: false };
   }
   const kept = legs.filter(leg => !removed.some(name => sameTicketName(name, leg.pick) || sameTicketName(name, leg.side)));
+  // A forced parlay is the top straights. Non-positive leg edge does not
+  // clear it. Placeability and started-game removals still do, via removed.
+  const forceTop3 = !!(opts.forceTop3 || opts.selectionRule === 'force-top3');
   if (kept.length === legs.length) {
     return { parlayLegs: existing, action: 'preserved', rebuilt: false };
   }
-  if (kept.length < 3 && Array.isArray(opts.pool) && opts.pool.length) {
+  if (forceTop3 && kept.length >= 2) {
+    return {
+      parlayLegs: [repriceLockedParlay(root, kept)],
+      action: 'resized',
+      rebuilt: false,
+    };
+  }
+  if (!forceTop3 && kept.length < 3 && Array.isArray(opts.pool) && opts.pool.length) {
     const ticket = refillKilledParlay(existing, { removedPicks: removed, pool: opts.pool });
     if (ticket && Array.isArray(ticket.legs) && ticket.legs.length >= 3) {
       return { parlayLegs: [ticket], action: 'refilled', rebuilt: false };
@@ -209,10 +219,22 @@ function resolveLockedParlay(parlayLegs, opts = {}) {
   };
 }
 
+function forceMathOpts(picksData) {
+  if (!picksData || picksData.selectionRule !== 'force-top3') return undefined;
+  return { forceTop3: true, selectionRule: 'force-top3' };
+}
+
+function negativeEvOnly(report) {
+  const errors = (report && report.errors) || [];
+  if (!errors.length) return false;
+  return errors.every((entry) => /Negative EV/i.test(String(entry)));
+}
+
 // ── Math Checks ──
-function runMathChecks(pick) {
+function runMathChecks(pick, opts) {
   const warnings = [], errors = [];
   const checks = { evMatch: true, kellyMatch: true, gradeMatch: true, edgePositive: true };
+  const forceTop3 = !!(opts && (opts.forceTop3 || opts.selectionRule === 'force-top3'));
   const odds = parseOdds(pick.odds);
   const units = parseUnits(pick.units);
   const coverProb = parseProbability(pick.winProbability || pick.coverProb);
@@ -224,12 +246,17 @@ function runMathChecks(pick) {
     return { checks, warnings, errors, severity: "critical" };
   }
 
-  // EV check
+  // EV check. A forced top-3 card keeps a negative-EV straight. The finding
+  // is a warning, so auto-fix does not drop it.
   const computedEV = coverProb * decPayout - 1;
   if (computedEV <= 0) {
     checks.edgePositive = false;
-    errors.push(`CRITICAL: Negative EV (${(computedEV * 100).toFixed(1)}%) — coverProb ${(coverProb * 100).toFixed(0)}% <= breakeven ${(breakeven * 100).toFixed(0)}%`);
+    const detail = `Negative EV (${(computedEV * 100).toFixed(1)}%) — coverProb ${(coverProb * 100).toFixed(0)}% <= breakeven ${(breakeven * 100).toFixed(0)}%`;
+    if (forceTop3) warnings.push(detail);
+    else errors.push(`CRITICAL: ${detail}`);
   }
+  // Forced stakes print 0.25u when quarter-Kelly is not positive. That floor is a match.
+  if (forceTop3 && Number.isFinite(units) && units + 1e-9 >= 0.25) checks.kellyMatch = true;
 
   // EV display match
   if (pick.kellyCalc) {
@@ -900,7 +927,7 @@ function autoCorrectCard(picksData) {
     if (step.changed) changed = true;
     if (step.stakeChanged) stakeChanged = true;
     notes.push(...step.notes);
-    reports = ((picksData && picksData.picks) || []).map((p) => runMathChecks(p));
+    reports = ((picksData && picksData.picks) || []).map((p) => runMathChecks(p, forceMathOpts(picksData)));
     const stillWrong = gradeStillWrong(picksData, reports);
     if (!step.changed && !stillWrong) {
       stable = true;
@@ -916,8 +943,11 @@ async function autoFixPicks(picksData, pickReports) {
   const replacements = [];
   const reports = Array.isArray(pickReports) ? pickReports : [];
   const criticalIndices = [];
+  const forceTop3 = !!(picksData && picksData.selectionRule === 'force-top3');
   for (let i = 0; i < reports.length; i++) {
-    if (reports[i].mathSeverity === "critical") criticalIndices.push(i);
+    if (reports[i].mathSeverity !== "critical") continue;
+    if (forceTop3 && negativeEvOnly(reports[i])) continue;
+    criticalIndices.push(i);
   }
 
   if (criticalIndices.length > 0) {
@@ -974,10 +1004,10 @@ async function autoFixPicks(picksData, pickReports) {
   return { fixed: replacements.length > 0 || qa.changed, replacements, qa };
 }
 
-function clearResolvedGradeWarnings(pickReports, picks) {
+function clearResolvedGradeWarnings(pickReports, picks, opts) {
   let removed = 0;
   for (const p of picks || []) {
-    const math = runMathChecks(p);
+    const math = runMathChecks(p, opts);
     if (!math.checks.gradeMatch) continue;
     for (const rep of pickReports || []) {
       if (rep.pick !== `${p.pick} ${p.odds}`) continue;
@@ -1171,7 +1201,7 @@ exports.handler = async (event) => {
     const pickReports = [];
 
     for (const pick of picksData.picks) {
-      const math = runMathChecks(pick);
+      const math = runMathChecks(pick, forceMathOpts(picksData));
       const narrative = runNarrativeChecks(pick);
       const allWarnings = [...math.warnings, ...narrative.warnings];
       const allErrors = [...math.errors, ...narrative.errors];
@@ -1243,7 +1273,7 @@ exports.handler = async (event) => {
     // ── Step 2: Auto-fix critical issues ──
     const fixResult = await autoFixPicks(picksData, pickReports);
     if (fixResult.qa && fixResult.qa.stable) {
-      totalWarnings -= clearResolvedGradeWarnings(pickReports, picksData.picks);
+      totalWarnings -= clearResolvedGradeWarnings(pickReports, picksData.picks, forceMathOpts(picksData));
     }
     if (fixResult.fixed) {
       console.log(`[verify] Auto-fixed ${fixResult.replacements.length} pick(s)`);
@@ -1468,7 +1498,7 @@ Return ONLY valid JSON array:
 
       // Re-verify math on all picks
       for (let i = 0; i < picksData.picks.length; i++) {
-        const finalMath = runMathChecks(picksData.picks[i]);
+        const finalMath = runMathChecks(picksData.picks[i], forceMathOpts(picksData));
         if (finalMath.severity === "critical") {
           console.log(`[verify-final] CRITICAL: Pick ${i + 1} still fails math — flagging for Discord`);
           picksData.picks[i]._verifyFlag = "math-critical-after-fix";
@@ -1489,6 +1519,8 @@ Return ONLY valid JSON array:
         removedPicks,
         straightCard: picksData.picks,
         pool: blockParlayRefill ? [] : (picksData.parlayPool || []),
+        forceTop3: picksData.selectionRule === 'force-top3',
+        selectionRule: picksData.selectionRule,
       });
       if (resolvedParlay.rebuilt) {
         throw new Error('[verify] refused: parlay rebuild is not a verify action');

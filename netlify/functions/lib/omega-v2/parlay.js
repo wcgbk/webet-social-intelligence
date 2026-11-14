@@ -433,6 +433,69 @@ function sizeParlay(pool, straights, opts) {
   };
 }
 
+/**
+ * Parlay of the forced top straights. 3 legs, or 2 when that is all
+ * that placed. Fewer than 2 does not publish. Joint probability is the
+ * product of leg pBet. Stake is quarter-Kelly on that joint, floored at
+ * 0.25u even when full Kelly is not positive, capped at 1u.
+ */
+function buildForcedParlay(straights) {
+  const legs = (straights || []).filter((leg) => leg && leg.skipped !== true).slice(0, 3);
+  if (legs.length < 2) {
+    return {
+      publish: false,
+      units: 0,
+      stakeUsd: 0,
+      legs: [],
+      skipReason: 'fewer than 2 qualifying legs',
+    };
+  }
+  let decimal = 1;
+  let pJoint = 1;
+  const priced = [];
+  for (const leg of legs) {
+    const d = leg.decimal || americanToDecimal(leg.odds);
+    const p = Number.isFinite(Number(leg.pBet))
+      ? Number(leg.pBet)
+      : Number(leg.calibration && leg.calibration.pCal);
+    if (!(d > 1) || !(p > 0 && p < 1)) {
+      return {
+        publish: false,
+        units: 0,
+        stakeUsd: 0,
+        legs: [],
+        skipReason: 'bad-price',
+      };
+    }
+    decimal *= d;
+    pJoint *= p;
+    priced.push({ ...leg, forced: true, decimal: d, pBet: p });
+  }
+  const sized = quarterKellyFromDecimal(pJoint, decimal, PARLAY_STAKE_CAP, { floorToQuarter: true });
+  const units = sized.units >= 0.25 ? sized.units : 0.25;
+  const american = decimalToAmerican(decimal);
+  const ev = pJoint * decimal - 1;
+  return {
+    publish: true,
+    units,
+    stakeUsd: stakeUsd(units),
+    legs: priced,
+    skipReason: null,
+    kellyFrac: sized.kellyFrac,
+    prob: pJoint,
+    pJoint,
+    decimal,
+    american,
+    combinedOdds: formatAmerican(american),
+    ev,
+    factor: 1,
+    pairs: [],
+    correlated: false,
+    sameGame: false,
+    correlationNote: correlationNote(),
+  };
+}
+
 module.exports = {
   correlationNote,
   pairRule,
@@ -441,6 +504,7 @@ module.exports = {
   chooseTicket,
   rankedTickets,
   sizeParlay,
+  buildForcedParlay,
   legMarket,
   mlTotalMix,
   sameSide,

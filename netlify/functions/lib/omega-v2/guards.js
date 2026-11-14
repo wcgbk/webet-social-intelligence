@@ -153,8 +153,13 @@ function stampPrintedLetter(row, notes) {
 }
 
 function toPick(row) {
-  const rating = ratingFor(row.edgeNovig);
-  return {
+  const forced = !!row.forced;
+  const rating = ratingFor(forced ? row.edge : row.edgeNovig);
+  const coverP = forced && row.pBet != null ? row.pBet : row.calibration.pCal;
+  const edgePct = forced
+    ? (row.edge != null ? pct(row.edge) : null)
+    : (row.edgeNovig != null ? pct(row.edgeNovig) : null);
+  const pick = {
     sport: row.sport,
     matchup: row.matchup,
     pick: row.pick,
@@ -170,14 +175,14 @@ function toPick(row) {
     grade: rating,
     qualityGrade: rating,
     commenceTime: row.commenceTime || '',
-    edgePct: row.edgeNovig != null ? pct(row.edgeNovig) : null,
+    edgePct,
     priceEdgePct: row.edge != null ? pct(row.edge) : null,
     edgeNovig: row.edgeNovig != null ? row.edgeNovig : null,
     ev: pct(row.ev),
     evRaw: row.ev,
     confidence: ratingToConfidence(rating),
-    coverProb: pct(row.calibration.pCal),
-    winProbability: pct(row.calibration.pCal),
+    coverProb: pct(coverP),
+    winProbability: pct(coverP),
     pModel: row.calibration.pModel,
     pMkt: row.calibration.pMkt,
     pCal: row.calibration.pCal,
@@ -199,6 +204,11 @@ function toPick(row) {
     clvPp: row.clvPp != null ? row.clvPp : null,
     calibrationMethod: row.calibration.method,
   };
+  if (forced) {
+    pick.forced = true;
+    if (row.pBet != null) pick.pBet = row.pBet;
+  }
+  return pick;
 }
 
 function toParlay(ticket, scanned) {
@@ -290,19 +300,40 @@ function pCalOfRow(row, pool) {
  * Quarter-Kelly units for a stored ticket, or null when a leg has no pCal.
  * Null leaves the printed stake alone. 0 means the nearest step is no bet.
  */
-function parlayQuarterKellyUnits(ticket, pool) {
+function probForLeg(leg, pool, force) {
+  if (force) {
+    if (leg && Number.isFinite(Number(leg.pBet))) return Number(leg.pBet);
+    const hit = (pool || []).find((r) => r && r.pick === (leg && leg.pick) && r.matchup === (leg && leg.matchup));
+    if (hit && Number.isFinite(Number(hit.pBet))) return Number(hit.pBet);
+  }
+  return pCalOfRow(leg, pool);
+}
+
+function parlayQuarterKellyUnits(ticket, pool, opts) {
   const legs = (ticket && ticket.legs) || [];
   if (legs.length < 2) return null;
+  const force = !!(opts && opts.forceTop3);
   let joint = 1;
   let dec = 1;
   for (const leg of legs) {
-    const p = pCalOfRow(leg, pool);
+    const p = probForLeg(leg, pool, force);
     const d = americanToDecimal(parseAmerican(leg.odds));
     if (!(p > 0 && p < 1) || d == null) return null;
     joint *= p;
     dec *= d;
   }
-  return quarterKellyFromDecimal(joint, dec, PARLAY_STAKE_CAP).units;
+  const sized = quarterKellyFromDecimal(
+    joint,
+    dec,
+    PARLAY_STAKE_CAP,
+    force ? { floorToQuarter: true } : null,
+  );
+  if (force && !(sized.units >= 0.25)) return 0.25;
+  return sized.units;
+}
+
+function forceTop3Card(card) {
+  return !!(card && card.selectionRule === 'force-top3');
 }
 
 /** A DK/HR quote that is actually on the row. A missing book is not one. */
@@ -423,6 +454,7 @@ function autoCorrectCard(card, opts) {
     notes.push('marked leakage checked');
     out.leakageChecked = true;
   }
+  const forceCard = forceTop3Card(out);
   const ranked = out.picks.slice().sort((a, b) => (Number(b.evRaw) || 0) - (Number(a.evRaw) || 0));
   const picks = [];
   const seen = new Set();
@@ -438,8 +470,13 @@ function autoCorrectCard(card, opts) {
       u = PER_BET_CAP;
     }
     if (!(u >= 0.25)) {
-      notes.push(`dropped dust stake ${p.pick || p.side}`);
-      continue;
+      if (forceCard) {
+        notes.push(`floored dust stake ${p.pick || p.side}`);
+        u = 0.25;
+      } else {
+        notes.push(`dropped dust stake ${p.pick || p.side}`);
+        continue;
+      }
     }
     if (g) seen.add(g);
     picks.push({
@@ -463,6 +500,8 @@ function autoCorrectCard(card, opts) {
       victim.unitsNum = next;
       victim.units = `${next}u`;
       victim.stakeUsd = Math.ceil(next * 150 - 1e-9);
+    } else if (forceCard) {
+      break;
     } else {
       notes.push(`budget dropped ${victim.pick || victim.side}`);
       picks.shift();
@@ -513,8 +552,8 @@ function autoCorrectCard(card, opts) {
     };
     let u = Math.round(unitsOf(pl) * 4) / 4;
     if (u > PARLAY_STAKE_CAP) u = PARLAY_STAKE_CAP;
-    const kelly = parlayQuarterKellyUnits(pl, out.parlayPool);
-    if (kelly != null && !(kelly >= 0.25)) {
+    const kelly = parlayQuarterKellyUnits(pl, out.parlayPool, { forceTop3: forceCard });
+    if (!forceCard && kelly != null && !(kelly >= 0.25)) {
       notes.push('parlay stake rounded to 0');
       out.parlayLegs = [];
     } else {
@@ -523,9 +562,15 @@ function autoCorrectCard(card, opts) {
         u = kelly;
       }
       if (!(u >= 0.25)) {
-        notes.push('parlay stake rounded to 0');
-        out.parlayLegs = [];
-      } else {
+        if (forceCard) {
+          notes.push('parlay stake floored to 0.25u');
+          u = 0.25;
+        } else {
+          notes.push('parlay stake rounded to 0');
+          out.parlayLegs = [];
+        }
+      }
+      if (out.parlayLegs.length) {
         pl.unitsNum = u;
         pl.units = `${u}u`;
         pl.modelVersion = MODEL_VERSION;
@@ -551,6 +596,7 @@ function autoCorrectCard(card, opts) {
 
 function validateCard(card) {
   const errors = [];
+  const forceCard = forceTop3Card(card);
   if (!card || card.modelVersion !== MODEL_VERSION) errors.push('model version is not stamped');
   if (card.leakageChecked !== true) errors.push('leakage was not checked');
   const picks = card.picks || [];
@@ -574,8 +620,8 @@ function validateCard(card) {
     const u = unitsOf(parlay);
     if (!(u >= 0.25)) errors.push('parlay stake is below 0.25u');
     if (u > PARLAY_STAKE_CAP + 1e-9) errors.push('parlay stake is above the cap');
-    const kelly = parlayQuarterKellyUnits(parlay, card.parlayPool);
-    if (kelly === 0 && u >= 0.25) errors.push('parlay stake floors sub-0.25u quarter-Kelly');
+    const kelly = parlayQuarterKellyUnits(parlay, card.parlayPool, { forceTop3: forceCard });
+    if (!forceCard && kelly === 0 && u >= 0.25) errors.push('parlay stake floors sub-0.25u quarter-Kelly');
     else if (kelly != null && kelly >= 0.25 && u > kelly + 1e-9) {
       errors.push(`parlay stake ${u}u is above quarter-Kelly ${kelly}u`);
     }
@@ -586,8 +632,10 @@ function validateCard(card) {
       if (posted && !PLACEABLE_BOOKS.has(posted)) {
         errors.push(`parlay leg book is not DK/Hard Rock (${leg.pick} ${leg.book})`);
       }
-      const edge = Number(leg.edgeNovig != null ? leg.edgeNovig : leg.edge);
-      if (Number.isFinite(edge) && !(edge > 0)) errors.push(`parlay leg edge is not positive (${leg.pick})`);
+      if (!forceCard) {
+        const edge = Number(leg.edgeNovig != null ? leg.edgeNovig : leg.edge);
+        if (Number.isFinite(edge) && !(edge > 0)) errors.push(`parlay leg edge is not positive (${leg.pick})`);
+      }
     }
   }
   if ((card.straightUnits || 0) > STRAIGHT_BUDGET + 1e-9) errors.push('straight budget exceeded');

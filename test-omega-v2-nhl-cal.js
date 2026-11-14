@@ -1,5 +1,8 @@
 'use strict';
 
+// Legacy positive-edge assertions. The default card is top-3 by EV.
+process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+
 /**
  * Thin-sport calibration. A pooled Platt does not write a sport under its
  * floor. NHL moneylines stay on the Pinnacle no-vig fair until an NHL-only

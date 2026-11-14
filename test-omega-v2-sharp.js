@@ -1,5 +1,8 @@
 'use strict';
 
+// Legacy positive-edge assertions. The default card is top-3 by EV.
+process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+
 /**
  * Live omega-v2 card. Legs need a positive no-vig edge. A parlay needs
  * two or three of those legs, a positive joint EV, and a quarter-Kelly

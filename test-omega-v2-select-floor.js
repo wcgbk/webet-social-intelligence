@@ -1,5 +1,8 @@
 'use strict';
 
+// Legacy shrink-EV rank. The default card is top-3 by price EV.
+process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+
 /**
  * Selection ranks on price EV after the no-vig shrink, and the uncertainty
  * floor is continuous across the 0.35 bucket wall.

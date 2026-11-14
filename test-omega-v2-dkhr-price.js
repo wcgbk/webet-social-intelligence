@@ -1,5 +1,8 @@
 'use strict';
 
+// Legacy positive-edge assertions. The default card is top-3 by EV.
+process.env.OMEGA_V2_FORCE_TOP3 = 'off';
+
 /**
  * v2 bet-price integrity. A published straight or parlay leg is a DraftKings
  * or Hard Rock number. A parlay leg also needs positive EV at that number.

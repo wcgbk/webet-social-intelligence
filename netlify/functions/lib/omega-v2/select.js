@@ -1,7 +1,9 @@
 'use strict';
 
 const {
-  MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS,
+  MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS, forceTop3From,
+  PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
+  KELLY_FRACTION,
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 
@@ -152,14 +154,49 @@ function placeableReject(candidate) {
 }
 
 /**
- * Straight: positive no-vig edge, positive EV at the DK/HR price, under the
- * miscalibration cap, and clear of k*SE in its no-vig bucket.
- * Parlay qualification here is that same no-vig screen. usableLegs also
- * requires pCal * decimal(DK/HR price) > 1. A leg that fails is skipped as
- * leg-ev-not-positive and is not on the ticket.
- * Nothing is added to fill a slot.
+ * Own-price vs Pinnacle fair. Same band and gap as board.js mispairedOwnOdds.
+ * A longshot outside (PAIR_SANITY_LO, PAIR_SANITY_HI) is not this reject.
  */
-function annotateCandidate(candidate) {
+function priceFairMismatch(implied, pMkt) {
+  if (!pairFixEnabled()) return false;
+  if (implied == null || !Number.isFinite(Number(implied))) return false;
+  if (!(implied > PAIR_SANITY_LO && implied < PAIR_SANITY_HI)) return false;
+  const fair = Number(pMkt);
+  if (!(fair > 0 && fair < 1)) return false;
+  return Math.abs(fair - implied) > PAIR_SANITY_PP;
+}
+
+/**
+ * Bet probability. Penalty is smoothedNovigStats(pMkt).penalty (~3.3pp below
+ * 0.35, 0 above, blended 0.33–0.37). OMEGA_V2_LONGSHOT_ADJ=off keeps pCal.
+ * Clamped to (0.001, 0.999).
+ */
+function forcedBetProb(pCal, pMkt, opts) {
+  let p = Number(pCal);
+  if (longshotAdjEnabled(opts && opts.env)) {
+    const penalty = smoothedNovigStats(pMkt).penalty;
+    if (Number.isFinite(penalty)) p -= penalty;
+  }
+  if (!Number.isFinite(p)) return null;
+  if (p < 0.001) return 0.001;
+  if (p > 0.999) return 0.999;
+  return p;
+}
+
+/**
+ * Straight gates.
+ * Flag off: positive no-vig edge, positive EV at the DK/HR price, under the
+ * miscalibration cap, and clear of k*SE in its no-vig bucket. Parlay
+ * qualification is that no-vig screen. usableLegs also requires a positive
+ * price EV. Nothing is added to fill a slot.
+ * Flag on (force top 3): placeable DK/HR price, a real calibration, the 10pp
+ * screen on edgeNovig, and the price-fair mismatch guard. pBet is pCal minus
+ * the longshot penalty. edge and ev are at pBet versus the DK/HR price.
+ * Rank is quarter-Kelly expected log growth at that pBet, not raw EV.
+ * Negative EV and the uncertainty floor do not remove the row.
+ */
+function annotateCandidate(candidate, opts) {
+  const force = forceTop3From(opts);
   const cal = candidate.calibration;
   if (!cal) {
     return {
@@ -167,6 +204,7 @@ function annotateCandidate(candidate) {
       qualified: false,
       parlayQualified: false,
       rejectReason: 'no-calibration',
+      ...(force ? { forced: true, forcePlaceable: false } : {}),
     };
   }
   const implied = americanToImplied(candidate.odds);
@@ -178,6 +216,7 @@ function annotateCandidate(candidate) {
       qualified: false,
       parlayQualified: false,
       rejectReason: 'bad-price',
+      ...(force ? { forced: true, forcePlaceable: false } : {}),
     };
   }
   const edge = cal.pCal - implied;
@@ -186,19 +225,25 @@ function annotateCandidate(candidate) {
   const edgeNovig = cal.pCal - pMkt;
   const gate = uncertaintyFloor(cal.pCal, pMkt);
   const ev = evAtOdds(cal.pCal, candidate.odds);
-  // Rank on the no-vig shrink, not on a later Platt lift. pShrink is the
-  // shipped shrink (calibrate.js). Missing pShrink falls back to pCal.
+  // Rank on the no-vig shrink, not on a later Platt lift, when the flag is
+  // off. pShrink is the shipped shrink (calibrate.js). Missing pShrink
+  // falls back to pCal. Flag-on rank is quarter-Kelly growth at pBet.
   const pShrink = Number.isFinite(Number(cal.pShrink)) ? Number(cal.pShrink) : Number(cal.pCal);
   const evShrink = evAtOdds(pShrink, candidate.odds);
   const bookReject = placeableReject(candidate);
   let rejectReason = null;
   if (bookReject) rejectReason = bookReject;
-  else if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
+  else if (force) {
+    if (!Number.isFinite(Number(cal.pCal)) || !Number.isFinite(edgeNovig)) rejectReason = 'no-calibration';
+    else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
+    else if (priceFairMismatch(implied, pMkt)) rejectReason = 'price-fair-mismatch';
+  } else if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
   else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
   else if (!gate.ok) rejectReason = 'edge-below-uncertainty-floor';
-  const straightReject = rejectReason
-    || (!(edge > 0) || !(ev > 0) ? 'price-edge-not-positive' : null);
-  return {
+  const straightReject = force
+    ? rejectReason
+    : (rejectReason || (!(edge > 0) || !(ev > 0) ? 'price-edge-not-positive' : null));
+  const row = {
     ...candidate,
     implied,
     decimal: dec,
@@ -209,8 +254,26 @@ function annotateCandidate(candidate) {
     ev,
     evShrink,
     qualified: straightReject == null,
-    parlayQualified: rejectReason == null,
+    parlayQualified: force ? straightReject == null : rejectReason == null,
     rejectReason: straightReject,
+  };
+  if (!force) return row;
+  const pBet = forcedBetProb(cal.pCal, pMkt, opts);
+  let reason = straightReject;
+  if (reason == null && pBet == null) reason = 'no-calibration';
+  const priceEdge = pBet == null ? edge : pBet - implied;
+  const priceEv = pBet == null ? ev : (pBet * (dec - 1) - (1 - pBet));
+  const forcePlaceable = reason == null;
+  return {
+    ...row,
+    pBet,
+    edge: priceEdge,
+    ev: priceEv,
+    forced: true,
+    forcePlaceable,
+    qualified: forcePlaceable,
+    parlayQualified: forcePlaceable,
+    rejectReason: reason,
   };
 }
 
@@ -222,7 +285,73 @@ function rankEv(row) {
   return Number.isFinite(ev) ? ev : -Infinity;
 }
 
+function finiteRank(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : -Infinity;
+}
+
+/**
+ * Expected log growth of a quarter-Kelly stake.
+ * b = decimal - 1, full = (b*p - (1-p)) / b, f = KELLY_FRACTION * full.
+ * Null when full Kelly is not positive or the inputs are not a real price.
+ */
+function kellyGrowth(p, decimal) {
+  const prob = Number(p);
+  const d = Number(decimal);
+  if (!Number.isFinite(prob) || !Number.isFinite(d)) return null;
+  const b = d - 1;
+  if (!(b > 0)) return null;
+  const full = (b * prob - (1 - prob)) / b;
+  if (!(full > 0)) return null;
+  const f = KELLY_FRACTION * full;
+  const growth = prob * Math.log(1 + f * b) + (1 - prob) * Math.log(1 - f);
+  return Number.isFinite(growth) ? growth : null;
+}
+
+/**
+ * Positive growth first (desc), then null growth by price EV (desc).
+ * Ties break on edge, then pick name.
+ */
+function compareForcedGrowth(a, b) {
+  const ag = a.kellyGrowth;
+  const bg = b.kellyGrowth;
+  const aHas = ag != null;
+  const bHas = bg != null;
+  if (aHas !== bHas) return aHas ? -1 : 1;
+  if (aHas && bg !== ag) return bg > ag ? 1 : -1;
+  if (!aHas) {
+    const ev = finiteRank(b.ev) - finiteRank(a.ev);
+    if (ev) return ev;
+  }
+  return (finiteRank(b.edge) - finiteRank(a.edge))
+    || String(a.pick).localeCompare(String(b.pick));
+}
+
+/**
+ * Top 3 placeable straights by quarter-Kelly expected log growth, one per game.
+ * Growth uses pBet and the decimal price. full Kelly <= 0 stores null and
+ * ranks after every positive-growth row, by price EV. Pregame cutoff still applies.
+ */
+function selectForcedTop3(annotated, opts) {
+  const asOfMs = pregameClockMs(opts);
+  const ranked = (annotated || [])
+    .filter((c) => c && c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
+    .map((c) => ({ ...c, kellyGrowth: kellyGrowth(c.pBet, c.decimal) }))
+    .sort(compareForcedGrowth);
+  const out = [];
+  const used = new Set();
+  for (const c of ranked) {
+    if (out.length >= MAX_STRAIGHTS) break;
+    const key = c.gameKey != null && c.gameKey !== '' ? c.gameKey : gameKey(c.matchup);
+    if (used.has(key)) continue;
+    used.add(key);
+    out.push({ ...c, forced: true });
+  }
+  return out;
+}
+
 function selectStraights(annotated, opts) {
+  if (forceTop3From(opts)) return selectForcedTop3(annotated, opts);
   const asOfMs = pregameClockMs(opts);
   const ranked = (annotated || [])
     .filter((c) => c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
@@ -248,8 +377,10 @@ module.exports = {
   uncertaintyFloor,
   BOUNDARY_BLEND,
   rankEv,
+  kellyGrowth,
   annotateCandidate,
   selectStraights,
+  selectForcedTop3,
   PREGAME_GRACE_MS,
   pregameClockMs,
   pastPregameCutoff,

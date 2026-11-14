@@ -233,6 +233,10 @@ async function runTrackingReport(opts) {
     clvRows: Array.isArray(src.clvRows) ? src.clvRows : clvBundle.rows,
     scoredRows: src.scoredRows,
     recal: src.recal,
+    pickClvRows: src.pickClvRows,
+    pickClv: (results && results.pickClv)
+      || (results && results.clv && results.clv.pickClv)
+      || null,
   });
   const dayDoc = tracking.dayDocument(index, asOf);
   const dryRun = !!src.dryRun;

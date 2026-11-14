@@ -5,11 +5,18 @@
  * Reads boards already stored by the scheduled line pulls and the
  * in-memory slate cache the CLV tracker already fetched for published
  * picks. No remote odds request is made here.
- * Writes land on clv-{date}.candidates. Pick KPI fields are left alone.
+ * Writes land on clv-{date}.candidates. Pick KPI fields (clv, bySport,
+ * avgCLV) are left alone. Published straights and parlay legs also get
+ * clv-{date}.pickClv once a close snapshot is already in hand. That row's
+ * clvPp is percentage points: close power no-vig minus the bet price's
+ * implied probability. Positive beat the close.
  * Every public function catches its own failures.
  */
 
-const { noVigTwoWay } = require('../omega-vnext/odds_math');
+const { noVigTwoWay, americanToImplied } = require('../omega-vnext/odds_math');
+const { SHARP_BOOKS } = require('../omega-vnext/config');
+const { pickClvEnabled } = require('./constants');
+const { summarizePickClv } = require('../clv-summary');
 const {
   gameKey, lookupGame, extractGameBooks, foldAccents, foldGameKey,
 } = require('../omega-vnext/line_path');
@@ -681,6 +688,180 @@ function publishedFromCard(picksData) {
   return out;
 }
 
+function oppositeRole(role) {
+  if (role === 'home') return 'away';
+  if (role === 'away') return 'home';
+  if (role === 'over') return 'under';
+  if (role === 'under') return 'over';
+  return null;
+}
+
+/**
+ * Power no-vig at the first sharp book that posts both sides of this line.
+ * Book order matches the morning fair: Pinnacle, Circa, Bookmaker, BetOnline, LowVig.
+ * One side only is not a close.
+ */
+function sharpCloseFair(game, cand) {
+  if (!game) return null;
+  const market = marketOf(cand);
+  const role = sideRole(game, cand);
+  const oppRole = oppositeRole(role);
+  if (!role || !oppRole) return null;
+  const want = lineOf(cand, market);
+  for (const book of SHARP_BOOKS) {
+    const row = rowFor(game.books, book);
+    if (!row) continue;
+    const side = priceOn(row, role, market);
+    const opp = priceOn(row, oppRole, market);
+    if (!side || !opp || side.price == null || opp.price == null) continue;
+    if (market !== 'ml' && !samePoint(side.point, want)) continue;
+    const fair = noVigTwoWay(side.price, opp.price);
+    if (!fair || !Number.isFinite(fair.p1)) continue;
+    return {
+      book: canonicalBook(book),
+      closeNoVig: fair.p1,
+      sideOdds: side.price,
+      oppOdds: opp.price,
+    };
+  }
+  return null;
+}
+
+function publishedTickets(picksData, published) {
+  const out = [];
+  const data = picksData && typeof picksData === 'object' ? picksData : null;
+  const straights = data && Array.isArray(data.picks) ? data.picks : [];
+  const tickets = data && Array.isArray(data.parlayLegs) ? data.parlayLegs : [];
+  let legs = 0;
+  for (const ticket of tickets) legs += (ticket && ticket.legs || []).length;
+  if (straights.length || legs) {
+    straights.forEach((pick, idx) => out.push({ cand: pick, kind: 'straight', idx }));
+    tickets.forEach((ticket) => {
+      (ticket && ticket.legs || []).forEach((leg, idx) => out.push({ cand: leg, kind: 'leg', idx }));
+    });
+    return out;
+  }
+  (published || []).forEach((pick, idx) => out.push({ cand: pick, kind: 'straight', idx }));
+  return out;
+}
+
+function pickClvKey(cand, kind, idx) {
+  let key = `unkeyed|${idx}`;
+  try {
+    if (cand && typeof cand === 'object') key = rowKey(cand);
+  } catch (_) { /* keep the fallback */ }
+  return `${kind}|${key}`;
+}
+
+/**
+ * One published straight or parlay leg. closeNoVig is the power no-vig when
+ * both sharp prices exist. clvPp is that close minus the bet price's implied
+ * probability, in percentage points (the stored CLV unit). Positive beat the close.
+ */
+function gradePickClvOne(ticket, snaps) {
+  const cand = ticket && ticket.cand;
+  const kind = ticket && ticket.kind === 'leg' ? 'leg' : 'straight';
+  const idx = ticket && ticket.idx != null ? ticket.idx : 0;
+  const market = cand && typeof cand === 'object' ? marketOf(cand) : null;
+  const bet = explicitBet(cand);
+  const impliedRaw = bet.price == null ? null : americanToImplied(bet.price);
+  let close = null;
+  try {
+    let commence = cand && cand.commenceTime ? String(cand.commenceTime) : '';
+    if (!commence) {
+      for (const snap of snaps || []) {
+        const game = gameIn(snap, cand);
+        if (game && game.commenceTime) {
+          commence = String(game.commenceTime);
+          break;
+        }
+      }
+    }
+    const closeSnap = bestCloseSnap(snaps, cand, Date.parse(commence));
+    if (closeSnap) close = sharpCloseFair(gameIn(closeSnap, cand), cand);
+  } catch (_) {
+    close = null;
+  }
+  const closeNoVig = close ? roundTo(close.closeNoVig, 6) : null;
+  const betImplied = impliedRaw == null ? null : roundTo(impliedRaw, 6);
+  const clvPp = closeNoVig != null && betImplied != null
+    ? roundTo((closeNoVig - betImplied) * 100, 2)
+    : null;
+  return {
+    rowKey: pickClvKey(cand, kind, idx),
+    kind,
+    sport: cand && cand.sport ? String(cand.sport).toUpperCase() : null,
+    matchup: cand && cand.matchup ? String(cand.matchup) : null,
+    side: cand && (cand.side || cand.pick) ? String(cand.side || cand.pick) : null,
+    market,
+    line: cand && typeof cand === 'object' ? lineOf(cand, marketOf(cand)) : null,
+    betPrice: bet.price,
+    betImplied,
+    closeNoVig,
+    sharpBook: close ? close.book : null,
+    sharpDevig: close ? 'power' : null,
+    clvPp,
+    beatClose: clvPp == null ? null : clvPp > 0,
+  };
+}
+
+function mergePickClv(prevRows, nextRows) {
+  const map = new Map();
+  const order = [];
+  const put = (row) => {
+    if (!row || !row.rowKey) return;
+    if (!map.has(row.rowKey)) {
+      map.set(row.rowKey, { ...row });
+      order.push(row.rowKey);
+      return;
+    }
+    const prev = map.get(row.rowKey);
+    if (row.closeNoVig == null && prev.closeNoVig != null) {
+      map.set(row.rowKey, {
+        ...row,
+        betImplied: row.betImplied != null ? row.betImplied : prev.betImplied,
+        betPrice: row.betPrice != null ? row.betPrice : prev.betPrice,
+        closeNoVig: prev.closeNoVig,
+        sharpBook: prev.sharpBook,
+        sharpDevig: prev.sharpDevig,
+        clvPp: prev.clvPp,
+        beatClose: prev.beatClose,
+      });
+      return;
+    }
+    map.set(row.rowKey, { ...prev, ...row });
+  };
+  for (const row of prevRows || []) put(row);
+  for (const row of nextRows || []) put(row);
+  return order.map((key) => map.get(key));
+}
+
+function gradePublishedPickClv(picksData, opts = {}) {
+  const tickets = publishedTickets(picksData, opts.published);
+  return tickets.map((ticket) => {
+    try {
+      return gradePickClvOne(ticket, opts.snapshots || []);
+    } catch (_) {
+      return gradePickClvOne({ cand: null, kind: ticket.kind, idx: ticket.idx }, []);
+    }
+  });
+}
+
+function applyPickClv(clvData, opts, snapshots) {
+  if (!pickClvEnabled(opts && opts.env)) return;
+  if (!clvData || typeof clvData !== 'object') return;
+  const graded = gradePublishedPickClv(opts && opts.picksData, {
+    published: opts && opts.published,
+    snapshots: snapshots || [],
+  });
+  if (!graded.length) return;
+  const prev = Array.isArray(opts && opts.existingPickClv)
+    ? opts.existingPickClv
+    : (Array.isArray(clvData.pickClv) ? clvData.pickClv : []);
+  clvData.pickClv = mergePickClv(prev, graded);
+  clvData.pickClvSummary = summarizePickClv(clvData.pickClv);
+}
+
 async function loadStoredSnapshots(dateISO) {
   let master = null;
   let linePathMeta = null;
@@ -767,18 +948,19 @@ async function attachCandidateCloses(clvData, opts = {}) {
       } catch (_) { /* board read is optional */ }
     }
     if (!candidates || !candidates.length) candidates = candidatesFromCard(opts.picksData);
-    if (!candidates || !candidates.length) {
-      if (!clvData.candidates && Array.isArray(opts.existingCandidates)) {
-        clvData.candidates = opts.existingCandidates;
-      }
-      return clvData;
-    }
     let snapshots;
     if (Array.isArray(opts.snapshots)) snapshots = opts.snapshots.slice();
     else snapshots = await loadStoredSnapshots(dateISO);
     try {
       snapshots = snapshots.concat(snapshotsFromBulkCache(opts.bulkCache, opts.nowIso));
     } catch (_) { /* cache shape is optional */ }
+    if (!candidates || !candidates.length) {
+      if (!clvData.candidates && Array.isArray(opts.existingCandidates)) {
+        clvData.candidates = opts.existingCandidates;
+      }
+      applyPickClv(clvData, opts, snapshots);
+      return clvData;
+    }
     const graded = gradeScoredCandidates(candidates, {
       snapshots,
       published: Array.isArray(opts.published) ? opts.published : publishedFromCard(opts.picksData),
@@ -789,6 +971,7 @@ async function attachCandidateCloses(clvData, opts = {}) {
     const bounded = boundCandidates(merged, candidates.length);
     clvData.candidates = bounded.rows;
     clvData.candidateClv = summarize(graded, bounded);
+    applyPickClv(clvData, opts, snapshots);
     return clvData;
   } catch (err) {
     console.warn(`[candidate-clv] close fill skipped: ${safeMsg(err)}`);
@@ -818,4 +1001,6 @@ module.exports = {
   candidatesFromCard,
   seedCandidateClv,
   attachCandidateCloses,
+  gradePublishedPickClv,
+  sharpCloseFair,
 };

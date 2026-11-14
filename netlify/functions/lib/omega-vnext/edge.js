@@ -420,6 +420,86 @@ function noVigPinnacleCircaImplied(sideBundles, target) {
 /**
  * Build sharp no-vig fair p for a two-way market given all side bundles.
  */
+function blankSharpQuote() {
+  return { p: null, book: null, odds: null, oddsOther: null, devig: null, pPower: null };
+}
+
+/**
+ * No-vig fair for one side, plus the prices that produced it.
+ * Prefer a paired same-book price (Pinnacle, then Circa, then the other
+ * sharp books). That pair is the power de-vig (noVigTwoWay), which is the
+ * fair_sharp_p / pMkt the card already uses. Mixing Pinnacle on one side
+ * with a different book's number on the other is not that pair. The mixed
+ * sharpConsensus path remains only when no book posts both sides, and that
+ * path is multiplicative (deVigMarket). pPower is the power no-vig whenever
+ * both prices exist, and null when the other side has no price.
+ * `p` matches the historical sharpFairForSide number.
+ */
+function sharpQuoteForSide(sideBundles, targetSide, targetPoint) {
+  if (!Array.isArray(sideBundles)) return blankSharpQuote();
+  const target = sideBundles.find(s => s && s.side === targetSide && (targetPoint == null || s.point === targetPoint));
+  if (!target) return blankSharpQuote();
+
+  for (const book of SHARP_BOOKS) {
+    const paired = noVigForBook(sideBundles, target, book);
+    if (paired == null) continue;
+    const opp = oppositeBundle(sideBundles, target);
+    const odds = americanForBook(target.prices, book);
+    const oddsOther = opp ? americanForBook(opp.prices, book) : null;
+    return {
+      p: paired,
+      book,
+      odds,
+      oddsOther,
+      devig: 'power',
+      pPower: odds != null && oddsOther != null ? paired : null,
+    };
+  }
+
+  const opposite = oppositeBundle(sideBundles, target);
+  if (!opposite) {
+    const odds = sharpConsensusAmerican(target.prices);
+    const imp = americanToImplied(odds);
+    return {
+      p: imp,
+      book: odds == null ? null : 'consensus',
+      odds,
+      oddsOther: null,
+      devig: imp == null ? null : 'implied',
+      pPower: null,
+    };
+  }
+
+  const odds = sharpConsensusAmerican(target.prices);
+  const oddsOther = sharpConsensusAmerican(opposite.prices);
+  if (odds == null || oddsOther == null) {
+    const imp = americanToImplied(odds);
+    return {
+      p: imp,
+      book: odds == null ? null : 'consensus',
+      odds,
+      oddsOther,
+      devig: imp == null ? null : 'implied',
+      pPower: null,
+    };
+  }
+  const outcomes = [
+    { side: 't', american: odds },
+    { side: 'o', american: oddsOther },
+  ];
+  const dv = deVigMarket(outcomes);
+  const row = dv.find(r => r.side === 't');
+  const powered = noVigTwoWay(odds, oddsOther);
+  return {
+    p: row ? row.fairP : null,
+    book: 'consensus',
+    odds,
+    oddsOther,
+    devig: row && row.fairP != null ? 'multiplicative' : null,
+    pPower: powered && Number.isFinite(powered.p1) ? powered.p1 : null,
+  };
+}
+
 /**
  * No-vig fair for one side.
  * Prefer a paired same-book price (Pinnacle, then Circa, then the other
@@ -428,30 +508,7 @@ function noVigPinnacleCircaImplied(sideBundles, target) {
  * when no book posts both sides.
  */
 function sharpFairForSide(sideBundles, targetSide, targetPoint) {
-  const target = sideBundles.find(s => s.side === targetSide && (targetPoint == null || s.point === targetPoint));
-  if (!target) return null;
-
-  for (const book of SHARP_BOOKS) {
-    const paired = noVigForBook(sideBundles, target, book);
-    if (paired != null) return paired;
-  }
-
-  const opposite = oppositeBundle(sideBundles, target);
-  if (!opposite) {
-    const imp = americanToImplied(sharpConsensusAmerican(target.prices));
-    return imp;
-  }
-
-  const a1 = sharpConsensusAmerican(target.prices);
-  const a2 = sharpConsensusAmerican(opposite.prices);
-  if (a1 == null || a2 == null) return americanToImplied(a1);
-  const outcomes = [
-    { side: 't', american: a1 },
-    { side: 'o', american: a2 },
-  ];
-  const dv = deVigMarket(outcomes);
-  const row = dv.find(r => r.side === 't');
-  return row ? row.fairP : null;
+  return sharpQuoteForSide(sideBundles, targetSide, targetPoint).p;
 }
 
 /**
@@ -500,7 +557,8 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const bestDkHr = bestDkHrPrice(sideBundle.prices);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
-  const fairSharp = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
+  const sharpQuote = sharpQuoteForSide(allBundles, sideBundle.side, sideBundle.point);
+  const fairSharp = sharpQuote.p;
   const odds = bestUs ? bestUs.american : sharpAm;
   const book = bestUs ? bestUs.book : 'consensus';
   const liquid = hasMajorLiquidity(sideBundle.prices);
@@ -519,6 +577,11 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     sharpAmerican: sharpAm,
     fair_sharp_p: fairSharp,
     sharpFairP: fairSharp,
+    sharpBook: sharpQuote.book,
+    sharpOdds: sharpQuote.odds,
+    sharpOddsOther: sharpQuote.oddsOther,
+    sharpDevig: sharpQuote.devig,
+    pMktPower: sharpQuote.pPower,
     predictedClv: predClv,
     liquid,
     majorBookCount: new Set((sideBundle.prices || []).map(p => p.book)
@@ -585,6 +648,7 @@ module.exports = {
   verifyPlaceabilityDecision,
   applyPlaceabilityDrops,
   sharpFairForSide,
+  sharpQuoteForSide,
   noVigPinnacleCircaImplied,
   oppositeBundle,
   predictedClvCents,

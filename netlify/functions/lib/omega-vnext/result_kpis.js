@@ -16,6 +16,7 @@
  */
 
 const { clvPpOf, marketFamily } = require('../clv-ledger');
+const { summarizePickClv, blankPickClv } = require('../clv-summary');
 
 const BANDS = Object.freeze([
   '-300 to -151',
@@ -281,6 +282,20 @@ function scoringFromRecal(recal) {
   return out;
 }
 
+function pickClvPayload(src) {
+  if (Array.isArray(src.pickClvRows)) return summarizePickClv(src.pickClvRows);
+  const ready = src.pickClv;
+  if (ready && typeof ready === 'object' && !Array.isArray(ready)) {
+    const n = Number(ready.n);
+    return {
+      n: Number.isFinite(n) && n > 0 ? n : 0,
+      meanClvPp: ready.meanClvPp == null || !Number.isFinite(Number(ready.meanClvPp)) ? null : Number(ready.meanClvPp),
+      beatClosePct: ready.beatClosePct == null || !Number.isFinite(Number(ready.beatClosePct)) ? null : Number(ready.beatClosePct),
+    };
+  }
+  return blankPickClv();
+}
+
 function buildResultKpis(input) {
   const src = input || {};
   const clv = clvSlices(src.clvRows);
@@ -293,6 +308,7 @@ function buildResultKpis(input) {
     clvByPriceBand: clv.byPriceBand,
     clvByMarket: clv.byMarket,
     scoringBySport: fromRows.length ? fromRows : scoringFromRecal(src.recal),
+    pickClv: pickClvPayload(src),
   };
 }
 

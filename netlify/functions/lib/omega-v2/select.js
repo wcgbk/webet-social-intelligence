@@ -3,7 +3,7 @@
 const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS, forceTop3From,
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
-  marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN,
+  marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
   KELLY_FRACTION,
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
@@ -169,24 +169,35 @@ function priceFairMismatch(implied, pMkt, opts) {
   return Math.abs(fair - implied) > PAIR_SANITY_PP;
 }
 
+function clampBetProb(p) {
+  if (!Number.isFinite(p)) return null;
+  if (p < 0.001) return 0.001;
+  if (p > 0.999) return 0.999;
+  return p;
+}
+
 /**
  * Bet probability. Base is the sharp no-vig price when OMEGA_V2_MARKET_P
  * is on (the default), otherwise pCal. The longshot penalty is
  * smoothedNovigStats(pMkt).penalty (~3.3pp below 0.35, 0 above, blended
  * across 0.33–0.37) and is subtracted only when OMEGA_V2_LONGSHOT_ADJ is
  * on. Clamped to (0.001, 0.999).
+ * OMEGA_V2_POWER_DEVIG is off by default. When it is on and opts.pMktPower
+ * is a real probability, that power no-vig is the bet probability and the
+ * longshot trim is skipped.
  */
 function forcedBetProb(pCal, pMkt, opts) {
   const env = opts && opts.env;
+  const power = Number(opts && opts.pMktPower);
+  if (powerDevigEnabled(env) && Number.isFinite(power) && power > 0 && power < 1) {
+    return clampBetProb(power);
+  }
   let p = marketPEnabled(env) ? Number(pMkt) : Number(pCal);
   if (longshotAdjEnabled(env)) {
     const penalty = smoothedNovigStats(pMkt).penalty;
     if (Number.isFinite(penalty)) p -= penalty;
   }
-  if (!Number.isFinite(p)) return null;
-  if (p < 0.001) return 0.001;
-  if (p > 0.999) return 0.999;
-  return p;
+  return clampBetProb(p);
 }
 
 /** American price shorter than -300. -300 itself is in band. */
@@ -276,7 +287,10 @@ function annotateCandidate(candidate, opts) {
     rejectReason: straightReject,
   };
   if (!force) return row;
-  const pBet = forcedBetProb(cal.pCal, pMkt, opts);
+  const pBet = forcedBetProb(cal.pCal, pMkt, {
+    ...(opts || {}),
+    pMktPower: candidate.pMktPower != null ? candidate.pMktPower : (opts && opts.pMktPower),
+  });
   let reason = straightReject;
   if (reason == null && pBet == null) reason = 'no-calibration';
   const priceEdge = pBet == null ? edge : pBet - implied;

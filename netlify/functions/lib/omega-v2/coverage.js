@@ -23,7 +23,7 @@
 const { MODEL_SPORTS, MIN_SPORT } = require('./constants');
 const { americanToImplied } = require('../omega-vnext/odds_math');
 const {
-  collectMarketOutcomes, sharpFairForSide, bestDkHrPrice, oppositeBundle,
+  collectMarketOutcomes, sharpQuoteForSide, bestDkHrPrice, oppositeBundle,
 } = require('../omega-vnext/edge');
 
 /** Mean |pCal - no-vig| on a real slate that falls back to k = 1. */
@@ -109,7 +109,8 @@ function appendAnchored(out, sport, event) {
     for (const side of bundles) {
       const opp = oppositeBundle(bundles, side);
       if (!opp || !posted(side, 'pinnacle') || !posted(opp, 'pinnacle')) continue;
-      const p = sharpFairForSide(bundles, side.side, side.point);
+      const quote = sharpQuoteForSide(bundles, side.side, side.point);
+      const p = quote.p;
       const dk = bestDkHrPrice(side.prices);
       if (!(p > 0 && p < 1) || !dk || !Number.isFinite(Number(dk.american))) continue;
       const breakEven = americanToImplied(dk.american);
@@ -128,6 +129,11 @@ function appendAnchored(out, sport, event) {
         pModel: p,
         pMkt: p,
         fair_sharp_p: p,
+        sharpBook: quote.book,
+        sharpOdds: quote.odds,
+        sharpOddsOther: quote.oddsOther,
+        sharpDevig: quote.devig,
+        pMktPower: quote.pPower,
         priceEdge: p - breakEven,
         commenceTime,
         homeTeam: home || null,

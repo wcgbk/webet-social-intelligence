@@ -11,6 +11,48 @@ function marketFamily(market, source) {
   return 'Other';
 }
 
+function blankPickClv() {
+  return { n: 0, meanClvPp: null, beatClosePct: null };
+}
+
+/**
+ * Mean and beat rate for per-pick rows. clvPp is percentage points.
+ * Positive beat the close. Rows without a number are left out of n.
+ */
+function summarizePickClv(rows) {
+  const list = [];
+  for (const row of rows || []) {
+    if (!row || row.clvPp == null || row.clvPp === '') continue;
+    const pp = Number(row.clvPp);
+    if (!Number.isFinite(pp)) continue;
+    list.push(row);
+  }
+  if (!list.length) return blankPickClv();
+  let sum = 0;
+  let beats = 0;
+  for (const row of list) {
+    const pp = Number(row.clvPp);
+    sum += pp;
+    if (row.beatClose === true || (row.beatClose == null && pp > 0)) beats += 1;
+  }
+  const n = list.length;
+  return {
+    n,
+    meanClvPp: +((sum / n).toFixed(2)),
+    beatClosePct: +(((beats / n) * 100).toFixed(1)),
+  };
+}
+
+function pickClvFromBlobs(blobs) {
+  const rows = [];
+  for (const blob of blobs || []) {
+    if (blob && Array.isArray(blob.pickClv)) {
+      for (const row of blob.pickClv) rows.push(row);
+    }
+  }
+  return summarizePickClv(rows);
+}
+
 function emptySummary(note) {
   return {
     available: false,
@@ -19,6 +61,7 @@ function emptySummary(note) {
     beatClosePct: null,
     byFamily: {},
     note: note || 'no clv blobs in window',
+    pickClv: blankPickClv(),
   };
 }
 
@@ -39,7 +82,11 @@ function summarizeClvBlobs(blobs) {
       });
     }
   }
-  if (!valid.length) return emptySummary('clv blobs present but no numeric clv rows');
+  if (!valid.length) {
+    const summary = emptySummary('clv blobs present but no numeric clv rows');
+    summary.pickClv = pickClvFromBlobs(blobs);
+    return summary;
+  }
 
   const sum = valid.reduce((s, p) => s + p.cents, 0);
   const beats = valid.filter(p => p.beat).length;
@@ -65,6 +112,7 @@ function summarizeClvBlobs(blobs) {
     beatClosePct: +((beats / valid.length) * 100).toFixed(1),
     byFamily: families,
     note: null,
+    pickClv: pickClvFromBlobs(blobs),
   };
 }
 
@@ -95,4 +143,6 @@ module.exports = {
   emptySummary,
   summarizeClvBlobs,
   summarizeClvFromStore,
+  summarizePickClv,
+  blankPickClv,
 };

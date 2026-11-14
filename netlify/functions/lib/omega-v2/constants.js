@@ -222,6 +222,57 @@ function marketPEnabled(env) {
 }
 
 /**
+ * Morning board carries the sharp book's two American prices, the de-vig
+ * that produced pMkt, and the power no-vig. Numbers and short labels only.
+ * Default on. OMEGA_V2_BOARD_SHARP_PRICES=off / 0 / false keeps the
+ * previous slim row.
+ */
+const BOARD_SHARP_PRICES_ENV = 'OMEGA_V2_BOARD_SHARP_PRICES';
+
+function boardSharpPricesEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[BOARD_SHARP_PRICES_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
+ * Bet probability uses the power no-vig (pMktPower) and skips the longshot
+ * trim, because power de-vig already handles favourite-longshot bias.
+ * Default off. It cannot be replay-tested until boards carry two-sided
+ * prices. Stays off until a replay on boards with two-sided prices beats
+ * the multiplicative+trim path.
+ * OMEGA_V2_POWER_DEVIG=on / 1 / true turns it on. Unset, off, 0, and false stay off.
+ */
+const POWER_DEVIG_ENV = 'OMEGA_V2_POWER_DEVIG';
+
+function powerDevigEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[POWER_DEVIG_ENV];
+  if (raw == null || String(raw).trim() === '') return false;
+  const text = String(raw).trim().toLowerCase();
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
+/**
+ * After the close is already captured, store one CLV row for each published
+ * straight and each parlay leg on clv-{date}.pickClv. Default on.
+ * OMEGA_V2_PICK_CLV=off / 0 / false skips that write. The row's clvPp is
+ * the close power no-vig minus the bet price's implied probability, in
+ * percentage points. Positive beat the close.
+ */
+const PICK_CLV_ENV = 'OMEGA_V2_PICK_CLV';
+
+function pickClvEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[PICK_CLV_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
  * American prices shorter than this are out of band for a forced straight.
  * -300 itself stays in band. -301, -600, and -1300 do not.
  * Default on. OMEGA_V2_FAV_CAP=off / 0 / false ranks every price together.
@@ -343,6 +394,12 @@ module.exports = {
   longshotAdjEnabled,
   MARKET_P_ENV,
   marketPEnabled,
+  BOARD_SHARP_PRICES_ENV,
+  boardSharpPricesEnabled,
+  POWER_DEVIG_ENV,
+  powerDevigEnabled,
+  PICK_CLV_ENV,
+  pickClvEnabled,
   FAV_CAP_ENV,
   FAV_CAP_AMERICAN,
   favCapEnabled,

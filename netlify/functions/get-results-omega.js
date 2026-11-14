@@ -943,8 +943,12 @@ exports.handler = async (event) => {
         authHeaders,
         dates: alphaDates,
       });
+      result.pickClv = result.clv && result.clv.pickClv
+        ? result.clv.pickClv
+        : { n: 0, meanClvPp: null, beatClosePct: null };
     } catch (e) {
       result.clv = { available: false, n: 0, meanCents: null, beatClosePct: null, byFamily: {}, note: 'clv summary unavailable' };
+      result.pickClv = { n: 0, meanClvPp: null, beatClosePct: null };
     }
 
     try {

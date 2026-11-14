@@ -8,6 +8,7 @@
 
 const {
   MODEL_VERSION, pairFixEnabled, PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI,
+  boardSharpPricesEnabled,
 } = require('./constants');
 const { americanToImplied } = require('../omega-vnext/odds_math');
 
@@ -47,9 +48,30 @@ function dkHrLineAgrees(edgeLine, quoteLine) {
   return Math.abs(edge - quote) <= 1e-6;
 }
 
-function slimCandidate(c) {
+/** American price as an integer. A missing quote stays null. */
+function americanOrNull(v) {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).trim().replace(/^\+/, ''));
+  if (!Number.isFinite(n) || n === 0) return null;
+  return Math.round(n);
+}
+
+/** Probability in (0, 1). Anything else stays null. */
+function probOrNull(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0 || n >= 1) return null;
+  return n;
+}
+
+function shortLabel(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
+function slimCandidate(c, env) {
   if (!c) return null;
-  return {
+  const row = {
     sport: c.sport || null,
     matchup: c.matchup || null,
     side: c.side || c.pick || null,
@@ -76,6 +98,13 @@ function slimCandidate(c) {
     homeTeam: c.homeTeam || null,
     awayTeam: c.awayTeam || null,
   };
+  if (!boardSharpPricesEnabled(env)) return row;
+  row.sharpBook = shortLabel(c.sharpBook);
+  row.sharpOdds = americanOrNull(c.sharpOdds);
+  row.sharpOddsOther = americanOrNull(c.sharpOddsOther);
+  row.sharpDevig = shortLabel(c.sharpDevig);
+  row.pMktPower = probOrNull(c.pMktPower);
+  return row;
 }
 
 function noWrite(meta) {

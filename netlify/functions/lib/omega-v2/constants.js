@@ -174,6 +174,22 @@ function forceTop3Enabled(env) {
 }
 
 /**
+ * Honest fill on a force-top3 card. A forced straight whose price EV is
+ * negative at its DK/HR decimal is capped at 0.25u and marked filler.
+ * Default on. OMEGA_V2_FILLER=off / 0 / false leaves the stake alone and
+ * does not mark the pick.
+ */
+const FILLER_ENV = 'OMEGA_V2_FILLER';
+
+function fillerEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[FILLER_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
  * Haircut the bet probability by the fitted longshot penalty.
  * Multiplicative no-vig overstates longshots, so without this the EV rank
  * fills the card with +1500..+5000 college dogs.
@@ -319,6 +335,8 @@ module.exports = {
   pairFixEnabled,
   FORCE_TOP3_ENV,
   forceTop3Enabled,
+  FILLER_ENV,
+  fillerEnabled,
   forceTop3From,
   isForceTop3Card,
   LONGSHOT_ADJ_ENV,

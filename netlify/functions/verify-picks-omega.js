@@ -257,7 +257,12 @@ function runMathChecks(pick, opts) {
     else errors.push(`CRITICAL: ${detail}`);
   }
   // Forced stakes print 0.25u when quarter-Kelly is not positive. That floor is a match.
-  if (forceTop3 && Number.isFinite(units) && units + 1e-9 >= 0.25) checks.kellyMatch = true;
+  // A filler is the same 0.25u minimum (negative price EV). It is not a sizing error.
+  const fillerMin = !!(pick && pick.filler === true)
+    && Number.isFinite(units)
+    && Math.abs(units - 0.25) <= 1e-9;
+  if (forceTop3 && fillerMin) checks.kellyMatch = true;
+  else if (forceTop3 && Number.isFinite(units) && units + 1e-9 >= 0.25) checks.kellyMatch = true;
 
   // EV display match
   if (pick.kellyCalc) {

@@ -2,12 +2,13 @@
 
 const {
   MODEL_VERSION, MAX_STRAIGHTS, PER_BET_CAP, STRAIGHT_BUDGET, CARD_BUDGET, PARLAY_STAKE_CAP, UNIT_DOLLARS,
+  fillerEnabled,
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
 const { marketFamily, pastPregameCutoff, pregameClockMs, annotateCandidate } = require('./select');
 const { bannedPairReason, sizeParlay, quotedLeg, canonicalPlaceBook, PLACEABLE_BOOKS } = require('./parlay');
 const { dkHrLineAgrees } = require('./board');
-const { quarterKellyFromDecimal } = require('./size');
+const { quarterKellyFromDecimal, priceEvAtBet } = require('./size');
 const { americanJuiceDelta, americanToDecimal, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
 const { letterFromPrintedEdge } = require('./letter');
 
@@ -219,6 +220,10 @@ function toPick(row) {
     pick.forced = true;
     if (row.pBet != null) pick.pBet = row.pBet;
     if (row.favCapFill) pick.favCapFill = true;
+    if (row.filler === true) {
+      pick.filler = true;
+      pick.fillerReason = row.fillerReason || 'negative-ev';
+    }
   }
   return pick;
 }
@@ -444,7 +449,9 @@ function replaceIllegalParlayBooks(card, picks, clockOpts, notes) {
  * Rock is replaced with the next +EV DK/HR leg, or the ticket is dropped.
  * A parlay whose quarter-Kelly rounds under 0.25u is removed. It is not
  * floored back up to 0.25u. A started leg is removed here. That correction
- * is not a validation error.
+ * is not a validation error. On a force-top3 card, a straight with negative
+ * price EV is a filler: stake 0.25u, letter and price left as they are.
+ * The parlay legs and the parlay stake are not part of that cap.
  */
 function autoCorrectCard(card, opts) {
   const notes = [];
@@ -538,6 +545,26 @@ function autoCorrectCard(card, opts) {
       if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = stake;
       notes.push(`b-grade cap ${p.pick || p.side}`);
       gradeMoved = true;
+    }
+  }
+  // After the letter and the B cap. A negative price EV (pBet × DK/HR
+  // decimal − 1) that still sits above 0.25u drops to that minimum.
+  // Already-0.25u fillers are marked and not noted. Positive-EV stakes,
+  // letters, and the parlay are left for the code above and below.
+  if (fillerEnabled() && forceCard) {
+    for (const p of picks) {
+      const priceEv = priceEvAtBet(p);
+      if (priceEv == null || !(priceEv < 0)) continue;
+      p.filler = true;
+      p.fillerReason = 'negative-ev';
+      if (unitsOf(p) > 0.25 + 1e-9) {
+        notes.push(`filler cap ${p.pick || p.side}`);
+        p.unitsNum = 0.25;
+        p.units = '0.25u';
+        if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) {
+          p.stakeDollars = Math.ceil(0.25 * UNIT_DOLLARS - 1e-9);
+        }
+      }
     }
   }
   out.picks = picks;

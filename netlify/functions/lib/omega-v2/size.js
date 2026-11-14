@@ -2,7 +2,7 @@
 
 const {
   KELLY_FRACTION, PER_BET_CAP, STRAIGHT_BUDGET, UNIT_DOLLARS, BANKROLL_UNITS,
-  forceTop3From,
+  forceTop3From, fillerEnabled,
 } = require('./constants');
 const { americanToDecimal, EDGE_B_UNIT_CAP } = require('../omega-vnext/odds_math');
 const { letterFromPrintedEdge } = require('./letter');
@@ -14,6 +14,20 @@ function roundQuarter(n) {
 function stakeUsd(units) {
   if (!(units > 0)) return 0;
   return Math.ceil(units * UNIT_DOLLARS - 1e-9);
+}
+
+/**
+ * Price EV at the DK/HR decimal: pBet * decimal - 1.
+ * Null when pBet or the price is missing. Callers treat null as "not negative".
+ */
+function priceEvAtBet(row) {
+  if (!row || typeof row !== 'object') return null;
+  const p = Number(row.pBet);
+  if (!(p > 0) || !(p < 1)) return null;
+  let dec = Number(row.decimal);
+  if (!(dec > 1)) dec = Number(americanToDecimal(row.odds));
+  if (!(dec > 1)) return null;
+  return p * dec - 1;
 }
 
 /**
@@ -117,8 +131,12 @@ function trimBudget(rows, budget, opts) {
  * Quarter-Kelly on pBet. f <= 0 or a step under 0.25u prints 0.25u.
  * Cap is 2u, then 0.5u when the printed price edge is a B.
  * The 3.5u straight budget trims by 0.25u and never goes under 0.25u.
+ * When OMEGA_V2_FILLER is on, a negative price EV (pBet × decimal − 1)
+ * is capped at exactly 0.25u and marked filler. The letter is not touched.
+ * Budget trim still runs on the other straights.
  */
 function sizeForcedStraights(selected) {
+  const markFiller = fillerEnabled();
   const sized = (selected || []).map((row) => {
     const p = Number.isFinite(Number(row && row.pBet))
       ? Number(row.pBet)
@@ -128,7 +146,10 @@ function sizeForcedStraights(selected) {
     let units = kelly.units >= 0.25 ? kelly.units : 0.25;
     if (units > PER_BET_CAP) units = PER_BET_CAP;
     if (letterFromPrintedEdge(row.edge) === 'b' && units > EDGE_B_UNIT_CAP) units = EDGE_B_UNIT_CAP;
-    return {
+    const priceEv = priceEvAtBet(row);
+    const filler = markFiller && priceEv != null && priceEv < 0;
+    if (filler) units = 0.25;
+    const next = {
       ...row,
       forced: true,
       units,
@@ -137,6 +158,14 @@ function sizeForcedStraights(selected) {
       skipped: false,
       skipReason: null,
     };
+    if (filler) {
+      next.filler = true;
+      next.fillerReason = 'negative-ev';
+    } else {
+      delete next.filler;
+      delete next.fillerReason;
+    }
+    return next;
   });
   return trimBudget(sized, STRAIGHT_BUDGET, { forceTop3: true });
 }
@@ -152,6 +181,7 @@ function sizeStraights(selected, opts) {
 module.exports = {
   roundQuarter,
   stakeUsd,
+  priceEvAtBet,
   quarterKellyFromDecimal,
   quarterKellyUnits,
   sizeStraight,

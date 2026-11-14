@@ -168,6 +168,16 @@ function buildFallbackNarrative(p) {
     stake = 'WeBetAI kept the stake disciplined, enough to matter without making one game the whole day.';
   }
 
+  if (p && p.filler === true) {
+    value = `This is a smaller fill play to complete the card, and ${price} is the posted number.`;
+    compass = 'The price carries lower expected value than the other plays, so the stake stays at the minimum.';
+    if (units) {
+      stake = `WeBetAI sized this fill at ${units}, a smaller fill play that completes the card.`;
+    } else {
+      stake = 'WeBetAI sized this as a smaller fill play at the minimum stake.';
+    }
+  }
+
   let close;
   if (shape === 'under') {
     close = 'WeBetAI is on the under because the game should land quieter than the posted total.';
@@ -275,7 +285,7 @@ function templateEdgeSummary(picks, dateFormatted, parlayLegs) {
   const sports = [...new Set(list.map(p => p.sport).filter(Boolean))];
   const sportBit = sports.length ? sports.join(' and ') : 'the board';
   const dateBit = dateFormatted ? ` for ${dateFormatted}` : '';
-  const bands = list.map(edgeBandFrom).filter(Boolean);
+  const bands = list.filter((p) => !(p && p.filler === true)).map(edgeBandFrom).filter(Boolean);
   const strongN = bands.filter(b => b === 'strong').length;
   const solidN = bands.filter(b => b === 'solid').length;
   let where;
@@ -496,6 +506,7 @@ function lockedRow(p, i, kind, env) {
   const steam = steamHintFrom(p);
   if (band) row.edgeBand = band;
   if (steam) row.steamHint = steam;
+  if (p && p.filler === true) row.filler = true;
   return row;
 }
 
@@ -523,7 +534,7 @@ YOUR JOB:
 HOW TO BUILD coreReasoning (straights, 4-6 sentences):
 1. Open with a concrete fact. Use verified news when you have it. Otherwise open on the matchup and the number.
 2. Explain the matchup or the situation: why this side, in this game, today.
-3. Explain the price in plain English. Use edgeBand and steamHint when they are present. A strong or solid band means the number is meaningfully off. A modest band means the price is only a little off, so keep the tone measured.
+3. Explain the price in plain English. Use edgeBand and steamHint when they are present. A strong or solid band means the number is meaningfully off. A modest band means the price is only a little off, so keep the tone measured. When filler is true, describe a smaller fill play and do not call that pick a strong play.
 4. Close on why WeBetAI locked this side.
 
 Parlay legs use the same voice in 3-5 sentences. Do not write a stub. Argue for that leg.
@@ -544,6 +555,7 @@ CONTEXT FIELDS on each locked row are a compass. They are not copy:
 - rating, grade, odds, units, sport, betType: fine to mention in English.
 - edgeBand: modest, solid, or strong. Translate it. Do not print a percent.
 - steamHint: translate the direction if it is present. If it is missing, do not invent line movement.
+- filler: when true, this straight is a smaller fill play added to complete the 3-pick card. It has lower expected value and the minimum stake. Describe it that way. Do not call it a strong play.
 - _contextEv and _contextCover: private. Use them only to decide how hard to talk about value. Never print them, and never print EV, expected value, cover probability, or a percent edge.
 
 OUTPUT: Return ONLY valid JSON (no markdown fences):
@@ -592,6 +604,7 @@ ${JSON.stringify(lockedLegs || [], null, 2)}
 Write the JSON now.
 Straights need 4-6 sentence coreReasoning. Parlay legs need 3-5 sentences. edgeSummary and insights need 3-5 sentences each.
 Fields named edgeBand, steamHint, _contextEv, and _contextCover are a compass for plain-English value talk. Do not print EV, cover probability, CLV cents, Kelly, or those raw context numbers.
+When a locked row has filler set, describe that pick as a smaller fill play. Do not call it a strong play.
 Argue for the picked side. Say WeBetAI. No em dashes.`;
 }
 

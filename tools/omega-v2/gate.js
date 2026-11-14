@@ -510,6 +510,13 @@ async function main() {
   );
   if (venueCopy.status !== 0) throw new Error('venue copy gate failed');
 
+  const filler = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-filler.js')],
+    { stdio: 'inherit' }
+  );
+  if (filler.status !== 0) throw new Error('filler stake gate failed');
+
   const v1BoardMap = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v1-board-map.js')],

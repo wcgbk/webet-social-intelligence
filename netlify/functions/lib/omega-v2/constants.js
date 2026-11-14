@@ -190,6 +190,38 @@ function longshotAdjEnabled(env) {
 }
 
 /**
+ * Bet probability is the sharp no-vig price at the same line (wisdom of
+ * the crowd), then the longshot penalty when that adjustment is on.
+ * Default on. OMEGA_V2_MARKET_P=off / 0 / false uses the calibrated
+ * probability as the base, which is the previous force-top3 rule.
+ */
+const MARKET_P_ENV = 'OMEGA_V2_MARKET_P';
+
+function marketPEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[MARKET_P_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
+ * American prices shorter than this are out of band for a forced straight.
+ * -300 itself stays in band. -301, -600, and -1300 do not.
+ * Default on. OMEGA_V2_FAV_CAP=off / 0 / false ranks every price together.
+ */
+const FAV_CAP_ENV = 'OMEGA_V2_FAV_CAP';
+const FAV_CAP_AMERICAN = -300;
+
+function favCapEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[FAV_CAP_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
  * opts.forceTop3 wins when the caller set it. Otherwise the env flag.
  * autoCorrect and validate do not use this: they follow card.selectionRule
  * so an unmarked fixture keeps the old gates while the flag is on.
@@ -291,6 +323,11 @@ module.exports = {
   isForceTop3Card,
   LONGSHOT_ADJ_ENV,
   longshotAdjEnabled,
+  MARKET_P_ENV,
+  marketPEnabled,
+  FAV_CAP_ENV,
+  FAV_CAP_AMERICAN,
+  favCapEnabled,
   NHL_ML_SHRINK_K,
   NHL_ML_WALKFORWARD_BEATS_NOVIG,
   ISOTONIC_MIN,

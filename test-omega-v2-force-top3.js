@@ -42,15 +42,25 @@ function annotate(over, opts) {
 
 const savedForce = process.env.OMEGA_V2_FORCE_TOP3;
 const savedAdj = process.env.OMEGA_V2_LONGSHOT_ADJ;
+const savedMarket = process.env.OMEGA_V2_MARKET_P;
+const savedFav = process.env.OMEGA_V2_FAV_CAP;
 
 function restoreEnv() {
   if (savedForce == null) delete process.env.OMEGA_V2_FORCE_TOP3;
   else process.env.OMEGA_V2_FORCE_TOP3 = savedForce;
   if (savedAdj == null) delete process.env.OMEGA_V2_LONGSHOT_ADJ;
   else process.env.OMEGA_V2_LONGSHOT_ADJ = savedAdj;
+  if (savedMarket == null) delete process.env.OMEGA_V2_MARKET_P;
+  else process.env.OMEGA_V2_MARKET_P = savedMarket;
+  if (savedFav == null) delete process.env.OMEGA_V2_FAV_CAP;
+  else process.env.OMEGA_V2_FAV_CAP = savedFav;
 }
 
+// These assertions are the calibrated bet probability and the unsplit rank.
+// Market price and the favorite cap are covered in test-omega-v2-market-p.js.
 process.env.OMEGA_V2_FORCE_TOP3 = '1';
+process.env.OMEGA_V2_MARKET_P = 'off';
+process.env.OMEGA_V2_FAV_CAP = 'off';
 delete process.env.OMEGA_V2_LONGSHOT_ADJ;
 assert.strictEqual(forceTop3Enabled(), true);
 assert.strictEqual(longshotAdjEnabled(), true);

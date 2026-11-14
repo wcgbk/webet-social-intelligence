@@ -396,6 +396,10 @@ async function main() {
   assert.strictEqual(mismatched.picks.length, 0);
   assert.strictEqual(mismatched.edgeSummary, 'Saturday, October 4, 2026: no placeable plays.');
   assert.strictEqual(v2.longshotAdjEnabled(), true, 'longshot adjustment defaults on');
+  assert.strictEqual(v2.marketPEnabled(), true, 'market probability defaults on');
+  assert.strictEqual(v2.favCapEnabled(), true, 'favorite cap defaults on');
+  assert.strictEqual(v2.FAV_CAP_AMERICAN, -300);
+  assert.ok(!/model gives/i.test(`${forcedCard.edgeSummary} ${forcedCard.insights || ''}`));
   // Child tests spawned below inherit this env. Keep the legacy flag off.
   process.env.OMEGA_V2_FORCE_TOP3 = 'off';
   assert.strictEqual(v2.forceTop3Enabled(), false);
@@ -470,6 +474,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (replayDkhr.status !== 0) throw new Error('replay dkhr gate failed');
+
+  const marketP = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-market-p.js')],
+    { stdio: 'inherit' }
+  );
+  if (marketP.status !== 0) throw new Error('market probability and favorite cap gate failed');
 
   const boardOrder = require('child_process').spawnSync(
     process.execPath,

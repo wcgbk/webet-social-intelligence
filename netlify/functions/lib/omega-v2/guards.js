@@ -25,8 +25,15 @@ function parseAmerican(raw) {
  * Pre-publish price recheck. `recheck` is injected by the caller.
  * This module never calls The Odds API or any other network price source.
  * A quote whose number differs from the edge line is dropped. Juice more
- * than 15 cents worse is dropped. A smaller DK/HR move is repriced, and
- * the leg stays only while it is still +EV at that price. A null quote,
+ * than 15 cents worse is dropped. A smaller DK/HR move is re-annotated
+ * with the same bet probability as selection (sharp no-vig when
+ * OMEGA_V2_MARKET_P is on, calibrated probability when it is off, then
+ * the longshot penalty). The leg stays while that annotation still
+ * qualifies. A price that moves shorter than -300 is not dropped here:
+ * it remains in the kept pool so it can fill an empty slot. Callers
+ * must run selectForcedTop3 on that pool afterward. Pipeline does.
+ * An in-band row then takes the slot, and the heavy favorite is marked
+ * favCapFill only when fewer than 3 in-band games remain. A null quote,
  * or a quote from any other book, leaves the locked price in place.
  */
 async function recheckPrices(candidates, recheck) {
@@ -204,9 +211,14 @@ function toPick(row) {
     clvPp: row.clvPp != null ? row.clvPp : null,
     calibrationMethod: row.calibration.method,
   };
+  // pModelCal is the calibrated probability. winProbability above is pBet
+  // on this path, which may be the sharp no-vig price rather than that number.
+  if (row.pModelCal != null) pick.pModelCal = row.pModelCal;
+  else if (row.calibration && row.calibration.pCal != null) pick.pModelCal = row.calibration.pCal;
   if (forced) {
     pick.forced = true;
     if (row.pBet != null) pick.pBet = row.pBet;
+    if (row.favCapFill) pick.favCapFill = true;
   }
   return pick;
 }

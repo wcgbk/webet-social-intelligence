@@ -9,6 +9,9 @@
  */
 
 const assert = require('assert');
+// This slate's joint EV is positive at the calibrated probability.
+// The market-price bet probability is a separate flag and is left off here.
+process.env.OMEGA_V2_MARKET_P = 'off';
 const { generateOmegaVnext, MODEL_VERSION } = require('./netlify/functions/lib/omega-vnext');
 const parlay = require('./netlify/functions/lib/omega-vnext/parlay');
 const { americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');

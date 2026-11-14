@@ -9,6 +9,10 @@ const assert = require('assert');
 const v2 = require('./netlify/functions/lib/omega-v2');
 const { americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
+// Joint probability in this file is the product of calibrated pCal.
+// Market-price bet probability is covered in test-omega-v2-market-p.js.
+process.env.OMEGA_V2_MARKET_P = 'off';
+
 const FUTURE = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
 const DATE = '2026-10-20';
 

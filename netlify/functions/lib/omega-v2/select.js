@@ -3,6 +3,7 @@
 const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS, forceTop3From,
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
+  marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN,
   KELLY_FRACTION,
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
@@ -169,13 +170,16 @@ function priceFairMismatch(implied, pMkt, opts) {
 }
 
 /**
- * Bet probability. Penalty is smoothedNovigStats(pMkt).penalty (~3.3pp below
- * 0.35, 0 above, blended 0.33–0.37). OMEGA_V2_LONGSHOT_ADJ=off keeps pCal.
- * Clamped to (0.001, 0.999).
+ * Bet probability. Base is the sharp no-vig price when OMEGA_V2_MARKET_P
+ * is on (the default), otherwise pCal. The longshot penalty is
+ * smoothedNovigStats(pMkt).penalty (~3.3pp below 0.35, 0 above, blended
+ * across 0.33–0.37) and is subtracted only when OMEGA_V2_LONGSHOT_ADJ is
+ * on. Clamped to (0.001, 0.999).
  */
 function forcedBetProb(pCal, pMkt, opts) {
-  let p = Number(pCal);
-  if (longshotAdjEnabled(opts && opts.env)) {
+  const env = opts && opts.env;
+  let p = marketPEnabled(env) ? Number(pMkt) : Number(pCal);
+  if (longshotAdjEnabled(env)) {
     const penalty = smoothedNovigStats(pMkt).penalty;
     if (Number.isFinite(penalty)) p -= penalty;
   }
@@ -183,6 +187,12 @@ function forcedBetProb(pCal, pMkt, opts) {
   if (p < 0.001) return 0.001;
   if (p > 0.999) return 0.999;
   return p;
+}
+
+/** American price shorter than -300. -300 itself is in band. */
+function favoriteOutOfBand(row) {
+  const odds = Number(row && row.odds);
+  return Number.isFinite(odds) && odds < FAV_CAP_AMERICAN;
 }
 
 /**
@@ -194,8 +204,11 @@ function forcedBetProb(pCal, pMkt, opts) {
  * Flag on (force top 3): placeable DK/HR price, a real calibration, the 10pp
  * screen on edgeNovig, the price-fair mismatch guard over the full
  * probability range, and a 10pp screen on the price edge (pBet - implied).
- * pBet is pCal minus the longshot penalty. edge and ev are at pBet versus
- * the DK/HR price.
+ * Those screens stay on pCal - pMkt and on pBet - implied. They do not
+ * switch when the bet probability uses the market price. pBet is the
+ * market no-vig (or pCal, when that flag is off) minus the longshot
+ * penalty. edge and ev are at pBet versus the DK/HR price. pModelCal
+ * keeps the calibrated probability for audit. edgeNovig stays pCal - pMkt.
  * Rank is quarter-Kelly expected log growth at that pBet, not raw EV.
  * Negative EV and the uncertainty floor do not remove the row.
  */
@@ -257,6 +270,7 @@ function annotateCandidate(candidate, opts) {
     longshotPenalty: gate.penalty,
     ev,
     evShrink,
+    pModelCal: cal.pCal,
     qualified: straightReject == null,
     parlayQualified: force ? straightReject == null : rejectReason == null,
     rejectReason: straightReject,
@@ -334,25 +348,63 @@ function compareForcedGrowth(a, b) {
 }
 
 /**
+ * Positive price EV first, then the American price closest to the -300
+ * cap (smaller absolute price), then higher quarter-Kelly growth
+ * (null last), then pick name.
+ */
+function compareFavFill(a, b) {
+  const aPos = Number(a.ev) > 0;
+  const bPos = Number(b.ev) > 0;
+  if (aPos !== bPos) return aPos ? -1 : 1;
+  const ad = Math.abs(Number(a.odds));
+  const bd = Math.abs(Number(b.odds));
+  if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return ad - bd;
+  const ag = a.kellyGrowth;
+  const bg = b.kellyGrowth;
+  const aHas = ag != null;
+  const bHas = bg != null;
+  if (aHas !== bHas) return aHas ? -1 : 1;
+  if (aHas && bg !== ag) return bg > ag ? 1 : -1;
+  return String(a.pick).localeCompare(String(b.pick));
+}
+
+/**
  * Top 3 placeable straights by quarter-Kelly expected log growth, one per game.
  * Growth uses pBet and the decimal price. full Kelly <= 0 stores null and
  * ranks after every positive-growth row, by price EV. Pregame cutoff still applies.
+ * With the favorite cap on, prices shorter than -300 are out of band. In-band
+ * rows fill the card first. Out-of-band rows fill empty slots only, one per
+ * game, and those rows are marked favCapFill. Cap off is the unsplit rank.
  */
 function selectForcedTop3(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
+  const cap = favCapEnabled(opts && opts.env);
   const ranked = (annotated || [])
     .filter((c) => c && c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
-    .map((c) => ({ ...c, kellyGrowth: kellyGrowth(c.pBet, c.decimal) }))
-    .sort(compareForcedGrowth);
+    .map((c) => ({ ...c, kellyGrowth: kellyGrowth(c.pBet, c.decimal) }));
+  const inBand = [];
+  const outBand = [];
+  for (const c of ranked) {
+    if (cap && favoriteOutOfBand(c)) outBand.push(c);
+    else inBand.push(c);
+  }
+  inBand.sort(compareForcedGrowth);
+  if (cap) outBand.sort(compareFavFill);
   const out = [];
   const used = new Set();
-  for (const c of ranked) {
-    if (out.length >= MAX_STRAIGHTS) break;
-    const key = c.gameKey != null && c.gameKey !== '' ? c.gameKey : gameKey(c.matchup);
-    if (used.has(key)) continue;
-    used.add(key);
-    out.push({ ...c, forced: true });
-  }
+  const take = (list, fill) => {
+    for (const c of list) {
+      if (out.length >= MAX_STRAIGHTS) break;
+      const key = c.gameKey != null && c.gameKey !== '' ? c.gameKey : gameKey(c.matchup);
+      if (used.has(key)) continue;
+      used.add(key);
+      const row = { ...c, forced: true };
+      if (fill) row.favCapFill = true;
+      out.push(row);
+    }
+  };
+  take(inBand, false);
+  if (cap) take(outBand, true);
   return out;
 }
 
@@ -384,6 +436,8 @@ module.exports = {
   BOUNDARY_BLEND,
   rankEv,
   kellyGrowth,
+  forcedBetProb,
+  favoriteOutOfBand,
   annotateCandidate,
   selectStraights,
   selectForcedTop3,

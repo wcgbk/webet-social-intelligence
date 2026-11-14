@@ -299,6 +299,10 @@ async function buildCard(input) {
   let parlayPoolLegs;
   let sizedParlay;
   if (forceTop3) {
+    // Recheck already re-annotated moved prices with the same bet
+    // probability. Selecting here applies the favorite cap, so a price
+    // that crossed below -300 does not stay on the card while an in-band
+    // replacement is still in the kept pool.
     straights = sizeForcedStraights(selectForcedTop3(kept, pregameOpts));
     sizedParlay = buildForcedParlay(straights);
     parlayPoolLegs = kept.filter((cand) => cand.parlayQualified && quotedLeg(cand));
@@ -325,6 +329,7 @@ async function buildCard(input) {
   const straightUnits = +sumUnits(straights).toFixed(2);
   const parlayUnits = sizedParlay.publish ? sizedParlay.units : 0;
   const dateFormatted = input.dateFormatted || date;
+  // Printed win probability is pBet. This line does not call that figure a model probability.
   const edgeSummary = forceTop3
     ? (picks.length
       ? `${dateFormatted}: top ${picks.length} plays by expected growth.`

@@ -15,9 +15,16 @@ async function stores() {
   return { omega: store('edge-picks-omega'), ab: store(S.V1AB_STORE) }; // omega: read-only (getJSON only)
 }
 
-async function buildCard(omegaCard, { dateISO, nowMs = Date.now() } = {}) {
-  const pool = (omegaCard && omegaCard.parlayPool) || [];
-  const sel = S.selectSharp(pool, { nowMs });
+async function buildCard(omegaCard, { dateISO, nowMs = Date.now(), env } = {}) {
+  // v2 stores the position pool with pCal / edgeNovig and string odds.
+  // mapCandidateForSharp restores the coverProb / edgePct / numeric odds
+  // calibrateSharp already required. Thresholds stay in SHARP.
+  // OMEGA_V1_BOARD_MAP=off / 0 / false passes the rows through unmapped.
+  const rawPool = (omegaCard && omegaCard.parlayPool) || [];
+  const pool = S.v1BoardMapEnabled(env)
+    ? rawPool.map((row) => S.mapCandidateForSharp(row))
+    : rawPool;
+  const sel = S.selectSharp(pool, { nowMs, env });
   const omegaPicks = (omegaCard && omegaCard.picks) || [];
   const picks = sel.picks.map(p => {
     const twin = omegaPicks.find(o => o.matchup === p.matchup && o.pick === p.pick);

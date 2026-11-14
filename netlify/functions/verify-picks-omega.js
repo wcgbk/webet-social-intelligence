@@ -67,6 +67,7 @@ const {
   isEdgeGradeB,
 } = require('./lib/omega-vnext/odds_math');
 const { letterFromPrintedEdge, shownEdgePoints } = require('./lib/omega-v2/letter');
+const { verifyCleanStampEnabled } = require('./lib/default_on_flag');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -1151,6 +1152,93 @@ async function storeReport(dateKey, report) {
   } catch (e) { console.error("[verify] Store error:", e.message); }
 }
 
+const PICK_STAMP_FIELDS = ['pick', 'odds', 'units', 'stakeUsd', 'rating', 'edgePct', 'winProbability'];
+
+function pickStampSnapshot(card) {
+  return JSON.stringify({
+    picks: ((card && card.picks) || []).map((row) => {
+      const out = {};
+      for (const key of PICK_STAMP_FIELDS) out[key] = row ? row[key] : undefined;
+      return out;
+    }),
+    parlayLegs: (card && card.parlayLegs) || [],
+  });
+}
+
+function isV2StampCard(picksData) {
+  if (!picksData || typeof picksData !== 'object') return false;
+  if (picksData.selectionRule === 'force-top3') return true;
+  if (isPipelineV2Card(picksData)) return true;
+  if (picksData.engine === 'omega-v2') return true;
+  const pipe = picksData.pipelineV2;
+  if (pipe && typeof pipe === 'object') {
+    if (pipe.selectionRule === 'force-top3' || pipe.parlaySource === 'top3-straights') return true;
+  }
+  return picksData.parlaySource === 'top3-straights';
+}
+
+/**
+ * True when the deterministic verify pass would rewrite a published pick field
+ * (the straight identity fields or parlayLegs). Narrative fills are not included:
+ * a clean force-top3 card must be stampable without those edits.
+ */
+async function pickFieldsWouldChange(picksData) {
+  const clone = JSON.parse(JSON.stringify(picksData));
+  const before = pickStampSnapshot(clone);
+  const reports = (clone.picks || []).map((pick) => {
+    const math = runMathChecks(pick, forceMathOpts(clone));
+    return {
+      pick: `${pick.pick} ${pick.odds}`,
+      mathSeverity: math.severity,
+      errors: math.errors,
+      warnings: math.warnings,
+      checks: math.checks,
+    };
+  });
+  await autoFixPicks(clone, reports);
+  const resolved = resolveLockedParlay(clone.parlayLegs, {
+    removedPicks: [],
+    straightCard: clone.picks,
+    pool: [],
+    forceTop3: clone.selectionRule === 'force-top3' || isV2StampCard(clone),
+    selectionRule: clone.selectionRule,
+  });
+  clone.parlayLegs = resolved.parlayLegs;
+  try { enforceOmegaDailyUnitCap(clone); } catch (_) { /* same guard as the blob write */ }
+  return pickStampSnapshot(clone) !== before;
+}
+
+/**
+ * Stamp a v2 / force-top3 card that verify would not change.
+ * Sets verified and verifiedAt, then hands the same object to the writer.
+ * Pick identity fields and parlayLegs stay byte-identical.
+ */
+async function stampCleanVerifiedCard(picksData, opts = {}) {
+  // OMEGA_VERIFY_CLEAN_STAMP=off / 0 / false skips the early write.
+  // The handler then runs the final pass, which is the previous path.
+  if (!verifyCleanStampEnabled(opts.env)) {
+    return { stamped: false, reason: 'flag-off', card: picksData };
+  }
+  const now = opts.now instanceof Date ? opts.now : new Date(opts.now || Date.now());
+  if (!picksData || !Array.isArray(picksData.picks) || picksData.picks.length === 0) {
+    return { stamped: false, reason: 'empty', card: picksData };
+  }
+  if (!isV2StampCard(picksData)) {
+    return { stamped: false, reason: 'not-v2', card: picksData };
+  }
+  if (await pickFieldsWouldChange(picksData)) {
+    return { stamped: false, reason: 'would-change-picks', card: picksData };
+  }
+  const before = pickStampSnapshot(picksData);
+  picksData.verified = true;
+  picksData.verifiedAt = now.toISOString();
+  if (pickStampSnapshot(picksData) !== before) {
+    return { stamped: false, reason: 'snapshot-moved', card: picksData };
+  }
+  if (typeof opts.writer === 'function') await opts.writer(opts.dateKey, picksData);
+  return { stamped: true, reason: 'clean', card: picksData, verifiedAt: picksData.verifiedAt };
+}
+
 exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
 exports.straightRefillAllowed = straightRefillAllowed;
@@ -1161,6 +1249,9 @@ exports.candidateClearsSportGates = candidateClearsSportGates;
 exports.runMathChecks = runMathChecks;
 exports.autoCorrectCard = autoCorrectCard;
 exports.autoFixPicks = autoFixPicks;
+exports.stampCleanVerifiedCard = stampCleanVerifiedCard;
+exports.pickStampSnapshot = pickStampSnapshot;
+exports.pickFieldsWouldChange = pickFieldsWouldChange;
 
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
@@ -1324,6 +1415,27 @@ exports.handler = async (event) => {
       console.log(`[verify-steam] drop pass skipped: ${e.message}`);
     }
 
+    // A clean v2 card used to reach updatePicksBlob only after sharp review and
+    // the narrative pass. Those calls run past the scheduled function budget,
+    // so a card with nothing to fix never got verified / verifiedAt. Stamp and
+    // write it now, before those calls, and do not touch pick fields.
+    let cleanV2Stamp = { stamped: false };
+    if (verifyCleanStampEnabled() && !fixResult.fixed && !droppedSteam && !placeabilityDropped) {
+      try {
+        cleanV2Stamp = await stampCleanVerifiedCard(picksData, {
+          dateKey,
+          now: new Date(),
+          writer: updatePicksBlob,
+        });
+        if (cleanV2Stamp.stamped) {
+          console.log(`[verify] clean v2 card stamped verifiedAt=${picksData.verifiedAt}`);
+        }
+      } catch (e) {
+        console.log(`[verify] clean stamp skipped: ${e.message}`);
+        cleanV2Stamp = { stamped: false };
+      }
+    }
+
     // ── Step 3: Sharp handicapper review ──
     const sharpResult = await sharpReview(picksData.picks, dateFormatted);
     console.log(`[verify] Sharp review: ${sharpResult.verdict} (${sharpResult.confidence || 0}% confidence)`);
@@ -1348,7 +1460,9 @@ exports.handler = async (event) => {
     // 2. Grades follow the printed edgePct — never rewritten from units
     // 3. Math checks pass
     // 4. A locked parlay is preserved, or a dropped leg is removed. It is not rebuilt.
-    {
+    if (cleanV2Stamp && cleanV2Stamp.stamped) {
+      console.log(`[verify-final] clean v2 card already stamped; pick fields left unchanged (${picksData.picks.length})`);
+    } else {
       console.log(`[verify-final] Running final verification pass on ${picksData.picks.length} picks`);
       let finalFixCount = 0;
 

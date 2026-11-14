@@ -17,6 +17,7 @@
  *  applyCardIntegrity(card)     all of the above, in order. Pure; returns a copy.
  */
 const { finishShortCard, sideBlocked } = require('./card_topup');
+const { copyVenueCheckEnabled } = require('../default_on_flag');
 
 function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
 
@@ -87,7 +88,94 @@ function pickSignature(picks) {
   return (picks || []).map((p) => `${p.matchup || ''}|${p.pick || p.side || ''}`).sort().join('||');
 }
 
-function textProblems(card) {
+function normTeam(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Team name on the ticket, without a trailing price, spread, or ML tag. */
+function pickTeamName(row) {
+  return String((row && (row.pick || row.side)) || '')
+    .trim()
+    .replace(/\s+(ml|moneyline)$/i, '')
+    .replace(/\s+[+-]?\d+(?:\.\d+)?$/, '')
+    .trim();
+}
+
+function teamNamesMatch(a, b) {
+  const left = normTeam(a);
+  const right = normTeam(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.startsWith(`${right} `) || right.startsWith(`${left} `)) return true;
+  return false;
+}
+
+/**
+ * Where the picked side is playing, from homeTeam / awayTeam on the row.
+ * HOME, AWAY, neutral-unknown, or total. Totals are not a venue.
+ */
+function venueOfRow(row) {
+  if (!row || typeof row !== 'object') return 'neutral-unknown';
+  const pick = String(row.pick || row.side || '');
+  const market = String(row.market || row.betType || '');
+  if (/^(over|under)\b/i.test(pick) || /\btotal\b/i.test(market)) return 'total';
+  const team = pickTeamName(row);
+  if (teamNamesMatch(team, row.homeTeam)) return 'HOME';
+  if (teamNamesMatch(team, row.awayTeam)) return 'AWAY';
+  return 'neutral-unknown';
+}
+
+const HOME_VENUE_CLAIM = /\bhome[-\s]teams?\b|\bhome plays\b|\bhome[-\s]team plays\b|\ball at home\b/i;
+const ROAD_VENUE_CLAIM = /\bon the road\b|\broad teams?\b|\broad favorites\b|\ball on the road\b/i;
+
+function everyPickVenue(picks, venue) {
+  const rows = picks || [];
+  return rows.length > 0 && rows.every((row) => venueOfRow(row) === venue);
+}
+
+/**
+ * General venue claims in the card prose that the rows do not all share.
+ * A home claim is kept only when every pick is HOME. A road claim is kept
+ * only when every pick is AWAY.
+ */
+function venueClaimProblems(card) {
+  const picks = (card && card.picks) || [];
+  if (!picks.length) return [];
+  const text = `${(card && card.edgeSummary) || ''} ${(card && card.insights) || ''}`;
+  const problems = [];
+  if (HOME_VENUE_CLAIM.test(text) && !everyPickVenue(picks, 'HOME')) {
+    problems.push('venue claim says home but the picks are not all home');
+  }
+  if (ROAD_VENUE_CLAIM.test(text) && !everyPickVenue(picks, 'AWAY')) {
+    problems.push('venue claim says road but the picks are not all away');
+  }
+  return problems;
+}
+
+/** Replace contradictory venue prose with the template card copy. */
+function applyVenueCopy(card, env) {
+  // OMEGA_COPY_VENUE_CHECK=off / 0 / false leaves the prose alone.
+  if (!copyVenueCheckEnabled(env)) return { card, changed: false, problems: [] };
+  if (!card || typeof card !== 'object') return { card, changed: false, problems: [] };
+  const problems = venueClaimProblems(card);
+  if (!problems.length) return { card, changed: false, problems };
+  const { buildCardFallbackCopy } = require('./narrate');
+  const copy = buildCardFallbackCopy({
+    picks: card.picks,
+    parlayLegs: card.parlayLegs,
+    dateFormatted: card.dateFormatted,
+  });
+  card.edgeSummary = copy.edgeSummary;
+  card.insights = copy.insights;
+  card.textRebuilt = { reasons: problems, source: 'template' };
+  return { card, changed: true, problems };
+}
+
+function textProblems(card, env) {
   const picks = card.picks || [];
   const sports = new Set(picks.map((p) => p.sport).filter(Boolean));
   const text = `${card.edgeSummary || ''} ${card.insights || ''}`;
@@ -116,16 +204,17 @@ function textProblems(card) {
     }
   }
   if (card.textSignature && card.textSignature !== pickSignature(picks)) problems.push('pick set changed since text was written');
+  if (copyVenueCheckEnabled(env)) problems.push(...venueClaimProblems(card));
   return problems;
 }
 
-function refreshCardText(card) {
+function refreshCardText(card, env) {
   const picks = card.picks || [];
   card.summary = card.summary && typeof card.summary === 'object' ? card.summary : {};
   const sports = [...new Set(picks.map((p) => p.sport).filter(Boolean))];
   let changed = JSON.stringify(card.summary.sportsCovered || null) !== JSON.stringify(sports);
   card.summary.sportsCovered = sports;
-  const problems = textProblems(card);
+  const problems = textProblems(card, env);
   if (problems.length || !card.edgeSummary || !card.insights) {
     const { buildCardFallbackCopy } = require('./narrate');
     const copy = buildCardFallbackCopy({ picks, dateFormatted: card.dateFormatted });
@@ -201,4 +290,7 @@ module.exports = {
   applyCardIntegrity,
   pickSignature,
   textProblems,
+  venueOfRow,
+  venueClaimProblems,
+  applyVenueCopy,
 };

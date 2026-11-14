@@ -746,6 +746,20 @@ async function generateOmegaVnext(opts = {}) {
   parlayLegs = attachClvToParlay(parlayLegs, publishedVersion, dateISO);
   picks = sortByGradeThenUnits(picks);
   narr.edgeSummary = alignEdgeSummary(narr.edgeSummary, picks, parlayLegs, dateFormatted);
+  try {
+    const { applyVenueCopy } = require('./card_integrity');
+    const venue = applyVenueCopy({
+      picks,
+      parlayLegs,
+      dateFormatted,
+      edgeSummary: narr.edgeSummary,
+      insights: narr.insights || '',
+    });
+    narr.edgeSummary = venue.card.edgeSummary;
+    narr.insights = venue.card.insights;
+  } catch (e) {
+    console.warn(`[omega-vnext] venue copy check skipped: ${e.message}`);
+  }
 
   const summary = summaryFrom(picks, parlayLegs, {
     modelVersion: publishedVersion,
@@ -836,7 +850,9 @@ async function generateOmegaVnext(opts = {}) {
       v1WouldParlay: built.v1WouldParlay === true,
       parlaySource: built.parlaySource || null,
       morningBoard: built.morningBoard || null,
+      ...(built.selectionRule ? { selectionRule: built.selectionRule } : {}),
     };
+    if (built.selectionRule) picksData.selectionRule = built.selectionRule;
     picksData.sportCoverage = built.sportCoverage || null;
     picksData.v1WouldParlay = built.v1WouldParlay === true;
     picksData.meta.pipelineV2 = true;

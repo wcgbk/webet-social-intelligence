@@ -495,6 +495,27 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (captureDegraded.status !== 0) throw new Error('capture degraded gate failed');
+
+  const verifyStamp = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-verify-stamp.js')],
+    { stdio: 'inherit' }
+  );
+  if (verifyStamp.status !== 0) throw new Error('verify stamp gate failed');
+
+  const venueCopy = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-venue-copy.js')],
+    { stdio: 'inherit' }
+  );
+  if (venueCopy.status !== 0) throw new Error('venue copy gate failed');
+
+  const v1BoardMap = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v1-board-map.js')],
+    { stdio: 'inherit' }
+  );
+  if (v1BoardMap.status !== 0) throw new Error('v1 board map gate failed');
 }
 
 function pickSlim(card) {

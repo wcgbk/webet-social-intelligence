@@ -13,6 +13,7 @@
  *  Staking: quarter Kelly on calibrated p (Omega unit scale, 1.25u cap).
  */
 const { americanToDecimal, kellyFraction, kellyToUnits } = require('../omega-vnext/odds_math');
+const { v1BoardMapEnabled } = require('../default_on_flag');
 
 const V1AB_MODEL_VERSION = 'v1ab-1.0.0-omega-sharp';
 const V1AB_STORE = 'edge-picks-omega-v1ab';
@@ -38,6 +39,68 @@ function impliedFromAmerican(a) {
   return n > 0 ? 100 / (n + 100) : -n / (-n + 100);
 }
 
+/**
+ * American price as a number. "+110" and -110 both become a finite American.
+ * "even" is +100. Anything else is NaN so calibrateSharp can reject it.
+ */
+function coerceAmerican(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value == null || value === '') return NaN;
+  const text = String(value).trim().replace(/[−–]/g, '-');
+  if (/^even$/i.test(text)) return 100;
+  const n = Number(text.replace(/^\+/, ''));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * Probability or edge on the scale calibrateSharp uses: a fraction.
+ * 0.035, "3.5%", and 3.5 (percentage points, absolute value greater than 1)
+ * all become 0.035. A fraction already in [-1, 1] is left alone.
+ * fair = coverProb - edgePct, so both inputs must be fractions, not percents.
+ */
+function coerceFraction(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.abs(value) > 1 ? value / 100 : value;
+  }
+  if (value == null || value === '') return NaN;
+  const text = String(value).trim();
+  const n = parseFloat(text.replace(/[−–]/g, '-').replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(n)) return NaN;
+  if (text.indexOf('%') !== -1 || Math.abs(n) > 1) return n / 100;
+  return n;
+}
+
+function firstFilled(values) {
+  for (const value of values) {
+    if (value != null && value !== '') return value;
+  }
+  return undefined;
+}
+
+/**
+ * v2 parlay-pool and morning-board rows renamed the fields calibrateSharp reads.
+ * coverProb may arrive as pCal / pCalRaw. edgePct may arrive as edge / edgeNovig.
+ * Odds may be a string ("+110"). This does not change sharp thresholds.
+ */
+function mapCandidateForSharp(row) {
+  const c = row && typeof row === 'object' ? row : {};
+  const coverRaw = firstFilled([c.coverProb, c.pCal, c.pCalRaw, c.winProbability]);
+  const edgeRaw = firstFilled([c.edgePct, c.edge, c.edgeNovig]);
+  const quoted = c.bestDkHr && c.bestDkHr.american != null ? c.bestDkHr.american : c.odds;
+  const cover = coerceFraction(coverRaw);
+  const edge = coerceFraction(edgeRaw);
+  const odds = coerceAmerican(quoted);
+  const side = c.side != null && c.side !== '' ? c.side : c.pick;
+  return {
+    ...c,
+    side: side != null && side !== '' ? side : c.side,
+    market: c.market || c.betType || c.market,
+    coverProb: Number.isFinite(cover) ? cover : c.coverProb,
+    edgePct: Number.isFinite(edge) ? edge : c.edgePct,
+    odds: Number.isFinite(odds) ? odds : c.odds,
+  };
+}
+
 function pickLabel(c) {
   const m = String(c.market || '');
   if (/moneyline/i.test(m)) return `${c.side} ML`;
@@ -45,12 +108,17 @@ function pickLabel(c) {
 }
 
 function calibrateSharp(c, cfg = SHARP) {
-  const cover = Number(c.coverProb);
-  const edgeOmega = Number(c.edgePct);
-  const odds = Number(c.bestDkHr && c.bestDkHr.american != null ? c.bestDkHr.american : c.odds);
-  const book = (c.bestDkHr && c.bestDkHr.book) || c.book || null;
-  const unc = Number.isFinite(Number(c.uncertainty)) ? Math.min(1, Math.max(0, Number(c.uncertainty))) : 1;
-  const out = { ...c, odds, book, uncertainty: unc };
+  // OMEGA_V1_BOARD_MAP=off / 0 / false reads coverProb, edgePct, and odds
+  // with Number(), which is the previous path. Renamed v2 fields stay invisible.
+  const mapOn = v1BoardMapEnabled(cfg && cfg.env);
+  const row = mapOn ? mapCandidateForSharp(c) : c;
+  const cover = Number(row.coverProb);
+  const edgeOmega = Number(row.edgePct);
+  const quoted = row.bestDkHr && row.bestDkHr.american != null ? row.bestDkHr.american : row.odds;
+  const odds = mapOn ? coerceAmerican(quoted) : Number(quoted);
+  const book = (row.bestDkHr && row.bestDkHr.book) || row.book || null;
+  const unc = Number.isFinite(Number(row.uncertainty)) ? Math.min(1, Math.max(0, Number(row.uncertainty))) : 1;
+  const out = { ...row, odds, book, uncertainty: unc };
   if (!Number.isFinite(cover) || !Number.isFinite(edgeOmega) || !Number.isFinite(odds)) {
     return { ...out, status: 'out', reason: 'missing coverProb/edge/odds' };
   }
@@ -74,8 +142,11 @@ function qualifyReason(x, cfg = SHARP) {
 }
 
 /** Full sharp pass over a pool. Returns { picks, qualified, rejected, all }. */
-function selectSharp(pool, { nowMs = Date.now(), cfg = SHARP } = {}) {
-  const all = (pool || []).map(c => calibrateSharp(c, cfg)).map(x => {
+function selectSharp(pool, { nowMs = Date.now(), cfg = SHARP, env } = {}) {
+  const scoreCfg = env == null || (cfg && Object.prototype.hasOwnProperty.call(cfg, 'env'))
+    ? cfg
+    : { ...cfg, env };
+  const all = (pool || []).map(c => calibrateSharp(c, scoreCfg)).map(x => {
     let reason = qualifyReason(x, cfg);
     if (!reason && x.commenceTime && Date.parse(x.commenceTime) <= nowMs) reason = 'game already started';
     return { ...x, status: reason ? 'out' : 'pass', reason: reason || 'qualifies' };
@@ -187,6 +258,8 @@ function reliabilityBuckets(rows, edges = [0, 0.3, 0.4, 0.5, 0.55, 0.6, 0.7, 1.0
 
 module.exports = {
   V1AB_MODEL_VERSION, V1AB_STORE, V1AB_KPI_START, SHARP,
-  impliedFromAmerican, calibrateSharp, qualifyReason, selectSharp, toPick, buildParlay,
+  impliedFromAmerican, coerceAmerican, coerceFraction, mapCandidateForSharp,
+  v1BoardMapEnabled,
+  calibrateSharp, qualifyReason, selectSharp, toPick, buildParlay,
   shortCardLabel, brierScore, reliabilityBuckets,
 };

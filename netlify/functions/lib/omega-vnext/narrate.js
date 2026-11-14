@@ -10,6 +10,7 @@
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const NARRATIVE_MAX_TOKENS = 5800;
 const { sportWatchSentence } = require('../no-plays');
+const { copyVenueCheckEnabled } = require('../default_on_flag');
 
 function resolveAnthropicKey(explicit) {
   return explicit
@@ -387,9 +388,23 @@ function alignEdgeSummary(text, picks, parlayLegs, dateFormatted) {
 function finishNarration(result, dateFormatted) {
   const picks = (result && result.picks) || [];
   const parlayLegs = (result && result.parlayLegs) || [];
+  const draft = {
+    picks,
+    parlayLegs,
+    dateFormatted,
+    edgeSummary: alignEdgeSummary(result && result.edgeSummary, picks, parlayLegs, dateFormatted),
+    insights: result && result.insights != null ? String(result.insights) : '',
+  };
+  try {
+    const { applyVenueCopy } = require('./card_integrity');
+    const scrubbed = applyVenueCopy(draft);
+    draft.edgeSummary = scrubbed.card.edgeSummary;
+    draft.insights = scrubbed.card.insights;
+  } catch (_) { /* keep the aligned summary */ }
   return {
     ...result,
-    edgeSummary: alignEdgeSummary(result && result.edgeSummary, picks, parlayLegs, dateFormatted),
+    edgeSummary: draft.edgeSummary,
+    insights: draft.insights,
   };
 }
 
@@ -439,13 +454,34 @@ function ensureExtraFields(p) {
  * Context for Claude. Sport, price, grade, and soft hints are translatable.
  * _contextEv / _contextCover are a compass only. Do not strip them before the call.
  */
-function lockedRow(p, i, kind) {
+const VENUE_RULE = 'Never generalize venue. Each pick has a venue fact: HOME, AWAY, neutral-unknown, or total. HOME means the picked team is the home team. AWAY means the picked team is the away team. total means the bet is a total. neutral-unknown means the row did not say. Say a pick is home or on the road only from that fact. Do not say the card is home-team plays, all at home, on the road, road team, or road favorites unless every pick shares that venue.';
+
+function venueOfPick(row) {
+  if (row && row.venue) return row.venue;
+  return require('./card_integrity').venueOfRow(row);
+}
+
+/** One line per pick, plus whether the narrator may generalize the venue. */
+function formatVenueFacts(rows) {
+  const list = rows || [];
+  const lines = list.map((row) => `${row.pick || row.side || 'pick'}: ${venueOfPick(row)}`);
+  const venues = list.map((row) => venueOfPick(row));
+  const shared = venues.length && venues.every((venue) => venue === venues[0]) ? venues[0] : null;
+  const tail = shared
+    ? `Every pick shares venue ${shared}.`
+    : 'These picks do not share one venue. Do not generalize venue.';
+  return lines.concat(tail).join('\n');
+}
+
+function lockedRow(p, i, kind, env) {
+  const includeVenue = copyVenueCheckEnabled(env);
   const row = {
     idx: i,
     kind: kind || 'straight',
     sport: p.sport || null,
     matchup: p.matchup || null,
     pick: p.pick || p.side || null,
+    ...(includeVenue ? { venue: venueOfPick(p) } : {}),
     betType: p.betType || p.market || null,
     odds: p.odds != null && p.odds !== '' ? p.odds : null,
     units: p.units || null,
@@ -496,6 +532,8 @@ edgeSummary (3-5 sentences): the slate thesis, where the value is concentrated, 
 
 insights (3-5 sentences): the sport mix, what to watch before lock (starter, quarterback, weather), and how the card is built for a normal fan. Plain English.
 
+${VENUE_RULE}
+
 whatLoses: one concrete sentence. Name the game script that beats this side. Do not write "the opposite happens."
 
 clvExpectation: one plain-English sentence on where the closing number should land (toward the side, against it, or holding). Do not say "CLV" and do not quote cents.
@@ -534,11 +572,18 @@ OUTPUT: Return ONLY valid JSON (no markdown fences):
   "insights": "3-5 sentences. Sport mix, what to watch, how the card is built. Plain English."
 }`;
 
-async function callClaudeOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted, useWebSearch }) {
-  // Send the full locked row, including _contextEv, _contextCover, edgeBand, and steamHint.
-  const userPrompt = `Date: ${dateFormatted}
+function narratorSystemPrompt(env) {
+  if (copyVenueCheckEnabled(env)) return SYSTEM_PROMPT;
+  return SYSTEM_PROMPT.replace(`\n${VENUE_RULE}\n`, '');
+}
 
-LOCKED STRAIGHT PICKS (verify and narrate; veto on disqualifying news only):
+function narratorUserPrompt({ dateFormatted, lockedStraights, lockedLegs, env } = {}) {
+  const facts = copyVenueCheckEnabled(env)
+    ? `VENUE FACTS (the only venue source; do not infer a shared home or road card):\n${formatVenueFacts(lockedStraights || [])}\n\n`
+    : '';
+  return `Date: ${dateFormatted}
+
+${facts}LOCKED STRAIGHT PICKS (verify and narrate; veto on disqualifying news only):
 ${JSON.stringify(lockedStraights || [], null, 2)}
 
 LOCKED PARLAY LEGS (narrate only. Do not veto. Sides are fixed for the parlay slip):
@@ -548,11 +593,16 @@ Write the JSON now.
 Straights need 4-6 sentence coreReasoning. Parlay legs need 3-5 sentences. edgeSummary and insights need 3-5 sentences each.
 Fields named edgeBand, steamHint, _contextEv, and _contextCover are a compass for plain-English value talk. Do not print EV, cover probability, CLV cents, Kelly, or those raw context numbers.
 Argue for the picked side. Say WeBetAI. No em dashes.`;
+}
+
+async function callClaudeOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted, useWebSearch, env }) {
+  // Send the full locked row, including _contextEv, _contextCover, edgeBand, and steamHint.
+  const userPrompt = narratorUserPrompt({ dateFormatted, lockedStraights, lockedLegs, env });
 
   const body = {
     model: CLAUDE_MODEL,
     max_tokens: NARRATIVE_MAX_TOKENS,
-    system: SYSTEM_PROMPT,
+    system: narratorSystemPrompt(env),
     messages: [{ role: 'user', content: userPrompt }],
   };
   if (useWebSearch) {
@@ -827,6 +877,10 @@ module.exports = {
   ensureNarrative,
   ensureExtraFields,
   lockedRow,
+  formatVenueFacts,
+  narratorSystemPrompt,
+  narratorUserPrompt,
+  VENUE_RULE,
   edgeBandFrom,
   steamHintFrom,
   resolveAnthropicKey,

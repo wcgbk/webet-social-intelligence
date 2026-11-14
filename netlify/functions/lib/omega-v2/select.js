@@ -156,11 +156,13 @@ function placeableReject(candidate) {
 /**
  * Own-price vs Pinnacle fair. Same band and gap as board.js mispairedOwnOdds.
  * A longshot outside (PAIR_SANITY_LO, PAIR_SANITY_HI) is not this reject.
+ * opts.fullRange drops that window (force-top3): any |pMkt - implied| past
+ * PAIR_SANITY_PP is a mismatch. Flag off never passes fullRange.
  */
-function priceFairMismatch(implied, pMkt) {
+function priceFairMismatch(implied, pMkt, opts) {
   if (!pairFixEnabled()) return false;
   if (implied == null || !Number.isFinite(Number(implied))) return false;
-  if (!(implied > PAIR_SANITY_LO && implied < PAIR_SANITY_HI)) return false;
+  if (!(opts && opts.fullRange) && !(implied > PAIR_SANITY_LO && implied < PAIR_SANITY_HI)) return false;
   const fair = Number(pMkt);
   if (!(fair > 0 && fair < 1)) return false;
   return Math.abs(fair - implied) > PAIR_SANITY_PP;
@@ -190,8 +192,10 @@ function forcedBetProb(pCal, pMkt, opts) {
  * qualification is that no-vig screen. usableLegs also requires a positive
  * price EV. Nothing is added to fill a slot.
  * Flag on (force top 3): placeable DK/HR price, a real calibration, the 10pp
- * screen on edgeNovig, and the price-fair mismatch guard. pBet is pCal minus
- * the longshot penalty. edge and ev are at pBet versus the DK/HR price.
+ * screen on edgeNovig, the price-fair mismatch guard over the full
+ * probability range, and a 10pp screen on the price edge (pBet - implied).
+ * pBet is pCal minus the longshot penalty. edge and ev are at pBet versus
+ * the DK/HR price.
  * Rank is quarter-Kelly expected log growth at that pBet, not raw EV.
  * Negative EV and the uncertainty floor do not remove the row.
  */
@@ -236,7 +240,7 @@ function annotateCandidate(candidate, opts) {
   else if (force) {
     if (!Number.isFinite(Number(cal.pCal)) || !Number.isFinite(edgeNovig)) rejectReason = 'no-calibration';
     else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
-    else if (priceFairMismatch(implied, pMkt)) rejectReason = 'price-fair-mismatch';
+    else if (priceFairMismatch(implied, pMkt, { fullRange: true })) rejectReason = 'price-fair-mismatch';
   } else if (!(edgeNovig > 0)) rejectReason = 'novig-edge-not-positive';
   else if (edgeNovig > MAX_EDGE) rejectReason = 'edge-over-10pp';
   else if (!gate.ok) rejectReason = 'edge-below-uncertainty-floor';
@@ -262,6 +266,8 @@ function annotateCandidate(candidate, opts) {
   let reason = straightReject;
   if (reason == null && pBet == null) reason = 'no-calibration';
   const priceEdge = pBet == null ? edge : pBet - implied;
+  // Full-range pair check is above. This is the price edge, not edgeNovig.
+  if (reason == null && pBet != null && (pBet - implied) > MAX_EDGE) reason = 'price-edge-over-10pp';
   const priceEv = pBet == null ? ev : (pBet * (dec - 1) - (1 - pBet));
   const forcePlaceable = reason == null;
   return {

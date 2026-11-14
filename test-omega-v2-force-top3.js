@@ -13,7 +13,7 @@ const {
 } = require('./netlify/functions/lib/omega-v2/select');
 const { sizeForcedStraights, sumUnits } = require('./netlify/functions/lib/omega-v2/size');
 const { buildForcedParlay } = require('./netlify/functions/lib/omega-v2/parlay');
-const { toPick, toParlay, autoCorrectCard, validateCard } = require('./netlify/functions/lib/omega-v2/guards');
+const { toPick, toParlay, autoCorrectCard, validateCard, matchOutcome, recheckPrices } = require('./netlify/functions/lib/omega-v2/guards');
 const { letterFromPrintedEdge } = require('./netlify/functions/lib/omega-v2/letter');
 const { MODEL_VERSION, STRAIGHT_BUDGET, forceTop3Enabled, longshotAdjEnabled } = require('./netlify/functions/lib/omega-v2/constants');
 const verify = require('./netlify/functions/verify-picks-omega');
@@ -157,7 +157,7 @@ const capped = sizeForcedStraights([annotate({
   matchup: 'C @ D',
   pick: 'Two Cap',
   odds: 100,
-  calibration: { pCal: 0.67, pMkt: 0.58, pModel: 0.67 },
+  calibration: { pCal: 0.58, pMkt: 0.52, pModel: 0.58 },
 })])[0];
 assert.strictEqual(letterFromPrintedEdge(capped.edge), 'aplus');
 assert.strictEqual(capped.units, 2);
@@ -167,7 +167,7 @@ const heavy = sizeForcedStraights(['North', 'East', 'West'].map((name, i) => ann
   matchup: `N${i} @ S${i}`,
   pick: name,
   odds: 100,
-  calibration: { pCal: 0.67, pMkt: 0.58, pModel: 0.67 },
+  calibration: { pCal: 0.58, pMkt: 0.52, pModel: 0.58 },
 })));
 assert.strictEqual(heavy.length, 3);
 assert.ok(Math.abs(sumUnits(heavy) - STRAIGHT_BUDGET) < 1e-9, `budget ${sumUnits(heavy)}`);
@@ -225,7 +225,7 @@ assert.strictEqual(richParlay.stakeUsd, 150);
 assert.strictEqual(buildForcedParlay(negSized.slice(0, 2)).legs.length, 2);
 assert.strictEqual(buildForcedParlay(negSized.slice(0, 1)).publish, false);
 
-// (f) Price-fair mismatch rejects. A longshot outside the band does not.
+// (f) Price-fair mismatch rejects. Under force the band is the full range.
 const mispaired = annotate({
   matchup: 'Fair A @ Fair B',
   pick: 'Mispaired',
@@ -242,12 +242,83 @@ const outside = annotate({
   odds: 2000,
   calibration: { pCal: 0.08, pMkt: 0.20, pModel: 0.08 },
 });
-assert.strictEqual(outside.rejectReason, null);
-assert.strictEqual(outside.forcePlaceable, true);
+assert.strictEqual(outside.rejectReason, 'price-fair-mismatch');
+assert.strictEqual(outside.forcePlaceable, false);
+
+// Exact side before a shared first word. A trailing line token still matches.
+const volunteers = matchOutcome([
+  { name: 'Tennessee St Tigers', price: 4000 },
+  { name: 'Tennessee Volunteers', price: -20000 },
+], { pick: 'Tennessee Volunteers', market: 'Moneyline' });
+assert.strictEqual(volunteers && volunteers.name, 'Tennessee Volunteers');
+assert.strictEqual(volunteers.price, -20000);
+const fgcu = matchOutcome([
+  { name: "Florida Int'l Golden Panthers", price: 120 },
+  { name: 'Florida Gulf Coast Eagles', price: -140 },
+], { pick: 'Florida Gulf Coast Eagles', market: 'Moneyline' });
+assert.strictEqual(fgcu && fgcu.name, 'Florida Gulf Coast Eagles');
+assert.strictEqual(fgcu.price, -140);
+const volSpread = matchOutcome([
+  { name: 'Tennessee St Tigers', price: -110, point: 3.5 },
+  { name: 'Tennessee Volunteers', price: -115, point: -3.5 },
+], { pick: 'Tennessee Volunteers -3.5', market: 'Spread', line: -3.5 });
+assert.strictEqual(volSpread && volSpread.name, 'Tennessee Volunteers');
+assert.strictEqual(volSpread.price, -115);
+assert.strictEqual(matchOutcome([
+  { name: 'Tennessee St Tigers', price: 4000 },
+  { name: 'Tennessee Volunteers', price: -20000 },
+], { pick: 'Tennessee', market: 'Moneyline' }), null);
+
+// (b) A 0.976 fair at +4000 is the other team's price. Force rejects it.
+const swappedFair = annotate({
+  matchup: 'Tennessee St Tigers @ Tennessee Volunteers',
+  pick: 'Tennessee Volunteers',
+  odds: 4000,
+  calibration: { pCal: 0.976, pMkt: 0.976, pModel: 0.976 },
+});
+assert.strictEqual(swappedFair.rejectReason, 'price-fair-mismatch');
+assert.strictEqual(swappedFair.qualified, false);
+assert.strictEqual(swappedFair.forcePlaceable, false);
+
+// Price edge (pBet - implied) over 10pp, with pMkt still inside 8pp of the price.
+const fatPrice = annotate({
+  matchup: 'Fat A @ Fat B',
+  pick: 'Fat Price',
+  odds: 100,
+  calibration: { pCal: 0.62, pMkt: 0.54, pModel: 0.62 },
+});
+assert.strictEqual(fatPrice.rejectReason, 'price-edge-over-10pp');
+assert.strictEqual(fatPrice.qualified, false);
+
+// (c) A normal -110 row is unchanged.
+const normal110 = annotate({
+  matchup: 'Normal A @ Normal B',
+  pick: 'Normal Side',
+  odds: -110,
+  calibration: { pCal: 0.55, pMkt: 0.52, pModel: 0.55 },
+});
+assert.strictEqual(normal110.rejectReason, null);
+assert.strictEqual(normal110.qualified, true);
+assert.strictEqual(normal110.forcePlaceable, true);
 
 // (g) Flag off: the same all-negative slate publishes nothing.
 process.env.OMEGA_V2_FORCE_TOP3 = 'off';
 assert.strictEqual(forceTop3Enabled(), false);
+const outsideOff = annotate({
+  matchup: 'Dog A @ Dog B',
+  pick: 'Outside Band',
+  odds: 2000,
+  calibration: { pCal: 0.08, pMkt: 0.20, pModel: 0.08 },
+});
+assert.notStrictEqual(outsideOff.rejectReason, 'price-fair-mismatch');
+const fatOff = annotate({
+  matchup: 'Fat A @ Fat B',
+  pick: 'Fat Price',
+  odds: 100,
+  calibration: { pCal: 0.62, pMkt: 0.54, pModel: 0.62 },
+});
+assert.notStrictEqual(fatOff.rejectReason, 'price-edge-over-10pp');
+assert.strictEqual(fatOff.qualified, true);
 const offSlate = negativeRaws.map((row) => annotate(row));
 assert.ok(offSlate.every((c) => c.qualified === false), offSlate.map((c) => c.rejectReason).join(','));
 assert.ok(offSlate.every((c) => c.forcePlaceable == null && c.pBet == null));
@@ -305,7 +376,7 @@ const reports = kept.picks.map((p) => {
   const math = verify.runMathChecks(p, { forceTop3: true });
   return { mathSeverity: math.severity, errors: math.errors, warnings: math.warnings, pick: `${p.pick} ${p.odds}` };
 });
-verify.autoFixPicks(kept, reports).then((fix) => {
+verify.autoFixPicks(kept, reports).then(async (fix) => {
   assert.strictEqual(fix.replacements.length, 0);
   assert.strictEqual(kept.picks.length, 2);
   const resolved = verify.resolveLockedParlay(kept.parlayLegs, {
@@ -315,6 +386,16 @@ verify.autoFixPicks(kept, reports).then((fix) => {
   });
   assert.strictEqual(resolved.action, 'preserved');
   assert.strictEqual(resolved.parlayLegs.length, 1);
+  const locked = annotate({
+    matchup: 'Tennessee St Tigers @ Tennessee Volunteers',
+    pick: 'Tennessee Volunteers',
+    odds: -20000,
+    calibration: { pCal: 0.976, pMkt: 0.976, pModel: 0.976 },
+  });
+  assert.strictEqual(locked.rejectReason, null, locked.rejectReason);
+  const checked = await recheckPrices([locked], async () => ({ american: 4000, book: 'draftkings' }));
+  assert.strictEqual(checked.kept.length, 0);
+  assert.strictEqual(checked.dropped[0].reason, 'price-fair-mismatch');
   restoreEnv();
   console.log('PASS test-omega-v2-force-top3');
 }).catch((err) => {

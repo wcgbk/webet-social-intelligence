@@ -99,7 +99,7 @@ async function recheckPrices(candidates, recheck) {
         american: nextOdds,
         book: nextBook,
       },
-    });
+    }, cand && cand.forced ? { forceTop3: true } : undefined);
     if (repriced.qualified || (repriced.ev > 0 && repriced.parlayQualified)) {
       kept.push(repriced);
       continue;
@@ -108,7 +108,7 @@ async function recheckPrices(candidates, recheck) {
       pick: cand.pick,
       matchup: cand.matchup,
       market: cand.market,
-      reason: 'price-recheck',
+      reason: repriced.forced && repriced.rejectReason ? repriced.rejectReason : 'price-recheck',
       cents,
       lineDrift: 0,
     });
@@ -647,24 +647,81 @@ function normQuote(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/** "tennessee volunteers 3 5" (norm of "… -3.5") → "tennessee volunteers". */
+function stripTrailingLineToken(normalized) {
+  return String(normalized || '').replace(/\s+\d+(?:\s+\d+)?$/, '').trim();
+}
+
+function exactOutcomeName(name, pick) {
+  if (!name || !pick) return false;
+  if (name === pick) return true;
+  const stripped = stripTrailingLineToken(pick);
+  return stripped !== pick && stripped === name;
+}
+
+/** Old containment: full name inside the pick, or the pick's first word inside the name. */
+function looseOutcomeName(name, pick) {
+  if (!pick || !name) return false;
+  return pick.includes(name) || name.includes(pick.split(' ')[0]);
+}
+
+function sharesFirstWord(name, pick) {
+  const word = String(pick || '').split(' ')[0];
+  if (!word || !name) return false;
+  return name.includes(word);
+}
+
+function lineAgrees(o, family, line) {
+  if (family === 'Moneyline') return true;
+  const point = o && o.point != null && o.point !== '' ? Number(o.point) : null;
+  if (line == null || point == null || !Number.isFinite(point) || Math.abs(point - line) > 1e-6) return false;
+  return true;
+}
+
+/**
+ * Join a DK/HR outcome to a leg.
+ * Totals stay over/under plus the line. Other markets take an exact
+ * normalized name first (a trailing line token on the pick does not count).
+ * The old first-word containment is used only when exactly one outcome
+ * matches loosely and no other outcome shares that first word. Anything
+ * else returns null so the recheck keeps the locked price.
+ */
 function matchOutcome(outcomes, leg) {
   const pick = normQuote(leg && (leg.pick || leg.side));
   const wantTotal = /^\s*over\b/.test(pick) ? 'over' : (/^\s*under\b/.test(pick) ? 'under' : null);
   const family = marketFamily(leg && leg.market, leg && (leg.pick || leg.side));
   const line = leg && leg.line != null && leg.line !== '' ? Number(leg.line) : null;
-  for (const o of outcomes || []) {
-    const name = normQuote(o && o.name);
-    if (wantTotal) {
+  const list = outcomes || [];
+  if (wantTotal) {
+    for (const o of list) {
+      const name = normQuote(o && o.name);
       if (name !== wantTotal) continue;
-    } else if (pick && name && !pick.includes(name) && !name.includes(pick.split(' ')[0])) {
-      continue;
+      if (!lineAgrees(o, family, line)) continue;
+      if (Number.isFinite(Number(o.price))) return o;
     }
-    if (family !== 'Moneyline') {
-      const point = o && o.point != null && o.point !== '' ? Number(o.point) : null;
-      if (line == null || point == null || !Number.isFinite(point) || Math.abs(point - line) > 1e-6) continue;
-    }
-    if (Number.isFinite(Number(o.price))) return o;
+    return null;
   }
+  const exact = [];
+  for (const o of list) {
+    if (exactOutcomeName(normQuote(o && o.name), pick)) exact.push(o);
+  }
+  if (exact.length) {
+    for (const o of exact) {
+      if (!lineAgrees(o, family, line)) continue;
+      if (Number.isFinite(Number(o.price))) return o;
+    }
+    return null;
+  }
+  const loose = [];
+  for (const o of list) {
+    if (looseOutcomeName(normQuote(o && o.name), pick)) loose.push(o);
+  }
+  if (loose.length !== 1) return null;
+  const wordShared = list.some((o) => o !== loose[0] && sharesFirstWord(normQuote(o && o.name), pick));
+  if (wordShared) return null;
+  const o = loose[0];
+  if (!lineAgrees(o, family, line)) return null;
+  if (Number.isFinite(Number(o.price))) return o;
   return null;
 }
 
@@ -735,6 +792,7 @@ module.exports = {
   autoCorrectCard,
   removeStartedLegs,
   recheckFromCachedBoard,
+  matchOutcome,
   parseAmerican,
   ratingFor,
   fmtU,

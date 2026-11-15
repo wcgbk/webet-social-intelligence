@@ -76,10 +76,13 @@ test('background dry run builds rows and posts nothing', async () => {
     'odds-master:NHL/e1/raw/2026-10-20T14:00:00Z': { x: 1 },
   });
   const log = [];
-  const s = await bg.run('2026-10-20', { env: { SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't' }, dryRun: true, blobs, fetchImpl: fakeFetch(log) });
+  const env = { SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't', SUPABASE_MIRROR_V2: 'off' };
+  const s = await bg.run('2026-10-20', { env, dryRun: true, blobs, fetchImpl: fakeFetch(log) });
   assert.strictEqual(s.built.games, 1); assert.strictEqual(s.built.odds_snapshots, 2);
+  assert.strictEqual(s.mirror, undefined);
   assert.strictEqual(log.length, 0);
-  const live = await bg.run('2026-10-20', { env: { SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't' }, blobs, fetchImpl: fakeFetch(log) });
+  const live = await bg.run('2026-10-20', { env, blobs, fetchImpl: fakeFetch(log) });
+  assert.strictEqual(live.mirror, undefined);
   assert.strictEqual(live.posted.odds_snapshots, 2);
   assert.ok(log.every((c) => /resolution=ignore-duplicates/.test(c.opts.headers.Prefer) && c.opts.headers['Content-Profile'] === 'clv'));
 });

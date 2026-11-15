@@ -12,6 +12,18 @@ const BOOKS = ['pinnacle', 'draftkings'];
 const MARKETS = ['h2h', 'spreads', 'totals'];
 const ROLE_LINE = { open: 'opening', close: 'closing' };
 
+function mirrorV2Enabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source.SUPABASE_MIRROR_V2;
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+function booksFor(env) {
+  return mirrorV2Enabled(env) ? ['pinnacle', 'draftkings', 'hardrockbet'] : BOOKS;
+}
+
 function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
 function lineTypeFor(doc, commence) {
@@ -87,6 +99,7 @@ function clvRows(clvDoc, events) {
 
 async function buildDay(date, blobs, opts = {}) {
   const limit = opts.concurrency || 12;
+  const books = booksFor(opts.env);
   const byDate = (await blobs.get('odds-master', `by-date/${date}`)) || { events: [] };
   const events = (byDate.events || []).filter((e) => e && e.eventId && e.sport);
   const games = events.map((e) => gameRow(e, 'netlify:odds-master'));
@@ -97,7 +110,7 @@ async function buildDay(date, blobs, opts = {}) {
       const keys = await blobs.list('odds-master', `${ev.sport}/${ev.eventId}/`);
       const wanted = keys.filter((k) => {
         const parts = k.split('/');
-        return parts.length >= 5 && BOOKS.includes(parts[2]) && MARKETS.includes(parts[3]);
+        return parts.length >= 5 && books.includes(parts[2]) && MARKETS.includes(parts[3]);
       });
       stats.priceBlobs += wanted.length;
       const docs = await mapLimit(wanted, 4, (k) => blobs.get('odds-master', k));

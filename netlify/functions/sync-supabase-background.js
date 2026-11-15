@@ -7,6 +7,7 @@
  */
 const S = require('./lib/clv-supabase');
 const { buildDay } = require('./lib/clv-sync');
+const mirror = require('./lib/supa-mirror');
 
 const REQUIRED_ENV = ['SUPABASE_SERVICE_ROLE_KEY', 'NETLIFY_AUTH_TOKEN'];
 
@@ -14,7 +15,7 @@ async function run(date, { env, fetchImpl, dryRun, blobs }) {
   S.requireEnv(env, REQUIRED_ENV);
   const client = blobs || S.blobClient(env, fetchImpl);
   const started = new Date().toISOString();
-  const built = await buildDay(date, client, { neighbourDates: [S.addDays(date, -1), S.addDays(date, 1)] });
+  const built = await buildDay(date, client, { neighbourDates: [S.addDays(date, -1), S.addDays(date, 1)], env });
   const bySport = {};
   for (const s of built.snaps) {
     const b = (bySport[s.sport] = bySport[s.sport] || { snapshot: 0, opening: 0, closing: 0 });
@@ -27,6 +28,18 @@ async function run(date, { env, fetchImpl, dryRun, blobs }) {
     built: { games: built.games.length, odds_snapshots: built.snaps.length, bySport }, posted, stats: built.stats,
   };
   if (!summary.ok) console.error(`[sync-supabase] ${date} errors: ${JSON.stringify(built.stats.errors).slice(0, 500)}`);
+  if (!dryRun && mirror.enabled(env)) {
+    try {
+      summary.mirror = await mirror.mirrorAfterSync(date, { env, fetch: fetchImpl, blobs: client });
+      if (!summary.mirror.ok) {
+        console.error(`[sync-supabase] mirror ${date}: ${JSON.stringify(summary.mirror.errors).slice(0, 500)}`);
+      }
+    } catch (e) {
+      const msg = String(e && e.message || e);
+      console.error(`[sync-supabase] mirror ${date} failed: ${msg}`);
+      summary.mirror = { ok: false, error: msg };
+    }
+  }
   try { await client.set('supabase-sync', `run/${date}${dryRun ? '-dry' : ''}`, summary); } catch (e) {
     console.error(`[sync-supabase] log write failed: ${e.message}`);
   }

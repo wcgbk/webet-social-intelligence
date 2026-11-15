@@ -11,6 +11,23 @@
  * Does not touch picks, grading or the card.
  */
 const S = require('./lib/clv-supabase');
+const mirror = require('./lib/supa-mirror');
+
+const MIRROR_BUDGET_MS = 8000;
+
+function raceTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, timedOut: true }), ms);
+  });
+  return Promise.race([
+    Promise.resolve(promise).then(
+      (v) => v,
+      (e) => ({ ok: false, error: e && e.message ? e.message : String(e) })
+    ),
+    timeout,
+  ]).finally(() => clearTimeout(timer));
+}
 
 const REQUIRED_ENV = ['ODDS_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'NETLIFY_AUTH_TOKEN'];
 const STORE = 'clv-close-capture';
@@ -51,12 +68,22 @@ async function handle(event, now, deps = {}) {
   const blobs = deps.blobs || S.blobClient(env, f);
   const today = S.etYmd(when);
   const legs = [];
+  let todayCard = null;
   for (const d of [today, S.addDays(today, -1)]) {
     const card = await blobs.get('edge-picks-omega', `picks-${d}`);
+    if (d === today) todayCard = card;
     legs.push(...cardLegs(card));
   }
+  async function withMirror(statusCode, body) {
+    if (!mirror.enabled(env) || !todayCard) return S.json(statusCode, body);
+    const mirrorResult = await raceTimeout(
+      mirror.mirrorTodayCard(today, { env, fetch: f, blobs }),
+      MIRROR_BUDGET_MS
+    );
+    return S.json(statusCode, { ...body, mirror: mirrorResult });
+  }
   const groups = dueGroups(legs, when);
-  if (!groups.length) return S.json(200, { ok: true, due: 0 });
+  if (!groups.length) return withMirror(200, { ok: true, due: 0 });
   const creditKey = `credits/${today}`;
   const credits = (await blobs.get(STORE, creditKey)) || { date: today, used: 0, calls: [] };
   const results = [];
@@ -98,7 +125,7 @@ async function handle(event, now, deps = {}) {
     }
   }
   await blobs.set(STORE, creditKey, credits);
-  return S.json(errors.length ? 500 : 200, { ok: !errors.length, due: groups.length, results, creditsToday: credits.used, errors });
+  return withMirror(errors.length ? 500 : 200, { ok: !errors.length, due: groups.length, results, creditsToday: credits.used, errors });
 }
 
 exports.handler = (event) => handle(event, new Date());

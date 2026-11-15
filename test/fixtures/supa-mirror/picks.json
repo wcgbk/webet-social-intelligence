@@ -1,0 +1,136 @@
+{
+  "date": "2026-11-13",
+  "model": "omega-v2-sharp-2026-11-01-dkhr",
+  "engine": "omega-v2",
+  "generatedAt": "2026-11-13T15:15:28.282Z",
+  "verified": true,
+  "verifiedAt": "2026-11-13T15:46:30.553Z",
+  "summary": {
+    "totalPicks": 1,
+    "totalStraightBets": 1,
+    "totalUnits": "0.25u",
+    "sportsCovered": [
+      "NBA"
+    ],
+    "modelVersion": "omega-v2-sharp-2026-11-01-dkhr",
+    "aplusLocks": 0,
+    "qaHardFails": 0
+  },
+  "picks": [
+    {
+      "sport": "NBA",
+      "matchup": "Cleveland Cavaliers @ Miami Heat",
+      "pick": "Cleveland Cavaliers +2.5",
+      "pickDisplay": "Cleveland Cavaliers +2.5",
+      "betType": "Spread",
+      "market": "Spread",
+      "odds": "-112",
+      "line": 2.5,
+      "units": "0.25u",
+      "unitsNum": 0.25,
+      "stakeUsd": 38,
+      "rating": "aminus",
+      "grade": "aminus",
+      "qualityGrade": "aminus",
+      "commenceTime": "2026-11-14T01:10:00Z",
+      "edgePct": "2.8%",
+      "priceEdgePct": "0.4%",
+      "edgeNovig": 0.027586786685018794,
+      "ev": "0.8%",
+      "evRaw": 0.007757369665549074,
+      "confidence": 75,
+      "coverProb": "53.2%",
+      "winProbability": "53.2%",
+      "pModel": 0.5709466837494285,
+      "pMkt": 0.5048133331382901,
+      "pCal": 0.5324001198233089,
+      "p_model": 0.5709466837494285,
+      "fair_sharp_p": 0.5048133331382901,
+      "openPrint": {
+        "book": "draftkings",
+        "line": 2.5,
+        "odds": -112,
+        "capturedAt": "2026-11-13T08:01:30.371Z"
+      },
+      "lineMove": {
+        "oddsMoveCents": 0,
+        "lineMovePts": 0,
+        "steamToward": false,
+        "steamAgainst": false,
+        "towardScore": 0,
+        "residualClvProxy": 2.6,
+        "_market": "Spread",
+        "openPrint": {
+          "book": "draftkings",
+          "line": 2.5,
+          "odds": -112,
+          "capturedAt": "2026-11-13T08:01:30.371Z"
+        },
+        "nowPrint": {
+          "book": "draftkings",
+          "line": 2.5,
+          "odds": -112
+        },
+        "sharpLineMove": 0,
+        "missingOpen": false
+      },
+      "book": "draftkings",
+      "homeTeam": "Miami Heat",
+      "awayTeam": "Cleveland Cavaliers",
+      "source": "omega-v2",
+      "modelVersion": "omega-v2-sharp-2026-11-01-dkhr",
+      "coreReasoning": "WeBetAI sees Cleveland as a stronger team than a road underdog designation suggests, projecting this game closer than the market implies. The small spread creates an opportunity where WeBetAI's win probability on the Cavaliers diverges enough from the price to generate positive expected value.",
+      "result": "loss",
+      "clvPp": null,
+      "calibrationMethod": "sport-floor",
+      "pickId": "4cba301dab0345b1",
+      "date": "2026-11-13",
+      "timestamp": "2026-11-13T15:16:19.407Z",
+      "timestampET": "11/13/2026, 10:16:19",
+      "side": "Cleveland Cavaliers +2.5",
+      "predictedClv": null,
+      "lockSnapshot": {
+        "odds": "-112",
+        "line": 2.5,
+        "book": "draftkings",
+        "capturedAt": "2026-11-13T15:16:19.407Z",
+        "openPrint": {
+          "book": "draftkings",
+          "line": 2.5,
+          "odds": -112,
+          "capturedAt": "2026-11-13T08:01:30.371Z"
+        }
+      },
+      "steamToward": false,
+      "steamAgainst": false,
+      "predictedResidualClv": null,
+      "whatLoses": "Miami controls the game at home with a physical, defense-first effort that keeps Cleveland from staying competitive deep into the fourth quarter.",
+      "dataVerified": "Edge is based on WeBetAI's model projections — no specific injuries, rosters, or stats have been assumed or invented.",
+      "clvExpectation": "WeBetAI anticipates modest line movement toward Cleveland, with the spread potentially tightening closer to a pick'em by tip-off.",
+      "profit": -37.5,
+      "finalScore": "121-133",
+      "settledAt": "2026-11-14T07:00:57.857Z"
+    }
+  ],
+  "rejections": [
+    {
+      "matchup": "Florida State Seminoles @ Pittsburgh Panthers",
+      "side": "Over 51.5",
+      "market": "Total",
+      "sport": "NCAAF",
+      "reason": "no-dk-hr-price",
+      "odds": "-115",
+      "book": "espnbet"
+    },
+    {
+      "matchup": "Florida State Seminoles @ Pittsburgh Panthers",
+      "side": "Under 52",
+      "market": "Total",
+      "sport": "NCAAF",
+      "reason": "no-dk-hr-price",
+      "odds": "-108",
+      "book": "bovada"
+    }
+  ],
+  "parlayLegs": []
+}

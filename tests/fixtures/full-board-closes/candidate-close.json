@@ -1,0 +1,165 @@
+{
+  "games": [
+    {
+      "game_id": "g-ncaam",
+      "sport": "NCAAM",
+      "commence_time": "2026-11-14T00:00:00Z",
+      "home_team": "North Carolina Tar Heels",
+      "away_team": "Duke Blue Devils"
+    },
+    {
+      "game_id": "g-nba-tot",
+      "sport": "NBA",
+      "commence_time": "2026-11-14T01:00:00Z",
+      "home_team": "Miami Heat",
+      "away_team": "Boston Celtics"
+    },
+    {
+      "game_id": "g-nba-ml",
+      "sport": "NBA",
+      "commence_time": "2026-11-14T02:00:00Z",
+      "home_team": "Miami Heat",
+      "away_team": "Boston Celtics"
+    }
+  ],
+  "snapshots": [
+    {
+      "game_id": "g-ncaam",
+      "sport": "NCAAM",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Duke Blue Devils",
+      "point": 3.5,
+      "price": -105,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T23:55:00Z",
+      "source": "oddsapi-live:capture-all-closes"
+    },
+    {
+      "game_id": "g-ncaam",
+      "sport": "NCAAM",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "North Carolina Tar Heels",
+      "point": -3.5,
+      "price": -115,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T23:55:00Z",
+      "source": "oddsapi-live:capture-all-closes"
+    },
+    {
+      "game_id": "g-ncaam",
+      "sport": "NCAAM",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Duke Blue Devils",
+      "point": 4.5,
+      "price": -130,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T23:55:00Z",
+      "source": "oddsapi-live:capture-all-closes"
+    },
+    {
+      "game_id": "g-nba-tot",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "totals",
+      "side": "Over",
+      "point": 220.5,
+      "price": -110,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T00:55:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-nba-tot",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "totals",
+      "side": "Under",
+      "point": 220.5,
+      "price": -110,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T00:55:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-nba-ml",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "h2h",
+      "side": "Miami Heat",
+      "point": null,
+      "price": -130,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:56:00Z",
+      "source": "oddsapi-live:capture-all-closes"
+    },
+    {
+      "game_id": "g-nba-ml",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "h2h",
+      "side": "Boston Celtics",
+      "point": null,
+      "price": 110,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:56:00Z",
+      "source": "oddsapi-live:capture-all-closes"
+    }
+  ],
+  "candidates": [
+    {
+      "rowKey": "ncaam-spread",
+      "sport": "NCAAM",
+      "matchup": "Duke Blue Devils @ North Carolina Tar Heels",
+      "side": "Duke Blue Devils +3.5",
+      "market": "spread",
+      "line": 3.5,
+      "commenceTime": "2026-11-14T00:00:00Z",
+      "betPrice": -110,
+      "closeSource": "track-clv",
+      "pinnacleFairClose": 0.42,
+      "published": false
+    },
+    {
+      "rowKey": "nba-total",
+      "sport": "NBA",
+      "matchup": "Boston Celtics @ Miami Heat",
+      "side": "Over 220.5",
+      "market": "total",
+      "line": 220.5,
+      "commenceTime": "2026-11-14T01:00:00Z",
+      "betPrice": -108,
+      "closeSource": "line-snap-1000",
+      "pinnacleFairClose": 0.5,
+      "published": true
+    },
+    {
+      "rowKey": "nba-ml",
+      "sport": "NBA",
+      "matchup": "Boston Celtics @ Miami Heat",
+      "side": "Miami Heat",
+      "market": "ml",
+      "line": null,
+      "commenceTime": "2026-11-14T02:00:00Z",
+      "betPrice": -125,
+      "closeSource": "track-clv",
+      "pinnacleFairClose": 0.55,
+      "published": false
+    },
+    {
+      "rowKey": "nhl-miss",
+      "sport": "NHL",
+      "matchup": "Ottawa Senators @ Calgary Flames",
+      "side": "Ottawa Senators ML",
+      "market": "ml",
+      "line": null,
+      "commenceTime": "2026-11-14T03:00:00Z",
+      "betPrice": 120,
+      "closeSource": null,
+      "pinnacleFairClose": null,
+      "published": false
+    }
+  ]
+}

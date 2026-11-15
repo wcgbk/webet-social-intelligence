@@ -823,6 +823,7 @@ async function handle(event, deps) {
         } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
       }
       // Yesterday and the day before: awaited Supabase true closes (no Odds API).
+      // upgradeDatesFromStore also scores clv.candidates (trueClose + candidateTrueCloseBySport).
       // The old fire-and-forget POST to legacy track-clv died with the lambda, so the
       // 23:00 snapshot was never upgraded. OMEGA_CLV_TRUE_CLOSE=off keeps that POST.
       const yestISO = sweepDates[0];

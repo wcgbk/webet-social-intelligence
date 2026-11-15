@@ -461,6 +461,13 @@ async function main() {
   );
   if (trueClose.status !== 0) throw new Error('clv true close gate failed');
 
+  const fullBoardCloses = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-full-board-closes.js')],
+    { stdio: 'inherit' }
+  );
+  if (fullBoardCloses.status !== 0) throw new Error('full board closes gate failed');
+
   const sharpPrices = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-sharp-prices.js')],

@@ -215,6 +215,8 @@ function inFilter(ids) {
 }
 
 async function loadSnapshots(gameIds, env, fetchImpl) {
+  // Pinnacle + closing only. Not filtered by source, so capture-pick-closes
+  // and capture-all-closes rows both count.
   const ids = [...new Set((gameIds || []).filter(Boolean).map((id) => String(id)))];
   const rows = [];
   const chunkSize = 40;
@@ -340,8 +342,33 @@ function chooseClose(rows, pick, game, sideInfo, betLine, api) {
       snapshotTs: chosen.stamp,
       gameId: game.game_id,
       commenceTime: game.commence_time,
+      rowSource: chosen.pair.sideRow && chosen.pair.sideRow.source,
     },
     reason: null,
+  };
+}
+
+function closeSourceLabel(rowSource) {
+  const s = String(rowSource || '');
+  if (s.includes('capture-all-closes')) return 'supabase:capture-all-closes';
+  if (s.includes('capture-pick-closes')) return 'supabase:capture-pick-closes';
+  if (s.startsWith('oddsapi-live:')) return `supabase:${s.slice('oddsapi-live:'.length)}`;
+  return 'supabase:capture-pick-closes';
+}
+
+/** Same pick-price CLV numbers buildPickClvRow stores. clvPp is percentage points. */
+function pickClvNumbers(close, betPrice) {
+  const impliedRaw = betPrice == null ? null : americanToImplied(betPrice);
+  const betImplied = impliedRaw == null ? null : roundTo(impliedRaw, 6);
+  const closeNoVig = close && Number.isFinite(close.fairP)
+    ? roundTo(close.fairP, 6)
+    : (close && close.closeNoVig);
+  const clvPp = closeNoVig != null && betImplied != null ? roundTo((closeNoVig - betImplied) * 100, 2) : null;
+  return {
+    betImplied,
+    closeNoVig,
+    clvPp,
+    beatClose: clvPp == null ? null : clvPp > 0,
   };
 }
 
@@ -452,7 +479,7 @@ function applyCloseToLedgerRow(rec, close) {
   rec.captureScore = 0;
   rec.anchor = 'pinnacle';
   rec.anchorBook = 'pinnacle';
-  rec.closeSource = 'supabase:capture-pick-closes';
+  rec.closeSource = closeSourceLabel(close && close.rowSource);
   refreshAliases(rec);
 }
 
@@ -462,10 +489,7 @@ function buildPickClvRow(ticket, close) {
   const idx = ticket && ticket.idx != null ? ticket.idx : 0;
   const market = cand && typeof cand === 'object' ? marketOf(cand) : null;
   const bet = explicitBet(cand);
-  const impliedRaw = bet.price == null ? null : americanToImplied(bet.price);
-  const betImplied = impliedRaw == null ? null : roundTo(impliedRaw, 6);
-  const closeNoVig = close && Number.isFinite(close.fairP) ? roundTo(close.fairP, 6) : (close && close.closeNoVig);
-  const clvPp = closeNoVig != null && betImplied != null ? roundTo((closeNoVig - betImplied) * 100, 2) : null;
+  const numbers = pickClvNumbers(close, bet.price);
   return {
     rowKey: pickClvKey(cand, kind, idx),
     kind,
@@ -475,13 +499,13 @@ function buildPickClvRow(ticket, close) {
     market,
     line: cand && typeof cand === 'object' ? lineOf(cand, marketOf(cand)) : null,
     betPrice: bet.price,
-    betImplied,
-    closeNoVig,
+    betImplied: numbers.betImplied,
+    closeNoVig: numbers.closeNoVig,
     sharpBook: 'pinnacle',
     sharpDevig: 'power',
-    clvPp,
-    beatClose: clvPp == null ? null : clvPp > 0,
-    closeSource: 'supabase:capture-pick-closes',
+    clvPp: numbers.clvPp,
+    beatClose: numbers.beatClose,
+    closeSource: closeSourceLabel(close && close.rowSource),
   };
 }
 
@@ -586,6 +610,165 @@ async function applyTrueClose(clvData, picksData, env, fetchImpl) {
   }, env);
 }
 
+const CANDIDATE_CAP = 240;
+const CANDIDATE_BUDGET_MS = 8000;
+
+function candidateBetPrice(cand) {
+  if (!cand || typeof cand !== 'object') return null;
+  if (cand.betPrice != null && cand.betPrice !== '') return cand.betPrice;
+  if (cand.odds != null && cand.odds !== '') return cand.odds;
+  return null;
+}
+
+/** Graded candidate row or raw board candidate → the pick shape entryForPick reads. */
+function candidateAsPick(cand) {
+  const marketRaw = String((cand && (cand.market || cand.betType)) || '').toLowerCase();
+  const side = String((cand && (cand.side || cand.pick)) || '');
+  let betType = 'Moneyline';
+  if (marketRaw === 'total' || marketRaw === 'totals' || /total/.test(marketRaw)) betType = 'Total';
+  else if (marketRaw === 'spread' || marketRaw === 'spreads' || /spread|puck|run line/.test(marketRaw)) betType = 'Spread';
+  else if (marketRaw === 'ml' || marketRaw === 'h2h' || /money/.test(marketRaw)) betType = 'Moneyline';
+  let pick = side;
+  const lineNum = cand && cand.line != null && cand.line !== '' ? Number(cand.line) : null;
+  const line = Number.isFinite(lineNum) ? lineNum : null;
+  if (betType === 'Total' && line != null && !/\d/.test(pick)) {
+    pick = `${/under/i.test(pick) ? 'Under' : 'Over'} ${line}`;
+  } else if (betType === 'Spread' && line != null && !/[+-]\d/.test(pick)) {
+    const shown = line > 0 ? `+${line}` : String(line);
+    pick = `${pick} ${shown}`.trim();
+  } else if (betType === 'Moneyline' && pick && !/\bML\b/i.test(pick)) {
+    pick = `${pick} ML`.trim();
+  }
+  const away = cand && cand.awayTeam;
+  const home = cand && cand.homeTeam;
+  return {
+    sport: cand && cand.sport,
+    matchup: (cand && cand.matchup) || (away && home ? `${away} @ ${home}` : null),
+    homeTeam: home || null,
+    awayTeam: away || null,
+    pick,
+    side,
+    betType,
+    market: betType,
+    line,
+    betLine: line,
+    commenceTime: cand && cand.commenceTime,
+    odds: candidateBetPrice(cand),
+  };
+}
+
+function sampleSe(values) {
+  const n = values.length;
+  if (n < 2) return null;
+  const mean = values.reduce((sum, v) => sum + v, 0) / n;
+  const ss = values.reduce((sum, v) => sum + ((v - mean) ** 2), 0);
+  return Math.sqrt((ss / (n - 1)) / n);
+}
+
+function trueCloseBucket(rows) {
+  const vals = [];
+  let beats = 0;
+  for (const row of rows || []) {
+    const pp = row && row.trueClose && row.trueClose.clvPp;
+    if (pp == null || pp === '' || !Number.isFinite(Number(pp))) continue;
+    const n = Number(pp);
+    vals.push(n);
+    if (row.trueClose.beatClose === true || (row.trueClose.beatClose == null && n > 0)) beats += 1;
+  }
+  if (!vals.length) return { n: 0, meanClvPp: null, beatRate: null, se: null };
+  const mean = vals.reduce((sum, v) => sum + v, 0) / vals.length;
+  const se = sampleSe(vals);
+  return {
+    n: vals.length,
+    meanClvPp: roundTo(mean, 2),
+    beatRate: roundTo(beats / vals.length, 4),
+    se: se == null ? null : roundTo(se, 4),
+  };
+}
+
+/** { sport: {n, meanClvPp, beatRate, se}, overall: {...} } from rows that have trueClose.clvPp. */
+function summarizeCandidateTrueClose(candidates) {
+  const bySport = {};
+  const groups = new Map();
+  for (const row of candidates || []) {
+    if (!row || !row.trueClose || row.trueClose.clvPp == null || !Number.isFinite(Number(row.trueClose.clvPp))) continue;
+    const sport = row.sport ? String(row.sport).toUpperCase() : 'UNKNOWN';
+    if (!groups.has(sport)) groups.set(sport, []);
+    groups.get(sport).push(row);
+  }
+  for (const [sport, rows] of groups) bySport[sport] = trueCloseBucket(rows);
+  bySport.overall = trueCloseBucket((candidates || []).filter((row) => row && row.trueClose && row.trueClose.clvPp != null));
+  return bySport;
+}
+
+function withCandidateBudget(promise, ms) {
+  let timer;
+  let settled = false;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      settled = true;
+      reject(new Error('candidate true-close budget'));
+    }, ms);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+  const work = Promise.resolve(promise).then(
+    (value) => value,
+    (err) => {
+      if (settled) return undefined;
+      throw err;
+    },
+  );
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Additive true-close CLV on clv.candidates. Does not change other fields
+ * or which rows are kept. Failures return a reason and leave the doc alone.
+ */
+async function upgradeCandidateTrueCloses(clvData, env, fetchImpl) {
+  if (!trueCloseEnabled(env)) return { upgraded: 0, skipped: 'flag-off' };
+  if (!clvData || typeof clvData !== 'object' || !Array.isArray(clvData.candidates)) {
+    return { upgraded: 0, skipped: 'no-candidates' };
+  }
+  const all = clvData.candidates;
+  if (!all.length) return { upgraded: 0, skipped: 'no-candidates' };
+  const list = all.slice(0, CANDIDATE_CAP);
+  if (all.length > list.length) {
+    console.log(`[true-close] candidate cap ${CANDIDATE_CAP} of ${all.length}`);
+  }
+  try {
+    const picks = list.map(candidateAsPick);
+    const loaded = await withCandidateBudget(
+      loadTrueCloses(clvData.date, picks, env, fetchImpl),
+      CANDIDATE_BUDGET_MS,
+    );
+    if (!loaded || loaded.reason) {
+      console.log(`[true-close] candidate upgrade skipped: ${loaded && loaded.reason ? loaded.reason : 'no result'}`);
+      return { upgraded: 0, reason: loaded && loaded.reason ? loaded.reason : 'no result' };
+    }
+    let upgraded = 0;
+    list.forEach((cand, i) => {
+      const entry = loaded.entries && loaded.entries[i];
+      if (!entry || !entry.close || !cand || typeof cand !== 'object') return;
+      const numbers = pickClvNumbers(entry.close, candidateBetPrice(cand));
+      cand.trueClose = {
+        closeNoVig: numbers.closeNoVig,
+        clvPp: numbers.clvPp,
+        beatClose: numbers.beatClose,
+        closeTs: entry.close.snapshotTs,
+        source: closeSourceLabel(entry.close.rowSource),
+      };
+      upgraded += 1;
+    });
+    clvData.candidateTrueCloseBySport = summarizeCandidateTrueClose(all);
+    return { upgraded, examined: list.length };
+  } catch (err) {
+    const reason = safeReason(err);
+    console.log(`[true-close] candidate upgrade failed: ${reason}`);
+    return { upgraded: 0, reason };
+  }
+}
+
 async function upgradeDatesFromStore(dates, opts) {
   const env = opts && opts.env;
   const fetchImpl = opts && opts.fetchImpl;
@@ -601,9 +784,17 @@ async function upgradeDatesFromStore(dates, opts) {
       try { picksData = await opts.readPicks(dateISO); } catch (_) { picksData = null; }
       const before = JSON.stringify(clvData);
       const report = await applyTrueClose(clvData, picksData, env, fetchImpl);
+      let candidateTrueClose = null;
+      try {
+        candidateTrueClose = await upgradeCandidateTrueCloses(clvData, env, fetchImpl);
+      } catch (err) {
+        const reason = safeReason(err);
+        console.log(`[true-close] candidate upgrade failed: ${reason}`);
+        candidateTrueClose = { upgraded: 0, reason };
+      }
       const changed = JSON.stringify(clvData) !== before;
       if (changed && opts.writeClv) await opts.writeClv(dateISO, clvData);
-      out.push(Object.assign({ date: dateISO, wrote: changed }, report, { changed }));
+      out.push(Object.assign({ date: dateISO, wrote: changed }, report, { changed, candidateTrueClose }));
     } catch (err) {
       out.push({ date: dateISO, changed: false, wrote: false, reason: safeReason(err) });
     }
@@ -618,4 +809,8 @@ module.exports = {
   upgradeLedger,
   applyTrueClose,
   upgradeDatesFromStore,
+  closeSourceLabel,
+  pickClvNumbers,
+  upgradeCandidateTrueCloses,
+  summarizeCandidateTrueClose,
 };

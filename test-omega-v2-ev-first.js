@@ -5,7 +5,7 @@
  * Flag on: in-band +EV, out-of-band +EV (favCapFill), in-band EV<=0,
  * out-of-band EV<=0. Sharp-fair rows stay ahead of stored-fair fallbacks
  * inside each of those classes, the same pack order as a2b6bb1.
- * Flag off is the in-band-first fill.
+ * Flag off is the in-band-first fill. Default is off (HOLD 2026-11-15).
  */
 
 const assert = require('assert');
@@ -109,8 +109,14 @@ process.env.OMEGA_V2_MARKET_P = '1';
 process.env.OMEGA_V2_FAV_CAP = '1';
 process.env.OMEGA_V2_LONGSHOT_ADJ = 'off';
 
+assert.strictEqual(EV_FIRST_DEFAULT_ON, false);
 delete process.env.OMEGA_V2_EV_FIRST;
-assert.strictEqual(evFirstEnabled(), EV_FIRST_DEFAULT_ON);
+assert.strictEqual(evFirstEnabled(), false);
+assert.strictEqual(evFirstEnabled({}), false);
+process.env.OMEGA_V2_EV_FIRST = '';
+assert.strictEqual(evFirstEnabled(), false);
+process.env.OMEGA_V2_EV_FIRST = '   ';
+assert.strictEqual(evFirstEnabled(), false);
 process.env.OMEGA_V2_EV_FIRST = 'off';
 assert.strictEqual(evFirstEnabled(), false);
 process.env.OMEGA_V2_EV_FIRST = '0';
@@ -121,7 +127,14 @@ process.env.OMEGA_V2_EV_FIRST = 'on';
 assert.strictEqual(evFirstEnabled(), true);
 process.env.OMEGA_V2_EV_FIRST = '1';
 assert.strictEqual(evFirstEnabled(), true);
+process.env.OMEGA_V2_EV_FIRST = 'true';
+assert.strictEqual(evFirstEnabled(), true);
+process.env.OMEGA_V2_EV_FIRST = 'yes';
+assert.strictEqual(evFirstEnabled(), true);
+process.env.OMEGA_V2_EV_FIRST = 'no';
+assert.strictEqual(evFirstEnabled(), false);
 assert.strictEqual(evFirstEnabled({ OMEGA_V2_EV_FIRST: 'off' }), false);
+assert.strictEqual(evFirstEnabled({ OMEGA_V2_EV_FIRST: 'on' }), true);
 
 const plusHigh = row({
   matchup: 'High Away @ High Home', pick: 'Plus High', odds: -110, pMkt: 0.60,

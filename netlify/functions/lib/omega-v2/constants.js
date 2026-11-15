@@ -462,12 +462,13 @@ function keyConvertEnabled(env) {
  * +EV rows cross the -300 cap ahead of an in-band 0% or negative-EV filler.
  * A -EV price shorter than -300 still waits until in-band rows run out.
  * +EV is pBet * decimal - 1 at the bet price. row.ev is not the tier key.
- * Default is on: line move + Pinnacle fair + this flag replayed 10/31-11/14
- * at +$2023 (straights 34-8 +$1077, parlays 7-7 +$946, days3 15/15, fav300 2)
- * against the +$1687 shipped stack. =off restores in-band-first fill.
+ * HOLD 2026-11-15: replay +$2023 (34-8, parlays 7-7) vs +$1687 but fav300=2
+ * (ND -6500, NE -305) breaks the no-shorter-than--300 rule. Opt-in with
+ * OMEGA_V2_EV_FIRST=on.
+ * =off restores in-band-first fill.
  */
 const EV_FIRST_ENV = 'OMEGA_V2_EV_FIRST';
-const EV_FIRST_DEFAULT_ON = true;
+const EV_FIRST_DEFAULT_ON = false;
 
 function evFirstEnabled(env) {
   const source = env == null ? process.env : env;

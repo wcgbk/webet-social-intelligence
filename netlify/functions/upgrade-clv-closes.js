@@ -8,7 +8,7 @@
  * No Odds API calls.
  */
 
-const { applyTrueClose } = require('./lib/clv-true-close');
+const { applyTrueClose, fillPublishedPickClv } = require('./lib/clv-true-close');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -75,29 +75,47 @@ async function writeKey(deps, key, value) {
   return livePut(key, value);
 }
 
-async function handle(event, deps) {
-  if (event && event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
-  const method = event && event.httpMethod;
-  if (method && method !== 'GET' && method !== 'POST') return json(405, { error: 'GET or POST required' });
+function ymdOk(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
 
-  const env = (deps && deps.env) || process.env;
-  if (!authorized(event, env)) return json(401, { error: 'Unauthorized' });
+function eachDate(from, to) {
+  const start = Date.parse(`${from}T12:00:00Z`);
+  const end = Date.parse(`${to}T12:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  const out = [];
+  for (let t = start; t <= end; t += 86400000) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+    if (out.length > 31) return null;
+  }
+  return out;
+}
 
-  const params = (event && event.queryStringParameters) || {};
-  const date = params.date;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return json(400, { error: 'date required' });
-  const dry = params.dry === '1' || params.dry === 'true' || params.dry === 'yes';
+function dateList(params) {
+  const from = params && params.from;
+  const to = params && params.to;
+  if ((from != null && from !== '') || (to != null && to !== '')) {
+    if (!ymdOk(from) || !ymdOk(to)) return { error: 'from and to required' };
+    const dates = eachDate(from, to);
+    if (!dates) return { error: 'bad date range' };
+    return { dates, ranged: true, from, to };
+  }
+  const date = params && params.date;
+  if (!ymdOk(date)) return { error: 'date required' };
+  return { dates: [date], ranged: false };
+}
 
+async function upgradeDate(date, deps, env, dry) {
   let clvRaw;
   let picksRaw;
   try {
     clvRaw = await readKey(deps, `clv-${date}`);
     picksRaw = await readKey(deps, `picks-${date}`);
   } catch (err) {
-    return json(500, { error: 'blob read failed' });
+    return { status: 500, body: { date, error: 'blob read failed' } };
   }
   if (!clvRaw || typeof clvRaw !== 'object' || Array.isArray(clvRaw)) {
-    return json(404, { error: `no clv for ${date}` });
+    return { status: 404, body: { date, error: `no clv for ${date}` } };
   }
 
   const clv = JSON.parse(JSON.stringify(clvRaw));
@@ -107,11 +125,18 @@ async function handle(event, deps) {
     pickClvSummary: clv.pickClvSummary || null,
   };
 
+  const fetchImpl = (deps && deps.fetch) || fetch;
   let report;
   try {
-    report = await applyTrueClose(clv, picks, env, (deps && deps.fetch) || fetch);
+    report = await applyTrueClose(clv, picks, env, fetchImpl);
   } catch (err) {
-    return json(500, { error: 'upgrade failed' });
+    return { status: 500, body: { date, error: 'upgrade failed' } };
+  }
+  try {
+    const fill = await fillPublishedPickClv(clv, picks, env, fetchImpl, date);
+    if (fill && fill.changed) report = Object.assign({}, report, { changed: true });
+  } catch (err) {
+    return { status: 500, body: { date, error: 'upgrade failed' } };
   }
 
   let wrote = false;
@@ -120,23 +145,58 @@ async function handle(event, deps) {
       await writeKey(deps, `clv-${date}`, clv);
       wrote = true;
     } catch (err) {
-      return json(500, { error: 'blob write failed' });
+      return { status: 500, body: { date, error: 'blob write failed' } };
     }
   }
 
-  return json(200, {
-    date,
-    dry,
-    wrote,
-    picksExamined: report.picksExamined,
-    upgraded: report.upgraded,
-    stillEarly: report.stillEarly,
-    noTrueClose: report.noTrueClose,
-    before,
-    after: {
-      avgCLV: clv.avgCLV == null ? null : clv.avgCLV,
-      pickClvSummary: clv.pickClvSummary || null,
+  return {
+    status: 200,
+    body: {
+      date,
+      dry,
+      wrote,
+      picksExamined: report.picksExamined,
+      upgraded: report.upgraded,
+      stillEarly: report.stillEarly,
+      noTrueClose: report.noTrueClose,
+      before,
+      after: {
+        avgCLV: clv.avgCLV == null ? null : clv.avgCLV,
+        pickClvSummary: clv.pickClvSummary || null,
+      },
     },
+  };
+}
+
+async function handle(event, deps) {
+  if (event && event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
+  const method = event && event.httpMethod;
+  if (method && method !== 'GET' && method !== 'POST') return json(405, { error: 'GET or POST required' });
+
+  const env = (deps && deps.env) || process.env;
+  if (!authorized(event, env)) return json(401, { error: 'Unauthorized' });
+
+  const params = (event && event.queryStringParameters) || {};
+  const listed = dateList(params);
+  if (listed.error) return json(400, { error: listed.error });
+  const dry = params.dry === '1' || params.dry === 'true' || params.dry === 'yes';
+
+  if (!listed.ranged) {
+    const one = await upgradeDate(listed.dates[0], deps, env, dry);
+    return json(one.status, one.body);
+  }
+
+  const days = [];
+  for (const date of listed.dates) {
+    const one = await upgradeDate(date, deps, env, dry);
+    days.push(Object.assign({ status: one.status }, one.body));
+  }
+  return json(200, {
+    dry,
+    from: listed.from,
+    to: listed.to,
+    wrote: days.filter((day) => day.wrote).length,
+    days,
   });
 }
 

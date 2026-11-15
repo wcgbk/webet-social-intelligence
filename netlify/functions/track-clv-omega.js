@@ -9,6 +9,7 @@ const {
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { defaultOnFlag } = require('./lib/default_on_flag');
+const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
 
 function trueCloseOn(env) {
   return defaultOnFlag('OMEGA_CLV_TRUE_CLOSE', env);
@@ -847,6 +848,26 @@ async function handle(event, deps) {
           console.log(`[track-clv] Supabase true-close upgrade failed: ${e.message}`);
         }
       }
+    } else if (!params.date && trueCloseOn(env) && pickClvFillEnabled(env)) {
+      // Cron is 07:00, 17:00, 23:00 UTC. After DST only 07:00 UTC is before noon
+      // ET, so the block above is the only scheduled yesterday upgrade. Noon and
+      // evening still fill yesterday from closes already in Supabase.
+      const back = new Date(estOffset);
+      back.setDate(back.getDate() - 1);
+      const yestOnly = back.toISOString().split('T')[0];
+      try {
+        const { upgradeDatesFromStore } = require('./lib/clv-true-close');
+        await upgradeDatesFromStore([yestOnly], {
+          env,
+          fetchImpl,
+          readClv: (d) => loadClvData(d, storeImpl),
+          readPicks: (d) => loadPicksData(d, storeImpl),
+          writeClv: (d, data) => writeClvData(d, data, storeImpl),
+        });
+      } catch (e) {
+        const msg = String(e && e.message || 'error');
+        console.log(`[track-clv] pickClv fill failed: ${/bearer|token|authorization|api[_-]?key/i.test(msg) ? 'unavailable' : msg}`);
+      }
     }
 
     // ── Step 1: Load today's picks from Blobs ──
@@ -1172,6 +1193,13 @@ async function handle(event, deps) {
         console.error('[track-clv] parlay leg grade:', e.message);
       }
 
+      // A same-day rebuild starts from a fresh object. Keep a pickClv the morning
+      // fill already wrote so a later miss cannot drop it.
+      if (existingClv && Array.isArray(existingClv.pickClv) && !Array.isArray(clvData.pickClv)) {
+        clvData.pickClv = existingClv.pickClv;
+        if (existingClv.pickClvSummary) clvData.pickClvSummary = existingClv.pickClvSummary;
+      }
+
       // Scored-candidate closes from this run's cache and stored boards only.
       // A failure here must not drop the pick write.
       try {
@@ -1204,6 +1232,13 @@ async function handle(event, deps) {
           const msg = String(e && e.message || 'error');
           console.error(`[track-clv] true close skipped: ${/bearer|token|authorization|api[_-]?key/i.test(msg) ? 'unavailable' : msg}`);
         }
+      }
+      try {
+        const { fillPublishedPickClv } = require('./lib/clv-true-close');
+        await fillPublishedPickClv(clvData, picksData, env, fetchImpl, dateISO);
+      } catch (e) {
+        const msg = String(e && e.message || 'error');
+        console.error(`[track-clv] pickClv fill skipped: ${/bearer|token|authorization|api[_-]?key/i.test(msg) ? 'unavailable' : msg}`);
       }
 
       await store.setJSON(`clv-${dateISO}`, clvData);

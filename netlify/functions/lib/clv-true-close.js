@@ -10,7 +10,7 @@
 const { SUPABASE_URL } = require('./clv-supabase');
 const { defaultOnFlag } = require('./default_on_flag');
 const { summarizePickClv } = require('./clv-summary');
-const { pickClvEnabled } = require('./omega-v2/constants');
+const { pickClvEnabled, pickClvFillEnabled } = require('./omega-v2/constants');
 const { noVigTwoWay, americanToImplied } = require('./omega-vnext/odds_math');
 const {
   publishedTickets,
@@ -350,6 +350,7 @@ function chooseClose(rows, pick, game, sideInfo, betLine, api) {
 
 function closeSourceLabel(rowSource) {
   const s = String(rowSource || '');
+  if (s.includes('ledger:true-close') || s.includes('ledger-true-close')) return 'ledger:true-close';
   if (s.includes('capture-all-closes')) return 'supabase:capture-all-closes';
   if (s.includes('capture-pick-closes')) return 'supabase:capture-pick-closes';
   if (s.startsWith('oddsapi-live:')) return `supabase:${s.slice('oddsapi-live:'.length)}`;
@@ -769,6 +770,136 @@ async function upgradeCandidateTrueCloses(clvData, env, fetchImpl) {
   }
 }
 
+/** Bet-price pickClv fill starts this ET card date. Earlier blobs stay as stored. */
+const PICK_CLV_FILL_FROM = '2026-11-14';
+
+function ledgerAsCand(rec) {
+  const line = rec && rec.betLine != null && rec.betLine !== '' ? rec.betLine : (rec && rec.line);
+  return {
+    sport: rec && rec.sport,
+    matchup: rec && rec.matchup,
+    pick: rec && rec.pick,
+    side: rec && (rec.side || rec.pick),
+    market: rec && (rec.market || rec.betType),
+    betType: rec && (rec.betType || rec.market),
+    odds: rec && rec.odds != null && rec.odds !== '' ? rec.odds : (rec && rec.pickTimeOdds),
+    line,
+    book: rec && rec.book,
+    commenceTime: rec && rec.commenceTime,
+    homeTeam: rec && rec.homeTeam,
+    awayTeam: rec && rec.awayTeam,
+    result: rec && rec.result,
+  };
+}
+
+/**
+ * Published straights and parlay legs, plus ledger straights the current card
+ * no longer lists (a force-replace drops the ticket the true-close merge needs).
+ */
+function collectFillTickets(clvData, picksData) {
+  const out = [];
+  const seen = new Set();
+  const push = (ticket) => {
+    if (!ticket || !ticket.cand || typeof ticket.cand !== 'object') return;
+    let key;
+    try { key = pickClvKey(ticket.cand, ticket.kind, ticket.idx); } catch (_) { return; }
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(ticket);
+  };
+  let cardTickets = [];
+  try { cardTickets = publishedTickets(picksData); } catch (_) { cardTickets = []; }
+  for (const ticket of cardTickets) push(ticket);
+  const ledger = Array.isArray(clvData && clvData.picks) ? clvData.picks : [];
+  ledger.forEach((rec, idx) => {
+    if (!rec || typeof rec !== 'object') return;
+    push({ cand: ledgerAsCand(rec), kind: 'straight', idx, ledgerRec: rec });
+  });
+  const storedLegs = Array.isArray(clvData && clvData.parlayLegs) ? clvData.parlayLegs : [];
+  storedLegs.forEach((leg, idx) => {
+    if (!leg || typeof leg !== 'object') return;
+    push({ cand: ledgerAsCand(leg), kind: 'leg', idx });
+  });
+  return out;
+}
+
+function ledgerMatch(ledger, cand) {
+  const pick = String(cand && (cand.pick || cand.side) || '');
+  const matchup = String(cand && cand.matchup || '');
+  if (!pick || !matchup) return null;
+  for (const rec of ledger || []) {
+    if (!rec || typeof rec !== 'object') continue;
+    if (String(rec.pick || '') === pick && String(rec.matchup || '') === matchup) return rec;
+  }
+  return null;
+}
+
+/** A pinnacle close already inside the pre-pitch window. Early captures are not a true close. */
+function ledgerTrueClose(rec) {
+  if (!rec || typeof rec !== 'object') return null;
+  if (isEarlyClose(rec)) return null;
+  const nv = num(rec.closingNoVig);
+  if (nv == null) return null;
+  const anchor = String(rec.anchor || rec.anchorBook || '').toLowerCase();
+  if (anchor && !anchor.includes('pinnacle')) return null;
+  return { fairP: nv, closeNoVig: nv, rowSource: 'ledger:true-close' };
+}
+
+/**
+ * Merge bet-price true-close rows into clv-{date}.pickClv.
+ * Snapshot match from capture-pick-closes wins. A non-early pinnacle ledger
+ * close fills a published leg the snapshot matcher skipped (moved line, empty
+ * card, or a last_update outside the 20-minute window).
+ * Flag off, pick-CLV off, true-close off, or a date before PICK_CLV_FILL_FROM:
+ * the object is not read for writes and is not changed. No Odds API calls.
+ */
+async function fillPublishedPickClv(clvData, picksData, env, fetchImpl, dateISO) {
+  if (!pickClvFillEnabled(env)) return { changed: false, filled: 0, skipped: 'flag-off' };
+  if (!pickClvEnabled(env)) return { changed: false, filled: 0, skipped: 'pick-clv-off' };
+  if (!trueCloseEnabled(env)) return { changed: false, filled: 0, skipped: 'true-close-off' };
+  if (!clvData || typeof clvData !== 'object' || Array.isArray(clvData)) {
+    return { changed: false, filled: 0, skipped: 'no-ledger' };
+  }
+  const date = String(dateISO || clvData.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < PICK_CLV_FILL_FROM) {
+    return { changed: false, filled: 0, skipped: 'before-fill-start' };
+  }
+  const tickets = collectFillTickets(clvData, picksData);
+  if (!tickets.length) return { changed: false, filled: 0, skipped: 'no-tickets' };
+  const ledger = Array.isArray(clvData.picks) ? clvData.picks : [];
+  let loaded;
+  try {
+    loaded = await loadTrueCloses(date, tickets.map((ticket) => ticket.cand), env, fetchImpl);
+  } catch (err) {
+    loaded = { entries: [], reason: safeReason(err) };
+  }
+  const entries = (loaded && loaded.entries) || [];
+  const rows = [];
+  tickets.forEach((ticket, i) => {
+    const entry = entries[i];
+    let close = entry && entry.close;
+    if (!close) {
+      const rec = ticket.ledgerRec || ledgerMatch(ledger, ticket.cand);
+      close = ledgerTrueClose(rec);
+    }
+    if (!close || !ticket.cand) return;
+    let row;
+    try { row = buildPickClvRow(ticket, close); } catch (_) { return; }
+    if (!row || row.clvPp == null) return;
+    rows.push(row);
+  });
+  if (!rows.length) return { changed: false, filled: 0, reason: (loaded && loaded.reason) || null };
+  const prevRows = Array.isArray(clvData.pickClv) ? clvData.pickClv : [];
+  const merged = mergePickClv(prevRows, rows);
+  const summary = summarizePickClv(merged);
+  const sameRows = JSON.stringify(merged) === JSON.stringify(clvData.pickClv || null);
+  const sameSummary = JSON.stringify(summary) === JSON.stringify(clvData.pickClvSummary || null);
+  if (sameRows && sameSummary) return { changed: false, filled: rows.length };
+  clvData.pickClv = merged;
+  clvData.pickClvSummary = summary;
+  return { changed: true, filled: rows.length };
+}
+
 async function upgradeDatesFromStore(dates, opts) {
   const env = opts && opts.env;
   const fetchImpl = opts && opts.fetchImpl;
@@ -784,6 +915,14 @@ async function upgradeDatesFromStore(dates, opts) {
       try { picksData = await opts.readPicks(dateISO); } catch (_) { picksData = null; }
       const before = JSON.stringify(clvData);
       const report = await applyTrueClose(clvData, picksData, env, fetchImpl);
+      let fill = null;
+      try {
+        fill = await fillPublishedPickClv(clvData, picksData, env, fetchImpl, dateISO);
+      } catch (err) {
+        const reason = safeReason(err);
+        console.log(`[true-close] pickClv fill failed: ${reason}`);
+        fill = { changed: false, reason };
+      }
       let candidateTrueClose = null;
       try {
         candidateTrueClose = await upgradeCandidateTrueCloses(clvData, env, fetchImpl);
@@ -794,7 +933,7 @@ async function upgradeDatesFromStore(dates, opts) {
       }
       const changed = JSON.stringify(clvData) !== before;
       if (changed && opts.writeClv) await opts.writeClv(dateISO, clvData);
-      out.push(Object.assign({ date: dateISO, wrote: changed }, report, { changed, candidateTrueClose }));
+      out.push(Object.assign({ date: dateISO, wrote: changed }, report, { changed, fill, candidateTrueClose }));
     } catch (err) {
       out.push({ date: dateISO, changed: false, wrote: false, reason: safeReason(err) });
     }
@@ -809,6 +948,8 @@ module.exports = {
   upgradeLedger,
   applyTrueClose,
   upgradeDatesFromStore,
+  fillPublishedPickClv,
+  PICK_CLV_FILL_FROM,
   closeSourceLabel,
   pickClvNumbers,
   upgradeCandidateTrueCloses,

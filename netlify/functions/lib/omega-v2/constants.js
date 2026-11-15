@@ -273,6 +273,22 @@ function pickClvEnabled(env) {
 }
 
 /**
+ * Write the bet-price true-close row for every published straight and parlay
+ * leg onto clv-{date}.pickClv, from closes capture-pick-closes already stored.
+ * Default on. OMEGA_V2_PICK_CLV_FILL=off / 0 / false leaves the blob unchanged.
+ * Dates before 2026-11-14 are never filled.
+ */
+const PICK_CLV_FILL_ENV = 'OMEGA_V2_PICK_CLV_FILL';
+
+function pickClvFillEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[PICK_CLV_FILL_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+/**
  * American prices shorter than this are out of band for a forced straight.
  * -300 itself stays in band. -301, -600, and -1300 do not.
  * Default on. OMEGA_V2_FAV_CAP=off / 0 / false ranks every price together.
@@ -400,6 +416,8 @@ module.exports = {
   powerDevigEnabled,
   PICK_CLV_ENV,
   pickClvEnabled,
+  PICK_CLV_FILL_ENV,
+  pickClvFillEnabled,
   FAV_CAP_ENV,
   FAV_CAP_AMERICAN,
   favCapEnabled,

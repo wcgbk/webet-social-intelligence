@@ -461,6 +461,13 @@ async function main() {
   );
   if (trueClose.status !== 0) throw new Error('clv true close gate failed');
 
+  const pickClvFill = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-pick-clv-fill.js')],
+    { stdio: 'inherit' }
+  );
+  if (pickClvFill.status !== 0) throw new Error('pickClv fill gate failed');
+
   const fullBoardCloses = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-full-board-closes.js')],

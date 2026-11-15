@@ -213,6 +213,23 @@ function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
  */
 const boardStampState = new WeakMap();
 
+/**
+ * Label for the pre-publish quote check. The stored 10:00 board tags its
+ * quote function. Any other injected quote is a caller fixture. Drop counts
+ * stay on priceRecheck as well, with the same numbers.
+ */
+function priceCheckMeta(input, checked) {
+  const tag = input && input.recheck && input.recheck.priceCheck;
+  const stored = !!(tag && tag.type === 'stored-1000-consistency');
+  const ran = typeof (input && input.recheck) === 'function';
+  return {
+    type: stored ? 'stored-1000-consistency' : (ran ? 'caller-quote' : 'not-run'),
+    boardFetchedAt: stored ? (tag.boardFetchedAt || null) : null,
+    checked: checked.checked === true,
+    mismatches: checked.dropped.length,
+  };
+}
+
 async function buildCard(input) {
   const date = input && input.date;
   const history = Array.isArray(input && input.history) ? input.history : [];
@@ -299,15 +316,20 @@ async function buildCard(input) {
   const checked = await recheckPrices(bettable, input.recheck);
   for (const drop of checked.dropped) rejections.push(drop);
   const kept = checked.kept;
+  const priceCheck = priceCheckMeta(input, checked);
+  if (priceCheck.type === 'stored-1000-consistency') {
+    const at = priceCheck.boardFetchedAt == null ? '' : priceCheck.boardFetchedAt;
+    console.log(`[omega-v2] stored-1000 consistency check checked=${priceCheck.checked} mismatches=${priceCheck.mismatches} boardFetchedAt=${at}`);
+  }
   const forceTop3 = forceTop3Enabled();
   let straights;
   let parlayPoolLegs;
   let sizedParlay;
   if (forceTop3) {
-    // Recheck already re-annotated moved prices with the same bet
-    // probability. Selecting here applies the favorite cap, so a price
-    // that crossed below -300 does not stay on the card while an in-band
-    // replacement is still in the kept pool.
+    // The stored-board consistency check already re-annotated moved prices
+    // with the same bet probability. Selecting here applies the favorite
+    // cap, so a price that crossed below -300 does not stay on the card
+    // while an in-band replacement is still in the kept pool.
     straights = sizeForcedStraights(selectForcedTop3(kept, pregameOpts));
     sizedParlay = buildForcedParlay(straights);
     parlayPoolLegs = kept.filter((cand) => cand.parlayQualified && quotedLeg(cand));
@@ -394,6 +416,7 @@ async function buildCard(input) {
       }])),
     },
     priceRecheck: { checked: checked.checked, dropped: checked.dropped.length },
+    priceCheck,
     leakageChecked: true,
     straightUnits,
     parlayUnits,

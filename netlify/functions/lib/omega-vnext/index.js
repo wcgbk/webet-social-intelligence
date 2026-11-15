@@ -611,7 +611,9 @@ async function generateOmegaVnext(opts = {}) {
       biasSource,
       recheck: typeof opts.priceRecheck === 'function'
         ? opts.priceRecheck
-        : recheckFromCachedBoard(snap && snap.oddsBySport),
+        : recheckFromCachedBoard(snap && snap.oddsBySport, {
+          boardFetchedAt: snap && snap.fetchedAt ? snap.fetchedAt : null,
+        }),
       hardFails,
       pregameAsOfMs: gateOpts.asOfMs,
       stageCounts: {
@@ -844,6 +846,7 @@ async function generateOmegaVnext(opts = {}) {
       modelVersion: publishedVersion,
       calibration: built.calibration || null,
       priceRecheck: built.priceRecheck || null,
+      priceCheck: built.priceCheck || null,
       leakageChecked: built.leakageChecked === true,
       pass: picks.length === 0 && !(parlayLegs && parlayLegs.length),
       short: picks.length > 0 && picks.length < 3,
@@ -856,6 +859,7 @@ async function generateOmegaVnext(opts = {}) {
     picksData.sportCoverage = built.sportCoverage || null;
     picksData.v1WouldParlay = built.v1WouldParlay === true;
     picksData.meta.pipelineV2 = true;
+    if (built.priceCheck) picksData.meta.priceCheck = built.priceCheck;
     picksData.narration = narr.narration || { status: skipNarrate ? 'skipped' : 'none', vetoesIgnored: 0 };
   }
   if (shadow) {

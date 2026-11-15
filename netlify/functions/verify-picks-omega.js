@@ -581,9 +581,10 @@ async function runHardRockCheck(picksData) {
     return { summary, pickResults, parlayFindings, legDecisions };
   }
 
-  // Main-lines fetch: Hard Rock only when every pick already carries placeableBooks.
-  // Otherwise include US_BOOK_PRIORITY so majors coverage can be rechecked live.
-  // Plus one per-event fetch per F5 game.
+  // Main-lines quote: the stored 10:00 board when it loaded. The Odds API
+  // block below runs only when that board is missing. It is not the normal
+  // path, and it is not a fresh recheck of a board that already loaded.
+  // Plus one per-event fetch per F5 game when the stored board has no F5.
   const bySport = {};
   for (const p of (picksData.picks || [])) (bySport[p.sport] = bySport[p.sport] || []).push(p);
   for (const pl of (picksData.parlayLegs || [])) {
@@ -716,8 +717,9 @@ async function runHardRockCheck(picksData) {
   return { summary, pickResults, parlayFindings, legDecisions };
 }
 
-// ── Open→pick steam recheck (Omega v12.1 line-move) ──
-// Load latest morning snap; hard-fail / flag critical on adverse steam past verify thresholds.
+// ── Open→pick steam check against stored morning snaps (Omega v12.1 line-move) ──
+// Not a live price pull. Load the stored morning snaps; hard-fail / flag critical
+// on adverse steam past verify thresholds.
 // Empty card OK — never lean force-fill. Placeability soft-veto is separate from steam:
 // it drops a pick only when Hard Rock and US majors both fail, and it does not refill.
 async function runOmegaSteamRecheck(picksData, pickReports) {
@@ -1357,7 +1359,7 @@ exports.handler = async (event) => {
       console.log(`[verify-hardrock] Check failed (non-fatal, card unchanged): ${e.message}`);
     }
 
-    // ── Step 1.6: Open→pick steam recheck (hard-fail / replace; empty OK) ──
+    // ── Step 1.6: Open→pick steam check vs stored morning snaps (hard-fail / replace; empty OK) ──
     let steamCheck = { checked: 0, failed: 0, reasons: [] };
     try {
       steamCheck = await runOmegaSteamRecheck(picksData, pickReports);

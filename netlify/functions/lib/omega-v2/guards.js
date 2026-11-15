@@ -23,11 +23,14 @@ function parseAmerican(raw) {
 }
 
 /**
- * Pre-publish price recheck. `recheck` is injected by the caller.
- * This module never calls The Odds API or any other network price source.
- * A quote whose number differs from the edge line is dropped. Juice more
- * than 15 cents worse is dropped. A smaller DK/HR move is re-annotated
- * with the same bet probability as selection (sharp no-vig when
+ * Consistency check against a quote the caller already holds.
+ * Production passes recheckFromCachedBoard, which reads the stored 10:00
+ * board. This is not a live or fresh market pull. This module never calls
+ * The Odds API or any other network price source.
+ * Drop behaviour is unchanged. A quote whose number differs from the edge
+ * line is dropped (`dk-hr-line-mismatch`). Juice more than 15 cents worse
+ * is dropped (`price-recheck`). A smaller DK/HR move is re-annotated with
+ * the same bet probability as selection (sharp no-vig when
  * OMEGA_V2_MARKET_P is on, calibrated probability when it is off, then
  * the longshot penalty). The leg stays while that annotation still
  * qualifies. A price that moves shorter than -300 is not dropped here:
@@ -723,7 +726,7 @@ function lineAgrees(o, family, line) {
  * normalized name first (a trailing line token on the pick does not count).
  * The old first-word containment is used only when exactly one outcome
  * matches loosely and no other outcome shares that first word. Anything
- * else returns null so the recheck keeps the locked price.
+ * else returns null so the stored-board check keeps the locked price.
  */
 function matchOutcome(outcomes, leg) {
   const pick = normQuote(leg && (leg.pick || leg.side));
@@ -767,8 +770,8 @@ function matchOutcome(outcomes, leg) {
 const DK_HR_RECHECK = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
 /**
- * Quote books a recheck may use. The leg's own book only when it is
- * DraftKings or Hard Rock, then those books. Never Pinnacle, FanDuel,
+ * Quote books the stored-board check may use. The leg's own book only when
+ * it is DraftKings or Hard Rock, then those books. Never Pinnacle, FanDuel,
  * BetMGM, or an offshore book. A missing quote leaves the locked price.
  */
 function recheckBookOrder(book) {
@@ -782,15 +785,18 @@ function recheckBookOrder(book) {
 }
 
 /**
- * Pre-publish quote from an already-loaded odds board.
+ * Quote from the stored 10:00 odds board already loaded for this card.
  * No network. A missing event leaves the locked price alone.
+ * The returned function carries priceCheck so the card can label this
+ * as a stored-board consistency check, not a live pull.
  */
-function recheckFromCachedBoard(oddsBySport) {
+function recheckFromCachedBoard(oddsBySport, opts) {
   const events = [];
   for (const list of Object.values(oddsBySport || {})) {
     if (Array.isArray(list)) events.push(...list);
   }
-  return async function recheck(leg) {
+  const boardFetchedAt = opts && opts.boardFetchedAt ? opts.boardFetchedAt : null;
+  async function recheck(leg) {
     const matchup = normQuote(leg && leg.matchup);
     const ev = events.find((row) => {
       const home = normQuote(row.home_team || row.homeTeam);
@@ -818,7 +824,12 @@ function recheckFromCachedBoard(oddsBySport) {
       };
     }
     return null;
+  }
+  recheck.priceCheck = {
+    type: 'stored-1000-consistency',
+    boardFetchedAt,
   };
+  return recheck;
 }
 
 module.exports = {

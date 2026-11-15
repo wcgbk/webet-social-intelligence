@@ -202,6 +202,18 @@ test('book price rows: slots, raw books, post-commence skip', () => {
   assert.ok(!rows.some((r) => r.snapshot_ts === '2026-11-14T02:00:00Z'));
 });
 
+test('book_prices allowlist defaults to core books at 0300/1000, env-overridable', () => {
+  const rows = [
+    { book: 'hardrockbet', slot: '0300' }, { book: 'pinnacle', slot: '1000' },
+    { book: 'williamhill_us', slot: '1000' }, { book: 'unibet_se', slot: '0300' },
+    { book: 'draftkings', slot: 'other' },
+  ];
+  assert.deepEqual(mirror.filterBookPriceRows(rows, {}).map((r) => r.book), ['hardrockbet', 'pinnacle', 'williamhill_us']);
+  assert.equal(mirror.filterBookPriceRows(rows, { SUPABASE_BOOK_PRICES_BOOKS: 'all', SUPABASE_BOOK_PRICES_SLOTS: 'all' }).length, 5);
+  assert.deepEqual(mirror.filterBookPriceRows(rows, { SUPABASE_BOOK_PRICES_BOOKS: 'unibet_se' }).map((r) => r.book), ['unibet_se']);
+  assert.equal(mirror.DEFAULT_BOOK_PRICES_BOOKS.length, 14);
+});
+
 test('price loader prefers raw blobs and decodes %3A keys', async () => {
   const rawBody = { bookmakers: [{ key: 'pinnacle', markets: [{ key: 'h2h', outcomes: [{ name: 'Miami Heat', price: -140 }, { name: 'Cleveland Cavaliers', price: 120 }] }] }] };
   const blobs = memBlobs({

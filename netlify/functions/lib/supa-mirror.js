@@ -44,6 +44,31 @@ const PK = {
 };
 const NO_UPDATED_AT = new Set(['mirror_runs', 'book_prices']);
 
+// clv.book_prices allowlist (Supabase Free plan, 500 MB cap). Override with
+// SUPABASE_BOOK_PRICES_BOOKS / SUPABASE_BOOK_PRICES_SLOTS (comma list, or "all").
+const DEFAULT_BOOK_PRICES_BOOKS = [
+  'hardrockbet', 'hardrockbet_fl', 'hardrockbet_oh', 'pinnacle', 'draftkings', 'fanduel',
+  'betmgm', 'williamhill_us', 'espnbet', 'fanatics', 'betrivers', 'betonlineag', 'bovada', 'lowvig',
+];
+const DEFAULT_BOOK_PRICES_SLOTS = ['0300', '1000'];
+
+function envList(env, name, fallback) {
+  const source = env == null ? process.env : env;
+  const raw = source[name];
+  if (raw == null || String(raw).trim() === '') return new Set(fallback);
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'all' || text === '*') return null;
+  return new Set(text.split(',').map((x) => x.trim()).filter(Boolean));
+}
+
+/** Pure. Keeps allowlisted books at allowlisted slots. */
+function filterBookPriceRows(rows, env) {
+  const books = envList(env, 'SUPABASE_BOOK_PRICES_BOOKS', DEFAULT_BOOK_PRICES_BOOKS);
+  const slots = envList(env, 'SUPABASE_BOOK_PRICES_SLOTS', DEFAULT_BOOK_PRICES_SLOTS);
+  return (rows || []).filter((r) => (!books || books.has(String(r.book).toLowerCase()))
+    && (!slots || slots.has(String(r.slot).toLowerCase())));
+}
+
 function enabled(env) {
   const source = env == null ? process.env : env;
   const raw = source.SUPABASE_MIRROR_V2;
@@ -769,7 +794,7 @@ async function mirrorDay(date, deps = {}) {
         }
         const collected = await collectPriceInputs(d, blobs);
         for (const err of collected.errors) errors.push(`book_prices ${d}: ${err}`);
-        const priceRows = buildBookPriceRows(d, collected.events, collected);
+        const priceRows = filterBookPriceRows(buildBookPriceRows(d, collected.events, collected), env);
         await writeTable('book_prices', priceRows, env, fetchImpl, dry, counts, errors);
       } catch (e) {
         errors.push(redact(`odds ${d}: ${e.message}`, env));
@@ -951,6 +976,8 @@ module.exports = {
   buildPickClvRows,
   buildKpiRows,
   buildBookPriceRows,
+  filterBookPriceRows,
+  DEFAULT_BOOK_PRICES_BOOKS,
   cumulativePayload,
   parseEspn,
   fetchScores,

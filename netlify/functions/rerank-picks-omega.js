@@ -62,6 +62,7 @@ async function runRerank(opts = {}) {
     fetchImpl: opts.fetchImpl,
     runNews: opts.runNews,
     pool: opts.pool,
+    env: env,
   });
   if (!result.changed || result.lastKnownGood || dry) {
     return { ...result, wrote: false, date: dateISO, dryRun: dry };

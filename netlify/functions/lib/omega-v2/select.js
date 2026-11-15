@@ -422,6 +422,33 @@ function selectForcedTop3(annotated, opts) {
   return out;
 }
 
+/**
+ * Full v2 order for a stored qualified pool. Same split as selectForcedTop3:
+ * in-band by quarter-Kelly growth, then out-of-band fills. Does not slice
+ * to 3. A missing `qualified` stays in (the pool is already the qualified
+ * set). `qualified: false` stays out. The -300 cap is favCapEnabled.
+ */
+function orderForcedPool(annotated, opts) {
+  const asOfMs = pregameClockMs(opts);
+  const cap = favCapEnabled(opts && opts.env);
+  const ranked = (annotated || [])
+    .filter((c) => c && c.qualified !== false && !pastPregameCutoff(c.commenceTime, asOfMs))
+    .map((c) => {
+      const decimal = c.decimal || americanToDecimal(c.odds);
+      const pBet = c.pBet != null ? c.pBet : (c.calibration && c.calibration.pCal);
+      return { ...c, decimal, pBet, kellyGrowth: kellyGrowth(pBet, decimal) };
+    });
+  const inBand = [];
+  const outBand = [];
+  for (const c of ranked) {
+    if (cap && favoriteOutOfBand(c)) outBand.push(c);
+    else inBand.push(c);
+  }
+  inBand.sort(compareForcedGrowth);
+  if (cap) outBand.sort(compareFavFill);
+  return cap ? inBand.concat(outBand) : inBand;
+}
+
 function selectStraights(annotated, opts) {
   if (forceTop3From(opts)) return selectForcedTop3(annotated, opts);
   const asOfMs = pregameClockMs(opts);
@@ -455,6 +482,7 @@ module.exports = {
   annotateCandidate,
   selectStraights,
   selectForcedTop3,
+  orderForcedPool,
   PREGAME_GRACE_MS,
   pregameClockMs,
   pastPregameCutoff,

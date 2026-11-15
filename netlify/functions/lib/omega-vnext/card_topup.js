@@ -19,15 +19,17 @@ const {
   MAX_STRAIGHTS,
 } = config;
 const {
+  matchupKey,
+  toPickObject,
+  applyDailyUnitCap,
+} = require('./select');
+const {
   passesPublishFloor,
   passesLeanFill,
   eligibleForLeanPool,
   eligiblePairedFill,
   compareByEv,
-  matchupKey,
-  toPickObject,
-  applyDailyUnitCap,
-} = require('./select');
+} = require('./select_floor');
 const { parlayFromStraights } = require('./parlay');
 const { passesSheetMinimums } = require('./bet_check_gate');
 const { verifyPlaceabilityDecision } = require('./edge');

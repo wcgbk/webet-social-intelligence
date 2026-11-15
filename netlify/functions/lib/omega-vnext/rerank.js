@@ -3,29 +3,71 @@
 /**
  * 10:15 ET news re-rank.
  * Uses the prices already on the 10:00 card. Does not call the Odds API.
- * A postponed game or a main that falls under the 2% EV floor is replaced
- * from that priced pool. Rank is stake EV, then edge. ESPN failure, or a
- * clock after 10:30 ET, keeps the 10:00 card (last known good). A row
- * under the floor that is not ev-stale can fill as a lean.
+ *
+ * Runtime before the helper restore: the module loads (missing exports are
+ * `undefined`, not a load error). rerankCard then throws
+ * `passesPublishFloor is not a function` at the v1 floor loop, after news
+ * and before any write. The 10:15 handler does not catch it, so the 10:00
+ * card stays. admin-run-omega-chain logs the throw and continues.
+ * The helpers are restored in select_floor.js. select.js stays frozen
+ * (omega-v2 gate vs a592e0b).
+ *
+ * A v2 card (engine omega-v2 or selectionRule force-top3) never takes that
+ * v1 floor. OMEGA_V2_NEWS_RERANK defaults on. It drops a leg only for hard
+ * news (ESPN postponed/canceled) or an already-stored QA hard-fail, refills
+ * that slot from the card's own ranked pool in v2 order, and rebuilds the
+ * same-3 parlay with the v2 builder. No stored pool keeps the 10:00 card.
+ * =off rollback: a v2 card is returned unchanged and nothing is written.
+ * That matches the pre-fix outcome (throw before write) without applying
+ * v1 selection to the v2 card.
+ *
+ * A non-v2 card still uses the v1 floor path below. ESPN failure, or a
+ * clock after 10:30 ET, keeps the 10:00 card (last known good).
  */
 
 const { etParts } = require('../et-schedule');
 const { runLateNews } = require('./late_news');
 const {
   selectStraights,
-  passesPublishFloor,
-  passesLeanFill,
   toPickObject,
-  straightCardLabel,
   matchupKey,
 } = require('./select');
+const {
+  passesPublishFloor,
+  passesLeanFill,
+  straightCardLabel,
+  compareByEv,
+} = require('./select_floor');
 const { parlayFromStraights } = require('./parlay');
 const { finishShortCard } = require('./card_topup');
 const { parseEdgeFraction, writeSummaryStakeDisplay } = require('./odds_math');
 const { recordRankedList, top10Rows } = require('./selection_pass');
-const { compareByEv } = require('./select');
 const { GATES } = require('./config');
 const { CONTEXT_INPUTS } = require('./timeline');
+const { defaultOnFlag } = require('../default_on_flag');
+const { summaryFrom } = require('./assemble');
+const { gameKey, orderForcedPool } = require('../omega-v2/select');
+const { sizeForcedStraights } = require('../omega-v2/size');
+const { buildForcedParlay } = require('../omega-v2/parlay');
+const { toPick, toParlay } = require('../omega-v2/guards');
+
+/** Default on. OMEGA_V2_NEWS_RERANK=off / 0 / false keeps the 10:00 v2 card. */
+function newsRerankEnabled(env) {
+  return defaultOnFlag('OMEGA_V2_NEWS_RERANK', env);
+}
+
+function isV2Card(card) {
+  if (!card || typeof card !== 'object') return false;
+  if (card.engine === 'omega-v2') return true;
+  if (card.selectionRule === 'force-top3') return true;
+  const pipe = card.pipelineV2;
+  if (pipe && typeof pipe === 'object') {
+    if (pipe.selectionRule === 'force-top3') return true;
+    if (pipe.parlaySource === 'top3-straights') return true;
+  }
+  const model = String(card.model || card.modelVersion || '');
+  return model.indexOf('omega-v2') !== -1;
+}
 
 const RERANK_WITHIN_MIN = 20 * 60;
 const CUTOFF_MIN = 10 * 60 + 30;
@@ -176,6 +218,323 @@ function topUpFromReserve(working, news, pool) {
   return finished;
 }
 
+function hardStatus(action) {
+  if (!action || action.action !== 'drop') return false;
+  const code = String(action.code || '').toLowerCase();
+  if (code === 'postponed' || code === 'canceled' || code === 'cancelled') return true;
+  return /postpon|cancel/i.test(String(action.reason || ''));
+}
+
+function namesMatch(a, b) {
+  const left = String(a || '').trim().toLowerCase();
+  const right = String(b || '').trim().toLowerCase();
+  return !!left && left === right;
+}
+
+function qaMatchesPick(pick, fail) {
+  if (!fail || fail.hardFail === false) return false;
+  const side = fail.side || fail.pick;
+  const matchup = fail.matchup;
+  if (!side && !matchup) return false;
+  if (side && !namesMatch(side, pick.pick || pick.side)) return false;
+  if (matchup && !namesMatch(matchup, pick.matchup)) return false;
+  return true;
+}
+
+/** Indexes of legs hard news or a stored QA hard-fail says to drop. */
+function hardDropIndexes(card, news) {
+  const picks = (card && card.picks) || [];
+  const drop = new Set();
+  for (const action of (news && news.actions) || []) {
+    if (!hardStatus(action)) continue;
+    const name = action.pick || action.side;
+    const matchup = action.matchup;
+    picks.forEach((pick, i) => {
+      if (name && !namesMatch(name, pick.pick || pick.side)) return;
+      if (matchup && !namesMatch(matchup, pick.matchup)) return;
+      if (!name && !matchup) return;
+      drop.add(i);
+    });
+  }
+  const fails = [].concat(card && card.qaHardFails || [], card && card.hardFails || []);
+  picks.forEach((pick, i) => {
+    if (fails.some((fail) => qaMatchesPick(pick, fail))) drop.add(i);
+  });
+  return drop;
+}
+
+function storedRankedPool(card, extra) {
+  const lists = [
+    extra,
+    card && card.rankedPool,
+    card && card.v2RankedPool,
+    card && card.pipelineV2 && card.pipelineV2.rankedPool,
+    card && card.selection && card.selection.rankedPool,
+  ];
+  for (const list of lists) {
+    if (Array.isArray(list) && list.length) return list;
+  }
+  return null;
+}
+
+function gameOf(row) {
+  if (!row) return '';
+  if (row.gameKey != null && row.gameKey !== '') return String(row.gameKey);
+  return gameKey(row.matchup || `${row.awayTeam || ''} @ ${row.homeTeam || ''}`);
+}
+
+function unitsNum(row) {
+  const n = Number(row && row.unitsNum != null ? row.unitsNum : String(row && row.units || '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fractionOf(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.abs(v) > 1 ? v / 100 : v;
+  const n = parseFloat(String(v).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  return /%/.test(String(v)) || Math.abs(n) > 1 ? n / 100 : n;
+}
+
+function americanOf(v) {
+  if (typeof v === 'number' && Number.isFinite(v) && v !== 0) return v;
+  const n = Number(String(v == null ? '' : v).trim().replace(/[−–]/g, '-').replace(/^\+/, ''));
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+/** Published straight → v2 leg for buildForcedParlay. Does not resize the straight. */
+function publishedPickToLeg(pick) {
+  const odds = americanOf(pick.odds);
+  const pBet = Number(pick.pBet);
+  const fromCover = fractionOf(pick.coverProb != null ? pick.coverProb : pick.winProbability);
+  const pCal = Number(pick.pCal != null ? pick.pCal : pick.pModelCal);
+  const p = Number.isFinite(pBet) ? pBet : (Number.isFinite(fromCover) ? fromCover : (Number.isFinite(pCal) ? pCal : null));
+  const edge = fractionOf(pick.edgePct != null ? pick.edgePct : pick.edge);
+  const ev = Number(pick.evRaw);
+  const calP = Number.isFinite(pCal) ? pCal : p;
+  return {
+    sport: pick.sport,
+    matchup: pick.matchup,
+    pick: pick.pick || pick.side,
+    market: pick.market || pick.betType,
+    marketFamily: pick.betType || pick.market,
+    odds: odds != null ? odds : pick.odds,
+    line: pick.line != null ? pick.line : null,
+    book: pick.book || null,
+    homeTeam: pick.homeTeam || null,
+    awayTeam: pick.awayTeam || null,
+    commenceTime: pick.commenceTime || '',
+    pBet: p,
+    edge: edge != null ? edge : 0,
+    ev: Number.isFinite(ev) ? ev : 0,
+    edgeNovig: pick.edgeNovig != null ? pick.edgeNovig : null,
+    forced: true,
+    units: unitsNum(pick),
+    stakeUsd: pick.stakeUsd,
+    coreReasoning: pick.coreReasoning || '',
+    gameKey: gameOf(pick),
+    calibration: {
+      pCal: Number.isFinite(calP) ? calP : 0.5,
+      pMkt: Number.isFinite(Number(pick.pMkt)) ? Number(pick.pMkt) : (Number.isFinite(calP) ? calP : 0.5),
+      pModel: Number.isFinite(Number(pick.pModel)) ? Number(pick.pModel) : (Number.isFinite(calP) ? calP : 0.5),
+      method: pick.calibrationMethod || 'board',
+    },
+  };
+}
+
+function withCalibration(row) {
+  if (row && row.calibration && row.calibration.pCal != null) return row;
+  const p = Number(row && row.pBet);
+  const fallback = Number.isFinite(p) ? p : 0.5;
+  return {
+    ...(row || {}),
+    calibration: {
+      pCal: fallback,
+      pMkt: row && row.pMkt != null ? row.pMkt : fallback,
+      pModel: row && row.pModel != null ? row.pModel : fallback,
+      method: 'board',
+    },
+  };
+}
+
+function materializeReplacement(row) {
+  const ready = withCalibration({ ...row, forced: true });
+  let sized;
+  try {
+    sized = sizeForcedStraights([ready]);
+  } catch (e) {
+    return null;
+  }
+  const one = sized && sized[0];
+  if (!one || one.skipped) return null;
+  if (!one.calibration) one.calibration = ready.calibration;
+  try {
+    return { pick: toPick(one), leg: one };
+  } catch (e) {
+    return null;
+  }
+}
+
+function refreshStakeSummary(card) {
+  if (!card.summary || typeof card.summary !== 'object') card.summary = {};
+  const next = summaryFrom(card.picks, card.parlayLegs, {});
+  card.summary.totalPicks = next.totalPicks;
+  card.summary.totalStraightBets = next.totalStraightBets;
+  card.summary.totalUnits = next.totalUnits;
+  card.summary.sportsCovered = next.sportsCovered;
+  const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
+  const straightU = (card.picks || []).reduce((s, p) => s + parseU(p.units), 0);
+  const parlayU = (card.parlayLegs || []).reduce((s, pl) => s + parseU(pl.units), 0);
+  card.straightUnits = +straightU.toFixed(2);
+  card.parlayUnits = +parlayU.toFixed(2);
+  card.totalUnits = +(straightU + parlayU).toFixed(2);
+}
+
+/**
+ * v2 card: hard news only. Surviving straights keep price, units, and grade.
+ * The open slot is the next row in v2 order on a game that is still on.
+ * The parlay is rebuilt from those straights by the v2 builder.
+ */
+async function rerankV2Card(original, opts, now) {
+  const runNews = opts.runNews || runLateNews;
+  const scratch = JSON.parse(JSON.stringify(original));
+  let news;
+  try {
+    news = await runNews({
+      picksData: scratch,
+      now,
+      fetchImpl: guardFetch(opts.fetchImpl),
+      withinMin: RERANK_WITHIN_MIN,
+      dateISO: original.date || null,
+    });
+  } catch (e) {
+    return keepOriginal(original, 'news-failed', {
+      error: e && e.message ? e.message : 'news failed',
+    });
+  }
+  if (newsFailed(news)) {
+    return keepOriginal(original, 'news-failed', {
+      errors: (news && news.errors) || [],
+    });
+  }
+  const drops = hardDropIndexes(original, news);
+  if (!drops.size) {
+    return {
+      card: original,
+      changed: false,
+      lastKnownGood: false,
+      reason: 'unchanged',
+      oddsApi: false,
+      dropped: 0,
+    };
+  }
+  const pool = storedRankedPool(original, opts.pool);
+  if (!pool) {
+    console.warn('[omega-v2] news rerank kept 10:00 card: no stored ranked pool');
+    return keepOriginal(original, 'no-v2-pool', { dropped: drops.size });
+  }
+  const blocked = new Set();
+  const used = new Set();
+  for (let i = 0; i < original.picks.length; i += 1) {
+    const g = gameOf(original.picks[i]);
+    if (!g) continue;
+    if (drops.has(i)) blocked.add(g);
+    else used.add(g);
+  }
+  let ordered;
+  try {
+    ordered = orderForcedPool(pool, { pregameAsOfMs: now.getTime(), env: opts.env });
+  } catch (e) {
+    console.warn(`[omega-v2] news rerank kept 10:00 card: pool order failed (${e && e.message ? e.message : 'error'})`);
+    return keepOriginal(original, 'no-v2-pool', { dropped: drops.size });
+  }
+  let cursor = 0;
+  const takeNext = () => {
+    while (cursor < ordered.length) {
+      const row = ordered[cursor];
+      cursor += 1;
+      const g = gameOf(row);
+      if (!g || blocked.has(g) || used.has(g)) continue;
+      const built = materializeReplacement(row);
+      if (!built) continue;
+      used.add(g);
+      return built;
+    }
+    return null;
+  };
+  const nextPicks = [];
+  const parlaySources = [];
+  const refilled = [];
+  for (let i = 0; i < original.picks.length; i += 1) {
+    if (!drops.has(i)) {
+      const kept = JSON.parse(JSON.stringify(original.picks[i]));
+      nextPicks.push(kept);
+      parlaySources.push(publishedPickToLeg(kept));
+      continue;
+    }
+    const built = takeNext();
+    if (!built) {
+      console.warn('[omega-v2] news rerank kept 10:00 card: ranked pool could not refill');
+      return keepOriginal(original, 'pool-short', { dropped: drops.size });
+    }
+    nextPicks.push(built.pick);
+    parlaySources.push(built.leg);
+    refilled.push(built.pick.pick || built.pick.side);
+  }
+  let ticket;
+  try {
+    ticket = buildForcedParlay(parlaySources);
+  } catch (e) {
+    console.warn(`[omega-v2] news rerank kept 10:00 card: parlay builder failed (${e && e.message ? e.message : 'error'})`);
+    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
+  }
+  if (!ticket || !ticket.publish || (ticket.legs || []).length !== nextPicks.length) {
+    console.warn('[omega-v2] news rerank kept 10:00 card: v2 parlay did not publish the same straights');
+    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
+  }
+  let parlayLegs;
+  try {
+    parlayLegs = toParlay(ticket, parlaySources.length);
+  } catch (e) {
+    console.warn(`[omega-v2] news rerank kept 10:00 card: parlay format failed (${e && e.message ? e.message : 'error'})`);
+    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
+  }
+  if (!parlayLegs.length || (parlayLegs[0].legs || []).length !== nextPicks.length) {
+    console.warn('[omega-v2] news rerank kept 10:00 card: parlay leg count drifted');
+    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
+  }
+  const next = JSON.parse(JSON.stringify(original));
+  next.picks = nextPicks;
+  next.parlayLegs = parlayLegs;
+  next.parlaySource = 'top3-straights';
+  next.selection = next.selection && typeof next.selection === 'object' ? next.selection : {};
+  next.selection.window = '10:00-10:15';
+  next.selection.rerankWindow = '10:15-10:30';
+  next.selection.rerankedAt = now.toISOString();
+  next.selection.rerankReason = 'v2-hard-news';
+  next.selection.rankedBy = 'v2-growth';
+  next.selection.onePerGame = true;
+  next.selection.oddsApi = false;
+  next.selection.v2NewsRerank = true;
+  next.newsRerank = {
+    type: 'v2-hard-news',
+    dropped: drops.size,
+    refilled,
+    oddsApi: false,
+  };
+  refreshStakeSummary(next);
+  return {
+    card: next,
+    changed: true,
+    lastKnownGood: false,
+    reason: 'v2-hard-news',
+    oddsApi: false,
+    dropped: drops.size,
+    picks: nextPicks.length,
+    parlayLegs: (parlayLegs[0].legs || []).length,
+  };
+}
+
 function keepOriginal(original, reason, extra) {
   return {
     card: original,
@@ -203,6 +562,12 @@ async function rerankCard(opts = {}) {
   const now = opts.now instanceof Date ? opts.now : new Date(opts.now || Date.now());
   if (pastRerankCutoff(now)) {
     return keepOriginal(original, 'after-1030');
+  }
+  if (isV2Card(original)) {
+    if (!newsRerankEnabled(opts.env)) {
+      return keepOriginal(original, 'v2-rerank-off');
+    }
+    return rerankV2Card(original, opts, now);
   }
   const working = JSON.parse(JSON.stringify(original));
   const runNews = opts.runNews || runLateNews;
@@ -397,4 +762,6 @@ module.exports = {
   pastRerankCutoff,
   rerankCard,
   newsFailed,
+  isV2Card,
+  newsRerankEnabled,
 };

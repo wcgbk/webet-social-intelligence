@@ -14,7 +14,8 @@ const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { formatAmerican, etCalendarDate, parseEdgeFraction, americanToDecimal } = require('./odds_math');
-const { toPickObject, matchupKey, compareByEv } = require('./select');
+const { toPickObject, matchupKey } = require('./select');
+const { compareByEv } = require('./select_floor');
 
 const DK_BOOK = 'draftkings';
 const HR_BOOK = 'hardrockbet';

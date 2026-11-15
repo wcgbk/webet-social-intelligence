@@ -45,7 +45,7 @@ const { bindEspnGameByTeamAndTime } = require('./sports/_common');
 const { resolveTeamId } = require('./sports/team_identity');
 const { lookupQb, backupQbDelta } = require('./sports/game_day');
 const { attachEv } = require('./edge');
-const { passesPublishFloor, passesLeanFill } = require('./select');
+const { passesPublishFloor, passesLeanFill } = require('./select_floor');
 const { resolveFetch } = require('./audit_log');
 
 const MAX_CALLS = 30;
@@ -162,13 +162,16 @@ function statusAction(live) {
     live.gameState,
   ].join(' ');
   const postponedWord = /postponed/i.test(detail);
+  const canceledWord = /cancel(?:l)?ed/i.test(detail);
   const suspendedWord = /suspended/i.test(detail);
   if (code === 'DI') {
     if (postponedWord) return 'postponed';
+    if (canceledWord) return 'canceled';
     if (suspendedWord) return 'suspended';
     return null;
   }
-  if (code === 'D' || code === 'DR' || postponedWord) return 'postponed';
+  if (code === 'PPD' || code === 'POSTPONED' || code === 'D' || code === 'DR' || postponedWord) return 'postponed';
+  if (code === 'CNCL' || code === 'CANCELED' || code === 'CANCELLED' || canceledWord) return 'canceled';
   if (code === 'U' || code === 'US' || code === 'SU' || suspendedWord) return 'suspended';
   return null;
 }
@@ -357,6 +360,9 @@ function decideLateNews(pick, live) {
   const posted = statusAction(live);
   if (posted === 'postponed') {
     return dropDecision('postponed', 'Game postponed before first pitch');
+  }
+  if (posted === 'canceled') {
+    return dropDecision('canceled', 'Game canceled');
   }
   if (posted === 'suspended') {
     return dropDecision('suspended', 'Game suspended before a result');
@@ -1044,6 +1050,9 @@ function parseScoreboardEvents(data) {
     const competitors = comp.competitors || [];
     const home = competitors.find((row) => row.homeAway === 'home') || {};
     const away = competitors.find((row) => row.homeAway === 'away') || {};
+    const st = event.status || comp.status || {};
+    const type = st.type || {};
+    const detail = type.description || type.name || type.state || st.detail || '';
     return {
       id: event.id,
       start: event.date || comp.date,
@@ -1051,6 +1060,9 @@ function parseScoreboardEvents(data) {
       awayTeam: away.team && (away.team.displayName || away.team.name),
       homeId: home.id || (home.team && home.team.id) || null,
       awayId: away.id || (away.team && away.team.id) || null,
+      detailedState: detail,
+      status: detail,
+      statusCode: type.name || type.state || '',
     };
   }).filter((row) => row.homeTeam || row.awayTeam);
 }
@@ -1094,6 +1106,7 @@ async function loadLiveContext({ picks, dateISO, fetchImpl, maxCalls = MAX_CALLS
   const dates = datesFor(picks, dateISO);
   const mlbGames = [];
   const nhlGames = [];
+  const footballEvents = { NFL: [], NCAAF: [] };
   const qb = {
     NFL: { map: {}, loaded: false },
     NCAAF: { map: {}, loaded: false },
@@ -1125,6 +1138,12 @@ async function loadLiveContext({ picks, dateISO, fetchImpl, maxCalls = MAX_CALLS
     if (got && got.ok) {
       qb.NFL = { map: parseFootballQbMap(got.data, { cardDate: dateISO }), loaded: true };
     }
+    const board = await budgetedJson(
+      `${ESPN_FB}/nfl/scoreboard?dates=${ymdCompact(dateISO || dates[0])}&limit=100`,
+      budget,
+      fetchImpl,
+    );
+    if (board && board.ok) footballEvents.NFL = parseScoreboardEvents(board.data);
   }
   const ncaafMap = {};
   let ncaafLoaded = false;
@@ -1154,6 +1173,7 @@ async function loadLiveContext({ picks, dateISO, fetchImpl, maxCalls = MAX_CALLS
       fetchImpl,
     );
     if (board && board.ok) events = parseScoreboardEvents(board.data);
+    footballEvents.NCAAF = events.slice();
     const unmatched = (bySport.NCAAF || []).filter((pick) => !matchGame(pick, events));
     if (unmatched.length && !budget.exhausted) {
       const fcs = await budgetedJson(
@@ -1162,6 +1182,7 @@ async function loadLiveContext({ picks, dateISO, fetchImpl, maxCalls = MAX_CALLS
         fetchImpl,
       );
       if (fcs && fcs.ok) events = events.concat(parseScoreboardEvents(fcs.data));
+      footballEvents.NCAAF = events.slice();
     }
     const summaries = [];
     const seenEvents = new Set();
@@ -1236,8 +1257,15 @@ async function loadLiveContext({ picks, dateISO, fetchImpl, maxCalls = MAX_CALLS
       };
     }
     if (sport === 'NFL' || sport === 'NCAAF') {
+      const event = matchGame(pick, footballEvents[sport] || []);
+      const status = event ? {
+        detailedState: event.detailedState || '',
+        status: event.status || event.detailedState || '',
+        statusCode: event.statusCode || '',
+        matched: true,
+      } : { matched: false };
       const pack = qb[sport];
-      if (!pack || pack.loaded !== true) return { qbLoaded: false, matched: false };
+      if (!pack || pack.loaded !== true) return { qbLoaded: false, ...status };
       const seen = new Set();
       const side = (team) => {
         if (!pack.map || !Object.keys(pack.map).length) return { qbStatus: null };
@@ -1248,6 +1276,9 @@ async function loadLiveContext({ picks, dateISO, fetchImpl, maxCalls = MAX_CALLS
         matched: true,
         homeQb: side(pick.homeTeam),
         awayQb: side(pick.awayTeam),
+        detailedState: status.detailedState || '',
+        status: status.status || '',
+        statusCode: status.statusCode || '',
       };
     }
     return { matched: false };

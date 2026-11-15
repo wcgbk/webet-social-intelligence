@@ -226,9 +226,23 @@ function params(url) {
   assert.strictEqual(FB.fullBoardEnabled({ OMEGA_FULL_BOARD_CLOSES: '0' }), false);
   assert.strictEqual(FB.fullBoardEnabled({ OMEGA_FULL_BOARD_CLOSES: 'false' }), false);
   assert.strictEqual(cap.DAILY_CAP, 100);
+  assert.strictEqual(typeof cap.dailyCapFor, 'function');
   const capSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/capture-pick-closes.js'), 'utf8');
   assert.ok(!capSrc.includes('CLOSE_CAPTURE_DAILY_CAP'));
   assert.ok(capSrc.includes('const DAILY_CAP = 100'));
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', {}), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-21', undefined), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-13', {}), 100);
+  assert.strictEqual(cap.dailyCapFor('2026-11-15', { OMEGA_CLOSE_CAP_SAT: '150' }), 100);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '100' }), 100);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '' }), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '   ' }), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: 'nope' }), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '151' }), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '999' }), 150);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '0' }), 0);
+  assert.strictEqual(cap.dailyCapFor('2026-11-14', { OMEGA_CLOSE_CAP_SAT: '-4' }), 0);
+  assert.strictEqual(cap.dailyCapFor(S.etYmd(new Date('2026-11-22T03:30:00Z')), {}), 150);
 
   const edgeNow = NOW;
   const grouped = FB.dueBoardEvents([
@@ -324,6 +338,7 @@ function params(url) {
   const credits = first.blobs.dump()['clv-close-capture:credits/2026-11-14'];
   assert.strictEqual(credits.used, 12);
   assert.strictEqual(credits.usedActual, 12);
+  assert.strictEqual(credits.cap, 150);
   assert.strictEqual(credits.calls.length, 4);
   for (const call of credits.calls) {
     assert.strictEqual(call.path, 'full-board');
@@ -476,7 +491,7 @@ function params(url) {
   const tight = await run({
     seed: {
       'edge-picks-omega:picks-2026-11-14': tightCard,
-      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 98, usedActual: 98, calls: [] },
+      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 148, usedActual: 148, calls: [] },
     },
     boards: tightBoards,
     headersFor: () => '1',
@@ -488,24 +503,26 @@ function params(url) {
   assert.ok(tight.body.fullBoard.budgetBlocked >= 1);
   assert.strictEqual(tight.body.fullBoard.calls, 0);
   const tightCredits = tight.blobs.dump()['clv-close-capture:credits/2026-11-14'];
-  assert.strictEqual(tightCredits.used, 100);
-  assert.strictEqual(tightCredits.usedActual, 100);
+  assert.strictEqual(tightCredits.used, 150);
+  assert.strictEqual(tightCredits.usedActual, 150);
+  assert.strictEqual(tightCredits.cap, 150);
   assert.ok(tightCredits.calls.every((call) => call.path === 'card-leg' && call.estCost === 1 && call.actualCost === 1));
 
   const capped = await run({
     seed: {
       'edge-picks-omega:picks-2026-11-14': tightCard,
-      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 100, calls: [] },
+      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 150, calls: [] },
     },
     boards: tightBoards,
   });
   assert.strictEqual(oddsCalls(capped.net).length, 0);
   assert.ok(capped.body.results.every((row) => row.skipped === 'cap'));
-  assert.strictEqual(capped.body.creditsToday, 100);
+  assert.strictEqual(capped.body.creditsToday, 150);
+  assert.strictEqual(capped.blobs.dump()['clv-close-capture:credits/2026-11-14'].cap, 150);
 
   const actualHeavy = await run({
     boards: tightBoards,
-    headersFor: () => '98',
+    headersFor: () => '148',
     seed: { 'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 0, usedActual: 0, calls: [] } },
   });
   assert.strictEqual(oddsCalls(actualHeavy.net).length, 1);
@@ -513,8 +530,143 @@ function params(url) {
   assert.strictEqual(actualHeavy.body.fullBoard.budgetBlocked, 1);
   const heavyCredits = actualHeavy.blobs.dump()['clv-close-capture:credits/2026-11-14'];
   assert.strictEqual(heavyCredits.used, 3);
-  assert.strictEqual(heavyCredits.usedActual, 98);
+  assert.strictEqual(heavyCredits.usedActual, 148);
+  assert.strictEqual(heavyCredits.cap, 150);
   assert.ok(FB.spentCredits(heavyCredits) + FB.COST > cap.DAILY_CAP);
+  assert.ok(FB.spentCredits(heavyCredits) + FB.COST > heavyCredits.cap);
+
+  const fridayNow = new Date('2026-11-13T23:55:00Z');
+  const fridayCard = {
+    picks: [
+      {
+        sport: 'NBA', matchup: 'Toronto Maple Leafs @ Boston Bruins', pick: 'Boston Bruins -3.5',
+        betType: 'Spread', commenceTime: '2026-11-14T00:00:00Z',
+      },
+      {
+        sport: 'NFL', matchup: 'Away @ Home Not On Board', pick: 'Over 44.5',
+        betType: 'Total', commenceTime: '2026-11-14T00:01:00Z',
+      },
+    ],
+  };
+  const fridayBoards = {
+    'by-date/2026-11-13': boardDoc([
+      { sport: 'NBA', eventId: 'nba-1', homeTeam: 'Boston Bruins', awayTeam: 'Toronto Maple Leafs', commenceTime: '2026-11-14T00:00:00Z' },
+      { sport: 'NHL', eventId: 'nhl-1', homeTeam: 'Rangers', awayTeam: 'Devils', commenceTime: '2026-11-14T00:01:00Z' },
+    ]),
+    'by-date/2026-11-12': boardDoc([]),
+  };
+  const weekday = await run({
+    now: fridayNow,
+    seed: {
+      'edge-picks-omega:picks-2026-11-13': fridayCard,
+      'clv-close-capture:credits/2026-11-13': { date: '2026-11-13', used: 98, usedActual: 98, calls: [] },
+    },
+    boards: fridayBoards,
+    headersFor: () => '1',
+  });
+  const weekdayCalls = oddsCalls(weekday.net);
+  assert.strictEqual(weekdayCalls.length, 2);
+  assert.ok(weekdayCalls.every((u) => params(u).get('bookmakers') === 'pinnacle,draftkings'));
+  assert.ok(!weekdayCalls.some((u) => u.includes('icehockey_nhl')));
+  assert.strictEqual(weekday.body.fullBoard.calls, 0);
+  assert.ok(weekday.body.fullBoard.budgetBlocked >= 1);
+  const weekdayCredits = weekday.blobs.dump()['clv-close-capture:credits/2026-11-13'];
+  assert.strictEqual(weekdayCredits.used, 100);
+  assert.strictEqual(weekdayCredits.usedActual, 100);
+  assert.strictEqual(weekdayCredits.cap, 100);
+  const weekdayCapped = await run({
+    now: fridayNow,
+    env: { OMEGA_CLOSE_CAP_SAT: '150' },
+    seed: {
+      'edge-picks-omega:picks-2026-11-13': fridayCard,
+      'clv-close-capture:credits/2026-11-13': { date: '2026-11-13', used: 100, calls: [] },
+    },
+    boards: fridayBoards,
+  });
+  assert.strictEqual(oddsCalls(weekdayCapped.net).length, 0);
+  assert.ok(weekdayCapped.body.results.every((row) => row.skipped === 'cap'));
+  assert.strictEqual(weekdayCapped.body.creditsToday, 100);
+  assert.strictEqual(weekdayCapped.blobs.dump()['clv-close-capture:credits/2026-11-13'].cap, 100);
+
+  const rollback = await run({
+    env: { OMEGA_CLOSE_CAP_SAT: '100' },
+    seed: {
+      'edge-picks-omega:picks-2026-11-14': tightCard,
+      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 98, usedActual: 98, calls: [] },
+    },
+    boards: tightBoards,
+    headersFor: () => '1',
+  });
+  const rollbackCalls = oddsCalls(rollback.net);
+  assert.strictEqual(rollbackCalls.length, 2);
+  assert.ok(rollbackCalls.every((u) => params(u).get('bookmakers') === 'pinnacle,draftkings'));
+  assert.strictEqual(rollback.body.fullBoard.calls, 0);
+  assert.ok(rollback.body.fullBoard.budgetBlocked >= 1);
+  const rollbackCredits = rollback.blobs.dump()['clv-close-capture:credits/2026-11-14'];
+  assert.strictEqual(rollbackCredits.used, 100);
+  assert.strictEqual(rollbackCredits.usedActual, 100);
+  assert.strictEqual(rollbackCredits.cap, 100);
+  const rollbackStop = await run({
+    env: { OMEGA_CLOSE_CAP_SAT: '100' },
+    seed: {
+      'edge-picks-omega:picks-2026-11-14': tightCard,
+      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 100, calls: [] },
+    },
+    boards: tightBoards,
+  });
+  assert.strictEqual(oddsCalls(rollbackStop.net).length, 0);
+  assert.ok(rollbackStop.body.results.every((row) => row.skipped === 'cap'));
+  assert.strictEqual(rollbackStop.body.creditsToday, 100);
+
+  const clamped = await run({
+    env: { OMEGA_CLOSE_CAP_SAT: '999' },
+    seed: {
+      'edge-picks-omega:picks-2026-11-14': tightCard,
+      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 148, usedActual: 148, calls: [] },
+    },
+    boards: tightBoards,
+    headersFor: () => '1',
+  });
+  assert.strictEqual(oddsCalls(clamped.net).length, 2);
+  assert.strictEqual(clamped.body.fullBoard.calls, 0);
+  const clampedCredits = clamped.blobs.dump()['clv-close-capture:credits/2026-11-14'];
+  assert.strictEqual(clampedCredits.used, 150);
+  assert.strictEqual(clampedCredits.cap, 150);
+  const clampedStop = await run({
+    env: { OMEGA_CLOSE_CAP_SAT: '999' },
+    seed: {
+      'edge-picks-omega:picks-2026-11-14': tightCard,
+      'clv-close-capture:credits/2026-11-14': { date: '2026-11-14', used: 150, calls: [] },
+    },
+    boards: tightBoards,
+  });
+  assert.strictEqual(oddsCalls(clampedStop.net).length, 0);
+  assert.ok(clampedStop.body.results.every((row) => row.skipped === 'cap'));
+  assert.strictEqual(clampedStop.blobs.dump()['clv-close-capture:credits/2026-11-14'].cap, 150);
+
+  const boundaryNow = new Date('2026-11-22T03:30:00Z');
+  assert.strictEqual(S.etYmd(boundaryNow), '2026-11-21');
+  const boundary = await run({
+    now: boundaryNow,
+    seed: {
+      'clv-close-capture:credits/2026-11-21': { date: '2026-11-21', used: 100, usedActual: 100, calls: [] },
+    },
+    boards: {
+      'by-date/2026-11-21': boardDoc([
+        { sport: 'NBA', eventId: 'nba-b', homeTeam: 'Boston Bruins', awayTeam: 'Toronto Maple Leafs', commenceTime: '2026-11-22T03:35:00Z' },
+      ]),
+      'by-date/2026-11-20': boardDoc([]),
+    },
+    bodies: {
+      basketball_nba: [oddsEvent('nba-b', '2026-11-22T03:35:00Z', 'Boston Bruins', 'Toronto Maple Leafs')],
+    },
+  });
+  assert.strictEqual(oddsCalls(boundary.net).length, 1);
+  assert.strictEqual(boundary.body.fullBoard.calls, 1);
+  assert.strictEqual(boundary.body.fullBoard.budgetBlocked, 0);
+  const boundaryCredits = boundary.blobs.dump()['clv-close-capture:credits/2026-11-21'];
+  assert.strictEqual(boundaryCredits.cap, 150);
+  assert.strictEqual(boundaryCredits.used, 103);
 
   const offBodies = oddsBySport();
   const off = await run({

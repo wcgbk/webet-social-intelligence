@@ -7,8 +7,10 @@
  * and also saves Pinnacle + DraftKings + Hard Rock h2h/spreads/totals for every
  * NFL, NCAAF, NBA, NCAAM, and NHL game on the stored odds-master slate in that
  * same window (one call per sport, worst-case 3 credits). off / 0 / false restores
- * the card-leg-only calls. Daily cap 100 credits, tracked in blob
- * clv-close-capture/credits/{ET date}. Done markers prevent repeat pulls.
+ * the card-leg-only calls. Daily cap is 100 credits, or 150 on the America/New_York
+ * Saturday of the credits day (OMEGA_CLOSE_CAP_SAT, default 150, clamp 0..150,
+ * set 100 to roll Saturday back). Tracked in blob clv-close-capture/credits/{ET date}.
+ * Done markers prevent repeat pulls.
  * Does not touch picks, grading, pricing, staking, or the card.
  */
 const S = require('./lib/clv-supabase');
@@ -34,6 +36,26 @@ function raceTimeout(promise, ms) {
 const REQUIRED_ENV = ['ODDS_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'NETLIFY_AUTH_TOKEN'];
 const STORE = 'clv-close-capture';
 const DAILY_CAP = 100;
+const SATURDAY_CAP = 150;
+
+/**
+ * Credits-day cap. `etDateISO` is the America/New_York YYYY-MM-DD already used
+ * for credits/{today}. Weekday comes from that date at 12:00 UTC, not server local time.
+ * Saturday reads OMEGA_CLOSE_CAP_SAT (default 150). Unset, blank, or non-integer → 150.
+ * Any Saturday value is clamped to 0..150. Every other day is 100.
+ */
+function dailyCapFor(etDateISO, env) {
+  const d = String(etDateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || new Date(`${d}T12:00:00Z`).getUTCDay() !== 6) return DAILY_CAP;
+  const raw = env ? env.OMEGA_CLOSE_CAP_SAT : undefined;
+  if (raw == null || String(raw).trim() === '') return SATURDAY_CAP;
+  const s = String(raw).trim();
+  if (!/^[+-]?\d+$/.test(s)) return SATURDAY_CAP;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return SATURDAY_CAP;
+  return Math.min(SATURDAY_CAP, Math.max(0, n));
+}
+
 const WINDOW_MIN = 2;
 const WINDOW_MAX = 8;
 const EST_COST = 1;
@@ -133,6 +155,7 @@ async function handle(event, now, deps = {}) {
   const f = deps.fetch || fetch;
   const blobs = deps.blobs || S.blobClient(env, f);
   const today = S.etYmd(when);
+  const dailyCap = dailyCapFor(today, env);
   const legs = [];
   let todayCard = null;
   for (const d of [today, S.addDays(today, -1)]) {
@@ -176,19 +199,20 @@ async function handle(event, now, deps = {}) {
   const creditKey = `credits/${today}`;
   const credits = (await blobs.get(STORE, creditKey)) || { date: today, used: 0, calls: [] };
   if (!Array.isArray(credits.calls)) credits.calls = [];
+  credits.cap = dailyCap;
   const results = [];
   const errors = [];
   const sportsCalled = new Set();
   const satisfied = new Set();
 
   function budgetLeft() {
-    return DAILY_CAP - FB.spentCredits(credits);
+    return dailyCap - FB.spentCredits(credits);
   }
 
   async function runCardLeg(g) {
     const doneKey = `done/${g.sport}/${g.commenceTime}/${g.market}`;
-    if (!FB.canAfford(credits, EST_COST, DAILY_CAP)) {
-      console.error(`[capture-pick-closes] daily cap ${DAILY_CAP} reached; skipping ${doneKey}`);
+    if (!FB.canAfford(credits, EST_COST, dailyCap)) {
+      console.error(`[capture-pick-closes] daily cap ${dailyCap} reached; skipping ${doneKey}`);
       results.push({ ...g, skipped: 'cap' });
       return;
     }
@@ -240,7 +264,7 @@ async function handle(event, now, deps = {}) {
     if (sportsCalled.has(sport)) return false;
     sportsCalled.add(sport);
     if (!sportEvents || !sportEvents.length) return false;
-    if (!FB.canAfford(credits, FB.COST, DAILY_CAP)) {
+    if (!FB.canAfford(credits, FB.COST, dailyCap)) {
       fullBoard.budgetBlocked += 1;
       return false;
     }
@@ -265,7 +289,7 @@ async function handle(event, now, deps = {}) {
         estCost: FB.COST,
         ...(actual == null ? {} : { actualCost: actual }),
         used: credits.used,
-        remaining: remainingHeader != null ? remainingHeader : (DAILY_CAP - FB.spentCredits(credits)),
+        remaining: remainingHeader != null ? remainingHeader : (dailyCap - FB.spentCredits(credits)),
       };
       pushCreditCall(credits, call);
       const body = await readOddsBody(resp);
@@ -393,5 +417,6 @@ exports.handle = handle;
 exports.dueGroups = dueGroups;
 exports.cardLegs = cardLegs;
 exports.DAILY_CAP = DAILY_CAP;
+exports.dailyCapFor = dailyCapFor;
 exports.WINDOW_MIN = WINDOW_MIN;
 exports.WINDOW_MAX = WINDOW_MAX;

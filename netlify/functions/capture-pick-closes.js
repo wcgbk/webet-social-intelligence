@@ -37,6 +37,9 @@ const DAILY_CAP = 100;
 const WINDOW_MIN = 2;
 const WINDOW_MAX = 8;
 const EST_COST = 1;
+// Scheduled runs die around 30s. A Saturday NCAAM tip is 40+ due games;
+// blob gets and done-marker puts stay capped so one tick can finish.
+const BLOB_IO_CONCURRENCY = 16;
 
 function cardLegs(card) {
   const out = [];
@@ -152,12 +155,13 @@ async function handle(event, now, deps = {}) {
   if (fullOn) {
     const slate = await loadBoardEvents(when, resolveBoardReader(deps));
     const dueEvents = FB.dueBoardEvents(slate, when, WINDOW_MIN, WINDOW_MAX);
-    for (const ev of dueEvents) {
-      if (await eventFullyDone(blobs, ev)) {
+    const fullyDone = await S.mapLimit(dueEvents, BLOB_IO_CONCURRENCY, (ev) => eventFullyDone(blobs, ev));
+    for (let i = 0; i < dueEvents.length; i++) {
+      if (fullyDone[i]) {
         fullBoard.skippedDone += 1;
         continue;
       }
-      pending.push(ev);
+      pending.push(dueEvents[i]);
     }
   }
   const bySport = FB.groupBySport(pending);
@@ -299,18 +303,22 @@ async function handle(event, now, deps = {}) {
       }
       const posted = await S.writeRows(rows, env, f);
       const returnedIds = new Set(events.map((ev) => ev && ev.id).filter(Boolean).map(String));
+      // Per-market done/{sport}/{ct}/{market} repeats for events that share a
+      // kickoff and again for slate rows the response already covered. One
+      // put per key; the last payload matches the old sequential overwrite.
+      const doneWrites = new Map();
       for (const ev of events) {
         const ct = FB.normalizeCommence(ev && ev.commence_time);
         if (ct) {
           satisfied.add(`${sport}|${ct}`);
           for (const market of FB.MARKETS) {
-            await blobs.set(STORE, FB.doneMarketKey(sport, ct, market), {
+            doneWrites.set(FB.doneMarketKey(sport, ct, market), {
               at: when.toISOString(), via: 'full-board', events: events.length, posted,
             });
           }
         }
         if (ev && ev.id) {
-          await blobs.set(STORE, FB.doneEvKey(sport, ev.id), {
+          doneWrites.set(FB.doneEvKey(sport, ev.id), {
             at: when.toISOString(), commenceTime: ct,
           });
         }
@@ -319,11 +327,12 @@ async function handle(event, now, deps = {}) {
         if (!returnedIds.has(String(wanted.eventId))) continue;
         satisfied.add(`${sport}|${wanted.commenceTime}`);
         for (const market of FB.MARKETS) {
-          await blobs.set(STORE, FB.doneMarketKey(sport, wanted.commenceTime, market), {
+          doneWrites.set(FB.doneMarketKey(sport, wanted.commenceTime, market), {
             at: when.toISOString(), via: 'full-board', events: events.length, posted,
           });
         }
       }
+      await S.mapLimit([...doneWrites], BLOB_IO_CONCURRENCY, ([key, payload]) => blobs.set(STORE, key, payload));
       fullBoard.events += events.length;
       return true;
     } catch (e) {

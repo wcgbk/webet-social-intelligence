@@ -342,6 +342,51 @@ function params(url) {
   assert.ok(first.blobs.dump()['clv-close-capture:done/NBA/2026-11-15T00:00:00Z/h2h']);
   assert.ok(first.blobs.dump()['clv-close-capture:done/NBA/2026-11-15T00:00:00Z/spreads']);
   assert.ok(first.blobs.dump()['clv-close-capture:done/NBA/2026-11-15T00:00:00Z/totals']);
+  const firstDoneKeys = first.blobs.writes
+    .filter((pair) => pair[1].startsWith('done/') || pair[1].startsWith('done-ev/'))
+    .map((pair) => pair[1]);
+  assert.strictEqual(firstDoneKeys.length, new Set(firstDoneKeys).size, 'each done key is written once per call');
+
+  const clusterKick = '2026-11-15T00:00:00Z';
+  const cluster = await run({
+    boards: {
+      'by-date/2026-11-14': boardDoc([
+        { sport: 'NCAAM', eventId: 'ncaam-a', homeTeam: 'Duke Blue Devils', awayTeam: 'Wake Forest', commenceTime: clusterKick },
+        { sport: 'NCAAM', eventId: 'ncaam-b', homeTeam: 'North Carolina Tar Heels', awayTeam: 'NC State', commenceTime: clusterKick },
+      ]),
+      'by-date/2026-11-13': boardDoc([]),
+    },
+    bodies: {
+      basketball_ncaab: [
+        oddsEvent('ncaam-a', clusterKick, 'Duke Blue Devils', 'Wake Forest'),
+        oddsEvent('ncaam-b', clusterKick, 'North Carolina Tar Heels', 'NC State'),
+      ],
+    },
+  });
+  const clusterDoneKeys = cluster.blobs.writes
+    .filter((pair) => pair[1].startsWith('done/') || pair[1].startsWith('done-ev/'))
+    .map((pair) => pair[1]);
+  assert.deepStrictEqual(clusterDoneKeys.slice().sort(), [
+    'done-ev/NCAAM/ncaam-a',
+    'done-ev/NCAAM/ncaam-b',
+    `done/NCAAM/${clusterKick}/h2h`,
+    `done/NCAAM/${clusterKick}/spreads`,
+    `done/NCAAM/${clusterKick}/totals`,
+  ]);
+  const clusterDump = cluster.blobs.dump();
+  const clusterMarket = clusterDump[`clv-close-capture:done/NCAAM/${clusterKick}/h2h`];
+  assert.strictEqual(clusterMarket.at, NOW.toISOString());
+  assert.strictEqual(clusterMarket.via, 'full-board');
+  assert.strictEqual(clusterMarket.events, 2);
+  assert.ok(clusterMarket.posted && clusterMarket.posted.games === 2);
+  assert.deepStrictEqual(clusterDump[`clv-close-capture:done/NCAAM/${clusterKick}/spreads`], clusterMarket);
+  assert.deepStrictEqual(clusterDump[`clv-close-capture:done/NCAAM/${clusterKick}/totals`], clusterMarket);
+  assert.deepStrictEqual(clusterDump['clv-close-capture:done-ev/NCAAM/ncaam-a'], {
+    at: NOW.toISOString(), commenceTime: clusterKick,
+  });
+  assert.deepStrictEqual(clusterDump['clv-close-capture:done-ev/NCAAM/ncaam-b'], {
+    at: NOW.toISOString(), commenceTime: clusterKick,
+  });
 
   const second = await run({ blobs: first.blobs });
   assert.strictEqual(oddsCalls(second.net).length, 0);

@@ -506,6 +506,25 @@ function evFirstCappedEnabled(env) {
   return false;
 }
 
+/**
+ * Drop an NBA game before the top-3 cut when an important player is still
+ * Questionable, Doubtful, Day-To-Day, or a game-time decision.
+ * Default off. Unset stays off. on/1/true/yes turn it on.
+ * off/0/false/blank turn it off (=off is the rollback).
+ * The fetch is once, in the v2 generate path, and a soft-fail does not veto.
+ */
+const NBA_INJURY_ENV = 'OMEGA_V2_NBA_INJURY';
+
+function nbaInjuryEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[NBA_INJURY_ENV];
+  if (raw == null) return false;
+  const text = String(raw).trim().toLowerCase();
+  if (text === '' || text === 'off' || text === '0' || text === 'false') return false;
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
+  return false;
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -591,4 +610,6 @@ module.exports = {
   EV_FIRST_CAPPED_ENV,
   EV_FIRST_CAPPED_DEFAULT_ON,
   evFirstCappedEnabled,
+  NBA_INJURY_ENV,
+  nbaInjuryEnabled,
 };

@@ -22,6 +22,7 @@ const { applySportCoverage, stampQualified } = require('./coverage');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { inputsLoggingEnabled, recordCandidateInputs } = require('./candidate_inputs');
 const { buildStoredRankedPool } = require('./ranked_pool');
+const { statusDiagnostics } = require('./status_veto');
 
 const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
@@ -295,7 +296,11 @@ async function buildCard(input) {
     linePollsPresent,
     blockDkImplied: linePollsPresent && pinnacleFairEnabled(),
   };
-  const pregameOpts = { pregameAsOfMs: asOfMs, linePolls: linePollsPresent ? linePolls : null };
+  const pregameOpts = {
+    pregameAsOfMs: asOfMs,
+    linePolls: linePollsPresent ? linePolls : null,
+    nbaInjury: input && input.nbaInjury ? input.nbaInjury : null,
+  };
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
   const prepared = [];
   const rejections = [];
@@ -480,6 +485,8 @@ async function buildCard(input) {
     const rankedPool = buildStoredRankedPool(kept, straights, pregameOpts);
     if (Array.isArray(rankedPool)) card.rankedPool = rankedPool;
   }
+  const statusDiag = statusDiagnostics(annotated, pregameOpts);
+  if (statusDiag) card.diagnostics = statusDiag;
   const published = autoCorrectCard(card, pregameOpts);
   // Published line names the rank: quarter-Kelly growth, not raw EV.
   if (published.selectionRule === 'force-top3') {
@@ -618,6 +625,7 @@ async function publishFromOmegaCandidates(input) {
     stageCounts: input.stageCounts || null,
     boardBySport: input.boardBySport || null,
     linePolls: input.linePolls || null,
+    nbaInjury: input.nbaInjury || null,
   });
   // Context log only. The card object above is already final.
   try {

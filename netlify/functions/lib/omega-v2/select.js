@@ -8,6 +8,7 @@ const {
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
+const { applyStatusVeto } = require('./status_veto');
 
 /** Same placeable books as a published straight. A missing book is not a reject. */
 const PLACEABLE_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
@@ -633,7 +634,7 @@ module.exports = {
   kellyGrowth,
   forcedBetProb,
   favoriteOutOfBand,
-  annotateCandidate,
+  annotateCandidate: (candidate, opts) => applyStatusVeto(annotateCandidate(candidate, opts), opts),
   selectStraights,
   selectForcedTop3,
   orderForcedPool,

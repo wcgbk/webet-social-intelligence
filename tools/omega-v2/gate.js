@@ -600,6 +600,12 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (v2Refill.status !== 0) throw new Error('v2 refill gate failed');
+  const nbaInjury = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-nba-injury.js')],
+    { stdio: 'inherit' }
+  );
+  if (nbaInjury.status !== 0) throw new Error('nba injury veto gate failed');
 }
 
 function pickSlim(card) {

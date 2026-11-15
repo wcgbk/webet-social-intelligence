@@ -14,6 +14,8 @@ const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble')
 const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
 const { narrateTextOnly } = require('./narrate_text');
+const { nbaInjuryEnabled } = require('../omega-v2/constants');
+const { fetchNbaInjuryReport } = require('./status_pull');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, readJson } = require('./store');
@@ -553,6 +555,11 @@ async function generateOmegaVnext(opts = {}) {
     // Prior morning boards, graded once and cached. Flag off skips the call.
     // An injected gradedBoardRows list (offline replay) skips it too.
     const wantSkill = shouldLoadMarketSkill(opts) && !fixtureCandidates;
+    let nbaInjury = null;
+    if (!replayLike && nbaInjuryEnabled()) {
+      nbaInjury = await fetchNbaInjuryReport({ timeoutMs: 5000 });
+      console.log(`[omega-v2] nba-injury softFail=${!!(nbaInjury && nbaInjury.softFail)} pulledAt=${nbaInjury && nbaInjury.pulledAt ? nbaInjury.pulledAt : ''} uncertainPlayers=${nbaInjury && nbaInjury.uncertainPlayers ? nbaInjury.uncertainPlayers : 0}`);
+    }
     if (wantHistory || wantBoards || wantSkill) {
       const raced = (promise, label) => {
         let timer;
@@ -626,6 +633,7 @@ async function generateOmegaVnext(opts = {}) {
       snap,
       replayLike,
       skipInputFetch: !!replayLike,
+      nbaInjury,
       linePolls: masterBoard ? {
         date: dateISO,
         games0300: masterBoard.games0300 || null,

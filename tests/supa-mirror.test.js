@@ -169,6 +169,8 @@ test('book price rows: slots, raw books, post-commence skip', () => {
   assert.equal(mirror.slotFor('2026-11-13T08:00:00Z'), '0300');
   assert.equal(mirror.slotFor('2026-11-13T15:00:00Z'), '1000');
   assert.equal(mirror.slotFor('2026-11-13T16:00:00Z'), 'other');
+  assert.equal(mirror.slotFor('2026-11-02T07:00:00Z'), '0300');
+  assert.equal(mirror.slotFor('2026-11-02T14:00:00Z'), '1000');
   assert.equal(mirror.slotFor('2026-10-20T07:00:00Z'), '0300');
   const raw = {
     bookmakers: [

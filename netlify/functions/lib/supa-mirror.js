@@ -139,8 +139,9 @@ function etHour(iso) {
 
 function slotFor(iso) {
   const hour = etHour(iso);
-  if (hour === 3) return '0300';
-  if (hour === 10) return '1000';
+  // UTC crons land an hour early in ET after DST ends (e.g. 11/01-11/03: 2 AM / 9 AM).
+  if (hour === 3 || hour === 2) return '0300';
+  if (hour === 10 || hour === 9) return '1000';
   return 'other';
 }
 

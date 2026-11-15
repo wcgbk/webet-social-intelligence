@@ -6,6 +6,8 @@
  * out-of-band EV<=0. Sharp-fair rows stay ahead of stored-fair fallbacks
  * inside each of those classes, the same pack order as a2b6bb1.
  * Flag off is the in-band-first fill. Default is off (HOLD 2026-11-15).
+ * OMEGA_V2_EV_FIRST_CAPPED is pinned off here so this file keeps the
+ * EV_FIRST pack order after that flag's default shipped on.
  */
 
 const assert = require('assert');
@@ -39,6 +41,7 @@ const saved = {
   adj: process.env.OMEGA_V2_LONGSHOT_ADJ,
   fav: process.env.OMEGA_V2_FAV_CAP,
   evFirst: process.env.OMEGA_V2_EV_FIRST,
+  capped: process.env.OMEGA_V2_EV_FIRST_CAPPED,
 };
 
 function restore() {
@@ -51,6 +54,7 @@ function restore() {
   put('OMEGA_V2_LONGSHOT_ADJ', saved.adj);
   put('OMEGA_V2_FAV_CAP', saved.fav);
   put('OMEGA_V2_EV_FIRST', saved.evFirst);
+  put('OMEGA_V2_EV_FIRST_CAPPED', saved.capped);
 }
 
 function putFlag(on) {
@@ -108,6 +112,7 @@ process.env.OMEGA_V2_FORCE_TOP3 = '1';
 process.env.OMEGA_V2_MARKET_P = '1';
 process.env.OMEGA_V2_FAV_CAP = '1';
 process.env.OMEGA_V2_LONGSHOT_ADJ = 'off';
+process.env.OMEGA_V2_EV_FIRST_CAPPED = 'off';
 
 assert.strictEqual(EV_FIRST_DEFAULT_ON, false);
 delete process.env.OMEGA_V2_EV_FIRST;
@@ -340,6 +345,7 @@ assert.ok(!twins.some((item) => item.pick === 'Twin Out'));
     now: new Date(AS_OF),
     env: {
       OMEGA_V2_EV_FIRST: 'on',
+      OMEGA_V2_EV_FIRST_CAPPED: 'off',
       OMEGA_V2_FAV_CAP: 'on',
       OMEGA_V2_MARKET_P: 'off',
       OMEGA_V2_LONGSHOT_ADJ: 'off',

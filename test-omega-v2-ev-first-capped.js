@@ -7,7 +7,8 @@
  * pBet * decimal - 1. Out-of-band rows keep favCapFill order and fill
  * a slot only when fewer than 3 in-band candidates remain.
  * CAPPED wins over OMEGA_V2_EV_FIRST. Cap off is a no-op.
- * Default is off until a replay clears the ship rule.
+ * Default is on. The 10/31-11/14 shipped-stack replay was +$1687,
+ * days3 15/15, fav300 0.
  */
 
 const assert = require('assert');
@@ -98,7 +99,7 @@ process.env.OMEGA_V2_FAV_CAP = '1';
 process.env.OMEGA_V2_LONGSHOT_ADJ = 'off';
 
 try {
-  assert.strictEqual(EV_FIRST_CAPPED_DEFAULT_ON, false);
+  assert.strictEqual(EV_FIRST_CAPPED_DEFAULT_ON, true);
   delete process.env.OMEGA_V2_EV_FIRST_CAPPED;
   assert.strictEqual(evFirstCappedEnabled(), EV_FIRST_CAPPED_DEFAULT_ON);
   assert.strictEqual(evFirstCappedEnabled({}), EV_FIRST_CAPPED_DEFAULT_ON);

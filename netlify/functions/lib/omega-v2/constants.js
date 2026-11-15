@@ -487,11 +487,14 @@ function evFirstEnabled(env) {
  * keep the existing favCapFill order and take a slot only when fewer than
  * 3 in-band candidates remain. This flag wins over OMEGA_V2_EV_FIRST.
  * Cap off is a no-op.
+ * Shipped default on. The 10/31-11/14 replay with line-move and Pinnacle
+ * fair was +$1687, days3 15/15, fav300 0, the same card as that stack.
+ * =off restores in-band sharp, then out-of-band sharp, then stored-fair.
  * Unset uses the default. on/1/true/yes turn it on. off/0/false and a
  * blank value turn it off.
  */
 const EV_FIRST_CAPPED_ENV = 'OMEGA_V2_EV_FIRST_CAPPED';
-const EV_FIRST_CAPPED_DEFAULT_ON = false;
+const EV_FIRST_CAPPED_DEFAULT_ON = true;
 
 function evFirstCappedEnabled(env) {
   const source = env == null ? process.env : env;

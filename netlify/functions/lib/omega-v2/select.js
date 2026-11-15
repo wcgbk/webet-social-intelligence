@@ -4,7 +4,7 @@ const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS, forceTop3From,
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
   marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
-  KELLY_FRACTION,
+  evFirstEnabled, KELLY_FRACTION,
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
@@ -413,6 +413,90 @@ function compareFavFill(a, b) {
 }
 
 /**
+ * Price EV on the probability and decimal the rank uses: p * decimal - 1.
+ * That is the +EV tier. It is not row.ev. An annotated force row stores
+ * p*(decimal-1)-(1-p), which matches in real math, and a push haircut only
+ * scales that stored EV. At a fair price the two expressions can differ by
+ * one ulp (stored ev about +1e-16 while p*decimal-1 is 0) and the log growth
+ * can come back as 0 rather than null. A stored pool row can also carry a
+ * pCal EV or a printed EV next to a different pBet, so growth and row.ev
+ * can disagree in sign. Neither of those is the tier key.
+ */
+function betPriceEv(pBet, decimal) {
+  const p = Number(pBet);
+  const d = Number(decimal);
+  if (!Number.isFinite(p) || !Number.isFinite(d) || !(d > 1)) return null;
+  return p * d - 1;
+}
+
+function splitBetEv(list) {
+  const pos = [];
+  const rest = [];
+  for (const row of list || []) {
+    const ev = betPriceEv(row && row.pBet, row && row.decimal);
+    if (ev != null && ev > 0) pos.push(row);
+    else rest.push(row);
+  }
+  return { pos, rest };
+}
+
+/**
+ * a2b6bb1 packs, in order: in-band sharp, out-of-band sharp, in-band
+ * stored-fair, out-of-band stored-fair. Out-of-band packs are omitted when
+ * the cap is off, which leaves the unsplit rank.
+ * OMEGA_V2_EV_FIRST, with the cap on, runs that same pack order on price-EV
+ * > 0 and then again on the rest. A +EV favorite shorter than -300 beats an
+ * in-band 0% or negative-EV filler. A -EV favorite does not. Inside each EV
+ * class, sharp-fair rows still come before stored-fair fallbacks.
+ */
+function forcedPacks(inFair, outFair, cap, evFirst) {
+  const base = [
+    [inFair.sharp, false],
+    [outFair.sharp, true],
+    [inFair.fallback, false],
+    [outFair.fallback, true],
+  ];
+  const packs = [];
+  const push = (rows, fill) => {
+    if (fill && !cap) return;
+    packs.push({ rows: rows || [], fill: !!(fill && cap) });
+  };
+  if (!(evFirst && cap)) {
+    for (const [rows, fill] of base) push(rows, fill);
+    return packs;
+  }
+  const halves = base.map(([rows, fill]) => ({ split: splitBetEv(rows), fill }));
+  for (const half of halves) push(half.split.pos, half.fill);
+  for (const half of halves) push(half.split.rest, half.fill);
+  return packs;
+}
+
+function takePacks(packs, limit) {
+  const out = [];
+  const used = new Set();
+  for (const pack of packs) {
+    for (const c of pack.rows) {
+      if (out.length >= limit) return out;
+      const key = c.gameKey != null && c.gameKey !== '' ? c.gameKey : gameKey(c.matchup);
+      if (used.has(key)) continue;
+      used.add(key);
+      const row = { ...c, forced: true };
+      if (pack.fill) row.favCapFill = true;
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+function concatPacks(packs) {
+  const out = [];
+  for (const pack of packs) {
+    for (const row of pack.rows) out.push(row);
+  }
+  return out;
+}
+
+/**
  * Top 3 placeable straights by quarter-Kelly expected log growth, one per game.
  * Growth uses pBet and the decimal price. full Kelly <= 0 stores null and
  * ranks after every positive-growth row, by price EV. Pregame cutoff still applies.
@@ -421,6 +505,9 @@ function compareFavFill(a, b) {
  * game, and those rows are marked favCapFill. Cap off is the unsplit rank.
  * Stored-fair fallbacks fill only after every sharp-fair row in both bands,
  * so a fallback takes a slot only when fewer than 3 sharp-fair rows exist.
+ * OMEGA_V2_EV_FIRST keeps that sharp-before-fallback pack order inside the
+ * +EV class and again inside the EV<=0 class, so only a +EV short favorite
+ * jumps an in-band filler.
  */
 function bySharpFair(list) {
   const sharp = [];
@@ -455,30 +542,15 @@ function selectForcedTop3(annotated, opts) {
   if (cap) outBand.sort(compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
-  const out = [];
-  const used = new Set();
-  const take = (list, fill) => {
-    for (const c of list) {
-      if (out.length >= MAX_STRAIGHTS) break;
-      const key = c.gameKey != null && c.gameKey !== '' ? c.gameKey : gameKey(c.matchup);
-      if (used.has(key)) continue;
-      used.add(key);
-      const row = { ...c, forced: true };
-      if (fill) row.favCapFill = true;
-      out.push(row);
-    }
-  };
-  take(inFair.sharp, false);
-  if (cap) take(outFair.sharp, true);
-  take(inFair.fallback, false);
-  if (cap) take(outFair.fallback, true);
-  return out;
+  const evFirst = evFirstEnabled(opts && opts.env);
+  return takePacks(forcedPacks(inFair, outFair, cap, evFirst), MAX_STRAIGHTS);
 }
 
 /**
  * Full v2 order for a stored qualified pool. Same split as selectForcedTop3:
  * in-band sharp, then out-of-band sharp, then stored-fair fallbacks in that
- * same band order. News re-rank refills from this list. Does not slice to 3.
+ * same band order. OMEGA_V2_EV_FIRST runs that order on +EV rows first.
+ * News re-rank refills from this list. Does not slice to 3.
  * A missing `qualified` stays in (the pool is already the qualified set).
  * `qualified: false` stays out. The -300 cap is favCapEnabled.
  */
@@ -502,8 +574,8 @@ function orderForcedPool(annotated, opts) {
   if (cap) outBand.sort(compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
-  if (!cap) return inFair.sharp.concat(inFair.fallback);
-  return inFair.sharp.concat(outFair.sharp, inFair.fallback, outFair.fallback);
+  const evFirst = evFirstEnabled(opts && opts.env);
+  return concatPacks(forcedPacks(inFair, outFair, cap, evFirst));
 }
 
 function selectStraights(annotated, opts) {

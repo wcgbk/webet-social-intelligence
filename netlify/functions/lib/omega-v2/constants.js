@@ -458,6 +458,26 @@ function keyConvertEnabled(env) {
   return text === 'on' || text === '1' || text === 'true' || text === 'yes';
 }
 
+/**
+ * +EV rows cross the -300 cap ahead of an in-band 0% or negative-EV filler.
+ * A -EV price shorter than -300 still waits until in-band rows run out.
+ * +EV is pBet * decimal - 1 at the bet price. row.ev is not the tier key.
+ * Default is on: line move + Pinnacle fair + this flag replayed 10/31-11/14
+ * at +$2023 (straights 34-8 +$1077, parlays 7-7 +$946, days3 15/15, fav300 2)
+ * against the +$1687 shipped stack. =off restores in-band-first fill.
+ */
+const EV_FIRST_ENV = 'OMEGA_V2_EV_FIRST';
+const EV_FIRST_DEFAULT_ON = true;
+
+function evFirstEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[EV_FIRST_ENV];
+  if (raw == null || String(raw).trim() === '') return EV_FIRST_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (EV_FIRST_DEFAULT_ON) return text !== 'off' && text !== '0' && text !== 'false';
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -537,4 +557,7 @@ module.exports = {
   KEY_CONVERT_ENV,
   KEY_CONVERT_DEFAULT_ON,
   keyConvertEnabled,
+  EV_FIRST_ENV,
+  EV_FIRST_DEFAULT_ON,
+  evFirstEnabled,
 };

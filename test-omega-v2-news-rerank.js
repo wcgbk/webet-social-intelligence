@@ -35,6 +35,7 @@ const ENV = {
   OMEGA_V2_LONGSHOT_ADJ: 'off',
   OMEGA_V2_FAV_CAP: 'on',
   OMEGA_V2_FORCE_TOP3: 'on',
+  OMEGA_V2_EV_FIRST: 'off',
 };
 const ANNOTATE = { forceTop3: true, pregameAsOfMs: NOW.getTime(), env: ENV };
 

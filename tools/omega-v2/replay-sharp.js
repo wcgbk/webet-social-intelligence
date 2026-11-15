@@ -15,6 +15,7 @@ const FLAG_KEYS = [
   'OMEGA_V2_MOVE_SHRINK',
   'OMEGA_V2_PINNACLE_FAIR',
   'OMEGA_V2_KEY_CONVERT',
+  'OMEGA_V2_EV_FIRST',
 ];
 for (const key of FLAG_KEYS) {
   if (process.env[key] == null || String(process.env[key]).trim() === '') {

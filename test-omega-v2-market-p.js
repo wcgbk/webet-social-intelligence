@@ -27,6 +27,7 @@ const saved = {
   adj: process.env.OMEGA_V2_LONGSHOT_ADJ,
   market: process.env.OMEGA_V2_MARKET_P,
   fav: process.env.OMEGA_V2_FAV_CAP,
+  evFirst: process.env.OMEGA_V2_EV_FIRST,
 };
 
 function restore() {
@@ -38,6 +39,7 @@ function restore() {
   put('OMEGA_V2_LONGSHOT_ADJ', saved.adj);
   put('OMEGA_V2_MARKET_P', saved.market);
   put('OMEGA_V2_FAV_CAP', saved.fav);
+  put('OMEGA_V2_EV_FIRST', saved.evFirst);
 }
 
 function raw(over) {
@@ -72,6 +74,7 @@ async function main() {
   process.env.OMEGA_V2_FORCE_TOP3 = '1';
   process.env.OMEGA_V2_MARKET_P = '1';
   process.env.OMEGA_V2_FAV_CAP = '1';
+  process.env.OMEGA_V2_EV_FIRST = 'off';
   delete process.env.OMEGA_V2_LONGSHOT_ADJ;
   assert.strictEqual(forceTop3Enabled(), true);
   assert.strictEqual(marketPEnabled(), true);

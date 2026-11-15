@@ -38,6 +38,7 @@ const ENV_KEYS = [
   'OMEGA_V2_FORCE_TOP3',
   'OMEGA_V2_MARKET_P',
   'OMEGA_V2_LONGSHOT_ADJ',
+  'OMEGA_V2_EV_FIRST',
 ];
 
 function book(key, last, outcomes, market) {
@@ -144,6 +145,8 @@ const saved = saveEnv(ENV_KEYS);
 process.env.OMEGA_V2_FORCE_TOP3 = '1';
 process.env.OMEGA_V2_MARKET_P = '1';
 process.env.OMEGA_V2_LONGSHOT_ADJ = 'off';
+// This file locks the a2b6bb1 sharp-then-fallback order. EV-first is separate.
+process.env.OMEGA_V2_EV_FIRST = 'off';
 for (const key of ENV_KEYS.slice(0, 4)) process.env[key] = 'off';
 delete process.env.OMEGA_V2_LINE_MOVE_VETO_PP;
 delete process.env.OMEGA_V2_LINE_MOVE_STALE_PP;

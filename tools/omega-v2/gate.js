@@ -572,6 +572,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (sharpGaps.status !== 0) throw new Error('sharp gaps gate failed');
+
+  const evFirst = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-ev-first.js')],
+    { stdio: 'inherit' }
+  );
+  if (evFirst.status !== 0) throw new Error('ev-first fill gate failed');
 }
 
 function pickSlim(card) {

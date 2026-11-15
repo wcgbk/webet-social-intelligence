@@ -579,6 +579,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (evFirst.status !== 0) throw new Error('ev-first fill gate failed');
+
+  const evFirstCapped = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-ev-first-capped.js')],
+    { stdio: 'inherit' }
+  );
+  if (evFirstCapped.status !== 0) throw new Error('ev-first capped fill gate failed');
 }
 
 function pickSlim(card) {

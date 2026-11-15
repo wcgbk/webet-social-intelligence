@@ -4,7 +4,7 @@ const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS, forceTop3From,
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
   marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
-  evFirstEnabled, KELLY_FRACTION,
+  evFirstEnabled, evFirstCappedEnabled, KELLY_FRACTION,
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
@@ -448,8 +448,14 @@ function splitBetEv(list) {
  * > 0 and then again on the rest. A +EV favorite shorter than -300 beats an
  * in-band 0% or negative-EV filler. A -EV favorite does not. Inside each EV
  * class, sharp-fair rows still come before stored-fair fallbacks.
+ * OMEGA_V2_EV_FIRST_CAPPED, with the cap on, keeps every in-band row ahead
+ * of every out-of-band row. In-band order is +EV sharp, +EV stored-fair,
+ * EV<=0 sharp, EV<=0 stored-fair, using the same price-EV split and the
+ * same within-class order. Out-of-band rows stay in the existing favCapFill
+ * order and are reached only after the in-band rows. CAPPED ignores
+ * EV_FIRST. Cap off leaves the unsplit rank, so both flags are a no-op.
  */
-function forcedPacks(inFair, outFair, cap, evFirst) {
+function forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped) {
   const base = [
     [inFair.sharp, false],
     [outFair.sharp, true],
@@ -461,6 +467,17 @@ function forcedPacks(inFair, outFair, cap, evFirst) {
     if (fill && !cap) return;
     packs.push({ rows: rows || [], fill: !!(fill && cap) });
   };
+  if (evFirstCapped && cap) {
+    const inSharp = splitBetEv(inFair.sharp);
+    const inFall = splitBetEv(inFair.fallback);
+    push(inSharp.pos, false);
+    push(inFall.pos, false);
+    push(inSharp.rest, false);
+    push(inFall.rest, false);
+    push(outFair.sharp, true);
+    push(outFair.fallback, true);
+    return packs;
+  }
   if (!(evFirst && cap)) {
     for (const [rows, fill] of base) push(rows, fill);
     return packs;
@@ -508,6 +525,9 @@ function concatPacks(packs) {
  * OMEGA_V2_EV_FIRST keeps that sharp-before-fallback pack order inside the
  * +EV class and again inside the EV<=0 class, so only a +EV short favorite
  * jumps an in-band filler.
+ * OMEGA_V2_EV_FIRST_CAPPED does not. Every in-band row, including an EV<=0
+ * filler and a stored-fair fallback, stays ahead of any shorter-than--300
+ * price. A +EV stored-fair row still ranks ahead of an in-band EV<=0 sharp.
  */
 function bySharpFair(list) {
   const sharp = [];
@@ -542,14 +562,17 @@ function selectForcedTop3(annotated, opts) {
   if (cap) outBand.sort(compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
-  const evFirst = evFirstEnabled(opts && opts.env);
-  return takePacks(forcedPacks(inFair, outFair, cap, evFirst), MAX_STRAIGHTS);
+  const env = opts && opts.env;
+  const evFirst = evFirstEnabled(env);
+  const evFirstCapped = evFirstCappedEnabled(env);
+  return takePacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped), MAX_STRAIGHTS);
 }
 
 /**
  * Full v2 order for a stored qualified pool. Same split as selectForcedTop3:
  * in-band sharp, then out-of-band sharp, then stored-fair fallbacks in that
  * same band order. OMEGA_V2_EV_FIRST runs that order on +EV rows first.
+ * OMEGA_V2_EV_FIRST_CAPPED lists every in-band row first.
  * News re-rank refills from this list. Does not slice to 3.
  * A missing `qualified` stays in (the pool is already the qualified set).
  * `qualified: false` stays out. The -300 cap is favCapEnabled.
@@ -574,8 +597,10 @@ function orderForcedPool(annotated, opts) {
   if (cap) outBand.sort(compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
-  const evFirst = evFirstEnabled(opts && opts.env);
-  return concatPacks(forcedPacks(inFair, outFair, cap, evFirst));
+  const env = opts && opts.env;
+  const evFirst = evFirstEnabled(env);
+  const evFirstCapped = evFirstCappedEnabled(env);
+  return concatPacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped));
 }
 
 function selectStraights(annotated, opts) {

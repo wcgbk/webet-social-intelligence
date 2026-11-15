@@ -479,6 +479,30 @@ function evFirstEnabled(env) {
   return text === 'on' || text === '1' || text === 'true' || text === 'yes';
 }
 
+/**
+ * Cap-respecting +EV-first fill. With the -300 cap on, every in-band row
+ * ranks ahead of every out-of-band row. Inside the in-band set the order
+ * is +EV sharp, +EV stored-fair, EV<=0 sharp, EV<=0 stored-fair. +EV is
+ * pBet * decimal - 1, the same tier as OMEGA_V2_EV_FIRST. Out-of-band rows
+ * keep the existing favCapFill order and take a slot only when fewer than
+ * 3 in-band candidates remain. This flag wins over OMEGA_V2_EV_FIRST.
+ * Cap off is a no-op.
+ * Unset uses the default. on/1/true/yes turn it on. off/0/false and a
+ * blank value turn it off.
+ */
+const EV_FIRST_CAPPED_ENV = 'OMEGA_V2_EV_FIRST_CAPPED';
+const EV_FIRST_CAPPED_DEFAULT_ON = false;
+
+function evFirstCappedEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[EV_FIRST_CAPPED_ENV];
+  if (raw == null) return EV_FIRST_CAPPED_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
+  if (text === '' || text === 'off' || text === '0' || text === 'false') return false;
+  return false;
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -561,4 +585,7 @@ module.exports = {
   EV_FIRST_ENV,
   EV_FIRST_DEFAULT_ON,
   evFirstEnabled,
+  EV_FIRST_CAPPED_ENV,
+  EV_FIRST_CAPPED_DEFAULT_ON,
+  evFirstCappedEnabled,
 };

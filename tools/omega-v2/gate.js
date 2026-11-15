@@ -454,6 +454,13 @@ async function main() {
   );
   if (candidateClv.status !== 0) throw new Error('candidate clv gate failed');
 
+  const trueClose = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-clv-true-close.js')],
+    { stdio: 'inherit' }
+  );
+  if (trueClose.status !== 0) throw new Error('clv true close gate failed');
+
   const sharpPrices = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-sharp-prices.js')],

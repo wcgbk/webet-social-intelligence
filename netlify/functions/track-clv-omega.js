@@ -8,6 +8,34 @@ const {
   gradePowerClv,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
+const { defaultOnFlag } = require('./lib/default_on_flag');
+
+function trueCloseOn(env) {
+  return defaultOnFlag('OMEGA_CLV_TRUE_CLOSE', env);
+}
+
+// Hard cap so a slow Supabase read cannot block the clv-{date} write.
+const TRUE_CLOSE_TIMEOUT_MS = 4000;
+
+function withTimeout(promise, ms) {
+  let timer;
+  let settled = false;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      settled = true;
+      reject(new Error('true-close timeout'));
+    }, ms);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+  const work = Promise.resolve(promise).then(
+    (value) => value,
+    (err) => {
+      if (settled) return undefined;
+      throw err;
+    },
+  );
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
 
 function attachModelClvFields(rec, pick) {
   if (!rec || !pick) return rec;
@@ -599,26 +627,108 @@ function finalizeBuckets(map) {
   return map;
 }
 
+// Day aggregates written on clv-{date}. Same math the handler used inline.
+function summarizeTrackedPicks(clvPicks) {
+  const validClvPicks = (clvPicks || []).filter(p => p && p.clv !== null && p.clv !== undefined);
+  const avgCLV = validClvPicks.length > 0
+    ? parseFloat((validClvPicks.reduce((sum, p) => sum + p.clv, 0) / validClvPicks.length).toFixed(4))
+    : 0;
+  const picksBeatClosing = validClvPicks.filter(p => p.beatClosing).length;
+
+  const bySport = {}, byMarket = {}, bySource = {}, byGameType = {}, byCohort = {};
+  const anchorBreakdown = {};
+  for (const p of validClvPicks) {
+    const s = p.sport || 'unknown';
+    const m = p.market || 'unknown';
+    const seg = p.segment || 'fullgame';
+    const src = p.source || 'full-game';
+    bump(bySport, s, p.clv, p.beatClosing);
+    bump(byMarket, m, p.clv, p.beatClosing);
+    bump(bySource, src, p.clv, p.beatClosing);
+    bump(byGameType, seg, p.clv, p.beatClosing);
+    bump(byCohort, `${seg}|${s}|${m}`, p.clv, p.beatClosing);
+    const a = p.anchor || 'none';
+    anchorBreakdown[a] = (anchorBreakdown[a] || 0) + 1;
+  }
+  finalizeBuckets(bySport); finalizeBuckets(byMarket); finalizeBuckets(bySource);
+  finalizeBuckets(byGameType); finalizeBuckets(byCohort);
+
+  const sharpAnchored = validClvPicks.filter(p => p.anchor && p.anchor !== 'soft-median' && p.anchor !== 'none').length;
+  return {
+    avgCLV,
+    avgCLVCents: parseFloat((avgCLV * 100).toFixed(2)),
+    picksBeatClosing,
+    totalTracked: validClvPicks.length,
+    sharpAnchoredCount: sharpAnchored,
+    sharpAnchorPct: validClvPicks.length ? +((sharpAnchored / validClvPicks.length) * 100).toFixed(1) : 0,
+    anchorBreakdown,
+    bySport,
+    byMarket,
+    bySource,
+    byGameType,
+    byCohort,
+  };
+}
+
 // ── Picks blob I/O + ESPN-only settlement ──
 // Used by the early settle (Step 1.5) and the awaited morning sweep. Grading runs on cheap
 // ESPN scoreboard calls and writes results back IMMEDIATELY — it must never wait behind the
 // slow per-pick historical close capture (that ordering is how whole days stayed unsettled).
-async function loadPicksData(dateISO) {
+async function loadBlobJson(key, storeImpl) {
+  if (storeImpl && typeof storeImpl.get === 'function') {
+    try {
+      const data = await storeImpl.get(key, { type: 'json' });
+      return data || null;
+    } catch (e) { return null; }
+  }
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore('edge-picks-omega');
-    const data = await store.get(`picks-${dateISO}`, { type: 'json' });
+    const data = await store.get(key, { type: 'json' });
     if (data) return data;
   } catch (e) { /* fall through to REST */ }
   const token = process.env.NETLIFY_AUTH_TOKEN;
   const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
   if (!token) return null;
   try {
-    const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-omega/picks-${dateISO}`;
+    const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-omega/${key}`;
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (resp.ok) return await resp.json();
   } catch (e) { /* ignore */ }
   return null;
+}
+
+async function loadPicksData(dateISO, storeImpl) {
+  return loadBlobJson(`picks-${dateISO}`, storeImpl);
+}
+
+async function loadClvData(dateISO, storeImpl) {
+  return loadBlobJson(`clv-${dateISO}`, storeImpl);
+}
+
+async function writeClvData(dateISO, clvData, storeImpl) {
+  if (storeImpl && typeof storeImpl.setJSON === 'function') {
+    await storeImpl.setJSON(`clv-${dateISO}`, clvData);
+    return true;
+  }
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore('edge-picks-omega');
+    await store.setJSON(`clv-${dateISO}`, clvData);
+    return true;
+  } catch (e) { /* fall through to REST */ }
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+  if (!token) return false;
+  try {
+    const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-omega/clv-${dateISO}`;
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(clvData),
+    });
+    return resp.ok;
+  } catch (e) { return false; }
 }
 
 async function writePicksData(dateISO, picksData) {
@@ -671,15 +781,19 @@ async function settleResultsForDate(dateISO, picksData) {
   return settledCount;
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
+async function handle(event, deps) {
+  if (event && event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
+  const env = (deps && deps.env) || process.env;
+  const fetchImpl = (deps && deps.fetch) || fetch;
+  const storeImpl = (deps && deps.store) || null;
+
   try {
     // Determine date — default to today ET
-    const params = event.queryStringParameters || {};
-    const now = new Date();
+    const params = (event && event.queryStringParameters) || {};
+    const now = (deps && deps.now) ? new Date(deps.now) : new Date();
     const estOffset = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const dateISO = params.date || estOffset.toISOString().split('T')[0];
     const nowMs = Date.now();
@@ -702,23 +816,40 @@ exports.handler = async (event) => {
       }
       for (const swISO of sweepDates) {
         try {
-          const swPicks = await loadPicksData(swISO);
+          const swPicks = await loadPicksData(swISO, storeImpl);
           if (!swPicks || !Array.isArray(swPicks.picks) || !swPicks.picks.length) continue;
           const n = await settleResultsForDate(swISO, swPicks);
           if (n > 0) console.log(`[track-clv] Sweep settled ${n} picks for ${swISO}`);
         } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
       }
-      // Yesterday's TRUE close capture (historical odds) still runs via self-POST — best
-      // effort only; settlement above no longer depends on it surviving.
+      // Yesterday and the day before: awaited Supabase true closes (no Odds API).
+      // The old fire-and-forget POST to legacy track-clv died with the lambda, so the
+      // 23:00 snapshot was never upgraded. OMEGA_CLV_TRUE_CLOSE=off keeps that POST.
       const yestISO = sweepDates[0];
-      const siteURL = process.env.URL || 'https://webetsocial.com';
-      fetch(`${siteURL}/.netlify/functions/track-clv?date=${yestISO}`, { method: 'POST' })
-        .then(() => console.log(`[track-clv] Triggered overnight CLV capture for ${yestISO}`))
-        .catch((e) => console.log(`[track-clv] Yesterday CLV trigger failed: ${e.message}`));
+      const priorISO = sweepDates[1];
+      if (!trueCloseOn(env)) {
+        const siteURL = env.URL || 'https://webetsocial.com';
+        fetchImpl(`${siteURL}/.netlify/functions/track-clv?date=${yestISO}`, { method: 'POST' })
+          .then(() => console.log(`[track-clv] Triggered overnight CLV capture for ${yestISO}`))
+          .catch((e) => console.log(`[track-clv] Yesterday CLV trigger failed: ${e.message}`));
+      } else {
+        try {
+          const { upgradeDatesFromStore } = require('./lib/clv-true-close');
+          await upgradeDatesFromStore([yestISO, priorISO], {
+            env,
+            fetchImpl,
+            readClv: (d) => loadClvData(d, storeImpl),
+            readPicks: (d) => loadPicksData(d, storeImpl),
+            writeClv: (d, data) => writeClvData(d, data, storeImpl),
+          });
+        } catch (e) {
+          console.log(`[track-clv] Supabase true-close upgrade failed: ${e.message}`);
+        }
+      }
     }
 
     // ── Step 1: Load today's picks from Blobs ──
-    const picksData = await loadPicksData(dateISO);
+    const picksData = await loadPicksData(dateISO, storeImpl);
 
     if (!picksData || !picksData.picks || picksData.picks.length === 0) {
       return {
@@ -927,33 +1058,20 @@ exports.handler = async (event) => {
     console.log(`[track-clv] Graded ${settledCount}/${clvPicks.length} picks via ESPN scores`);
 
     // ── Step 5: Summary stats + beat-rate breakouts (per source / market / segment / cohort) ──
-    const validClvPicks = clvPicks.filter(p => p.clv !== null && p.clv !== undefined);
-    const avgCLV = validClvPicks.length > 0
-      ? parseFloat((validClvPicks.reduce((sum, p) => sum + p.clv, 0) / validClvPicks.length).toFixed(4))
-      : 0;
-    const picksBeatClosing = validClvPicks.filter(p => p.beatClosing).length;
-
-    const bySport = {}, byMarket = {}, bySource = {}, byGameType = {}, byCohort = {};
-    const anchorBreakdown = {};
-    for (const p of validClvPicks) {
-      const s = p.sport || 'unknown';
-      const m = p.market || 'unknown';
-      const seg = p.segment || 'fullgame';
-      const src = p.source || 'full-game';
-      // Existing contract buckets ({count, clvSum, beat}) + added beatRate via finalizeBuckets.
-      bump(bySport, s, p.clv, p.beatClosing);
-      bump(byMarket, m, p.clv, p.beatClosing);
-      // New breakouts for later gating/weighting (additive; nothing reads these yet).
-      bump(bySource, src, p.clv, p.beatClosing);
-      bump(byGameType, seg, p.clv, p.beatClosing);
-      bump(byCohort, `${seg}|${s}|${m}`, p.clv, p.beatClosing);
-      const a = p.anchor || 'none';
-      anchorBreakdown[a] = (anchorBreakdown[a] || 0) + 1;
-    }
-    finalizeBuckets(bySport); finalizeBuckets(byMarket); finalizeBuckets(bySource);
-    finalizeBuckets(byGameType); finalizeBuckets(byCohort);
-
-    const sharpAnchored = validClvPicks.filter(p => p.anchor && p.anchor !== 'soft-median' && p.anchor !== 'none').length;
+    const {
+      avgCLV,
+      avgCLVCents,
+      picksBeatClosing,
+      totalTracked,
+      sharpAnchoredCount,
+      sharpAnchorPct,
+      anchorBreakdown,
+      bySport,
+      byMarket,
+      bySource,
+      byGameType,
+      byCohort,
+    } = summarizeTrackedPicks(clvPicks);
 
     const settledResults = clvPicks.filter(p => p.result && p.result !== 'pending');
     const wins = settledResults.filter(p => p.result === 'win').length;
@@ -967,12 +1085,12 @@ exports.handler = async (event) => {
       clvMethod: 'no-vig-sharp-anchor-v2',
       picks: clvPicks,
       avgCLV,
-      avgCLVCents: parseFloat((avgCLV * 100).toFixed(2)),
+      avgCLVCents,
       picksBeatClosing,
-      totalTracked: validClvPicks.length,
+      totalTracked,
       totalPicks: picksData.picks.length,
-      sharpAnchoredCount: sharpAnchored,
-      sharpAnchorPct: validClvPicks.length ? +((sharpAnchored / validClvPicks.length) * 100).toFixed(1) : 0,
+      sharpAnchoredCount,
+      sharpAnchorPct,
       anchorBreakdown,
       bySport, byMarket,
       bySource, byGameType, byCohort, // ADDED — full-game vs F5 + per-source/market/cohort beat-rate
@@ -1075,6 +1193,18 @@ exports.handler = async (event) => {
         if (existingClv && Array.isArray(existingClv.candidates)) clvData.candidates = existingClv.candidates;
       }
 
+      // Supabase true close (Pinnacle, 2–8 min before kickoff). Awaited, capped,
+      // and swallowed: a miss must not block the clv-{date} write.
+      if (trueCloseOn(env)) {
+        try {
+          const { applyTrueClose } = require('./lib/clv-true-close');
+          await withTimeout(applyTrueClose(clvData, picksData, env, fetchImpl), TRUE_CLOSE_TIMEOUT_MS);
+        } catch (e) {
+          const msg = String(e && e.message || 'error');
+          console.error(`[track-clv] true close skipped: ${/bearer|token|authorization|api[_-]?key/i.test(msg) ? 'unavailable' : msg}`);
+        }
+      }
+
       await store.setJSON(`clv-${dateISO}`, clvData);
       console.log(`[track-clv] Stored CLV data at clv-${dateISO}`);
 
@@ -1166,7 +1296,11 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: true, message: `CLV tracking failed: ${err.message}` }),
     };
   }
-};
+}
+
+exports.handler = (event) => handle(event);
+exports.handle = handle;
+exports.summarizeTrackedPicks = summarizeTrackedPicks;
 
 // ── Test-only exports (offline validation; no effect on the deployed handler) ──
 // Mirrors the generator's `module.exports.extractF5FromEvent` pattern so the de-vig /
@@ -1175,4 +1309,5 @@ module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
+  summarizeTrackedPicks,
 };

@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-13",
+  "model": "omega-v2-sharp-2026-11-01-dkhr",
+  "generatedAt": "2026-11-13T15:15:28.282Z",
+  "picks": [
+    {
+      "sport": "NBA",
+      "matchup": "Cleveland Cavaliers @ Miami Heat",
+      "pick": "Cleveland Cavaliers +2.5",
+      "pickDisplay": "Cleveland Cavaliers +2.5",
+      "betType": "Spread",
+      "market": "Spread",
+      "odds": "-112",
+      "line": 2.5,
+      "units": "0.25u",
+      "unitsNum": 0.25,
+      "stakeUsd": 38,
+      "rating": "aminus",
+      "grade": "aminus",
+      "qualityGrade": "aminus",
+      "commenceTime": "2026-11-14T01:10:00Z",
+      "book": "draftkings",
+      "homeTeam": "Miami Heat",
+      "awayTeam": "Cleveland Cavaliers",
+      "source": "omega-v2",
+      "modelVersion": "omega-v2-sharp-2026-11-01-dkhr",
+      "result": "loss",
+      "profit": -37.5,
+      "finalScore": "121-133",
+      "settledAt": "2026-11-14T07:00:57.857Z",
+      "pickId": "4cba301dab0345b1",
+      "date": "2026-11-13",
+      "side": "Cleveland Cavaliers +2.5",
+      "p_model": 0.5709466837494285,
+      "fair_sharp_p": 0.5048133331382901,
+      "edgePct": "2.8%"
+    }
+  ],
+  "parlayLegs": []
+}

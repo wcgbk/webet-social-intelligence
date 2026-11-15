@@ -1,0 +1,257 @@
+{
+  "games": [
+    {
+      "game_id": "g-usf",
+      "sport": "NCAAF",
+      "commence_time": "2026-11-13T01:00:00Z",
+      "home_team": "South Florida Bulls",
+      "away_team": "Memphis Tigers"
+    },
+    {
+      "game_id": "g-cha",
+      "sport": "NBA",
+      "commence_time": "2026-11-13T02:10:00Z",
+      "home_team": "Phoenix Suns",
+      "away_team": "Charlotte Hornets"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "commence_time": "2026-11-14T01:10:00Z",
+      "home_team": "Miami Heat",
+      "away_team": "Cleveland Cavaliers"
+    },
+    {
+      "game_id": "g-cle-late",
+      "sport": "NBA",
+      "commence_time": "2026-11-14T06:00:00Z",
+      "home_team": "Miami Heat",
+      "away_team": "Cleveland Cavaliers"
+    },
+    {
+      "game_id": "g-usa",
+      "sport": "NCAAF",
+      "commence_time": "2026-11-15T00:00:00Z",
+      "home_team": "South Alabama Jaguars",
+      "away_team": "Troy Trojans"
+    }
+  ],
+  "snapshots": [
+    {
+      "game_id": "g-usf",
+      "sport": "NCAAF",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "South Florida Bulls",
+      "point": 4.5,
+      "price": 100,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T00:55:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-usf",
+      "sport": "NCAAF",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Memphis Tigers",
+      "point": -4.5,
+      "price": -113,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T00:55:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cha",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Charlotte Hornets",
+      "point": 6,
+      "price": -108,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T02:04:59Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cha",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Phoenix Suns",
+      "point": -6,
+      "price": -102,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T02:04:59Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Cleveland Cavaliers",
+      "point": 2.5,
+      "price": -150,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T23:00:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Miami Heat",
+      "point": -2.5,
+      "price": 130,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-13T23:00:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Cleveland Cavaliers",
+      "point": 2.5,
+      "price": -115,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:02:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Miami Heat",
+      "point": -2.5,
+      "price": -105,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:02:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Cleveland Cavaliers",
+      "point": 2.5,
+      "price": -102,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:04:53Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Miami Heat",
+      "point": -2.5,
+      "price": -108,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:04:53Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "draftkings",
+      "market": "spreads",
+      "side": "Cleveland Cavaliers",
+      "point": 2.5,
+      "price": -105,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:04:53Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "draftkings",
+      "market": "spreads",
+      "side": "Miami Heat",
+      "point": -2.5,
+      "price": -115,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:04:53Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Cleveland Cavaliers",
+      "point": 2.5,
+      "price": -130,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:11:30Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Miami Heat",
+      "point": -2.5,
+      "price": 110,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T01:11:30Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle-late",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Cleveland Cavaliers",
+      "point": 2.5,
+      "price": -180,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T05:55:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-cle-late",
+      "sport": "NBA",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Miami Heat",
+      "point": -2.5,
+      "price": 150,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T05:55:00Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-usa",
+      "sport": "NCAAF",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "South Alabama Jaguars",
+      "point": -3,
+      "price": -104,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T23:55:05Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    },
+    {
+      "game_id": "g-usa",
+      "sport": "NCAAF",
+      "book": "pinnacle",
+      "market": "spreads",
+      "side": "Troy Trojans",
+      "point": 3,
+      "price": -108,
+      "line_type": "closing",
+      "snapshot_ts": "2026-11-14T23:55:05Z",
+      "source": "oddsapi-live:capture-pick-closes"
+    }
+  ]
+}

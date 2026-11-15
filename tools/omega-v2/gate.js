@@ -551,6 +551,20 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (v1BoardMap.status !== 0) throw new Error('v1 board map gate failed');
+
+  const keyConvert = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-key-convert.js')],
+    { stdio: 'inherit' }
+  );
+  if (keyConvert.status !== 0) throw new Error('key convert gate failed');
+
+  const sharpGaps = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-sharp-gaps.js')],
+    { stdio: 'inherit' }
+  );
+  if (sharpGaps.status !== 0) throw new Error('sharp gaps gate failed');
 }
 
 function pickSlim(card) {

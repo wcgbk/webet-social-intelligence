@@ -121,6 +121,9 @@ for (const date of DATES) {
       stakeUsd: p.stakeUsd,
       filler: p.filler || false,
       label: p.label || null,
+      ...(p.lineMovePinn ? { lineMovePinn: p.lineMovePinn } : {}),
+      ...(p.staleSoft ? { staleSoft: true, softLagPp: p.softLagPp != null ? p.softLagPp : null } : {}),
+      ...(p.pushQ ? { pushQ: p.pushQ } : {}),
     })),
     parlay: card.parlayLegs[0] ? {
       combinedOdds: card.parlayLegs[0].combinedOdds,

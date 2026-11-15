@@ -626,6 +626,15 @@ async function generateOmegaVnext(opts = {}) {
       snap,
       replayLike,
       skipInputFetch: !!replayLike,
+      linePolls: masterBoard ? {
+        date: dateISO,
+        games0300: masterBoard.games0300 || null,
+        games1000: masterBoard.games1000 || null,
+        polls: masterBoard.polls || null,
+        eventsBySport: masterBoard.eventsBySport || null,
+      } : (linePathMeta && linePathMeta.path && linePathMeta.path.polls
+        ? { polls: linePathMeta.path.polls }
+        : null),
     };
     if (Object.prototype.hasOwnProperty.call(opts, 'logInputs')) publishInput.logInputs = opts.logInputs;
     if (typeof opts.inputsFetch === 'function') publishInput.inputsFetch = opts.inputsFetch;

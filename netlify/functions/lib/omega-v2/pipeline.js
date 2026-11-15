@@ -2,7 +2,7 @@
 
 const {
   MODEL_VERSION, FLAG_ENV, SHRINK_N0, MIN_SPORT, NHL_ML_SHRINK_K, NHL_ML_WALKFORWARD_BEATS_NOVIG,
-  forceTop3Enabled,
+  forceTop3Enabled, pinnacleFairEnabled, keyConvertEnabled,
 } = require('./constants');
 const { fitWalkForward, applyCalibration } = require('./calibrate');
 const {
@@ -56,6 +56,16 @@ function placeableDkHr(raw) {
       return { reject: 'no-dk-hr-price' };
     }
     if (american != null && !dkHrLineAgrees(edgeLine, quotePoint(px))) {
+      const quoteLine = quotePoint(px);
+      if (keyConvertEnabled() && quoteLine != null) {
+        return {
+          odds: american,
+          book: canonicalPlaceBook(postedBook) || null,
+          fromBest: true,
+          needsKeyConvert: true,
+          quoteLine,
+        };
+      }
       return { reject: 'dk-hr-line-mismatch' };
     }
     if (american != null) {
@@ -105,6 +115,7 @@ function normalizeCandidate(raw) {
   const market = marketFamily(raw.market || raw.betType, pick);
   const quote = placeableDkHr(raw);
   const rejected = quote && quote.reject;
+  const convertible = !!(quote && quote.needsKeyConvert && !rejected);
   const priced = !!(quote && !rejected);
   return {
     sport: String(raw.sport || '').toUpperCase(),
@@ -114,7 +125,9 @@ function normalizeCandidate(raw) {
     marketFamily: market,
     odds: priced ? quote.odds : null,
     oddsText: priced && quote.fromBest ? (oddsLabel(quote.odds) || raw.odds) : raw.odds,
-    line: raw.line != null ? raw.line : (raw.betPoint != null ? raw.betPoint : null),
+    line: convertible && quote.quoteLine != null
+      ? quote.quoteLine
+      : (raw.line != null ? raw.line : (raw.betPoint != null ? raw.betPoint : null)),
     pModel: numProb(raw.pModel != null ? raw.pModel : (raw.modelRawP != null ? raw.modelRawP : raw.p_model)),
     pMkt: numProb(raw.pMkt != null ? raw.pMkt : (raw.fair_sharp_p != null ? raw.fair_sharp_p : raw.sharpFairP)),
     uncertainty: Number.isFinite(Number(raw.uncertainty)) ? Number(raw.uncertainty) : null,
@@ -124,6 +137,7 @@ function normalizeCandidate(raw) {
     postedOdds: raw.odds,
     bestDkHr: raw.bestDkHr && typeof raw.bestDkHr === 'object' ? raw.bestDkHr : null,
     lineMismatch: rejected === 'dk-hr-line-mismatch',
+    needsKeyConvert: convertible,
     homeTeam: raw.homeTeam || null,
     awayTeam: raw.awayTeam || null,
     result: raw.result || null,
@@ -150,8 +164,32 @@ function dedupe(cands) {
   return [...map.values()];
 }
 
+function pollsPresent(src) {
+  if (!src || typeof src !== 'object') return false;
+  if (Array.isArray(src['0300']) || Array.isArray(src['1000']) || Array.isArray(src.close)) return true;
+  if (src.games0300 || src.games1000) return true;
+  if (Array.isArray(src.polls) && src.polls.length) return true;
+  if (Array.isArray(src.events0300) || Array.isArray(src.events1000)) return true;
+  if (src.eventsBySport && typeof src.eventsBySport === 'object' && Object.keys(src.eventsBySport).length) return true;
+  return false;
+}
+
 /** Same screen as the main loop. A rescued row is not a free pass. */
-function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
+function stageCandidate(cand, fit, asOfMs, prepared, rejections, stageOpts) {
+  const polls = !!(stageOpts && stageOpts.linePollsPresent);
+  if (cand.needsKeyConvert && !polls) {
+    rejections.push({
+      matchup: cand.matchup,
+      side: cand.pick,
+      market: cand.market,
+      sport: cand.sport,
+      reason: 'dk-hr-line-mismatch',
+      odds: cand.postedOdds != null ? cand.postedOdds : null,
+      book: cand.postedBook || null,
+      line: cand.line != null ? cand.line : null,
+    });
+    return;
+  }
   if (cand.lineMismatch) {
     rejections.push({
       matchup: cand.matchup,
@@ -188,11 +226,12 @@ function stageCandidate(cand, fit, asOfMs, prepared, rejections) {
     });
     return;
   }
-  if (cand.pMkt == null && cand.odds != null) {
+  const blockDkImplied = !!(stageOpts && stageOpts.blockDkImplied);
+  if (cand.pMkt == null && cand.odds != null && !blockDkImplied) {
     const implied = americanToImplied(cand.odds);
     if (implied != null) cand.pMkt = implied;
   }
-  if (cand.pModel == null || cand.pMkt == null || cand.odds == null) {
+  if (cand.pModel == null || cand.odds == null || (cand.pMkt == null && !blockDkImplied)) {
     rejections.push({
       matchup: cand.matchup,
       side: cand.pick,
@@ -249,11 +288,17 @@ async function buildCard(input) {
     marketSkill = disabledMarketSkill();
   }
   const asOfMs = pregameClockMs(input);
-  const pregameOpts = { pregameAsOfMs: asOfMs };
+  const linePolls = input && input.linePolls ? input.linePolls : null;
+  const linePollsPresent = pollsPresent(linePolls);
+  const stageOpts = {
+    linePollsPresent,
+    blockDkImplied: linePollsPresent && pinnacleFairEnabled(),
+  };
+  const pregameOpts = { pregameAsOfMs: asOfMs, linePolls: linePollsPresent ? linePolls : null };
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
   const prepared = [];
   const rejections = [];
-  for (const cand of normalized) stageCandidate(cand, fit, asOfMs, prepared, rejections);
+  for (const cand of normalized) stageCandidate(cand, fit, asOfMs, prepared, rejections, stageOpts);
   let sportCoverage;
   try {
     sportCoverage = applySportCoverage(prepared, input.stageCounts, {
@@ -280,7 +325,7 @@ async function buildCard(input) {
     try {
       const cand = normalizeCandidate(raw);
       cand.autoCorrected = true;
-      stageCandidate(cand, fit, asOfMs, prepared, rejections);
+      stageCandidate(cand, fit, asOfMs, prepared, rejections, stageOpts);
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       console.warn(`[coverage] rescued row skipped: ${msg}`);
@@ -294,7 +339,7 @@ async function buildCard(input) {
     if (!cand.calibration) continue;
     cand.calibration = applyMarketSkill(cand.calibration, marketSkill, cand.sport);
   }
-  const annotated = prepared.map((cand) => annotateCandidate(cand));
+  const annotated = prepared.map((cand) => annotateCandidate(cand, pregameOpts));
   stampQualified(sportCoverage, annotated);
   for (const cand of annotated) {
     if (!cand.qualified && !cand.parlayQualified) {
@@ -309,6 +354,7 @@ async function buildCard(input) {
         edgeNovig: cand.edgeNovig,
         pCal: cand.calibration ? cand.calibration.pCal : null,
         pMkt: cand.calibration ? cand.calibration.pMkt : null,
+        ...(cand.lineMovePinn ? { lineMovePinn: cand.lineMovePinn } : {}),
       });
     }
   }
@@ -565,6 +611,7 @@ async function publishFromOmegaCandidates(input) {
     pregameAsOfMs: input.pregameAsOfMs,
     stageCounts: input.stageCounts || null,
     boardBySport: input.boardBySport || null,
+    linePolls: input.linePolls || null,
   });
   // Context log only. The card object above is already final.
   try {

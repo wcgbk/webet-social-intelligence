@@ -7,6 +7,7 @@ const {
   KELLY_FRACTION,
 } = require('./constants');
 const { dkHrLineAgrees, quotePoint } = require('./board');
+const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
 
 /** Same placeable books as a published straight. A missing book is not a reject. */
 const PLACEABLE_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
@@ -225,27 +226,40 @@ function favoriteOutOfBand(row) {
  */
 function annotateCandidate(candidate, opts) {
   const force = forceTop3From(opts);
+  const prep = applySharpPrep(candidate, opts);
+  if (prep && prep.rejectReason) {
+    return {
+      ...candidate,
+      qualified: false,
+      parlayQualified: false,
+      rejectReason: prep.rejectReason,
+      ...(prep.lineMovePinn ? { lineMovePinn: prep.lineMovePinn } : {}),
+      ...(force ? { forced: true, forcePlaceable: false } : {}),
+    };
+  }
+  if (prep && prep.candidate) candidate = prep.candidate;
+  const finish = (row) => applySharpFinish(row, candidate, opts);
   const cal = candidate.calibration;
   if (!cal) {
-    return {
+    return finish({
       ...candidate,
       qualified: false,
       parlayQualified: false,
       rejectReason: 'no-calibration',
       ...(force ? { forced: true, forcePlaceable: false } : {}),
-    };
+    });
   }
   const implied = americanToImplied(candidate.odds);
   const dec = americanToDecimal(candidate.odds);
   const pMkt = Number(cal.pMkt);
   if (implied == null || dec == null || !Number.isFinite(pMkt)) {
-    return {
+    return finish({
       ...candidate,
       qualified: false,
       parlayQualified: false,
       rejectReason: 'bad-price',
       ...(force ? { forced: true, forcePlaceable: false } : {}),
-    };
+    });
   }
   const edge = cal.pCal - implied;
   // Both edges use the final map. The 10pp screen does not see the raw
@@ -286,7 +300,7 @@ function annotateCandidate(candidate, opts) {
     parlayQualified: force ? straightReject == null : rejectReason == null,
     rejectReason: straightReject,
   };
-  if (!force) return row;
+  if (!force) return finish(row);
   const pBet = forcedBetProb(cal.pCal, pMkt, {
     ...(opts || {}),
     pMktPower: candidate.pMktPower != null ? candidate.pMktPower : (opts && opts.pMktPower),
@@ -298,7 +312,7 @@ function annotateCandidate(candidate, opts) {
   if (reason == null && pBet != null && (pBet - implied) > MAX_EDGE) reason = 'price-edge-over-10pp';
   const priceEv = pBet == null ? ev : (pBet * (dec - 1) - (1 - pBet));
   const forcePlaceable = reason == null;
-  return {
+  return finish({
     ...row,
     pBet,
     edge: priceEdge,
@@ -308,7 +322,7 @@ function annotateCandidate(candidate, opts) {
     qualified: forcePlaceable,
     parlayQualified: forcePlaceable,
     rejectReason: reason,
-  };
+  });
 }
 
 /** Price EV after the no-vig shrink. Callers that only stored `ev` keep that order. */
@@ -356,6 +370,9 @@ function compareForcedGrowth(a, b) {
   if (!aHas) {
     const ev = finiteRank(b.ev) - finiteRank(a.ev);
     if (ev) return ev;
+    const aStale = a.staleSoft === true;
+    const bStale = b.staleSoft === true;
+    if (aStale !== bStale) return aStale ? -1 : 1;
   }
   return (finiteRank(b.edge) - finiteRank(a.edge))
     || String(a.pick).localeCompare(String(b.pick));
@@ -390,12 +407,19 @@ function compareFavFill(a, b) {
  * rows fill the card first. Out-of-band rows fill empty slots only, one per
  * game, and those rows are marked favCapFill. Cap off is the unsplit rank.
  */
+/** Positive growth only. A non-positive row stays null so it cannot jump +EV. */
+function growthForRank(row, pBet, decimal) {
+  const g = kellyGrowth(pBet, decimal);
+  if (g == null || !row || row.staleSoft !== true) return g;
+  return g + 1e-6;
+}
+
 function selectForcedTop3(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
   const cap = favCapEnabled(opts && opts.env);
   const ranked = (annotated || [])
     .filter((c) => c && c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
-    .map((c) => ({ ...c, kellyGrowth: kellyGrowth(c.pBet, c.decimal) }));
+    .map((c) => ({ ...c, kellyGrowth: growthForRank(c, c.pBet, c.decimal) }));
   const inBand = [];
   const outBand = [];
   for (const c of ranked) {
@@ -436,7 +460,7 @@ function orderForcedPool(annotated, opts) {
     .map((c) => {
       const decimal = c.decimal || americanToDecimal(c.odds);
       const pBet = c.pBet != null ? c.pBet : (c.calibration && c.calibration.pCal);
-      return { ...c, decimal, pBet, kellyGrowth: kellyGrowth(pBet, decimal) };
+      return { ...c, decimal, pBet, kellyGrowth: growthForRank(c, pBet, decimal) };
     });
   const inBand = [];
   const outBand = [];

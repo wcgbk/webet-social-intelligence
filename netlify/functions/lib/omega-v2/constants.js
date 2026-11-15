@@ -366,6 +366,92 @@ const PRICE_BASE_DECIMAL = 1 + 100 / 110;
 const UNC_BASELINE = 0.18;
 const FLAG_ENV = 'OMEGA_PIPELINE_V2';
 
+/**
+ * 3 AM -> 10 AM Pinnacle move. Veto a side the sharp book has moved
+ * against, and rank a stale DK/HR price ahead of an equal-sign neighbor.
+ * Default is on: the 10/31-11/13 replay at 1.5pp matched +1019 with the
+ * top-3 shape intact. 1.0pp was +955. =off restores the old rank.
+ * OMEGA_V2_LINE_MOVE_VETO_PP (1.5) and OMEGA_V2_LINE_MOVE_STALE_PP (1.0)
+ * are percentage points.
+ */
+const LINE_MOVE_ENV = 'OMEGA_V2_LINE_MOVE';
+const LINE_MOVE_DEFAULT_ON = true;
+
+function lineMoveEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[LINE_MOVE_ENV];
+  if (raw == null || String(raw).trim() === '') return LINE_MOVE_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (LINE_MOVE_DEFAULT_ON) return text !== 'off' && text !== '0' && text !== 'false';
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
+function lineMoveVetoPp(env) {
+  const source = env == null ? process.env : env;
+  const n = Number(source.OMEGA_V2_LINE_MOVE_VETO_PP);
+  if (Number.isFinite(n) && n > 0) return n / 100;
+  return 0.015;
+}
+
+function lineMoveStalePp(env) {
+  const source = env == null ? process.env : env;
+  const n = Number(source.OMEGA_V2_LINE_MOVE_STALE_PP);
+  if (Number.isFinite(n) && n > 0) return n / 100;
+  return 0.01;
+}
+
+/**
+ * Pull an NHL bet probability back toward the 3 AM price.
+ * pBet = pBet - 0.35 * (p10 - p3). Other sports use lambda 0.
+ * Replay alone was +984, under +1019, so the default stays off.
+ * =off leaves pBet on the market price.
+ */
+const MOVE_SHRINK_ENV = 'OMEGA_V2_MOVE_SHRINK';
+const MOVE_SHRINK_DEFAULT_ON = false;
+
+function moveShrinkEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[MOVE_SHRINK_ENV];
+  if (raw == null || String(raw).trim() === '') return MOVE_SHRINK_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (MOVE_SHRINK_DEFAULT_ON) return text !== 'off' && text !== '0' && text !== 'false';
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
+/**
+ * Bet probability is Pinnacle's two-way at the number, else Circa, else
+ * Pinnacle converted at most 1.5 points. Never the bet book's own implied.
+ * Default follows the replay. =off keeps the stored fair.
+ */
+const PINNACLE_FAIR_ENV = 'OMEGA_V2_PINNACLE_FAIR';
+const PINNACLE_FAIR_DEFAULT_ON = false;
+
+function pinnacleFairEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[PINNACLE_FAIR_ENV];
+  if (raw == null || String(raw).trim() === '') return PINNACLE_FAIR_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (PINNACLE_FAIR_DEFAULT_ON) return text !== 'off' && text !== '0' && text !== 'false';
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
+/**
+ * Accept a DK/HR number within 1.5 points of Pinnacle and price the push.
+ * Half-point same-line rows stay on today's EV. Default follows the replay.
+ * =off rejects dk-hr-line-mismatch as before.
+ */
+const KEY_CONVERT_ENV = 'OMEGA_V2_KEY_CONVERT';
+const KEY_CONVERT_DEFAULT_ON = false;
+
+function keyConvertEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[KEY_CONVERT_ENV];
+  if (raw == null || String(raw).trim() === '') return KEY_CONVERT_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (KEY_CONVERT_DEFAULT_ON) return text !== 'off' && text !== '0' && text !== 'false';
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -431,4 +517,18 @@ module.exports = {
   PRICE_BASE_DECIMAL,
   UNC_BASELINE,
   FLAG_ENV,
+  LINE_MOVE_ENV,
+  LINE_MOVE_DEFAULT_ON,
+  lineMoveEnabled,
+  lineMoveVetoPp,
+  lineMoveStalePp,
+  MOVE_SHRINK_ENV,
+  MOVE_SHRINK_DEFAULT_ON,
+  moveShrinkEnabled,
+  PINNACLE_FAIR_ENV,
+  PINNACLE_FAIR_DEFAULT_ON,
+  pinnacleFairEnabled,
+  KEY_CONVERT_ENV,
+  KEY_CONVERT_DEFAULT_ON,
+  keyConvertEnabled,
 };

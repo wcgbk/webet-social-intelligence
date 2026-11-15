@@ -228,6 +228,12 @@ function toPick(row) {
       pick.fillerReason = row.fillerReason || 'negative-ev';
     }
   }
+  if (row.lineMovePinn) pick.lineMovePinn = row.lineMovePinn;
+  if (row.staleSoft) {
+    pick.staleSoft = true;
+    if (row.softLagPp != null) pick.softLagPp = row.softLagPp;
+  }
+  if (row.pushQ) pick.pushQ = row.pushQ;
   return pick;
 }
 

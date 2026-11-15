@@ -63,7 +63,7 @@ function enforceHardFailGate(card) {
   card.summary.totalPicks = card.picks.length;
   card.summary.totalStraightBets = card.picks.length;
   try {
-    const { writeSummaryStakeDisplay } = require('./odds_math');
+    const { writeSummaryStakeDisplay } = require('./stake_display');
     writeSummaryStakeDisplay(card.summary, card.picks, card.parlayLegs);
   } catch (_) { /* display only */ }
   card.hardFailGate = report;

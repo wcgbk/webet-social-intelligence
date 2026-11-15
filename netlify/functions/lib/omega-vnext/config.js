@@ -377,6 +377,142 @@ const MODEL_NOTES = [
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
 const BLOB_STORE = 'edge-picks-omega';
 
+/**
+ * Restored d9d53c6 exports. Existing constants above are unchanged.
+ * nbaModuleEnabled is the OMEGA_NBA==='1' switch, not nbaCardEnabled.
+ */
+function nbaModuleEnabled(env) {
+  const e = env == null ? process.env : env;
+  return e.OMEGA_NBA === '1';
+}
+
+const STEAM_WINDOW_MIN = 15;
+
+const PINNACLE_LINE_MOVE = {
+  creditFloor: 49000,
+  regions: 'eu',
+  bookmakers: 'pinnacle',
+  checkBookmakers: 'pinnacle,draftkings,hardrockbet',
+  secondaryBookmakers: 'draftkings,hardrockbet',
+  markets: 'h2h,spreads,totals',
+  steamProbPts: 3,
+  steamLinePoints: 0.5,
+  windowMinutes: STEAM_WINDOW_MIN,
+  historicalCreditsPerPull: 30,
+  earlyReuseMs: 5 * 60 * 1000,
+};
+
+const LINE_MOVE_PROB = {
+  noise: 0.005,
+  scale: 0.030,
+  maxK: 0.90,
+  maxAbsProbAdj: 0.015,
+  openWeight: 0.25,
+  adverseDropProb: 0.020,
+  extraSharpBooks: [],
+  extraSharpWeight: 0.5,
+  circaWeight: 0.5,
+  hardRockOppositionDamp: 0.5,
+  probClamp: [0.02, 0.98],
+  weights: {
+    NFL: { Moneyline: 0.35, Spread: 0.45, Total: 0.40 },
+    NCAAF: { Moneyline: 0.20, Spread: 0.25, Total: 0.20 },
+    NHL: { Moneyline: 0.15, Spread: 0.25, Total: 0.20 },
+    MLB: { Moneyline: 0.15, Spread: 0.20, Total: 0.20 },
+    NBA: { Moneyline: 0.15, Spread: 0.20, Total: 0.20 },
+    default: { Moneyline: 0.20, Spread: 0.25, Total: 0.20 },
+  },
+  dkLagWeight: {
+    NFL: 0.15,
+    NCAAF: 0.10,
+    NHL: 0.08,
+    MLB: 0.08,
+    NBA: 0.08,
+    default: 0.10,
+  },
+};
+
+/** ASSUMED. EV above this is a model-error flag for every sport, market, and price. */
+const EV_CAP_ALL = 0.10;
+/** ASSUMED 2026-10-18. Default 0. OMEGA_EDGE_FLOOR_K overrides at call time. */
+const EDGE_FLOOR_K = 0;
+
+function envNumber(name, fallback) {
+  const v = process.env[name];
+  if (v == null || String(v).trim() === '') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** Default on. OMEGA_TEAM_EXACT_ONLY=0 / off / false / no disables. */
+function teamExactOnly() {
+  const v = process.env.OMEGA_TEAM_EXACT_ONLY;
+  if (v == null) return true;
+  const s = String(v).trim().toLowerCase();
+  if (s === '') return true;
+  if (s === '0' || s === 'off' || s === 'false' || s === 'no') return false;
+  return true;
+}
+
+const RATING_ERROR_N0 = 6;
+const RATING_ERROR_SD = {
+  NCAAF: { margin: 8, total: 6 },
+  NHL: { margin: 1.25, total: 0.9 },
+  MLB: { margin: 2.1, total: 1.75 },
+  NFL: {
+    margin: { base: 4, k: 16 },
+    total: 6,
+  },
+  NBA: { margin: 0, total: 0 },
+};
+
+function ratingKind(kind) {
+  return /total/i.test(String(kind || '')) ? 'total' : 'margin';
+}
+
+function ratingGamesN(gpHome, gpAway) {
+  const a = Number(gpHome);
+  const b = Number(gpAway);
+  if (!(a > 0) || !(b > 0)) return undefined;
+  return (a + b) / 2;
+}
+
+function ratingErrorSd(sport, kind, n) {
+  const table = RATING_ERROR_SD[String(sport || '').toUpperCase()];
+  const entry = table ? table[ratingKind(kind)] : 0;
+  const games = Number(n);
+  const used = Number.isFinite(games) && games > 0 ? games : RATING_ERROR_N0;
+  if (entry != null && typeof entry === 'object') {
+    const base = Number(entry.base);
+    const k = Number(entry.k);
+    if (!(base > 0) || !(k > 0) || !Number.isFinite(k)) return 0;
+    return base * Math.sqrt(k / (k + used));
+  }
+  const base = Number(entry);
+  if (!(base > 0)) return 0;
+  return base * Math.sqrt(RATING_ERROR_N0 / Math.max(used, RATING_ERROR_N0));
+}
+
+function gameSdFor(sport, kind) {
+  const key = String(sport || '').toUpperCase();
+  if (ratingKind(kind) === 'total') return SPORT_TOTAL_STD[key] || 10;
+  return SPORT_SPREAD_STD[key] || 13.5;
+}
+
+function effectiveSd(sport, kind, n) {
+  const game = gameSdFor(sport, kind);
+  const rating = ratingErrorSd(sport, kind, n);
+  if (!(rating > 0) || !(game > 0)) return game;
+  return Math.sqrt(game * game + rating * rating);
+}
+
+const MARKET_ANCHOR_MODEL_WEIGHT = {
+  NCAAF: { spread: 0.10, ml: 0.10, total: 0.10 },
+  NFL: { spread: 0.10, ml: 0.10, total: 0 },
+  NHL: { spread: 0.10, ml: 0.10, total: 0.10 },
+  MLB: { spread: 0.70, ml: 0.70, total: 0.10 },
+};
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -418,4 +554,15 @@ module.exports = {
   MODEL_NOTES,
   SITE_ID,
   BLOB_STORE,
+  nbaModuleEnabled,
+  STEAM_WINDOW_MIN,
+  PINNACLE_LINE_MOVE,
+  LINE_MOVE_PROB,
+  EV_CAP_ALL,
+  EDGE_FLOOR_K,
+  envNumber,
+  teamExactOnly,
+  ratingErrorSd,
+  effectiveSd,
+  MARKET_ANCHOR_MODEL_WEIGHT,
 };

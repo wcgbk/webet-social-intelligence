@@ -439,6 +439,53 @@ async function readHealthLatest() {
   return readJson('omega-health-latest');
 }
 
+/**
+ * Append one late-news ops run. Dated key plus late-news-latest.
+ * Caps the dated runs list at 48. Soft-fail at the call site.
+ */
+async function storeLateNewsOps(dateISO, run) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`omega-ops refused bad date: ${dateISO}`);
+  }
+  const datedKey = assertOpsKey(`omega-ops/late-news-${d}`);
+  const latestKey = assertOpsKey('omega-ops/late-news-latest');
+  let prev = null;
+  try {
+    prev = await readJson(datedKey);
+  } catch (e) {
+    prev = null;
+  }
+  const prior = Array.isArray(prev && prev.runs) ? prev.runs : [];
+  const runs = prior.slice(-47);
+  runs.push(run || {});
+  const payload = {
+    date: d,
+    opsOnly: true,
+    storedAt: new Date().toISOString(),
+    runs,
+  };
+  await storeJson(datedKey, payload);
+  try {
+    await storeJson(latestKey, payload);
+  } catch (e) {
+    console.error(`[omega-vnext/store] late-news latest: ${e.message}`);
+  }
+  return { dated: datedKey, latest: latestKey };
+}
+
+/** Private daily unmatched football names. Null on a bad date or a missing blob. */
+async function readUnmatchedTeams(dateISO) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  try {
+    return await readJson(`omega-unmatched-${d}`);
+  } catch (e) {
+    console.warn(`[omega-vnext/store] unmatched read soft-fail: ${e.message}`);
+    return null;
+  }
+}
+
 module.exports = {
   readHealthRecord,
   readHealthLatest,
@@ -449,4 +496,6 @@ module.exports = {
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
+  storeLateNewsOps,
+  readUnmatchedTeams,
 };

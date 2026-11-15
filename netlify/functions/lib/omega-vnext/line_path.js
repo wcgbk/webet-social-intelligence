@@ -688,6 +688,45 @@ async function storeLinePoll(dateISO, poll) {
   return { snapKey, pathKey, gameCount: snapDoc.gameCount };
 }
 
+const OFFICIAL_MOVE_SLOTS = new Set(['0300', '1000', 'open']);
+
+function moveSlotLabel(poll) {
+  if (!poll) return '';
+  const raw = poll.hhmm != null && poll.hhmm !== '' ? poll.hhmm : poll.slot;
+  if (raw == null || raw === '') return '';
+  const text = String(raw);
+  if (text === 'open') return 'open';
+  return text.padStart(4, '0');
+}
+
+/**
+ * Line-move polls are 0300, 1000, and a stored open. Retired morning
+ * slots are dropped. latest is the 1000 poll only. earliest is 0300,
+ * else the stored open. Open does not stand in for a missing 0300 or
+ * 1000 as a move endpoint (missingSlots says so).
+ */
+function shapeOfficialLinePath(polls, dateISO) {
+  const by = {};
+  for (const poll of polls || []) {
+    const slot = moveSlotLabel(poll);
+    if (!OFFICIAL_MOVE_SLOTS.has(slot) || !poll) continue;
+    if (!by[slot]) by[slot] = poll;
+  }
+  const ordered = ['open', '0300', '1000'].map((slot) => by[slot]).filter(Boolean);
+  const earliest = by['0300'] || by.open || null;
+  const latest = by['1000'] || null;
+  const missingSlots = [];
+  if (!by['0300']) missingSlots.push('0300');
+  if (!by['1000']) missingSlots.push('1000');
+  return {
+    path: ordered.length ? { date: dateISO || null, polls: ordered } : null,
+    earliest,
+    latest,
+    missingSlots,
+    source: latest ? 'pull-0300-1000' : 'missing-0300-1000',
+  };
+}
+
 module.exports = {
   foldAccents,
   gameKey,
@@ -715,4 +754,5 @@ module.exports = {
   writeJsonBlob,
   median,
   normToken,
+  shapeOfficialLinePath,
 };

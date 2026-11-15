@@ -43,7 +43,40 @@
 const { samePlayerName } = require('../player-name');
 const { bindEspnGameByTeamAndTime } = require('./sports/_common');
 const { resolveTeamId } = require('./sports/team_identity');
-const { lookupQb, backupQbDelta } = require('./sports/game_day');
+const { lookupQb: lookupQbDirect, backupQbDelta: backupQbDeltaDirect } = require('./sports/game_day');
+const { missingImportsC } = require('./missing_import_flag');
+const { modelRow, rowByIdentityOrFuzzy } = require('./sports/team_identity');
+
+function normTeamKeyQb(name) {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Flag off keeps the pre-restore TypeError so a loaded QB map still soft-fails
+// 10:15 news and leaves the 10:00 card. Flag on is the d9d53c6 4-arg lookup.
+function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
+  if (!missingImportsC()) throw new TypeError('lookupQb is not a function');
+  void lookupQbDirect;
+  if (!teamName || !qbByTeam || typeof qbByTeam !== 'object') return null;
+  const direct = qbByTeam[teamName] || qbByTeam[normTeamKeyQb(teamName)];
+  if (direct) return direct;
+  if (sport === 'NFL' || sport === 'NCAAF') return modelRow(sport, qbByTeam, teamName, { fallbackSeen });
+  for (const [k, v] of Object.entries(qbByTeam)) {
+    if (normTeamKeyQb(k) === normTeamKeyQb(teamName)) return v;
+    if (rowByIdentityOrFuzzy(sport, { [k]: v }, teamName, { fallbackSeen })) return v;
+  }
+  return null;
+}
+
+function backupQbDelta(...args) {
+  if (!missingImportsC()) throw new TypeError('backupQbDelta is not a function');
+  return backupQbDeltaDirect(...args);
+}
 const { attachEv } = require('./edge');
 const { passesPublishFloor, passesLeanFill } = require('./select_floor');
 const { resolveFetch } = require('./audit_log');

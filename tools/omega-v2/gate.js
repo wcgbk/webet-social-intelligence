@@ -415,6 +415,13 @@ async function main() {
   );
   if (fnLoad.status !== 0) throw new Error('netlify functions load gate failed');
 
+  const missingImports = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-missing-imports.js')],
+    { stdio: 'inherit' }
+  );
+  if (missingImports.status !== 0) throw new Error('missing imports gate failed');
+
   const regradeLetters = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-regrade-omega-letters.js')],

@@ -38,9 +38,10 @@ const {
   straightCardLabel,
   compareByEv,
 } = require('./select_floor');
-const { parlayFromStraights } = require('./parlay');
+const { parlayFromStraights } = require('./parlay_straights');
 const { finishShortCard } = require('./card_topup');
-const { parseEdgeFraction, writeSummaryStakeDisplay } = require('./odds_math');
+const { parseEdgeFraction } = require('./odds_math');
+const { writeSummaryStakeDisplay } = require('./stake_display');
 const { recordRankedList, top10Rows } = require('./selection_pass');
 const { GATES } = require('./config');
 const { CONTEXT_INPUTS } = require('./timeline');

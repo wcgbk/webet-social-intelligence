@@ -1259,6 +1259,9 @@ exports.autoFixPicks = autoFixPicks;
 exports.stampCleanVerifiedCard = stampCleanVerifiedCard;
 exports.pickStampSnapshot = pickStampSnapshot;
 exports.pickFieldsWouldChange = pickFieldsWouldChange;
+exports.updatePicksBlob = updatePicksBlob;
+exports.fetchBetaPicks = fetchBetaPicks;
+exports.enforceOmegaDailyUnitCap = enforceOmegaDailyUnitCap;
 
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 

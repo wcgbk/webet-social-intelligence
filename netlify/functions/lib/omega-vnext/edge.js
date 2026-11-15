@@ -654,5 +654,6 @@ module.exports = {
   predictedClvCents,
   enrichCandidateWithEdge,
   attachEv,
+  canonicalizeBook,
   PLACEABILITY_VETO_REASON,
 };

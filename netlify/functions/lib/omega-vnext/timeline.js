@@ -8,7 +8,7 @@
 
 const { parseEdgeFraction } = require('./odds_math');
 const { matchupKey } = require('./select');
-const { parlayFromStraights, isNoQualifyingParlay } = require('./parlay');
+const { parlayFromStraights, isNoQualifyingParlay } = require('./parlay_straights');
 const {
   applySilentSortCheck,
   reviewHardRock,

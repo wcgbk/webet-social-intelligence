@@ -30,7 +30,7 @@ const {
   eligiblePairedFill,
   compareByEv,
 } = require('./select_floor');
-const { parlayFromStraights } = require('./parlay');
+const { parlayFromStraights } = require('./parlay_straights');
 const { passesSheetMinimums } = require('./bet_check_gate');
 const { verifyPlaceabilityDecision } = require('./edge');
 

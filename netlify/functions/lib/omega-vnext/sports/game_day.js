@@ -300,6 +300,142 @@ function applyWeatherTotalAdj(modelTotal, weather) {
   return { modelTotal: total, weatherNote: notes.join('; '), applied: true };
 }
 
+// Starting QB only. The daily ESPN depth chart wins when that team has a
+// row. An NFL preseason QB1 counts as the rated starter when the name and
+// the team match. With no chart, depth 1 or NAMED_STARTING_QB still counts.
+const NAMED_STARTING_QB = Object.freeze({
+  'lamar jackson': 'BAL',
+});
+
+const PRESEASON_QB1 = Object.freeze({
+  'jalen hurts': 'PHI',
+  'lamar jackson': 'BAL',
+  'baker mayfield': 'TB',
+  'caleb williams': 'CHI',
+});
+
+const NAMED_BACKUP_QB = Object.freeze({
+  'lamar jackson': { marginPts: 4.5, totalPts: -2.25 },
+});
+
+function normQbName(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function nflAbbr(teamName) {
+  if (teamName == null || teamName === '') return null;
+  const { resolveTeamId, teamRecord } = require('./team_identity');
+  const id = resolveTeamId('NFL', teamName);
+  const rec = id ? teamRecord('NFL', id) : null;
+  if (rec && rec.abbreviation) return String(rec.abbreviation).toUpperCase();
+  const raw = String(teamName).trim().toUpperCase();
+  return /^[A-Z]{2,3}$/.test(raw) ? raw : null;
+}
+
+function preseasonRatedStarter(qb, teamName) {
+  if (!qb) return false;
+  const want = PRESEASON_QB1[normQbName(qb.qbName || qb.name)];
+  if (!want) return false;
+  return nflAbbr(teamName) === want;
+}
+
+function depthFeedEntry(sport, teamName, depthByTeam) {
+  if (!depthByTeam || typeof depthByTeam !== 'object' || Array.isArray(depthByTeam)) return null;
+  const table = depthByTeam.map && typeof depthByTeam.map === 'object' && !Array.isArray(depthByTeam.map)
+    ? depthByTeam.map
+    : depthByTeam;
+  if (!table || typeof table !== 'object' || Array.isArray(table)) return null;
+  const { resolveTeamId } = require('./team_identity');
+  const id = resolveTeamId(sport, teamName);
+  if (id && table[String(id)] && table[String(id)].qb1) return table[String(id)];
+  const want = normTeamKey(teamName);
+  for (const row of Object.values(table)) {
+    if (!row || typeof row !== 'object' || !row.qb1 || !row.qb1.name) continue;
+    if (id && row.teamId != null && String(row.teamId) === String(id)) return row;
+    if (row.displayName && normTeamKey(row.displayName) === want) return row;
+    if (row.abbr && want && normTeamKey(row.abbr) === want) return row;
+  }
+  return null;
+}
+
+function playerIsFeedQb1(qb, entry) {
+  const qb1 = entry && entry.qb1;
+  if (!qb || !qb1) return false;
+  const rawId = qb.athleteId != null && qb.athleteId !== '' ? qb.athleteId
+    : (qb.id != null && qb.id !== '' ? qb.id : null);
+  if (rawId != null && qb1.athleteId != null && String(qb1.athleteId) !== '') {
+    return String(rawId) === String(qb1.athleteId);
+  }
+  const name = normQbName(qb.qbName || qb.name);
+  const want = normQbName(qb1.name);
+  return !!(name && want && name === want);
+}
+
+function isStartingQb(qb, feedEntry, ctx) {
+  if (!qb) return false;
+  if (ctx && ctx.sport === 'NFL' && preseasonRatedStarter(qb, ctx.team)) return true;
+  if (feedEntry && feedEntry.qb1) return playerIsFeedQb1(qb, feedEntry);
+  const depth = qb.depthChartRank != null ? qb.depthChartRank : (qb.depthRank != null ? qb.depthRank : qb.depth);
+  if (depth != null && Number.isFinite(Number(depth))) return Number(depth) === 1;
+  if (qb.isStarter === true || qb.qb1 === true) return true;
+  return Object.prototype.hasOwnProperty.call(NAMED_STARTING_QB, normQbName(qb.qbName || qb.name));
+}
+
+function isFreshQbOut(qb, feedEntry, ctx) {
+  if (!qb) return false;
+  if (!isStartingQb(qb, feedEntry, ctx)) return false;
+  const st = String(qb.qbStatus || qb.status || '').toLowerCase();
+  if (!st) return false;
+  if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
+  if (/doubtful|questionable/.test(st)) return false;
+  return /\bout\b/.test(st);
+}
+
+/**
+ * Points to move the margin (positive = starter is better than the backup)
+ * and the total (negative = fewer points). Fresh Out only.
+ * Explicit starterValue and backupValue win. A gap above 20 is Elo
+ * (25 Elo ≈ 1 point). Otherwise the numbers are already points.
+ */
+function backupQbDelta(qb, sport, feedEntry, ctx) {
+  if (!qb) return null;
+  if (!(ctx && ctx.force) && !isFreshQbOut(qb, feedEntry, ctx)) return null;
+  const cfg = (QB_INJURY && QB_INJURY[sport]) || {
+    outMarginPts: 3.0, outTotalPts: -1.5, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0,
+  };
+  const capM = Math.abs(Number(cfg.maxAbsMarginAdj) || 5);
+  const capT = Math.abs(Number(cfg.maxAbsTotalAdj) || 3);
+  let marginPts = Number(cfg.outMarginPts);
+  let totalPts = Number(cfg.outTotalPts);
+  let source = 'table';
+  const starter = Number(qb.starterValue != null ? qb.starterValue : qb.qbValue);
+  const backup = Number(qb.backupValue != null ? qb.backupValue : qb.backupQbValue);
+  if (Number.isFinite(starter) && Number.isFinite(backup)) {
+    const gap = starter - backup;
+    const points = Math.abs(gap) > 20 ? gap / 25 : gap;
+    if (points > 0) {
+      marginPts = points;
+      totalPts = -Math.abs(points) * 0.5;
+      source = 'starter-backup';
+    }
+  } else {
+    const named = NAMED_BACKUP_QB[normQbName(qb.qbName || qb.name)];
+    if (named) {
+      marginPts = named.marginPts;
+      totalPts = named.totalPts;
+      source = 'named';
+    }
+  }
+  if (!Number.isFinite(marginPts) || marginPts < 0) marginPts = 0;
+  if (!Number.isFinite(totalPts) || totalPts > 0) totalPts = 0;
+  return {
+    marginPts: clamp(marginPts, 0, capM),
+    totalPts: clamp(totalPts, -capT, 0),
+    source,
+    qbName: qb.qbName || qb.name || null,
+  };
+}
+
 module.exports = {
   HFA_ADJ,
   SHORT_REST_DAYS,
@@ -309,6 +445,8 @@ module.exports = {
   restMapFromScoreboard,
   lookupRest,
   hfaAdjustment,
+  lookupQb,
+  backupQbDelta,
   qbSoftAdjust,
   qbContinuityAdjust,
   applyGameDayAdjustments,

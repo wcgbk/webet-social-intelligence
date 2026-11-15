@@ -421,10 +421,11 @@ function moveShrinkEnabled(env) {
 /**
  * Bet probability is Pinnacle's two-way at the number, else Circa, else
  * Pinnacle converted at most 1.5 points. Never the bet book's own implied.
- * Default follows the replay. =off keeps the stored fair.
+ * Default is on: the 10/31-11/13 replay was +1687 with days3 15/15.
+ * =off keeps the stored fair. No 3 AM/10 AM poll leaves the stored fair.
  */
 const PINNACLE_FAIR_ENV = 'OMEGA_V2_PINNACLE_FAIR';
-const PINNACLE_FAIR_DEFAULT_ON = false;
+const PINNACLE_FAIR_DEFAULT_ON = true;
 
 function pinnacleFairEnabled(env) {
   const source = env == null ? process.env : env;
@@ -437,7 +438,10 @@ function pinnacleFairEnabled(env) {
 
 /**
  * Accept a DK/HR number within 1.5 points of Pinnacle and price the push.
- * Half-point same-line rows stay on today's EV. Default follows the replay.
+ * Half-point same-line rows stay on today's EV.
+ * HOLD: alone replay was +700 after alias grading (grade85 raw +683, two
+ * Odds API names unmatched) and the stack with line-move plus Pinnacle
+ * fair was +1367, under the +1687 Pinnacle-fair card. Default stays off.
  * =off rejects dk-hr-line-mismatch as before.
  */
 const KEY_CONVERT_ENV = 'OMEGA_V2_KEY_CONVERT';

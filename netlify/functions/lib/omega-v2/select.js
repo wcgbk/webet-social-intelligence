@@ -356,11 +356,20 @@ function kellyGrowth(p, decimal) {
   return Number.isFinite(growth) ? growth : null;
 }
 
+/** Stored-fair fallback. A Pinnacle/Circa fair sorts strictly ahead of it. */
+function storedFairFallback(row) {
+  return !!(row && row.noSharpFair === true);
+}
+
 /**
  * Positive growth first (desc), then null growth by price EV (desc).
  * Ties break on edge, then pick name.
+ * A stored-fair fallback sorts after every sharp-fair row.
  */
 function compareForcedGrowth(a, b) {
+  const aFall = storedFairFallback(a);
+  const bFall = storedFairFallback(b);
+  if (aFall !== bFall) return aFall ? 1 : -1;
   const ag = a.kellyGrowth;
   const bg = b.kellyGrowth;
   const aHas = ag != null;
@@ -382,8 +391,12 @@ function compareForcedGrowth(a, b) {
  * Positive price EV first, then the American price closest to the -300
  * cap (smaller absolute price), then higher quarter-Kelly growth
  * (null last), then pick name.
+ * A stored-fair fallback sorts after every sharp-fair row.
  */
 function compareFavFill(a, b) {
+  const aFall = storedFairFallback(a);
+  const bFall = storedFairFallback(b);
+  if (aFall !== bFall) return aFall ? 1 : -1;
   const aPos = Number(a.ev) > 0;
   const bPos = Number(b.ev) > 0;
   if (aPos !== bPos) return aPos ? -1 : 1;
@@ -406,7 +419,19 @@ function compareFavFill(a, b) {
  * With the favorite cap on, prices shorter than -300 are out of band. In-band
  * rows fill the card first. Out-of-band rows fill empty slots only, one per
  * game, and those rows are marked favCapFill. Cap off is the unsplit rank.
+ * Stored-fair fallbacks fill only after every sharp-fair row in both bands,
+ * so a fallback takes a slot only when fewer than 3 sharp-fair rows exist.
  */
+function bySharpFair(list) {
+  const sharp = [];
+  const fallback = [];
+  for (const row of list || []) {
+    if (storedFairFallback(row)) fallback.push(row);
+    else sharp.push(row);
+  }
+  return { sharp, fallback };
+}
+
 /** Positive growth only. A non-positive row stays null so it cannot jump +EV. */
 function growthForRank(row, pBet, decimal) {
   const g = kellyGrowth(pBet, decimal);
@@ -428,6 +453,8 @@ function selectForcedTop3(annotated, opts) {
   }
   inBand.sort(compareForcedGrowth);
   if (cap) outBand.sort(compareFavFill);
+  const inFair = bySharpFair(inBand);
+  const outFair = bySharpFair(outBand);
   const out = [];
   const used = new Set();
   const take = (list, fill) => {
@@ -441,16 +468,19 @@ function selectForcedTop3(annotated, opts) {
       out.push(row);
     }
   };
-  take(inBand, false);
-  if (cap) take(outBand, true);
+  take(inFair.sharp, false);
+  if (cap) take(outFair.sharp, true);
+  take(inFair.fallback, false);
+  if (cap) take(outFair.fallback, true);
   return out;
 }
 
 /**
  * Full v2 order for a stored qualified pool. Same split as selectForcedTop3:
- * in-band by quarter-Kelly growth, then out-of-band fills. Does not slice
- * to 3. A missing `qualified` stays in (the pool is already the qualified
- * set). `qualified: false` stays out. The -300 cap is favCapEnabled.
+ * in-band sharp, then out-of-band sharp, then stored-fair fallbacks in that
+ * same band order. News re-rank refills from this list. Does not slice to 3.
+ * A missing `qualified` stays in (the pool is already the qualified set).
+ * `qualified: false` stays out. The -300 cap is favCapEnabled.
  */
 function orderForcedPool(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
@@ -470,7 +500,10 @@ function orderForcedPool(annotated, opts) {
   }
   inBand.sort(compareForcedGrowth);
   if (cap) outBand.sort(compareFavFill);
-  return cap ? inBand.concat(outBand) : inBand;
+  const inFair = bySharpFair(inBand);
+  const outFair = bySharpFair(outBand);
+  if (!cap) return inFair.sharp.concat(inFair.fallback);
+  return inFair.sharp.concat(outFair.sharp, inFair.fallback, outFair.fallback);
 }
 
 function selectStraights(annotated, opts) {

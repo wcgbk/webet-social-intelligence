@@ -4,6 +4,8 @@
  * 3 AM -> 10 AM Pinnacle context for the v2 card.
  * Missing 3 AM prices do not veto and do not boost.
  * The bet book's own implied is not a fair when Pinnacle fair is on.
+ * A 10 AM poll with no Pinnacle/Circa pair keeps the stored fair, tags the
+ * row, and leaves it placeable. It does not empty the card.
  */
 
 const { noVigTwoWay, americanToImplied } = require('../omega-vnext/odds_math');
@@ -414,8 +416,36 @@ function lineMoveRecord(move, stale) {
 }
 
 /**
+ * Stored fair stays. The tag is meta for rank only. sharpAudit keeps the
+ * old drop reason without making the row unplaceable.
+ */
+function tagStoredFallback(candidate, moveOn, shrinkOn, record, stale, move) {
+  const next = {
+    ...candidate,
+    calibration: candidate.calibration ? { ...candidate.calibration } : candidate.calibration,
+    noSharpFair: true,
+    fairSource: 'stored-fallback',
+    sharpAudit: 'no-sharp-fair',
+  };
+  const needMove = (moveOn && (record || stale)) || (shrinkOn && move);
+  if (!needMove) return next;
+  next._sharp = {
+    lineMovePinn: record,
+    stale: !!stale,
+    softLagPp: stale && move && move.dkLag != null
+      ? round6(move.dkLag * 100)
+      : (move && move.levelLagPp != null ? round6(move.levelLagPp) : null),
+    shrink: shrinkOn && move ? { p3: move.p3, p10: move.p10 } : null,
+    pushQ: 0,
+    pushAware: false,
+  };
+  return next;
+}
+
+/**
  * Adjust the candidate before the existing annotate math.
  * Null means the row is unchanged. A rejectReason drops it before the cut.
+ * noSharpFair keeps the stored fair and stays placeable.
  */
 function applySharpPrep(candidate, opts) {
   const env = opts && opts.env;
@@ -428,8 +458,8 @@ function applySharpPrep(candidate, opts) {
   if (!index) return null;
   const spec = specOf(candidate);
   if (!spec) {
-    if (fairOn) return { rejectReason: 'no-sharp-fair' };
     if (keyOn && candidate && candidate.needsKeyConvert) return { rejectReason: 'dk-hr-line-mismatch' };
+    if (fairOn) return { candidate: tagStoredFallback(candidate) };
     return null;
   }
   const g10 = gameAt(index, '1000', candidate);
@@ -441,11 +471,11 @@ function applySharpPrep(candidate, opts) {
   if (moveOn && move && move.m <= -lineMoveVetoPp(env)) {
     return { rejectReason: 'pinnacle-moved-against', lineMovePinn: record };
   }
-  if (fairOn) {
-    if (!fair) return { rejectReason: 'no-sharp-fair', lineMovePinn: record };
-  }
   if (keyOn && candidate && candidate.needsKeyConvert && !(fair && fair.p != null)) {
     return { rejectReason: 'dk-hr-line-mismatch', lineMovePinn: record };
+  }
+  if (fairOn && !fair) {
+    return { candidate: tagStoredFallback(candidate, moveOn, shrinkOn, record, stale, move) };
   }
   const needCopy = (fairOn && fair) || (keyOn && fair && (fair.converted || (fair.q > 0)))
     || (moveOn && (record || stale)) || (shrinkOn && move);

@@ -6,8 +6,10 @@
  */
 
 const assert = require('assert');
-const { annotateCandidate, selectForcedTop3 } = require('./netlify/functions/lib/omega-v2/select');
+const { annotateCandidate, selectForcedTop3, orderForcedPool } = require('./netlify/functions/lib/omega-v2/select');
 const { buildCard } = require('./netlify/functions/lib/omega-v2/pipeline');
+const { buildForcedParlay } = require('./netlify/functions/lib/omega-v2/parlay');
+const { toPick } = require('./netlify/functions/lib/omega-v2/guards');
 const { americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
 const FUTURE = '2026-11-16T18:00:00Z';
@@ -72,6 +74,39 @@ function pollsFrom(am, pm) {
     '0300': [spreadEvent('New York Jets', 'New England Patriots', am)],
     '1000': [spreadEvent('New York Jets', 'New England Patriots', pm)],
   };
+}
+
+function slateCand(away, home, over) {
+  return cand({
+    matchup: `${away} @ ${home}`,
+    pick: `${away} +3.5`,
+    homeTeam: home,
+    awayTeam: away,
+    gameKey: `${away.toLowerCase()} @ ${home.toLowerCase()}`,
+    ...over,
+  });
+}
+
+function pinSpread(away, home, pinPrice, pinOpp) {
+  return spreadEvent(away, home, [
+    book('pinnacle', '2026-11-16 10:05', [
+      { name: away, price: pinPrice, point: 3.5 },
+      { name: home, price: pinOpp, point: -3.5 },
+    ], 'spreads'),
+    book('draftkings', '2026-11-16 10:05', [
+      { name: away, price: -110, point: 3.5 },
+      { name: home, price: -110, point: -3.5 },
+    ], 'spreads'),
+  ]);
+}
+
+function dkSpread(away, home) {
+  return spreadEvent(away, home, [
+    book('draftkings', '2026-11-16 10:05', [
+      { name: away, price: -110, point: 3.5 },
+      { name: home, price: -110, point: -3.5 },
+    ], 'spreads'),
+  ]);
 }
 
 function cand(over) {
@@ -239,6 +274,8 @@ assert.strictEqual(fairKept.calibration.pMkt, 0.50);
 const fair = annotateCandidate(cand(), { ...baseOpts, linePolls: toward });
 assert.ok(fair.calibration.pMkt > 0.54, fair.calibration.pMkt);
 assert.ok(Math.abs(fair.pBet - fair.calibration.pMkt) < 1e-12);
+assert.notStrictEqual(fair.noSharpFair, true);
+assert.strictEqual(fair.fairSource, undefined);
 const noSharp = {
   '1000': [spreadEvent('New York Jets', 'New England Patriots', [
     book('draftkings', '2026-11-16 10:05', [
@@ -247,8 +284,122 @@ const noSharp = {
     ], 'spreads'),
   ])],
 };
-const rejectedFair = annotateCandidate(cand(), { ...baseOpts, linePolls: noSharp });
-assert.strictEqual(rejectedFair.rejectReason, 'no-sharp-fair');
+const fallbackFair = annotateCandidate(cand(), { ...baseOpts, linePolls: noSharp });
+assert.strictEqual(fallbackFair.qualified, true, fallbackFair.rejectReason);
+assert.strictEqual(fallbackFair.rejectReason, null);
+assert.strictEqual(fallbackFair.noSharpFair, true);
+assert.strictEqual(fallbackFair.fairSource, 'stored-fallback');
+assert.strictEqual(fallbackFair.sharpAudit, 'no-sharp-fair');
+assert.strictEqual(fallbackFair.calibration.pMkt, 0.50);
+const circaOnly = {
+  '1000': [spreadEvent('New York Jets', 'New England Patriots', [
+    book('circa', '2026-11-16 10:05', [
+      { name: 'New York Jets', price: -110, point: 3.5 },
+      { name: 'New England Patriots', price: -110, point: -3.5 },
+    ], 'spreads'),
+  ])],
+};
+const circaFair = annotateCandidate(cand(), { ...baseOpts, linePolls: circaOnly });
+assert.strictEqual(circaFair.qualified, true, circaFair.rejectReason);
+assert.notStrictEqual(circaFair.noSharpFair, true);
+assert.strictEqual(circaFair.fairSource, undefined);
+
+function assertNoPublicFairTag(row) {
+  const pick = toPick(row);
+  assert.strictEqual(pick.noSharpFair, undefined);
+  assert.strictEqual(pick.fairSource, undefined);
+  assert.strictEqual(pick.sharpAudit, undefined);
+  const text = JSON.stringify(pick);
+  assert.ok(!text.includes('stored-fallback'));
+  assert.ok(!text.includes('no-sharp-fair'));
+  assert.ok(!text.includes('noSharpFair'));
+}
+
+const emptyNames = [
+  ['Alpha Away', 'Alpha Home'],
+  ['Bravo Away', 'Bravo Home'],
+  ['Charlie Away', 'Charlie Home'],
+  ['Delta Away', 'Delta Home'],
+];
+const emptyPoll = { '1000': emptyNames.map(([away, home]) => dkSpread(away, home)) };
+const emptyRows = emptyNames.map(([away, home]) => annotateCandidate(
+  slateCand(away, home),
+  { ...baseOpts, linePolls: emptyPoll },
+));
+assert.ok(emptyRows.every((row) => row.qualified && row.noSharpFair === true && row.fairSource === 'stored-fallback'));
+const emptyCard = selectForcedTop3(emptyRows, baseOpts);
+assert.strictEqual(emptyCard.length, 3);
+assert.ok(emptyCard.every((row) => row.noSharpFair === true && row.fairSource === 'stored-fallback' && row.sharpAudit === 'no-sharp-fair'));
+const emptyParlay = buildForcedParlay(emptyCard);
+assert.strictEqual(emptyParlay.publish, true, emptyParlay.skipReason);
+assert.strictEqual(emptyParlay.legs.length, 3);
+assert.deepStrictEqual(emptyParlay.legs.map((leg) => leg.pick), emptyCard.map((row) => row.pick));
+assert.ok(emptyParlay.legs.every((leg) => leg.noSharpFair === true && leg.fairSource === 'stored-fallback'));
+emptyCard.forEach(assertNoPublicFairTag);
+
+const alpha = slateCand('Alpha Away', 'Alpha Home');
+const bravo = slateCand('Bravo Away', 'Bravo Home');
+const charlie = slateCand('Charlie Away', 'Charlie Home', {
+  calibration: { pCal: 0.57, pMkt: 0.55, pModel: 0.57, method: 'board' },
+});
+const delta = slateCand('Delta Away', 'Delta Home', {
+  calibration: { pCal: 0.60, pMkt: 0.58, pModel: 0.60, method: 'board' },
+});
+const mixedPoll = {
+  '1000': [
+    pinSpread('Alpha Away', 'Alpha Home', -110, -110),
+    pinSpread('Bravo Away', 'Bravo Home', -110, -110),
+    dkSpread('Charlie Away', 'Charlie Home'),
+    dkSpread('Delta Away', 'Delta Home'),
+  ],
+};
+const mixedRows = [delta, charlie, bravo, alpha].map((row) => annotateCandidate(row, { ...baseOpts, linePolls: mixedPoll }));
+assert.ok(mixedRows.every((row) => row.qualified), mixedRows.map((row) => `${row.pick}:${row.rejectReason}`).join(','));
+const mixedCard = selectForcedTop3(mixedRows, baseOpts);
+assert.deepStrictEqual(mixedCard.map((row) => row.pick), [
+  'Alpha Away +3.5',
+  'Bravo Away +3.5',
+  'Delta Away +3.5',
+]);
+assert.notStrictEqual(mixedCard[0].noSharpFair, true);
+assert.notStrictEqual(mixedCard[1].noSharpFair, true);
+assert.strictEqual(mixedCard[2].noSharpFair, true);
+assert.strictEqual(mixedCard[2].fairSource, 'stored-fallback');
+const mixedParlay = buildForcedParlay(mixedCard);
+assert.strictEqual(mixedParlay.publish, true, mixedParlay.skipReason);
+assert.deepStrictEqual(mixedParlay.legs.map((leg) => leg.pick), mixedCard.map((row) => row.pick));
+
+const echo = slateCand('Echo Away', 'Echo Home', {
+  odds: -450,
+  calibration: { pCal: 0.84, pMkt: 0.82, pModel: 0.84, method: 'board' },
+});
+const bandPoll = {
+  '1000': [
+    pinSpread('Alpha Away', 'Alpha Home', -110, -110),
+    pinSpread('Bravo Away', 'Bravo Home', -110, -110),
+    pinSpread('Echo Away', 'Echo Home', -450, 400),
+    dkSpread('Delta Away', 'Delta Home'),
+  ],
+};
+const bandRows = [delta, echo, bravo, alpha].map((row) => annotateCandidate(row, { ...baseOpts, linePolls: bandPoll }));
+assert.ok(bandRows.every((row) => row.qualified), bandRows.map((row) => `${row.pick}:${row.rejectReason}`).join(','));
+const bandCard = selectForcedTop3(bandRows, baseOpts);
+assert.deepStrictEqual(bandCard.map((row) => row.pick), [
+  'Alpha Away +3.5',
+  'Bravo Away +3.5',
+  'Echo Away +3.5',
+]);
+assert.strictEqual(bandCard[2].favCapFill, true);
+assert.notStrictEqual(bandCard[2].noSharpFair, true);
+const bandOrder = orderForcedPool(bandRows, baseOpts);
+assert.deepStrictEqual(bandOrder.map((row) => row.pick), [
+  'Alpha Away +3.5',
+  'Bravo Away +3.5',
+  'Echo Away +3.5',
+  'Delta Away +3.5',
+]);
+assert.strictEqual(bandOrder[3].noSharpFair, true);
+assert.strictEqual(bandOrder[3].fairSource, 'stored-fallback');
 process.env.OMEGA_V2_PINNACLE_FAIR = 'off';
 
 process.env.OMEGA_V2_KEY_CONVERT = 'on';

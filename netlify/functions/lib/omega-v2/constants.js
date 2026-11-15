@@ -423,6 +423,8 @@ function moveShrinkEnabled(env) {
  * Pinnacle converted at most 1.5 points. Never the bet book's own implied.
  * Default is on: the 10/31-11/13 replay was +1687 with days3 15/15.
  * =off keeps the stored fair. No 3 AM/10 AM poll leaves the stored fair.
+ * A 10 AM poll with no Pinnacle/Circa pair also keeps that stored fair.
+ * The row stays placeable and ranks after every row that has a sharp fair.
  */
 const PINNACLE_FAIR_ENV = 'OMEGA_V2_PINNACLE_FAIR';
 const PINNACLE_FAIR_DEFAULT_ON = true;

@@ -606,6 +606,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (nbaInjury.status !== 0) throw new Error('nba injury veto gate failed');
+
+  const qbAdj = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-nfl-qb-adj.js')],
+    { stdio: 'inherit' }
+  );
+  if (qbAdj.status !== 0) throw new Error('nfl qb margin scale gate failed');
 }
 
 function pickSlim(card) {

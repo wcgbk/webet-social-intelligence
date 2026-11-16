@@ -200,6 +200,30 @@ const QA_HARDFAIL = {
  * scales by doubtfulWeight. Used by sports/game_day.js qbSoftAdjust only.
  */
 const QB_MARGIN_SCALE = 0; // LOCK (2026-10-18): hand-set QB points banned. Flags only. Was 1.
+/**
+ * Pre-lock scale from 5a91c44 ("Was 1"). OMEGA_NFL_QB_ADJ=on restores it.
+ * Unset, blank, off, 0, and false stay at 0. on/1/true/yes use 1.
+ * Scale 1 multiplies the QB_INJURY table: NFL out 3.0 margin / -1.5 total,
+ * NCAAF out 3.5 / -2.0, doubtful × 0.75, plus the uncertainty bump.
+ * It does not change v2 bet probability while OMEGA_V2_MARKET_P is on
+ * (p is the sharp no-vig, not pModel). It does move the NFL/NCAAF model
+ * margin inside qbSoftAdjust, so pModel and the v1 card move, and a large
+ * pModel shift can still trip v2's 10pp pCal-versus-pMkt screen.
+ * Late-news reprice uses backupQbDelta, which reads QB_INJURY directly
+ * and does not multiply by this scale.
+ */
+const QB_MARGIN_SCALE_ON = 1;
+const NFL_QB_ADJ_ENV = 'OMEGA_NFL_QB_ADJ';
+
+function qbMarginScale(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[NFL_QB_ADJ_ENV];
+  if (raw == null) return QB_MARGIN_SCALE;
+  const text = String(raw).trim().toLowerCase();
+  if (text === '' || text === 'off' || text === '0' || text === 'false') return QB_MARGIN_SCALE;
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return QB_MARGIN_SCALE_ON;
+  return QB_MARGIN_SCALE;
+}
 const QB_INJURY = {
   NFL: { outMarginPts: 3.0, outTotalPts: -1.5, doubtfulWeight: 0.75, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0 },
   NCAAF: { outMarginPts: 3.5, outTotalPts: -2.0, doubtfulWeight: 0.75, maxAbsMarginAdj: 6.0, maxAbsTotalAdj: 4.0 },
@@ -545,6 +569,9 @@ module.exports = {
   QA_HARDFAIL,
   QB_INJURY,
   QB_MARGIN_SCALE,
+  QB_MARGIN_SCALE_ON,
+  NFL_QB_ADJ_ENV,
+  qbMarginScale,
   QUALITY_GRADE,
   SELECT_WEIGHTS,
   SPORT_SPREAD_STD,

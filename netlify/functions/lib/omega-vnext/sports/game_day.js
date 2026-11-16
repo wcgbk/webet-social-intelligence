@@ -9,7 +9,7 @@
 
 const { clamp } = require('../odds_math');
 const { fuzzyTeam } = require('./_common');
-const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, QB_MARGIN_SCALE } = require('../config');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, qbMarginScale } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -137,13 +137,19 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   };
   apply(homeQb, 'home');
   apply(awayQb, 'away');
-  // LOCK (2026-10-18): QB_MARGIN_SCALE=0 — unfitted QB points move nothing
-  // (margin, total, uncertainty). Status notes/flags still report.
-  const qbScale = QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE;
+  // LOCK (2026-10-18): scale 0 unless OMEGA_NFL_QB_ADJ is on.
+  // Off: margin, total, and uncertainty stay put. Notes still report.
+  // On: the pre-lock scale of 1 applies the QB_INJURY table.
+  const qbScale = qbMarginScale();
+  // Scale 0 times a negative table value is -0. Callers compare with === 0.
+  const scaled = (n) => {
+    const v = n * qbScale;
+    return v === 0 ? 0 : v;
+  };
   return {
-    marginAdj: clamp(marginAdj * qbScale, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
-    totalAdj: clamp(totalAdj * qbScale, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
-    uncBump: uncBump * qbScale,
+    marginAdj: clamp(scaled(marginAdj), -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
+    totalAdj: clamp(scaled(totalAdj), -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
+    uncBump: scaled(uncBump),
     note: notes.length ? notes.join('; ') : null,
   };
 }

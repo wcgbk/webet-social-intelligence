@@ -1010,6 +1010,9 @@
   # Overnight Odds pull (Ben 2026-10-18): odds-master baseline-0300.
   included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
 
+[functions."monitor-omega-missed-pull"]
+  schedule = "15 7,8 * * *"
+
 [functions."capture-odds-10am"]
   schedule = "0 14,15 * * *"
   # 10:00 ET. DST-proof via etGuard (14:00 UTC EDT, 15:00 UTC EST).

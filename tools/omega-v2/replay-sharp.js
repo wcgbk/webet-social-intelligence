@@ -5,6 +5,13 @@
 // matches /workspace/opt90-1114/rp_main_a.json. Set a flag to on/1/true to
 // replay that fix. Polls are the 3 AM / 10 AM / close blobs and travel on
 // opts.linePolls, the same field publishFromOmegaCandidates reads.
+//
+// Optional window. Unset, the date list and the stored boards are the
+// 10/31-11/14 run and the file is byte-identical to that baseline.
+//   OMEGA_V2_REPLAY_FROM / OMEGA_V2_REPLAY_TO   YYYY-MM-DD, inclusive
+//   OMEGA_V2_REPLAY_BOARD_DIR                   mb-DATE.json directory
+// Board dir is used only for a date that has no stored mb board.
+// Stored boards (b2/mb-DATE.json, and b2_1114.json on 11/14) keep priority.
 'use strict';
 
 const fs = require('fs');
@@ -24,7 +31,11 @@ for (const key of FLAG_KEYS) {
   }
 }
 
-const WT = process.argv[3] || path.resolve(__dirname, '../..');
+// argv[3] is the worktree only when this file is the program. A require()
+// from the poll builder must not treat the parent's argv as a worktree.
+const WT = (require.main === module && process.argv[3])
+  ? process.argv[3]
+  : path.resolve(__dirname, '../..');
 const L = path.join(WT, 'netlify/functions/lib/omega-v2') + path.sep;
 const sel = require(L + 'select');
 const size = require(L + 'size');
@@ -33,10 +44,50 @@ const g = require(L + 'guards');
 const PL = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 const DATES = ['2026-10-31'].concat(Array.from({ length: 14 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`));
 const POLL_DIR = process.env.OMEGA_V2_POLL_DIR || '/workspace/sharp-fix-1115/data';
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 function flagOn(name) {
   const text = String(process.env[name] || '').trim().toLowerCase();
   return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
+
+function nextDate(iso) {
+  const t = Date.parse(`${iso}T12:00:00Z`) + 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+function replayDates() {
+  const from = String(process.env.OMEGA_V2_REPLAY_FROM || '').trim();
+  const to = String(process.env.OMEGA_V2_REPLAY_TO || '').trim();
+  if (!from && !to) return DATES;
+  const start = from || DATES[0];
+  const end = to || DATES[DATES.length - 1];
+  if (!YMD.test(start) || !YMD.test(end) || start > end) {
+    throw new Error(`OMEGA_V2_REPLAY_FROM/TO must be YYYY-MM-DD with from <= to (got ${start}..${end})`);
+  }
+  const out = [];
+  for (let cur = start; cur <= end; cur = nextDate(cur)) out.push(cur);
+  return out;
+}
+
+function storedBoardPath(date) {
+  if (date === '2026-11-14') return '/workspace/force3-1113/lowpay/b2_1114.json';
+  return `/workspace/force3-1113/lowpay/b2/mb-${date}.json`;
+}
+
+function loadCandidates(date) {
+  const stored = storedBoardPath(date);
+  if (fs.existsSync(stored)) {
+    return JSON.parse(fs.readFileSync(stored, 'utf8')).candidates;
+  }
+  const dir = String(process.env.OMEGA_V2_REPLAY_BOARD_DIR || '').trim();
+  if (dir) {
+    const alt = path.join(dir, `mb-${date}.json`);
+    if (fs.existsSync(alt)) {
+      return JSON.parse(fs.readFileSync(alt, 'utf8')).candidates;
+    }
+  }
+  throw new Error(`no morning board for ${date}`);
 }
 
 function loadPolls(date) {
@@ -73,22 +124,17 @@ function toCand(c) {
   };
 }
 
-const out = {};
-for (const date of DATES) {
-  const f = date === '2026-11-14'
-    ? '/workspace/force3-1113/lowpay/b2_1114.json'
-    : `/workspace/force3-1113/lowpay/b2/mb-${date}.json`;
-  let B = JSON.parse(fs.readFileSync(f)).candidates;
-  const pollDoc = loadPolls(date);
+function buildDay(date, B, pollDoc) {
+  let rows = B;
   if (flagOn('OMEGA_V2_KEY_CONVERT') && pollDoc) {
     const gaps = require(L + 'sharp_gaps');
     if (gaps && typeof gaps.synthesizeOffLine === 'function') {
-      const extra = gaps.synthesizeOffLine(pollDoc, B) || [];
-      if (extra.length) B = B.concat(extra);
+      const extra = gaps.synthesizeOffLine(pollDoc, rows) || [];
+      if (extra.length) rows = rows.concat(extra);
     }
   }
   const asOf = Date.parse(`${date}T10:05:00-05:00`);
-  const cands = B.filter((c) => PL.has(String(c.book || '').toLowerCase()) && c.lineAgrees !== false).map(toCand);
+  const cands = rows.filter((c) => PL.has(String(c.book || '').toLowerCase()) && c.lineAgrees !== false).map(toCand);
   const opts = { pregameAsOfMs: asOf, linePolls: pollDoc };
   const ann = cands.map((c) => sel.annotateCandidate(c, opts));
   const st = size.sizeStraights(sel.selectStraights(ann.filter((c) => c.qualified), opts), opts);
@@ -103,7 +149,7 @@ for (const date of DATES) {
     parlayPool: [],
   };
   card = g.autoCorrectCard(card, opts);
-  out[date] = {
+  return {
     picks: card.picks.map((p) => ({
       sport: p.sport,
       matchup: p.matchup,
@@ -137,4 +183,17 @@ for (const date of DATES) {
     notes: card.qaNotes,
   };
 }
-fs.writeFileSync(process.argv[2], JSON.stringify(out, null, 1));
+
+function main() {
+  const out = {};
+  for (const date of replayDates()) {
+    const B = loadCandidates(date);
+    const pollDoc = loadPolls(date);
+    out[date] = buildDay(date, B, pollDoc);
+  }
+  fs.writeFileSync(process.argv[2], JSON.stringify(out, null, 1));
+}
+
+if (require.main === module) main();
+
+module.exports = { buildDay, loadCandidates, loadPolls, replayDates, DATES };

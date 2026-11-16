@@ -18,6 +18,18 @@
 
 const { BLOB_STORE } = require('./lib/omega-vnext/config');
 const { readPicksLocated, writePicksRaw } = require('./lib/omega-vnext/store');
+const { guardCardWrite, liveStoreDeps } = require('./lib/omega-vnext/card_lock');
+
+async function lockRegradeCard(date, data, store) {
+  try {
+    return await guardCardWrite(date, data, Object.assign({
+      log: (msg) => console.error(msg),
+    }, liveStoreDeps(date, store || null)));
+  } catch (err) {
+    console.error(`[card-lock] regrade ${err && err.message ? err.message : err}`);
+    return data;
+  }
+}
 
 const ALLOWED_DATES = Object.freeze(['2026-10-31', '2026-11-01', '2026-11-02']);
 const ALLOWED = new Set(ALLOWED_DATES);
@@ -109,7 +121,10 @@ async function loadCard(date, opts) {
     const card = await store.get(key, { type: 'json' });
     return {
       card,
-      write: (data) => store.setJSON(key, data),
+      write: async (data) => {
+        const locked = await lockRegradeCard(date, data, store);
+        return store.setJSON(key, locked);
+      },
     };
   }
 
@@ -119,16 +134,17 @@ async function loadCard(date, opts) {
   return {
     card: located ? located.card : null,
     write: async (data) => {
+      const locked = await lockRegradeCard(date, data, via === 'sdk' ? sdkStore : null);
       if (via === 'sdk') {
         if (!sdkStore || typeof sdkStore.setJSON !== 'function') {
           const err = new Error('edge-picks-omega store unavailable');
           err.statusCode = 500;
           throw err;
         }
-        await sdkStore.setJSON(`picks-${date}`, data);
+        await sdkStore.setJSON(`picks-${date}`, locked);
         return;
       }
-      await writePicksRaw(date, data);
+      await writePicksRaw(date, locked, { cardLockApplied: true });
     },
   };
 }

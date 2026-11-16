@@ -1031,6 +1031,23 @@ function clearResolvedGradeWarnings(pickReports, picks, opts) {
   return removed;
 }
 
+async function omegaBlobGet(key, token) {
+  const resp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/${key}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!resp.ok) return null;
+  return resp.json();
+}
+
+async function omegaBlobPut(key, value, token) {
+  const resp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/${key}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) throw new Error(`blob PUT ${key} → ${resp.status}`);
+}
+
 // ── Write updated picks back to blob ──
 async function updatePicksBlob(dateKey, picksData, deps) {
   try { enforceOmegaDailyUnitCap(picksData); } catch (e) { console.error('[verify] unit cap', e.message); }
@@ -1042,21 +1059,37 @@ async function updatePicksBlob(dateKey, picksData, deps) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return false;
 
+  let body = picksData;
+  try {
+    const { guardCardWrite } = require('./lib/omega-vnext/card_lock');
+    body = await guardCardWrite(dateKey, picksData, {
+      env: deps && deps.env,
+      now: deps && deps.now,
+      log: (msg) => console.error(msg),
+      readSnapshot: (key) => omegaBlobGet(key, token),
+      writeSnapshot: (key, value) => omegaBlobPut(key, value, token),
+      readCurrent: () => omegaBlobGet(`picks-${dateKey}`, token),
+    });
+  } catch (lockErr) {
+    console.error(`[card-lock] verify ${lockErr && lockErr.message ? lockErr.message : lockErr}`);
+    body = picksData;
+  }
+
   try {
     const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/picks-${dateKey}`;
     const resp = await fetch(url, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(picksData),
+      body: JSON.stringify(body),
     });
     if (resp.ok) {
       console.log(`[verify] Updated picks blob for ${dateKey}`);
       try {
         if (deps && typeof deps.syncMainCardToV1 === 'function') {
-          await deps.syncMainCardToV1(dateKey, picksData, deps);
+          await deps.syncMainCardToV1(dateKey, body, deps);
         } else {
           const { syncMainCardToV1 } = require('./lib/omega-v1ab/sync-main');
-          await syncMainCardToV1(dateKey, picksData, {
+          await syncMainCardToV1(dateKey, body, {
             env: deps && deps.env,
             store: deps && deps.store,
           });

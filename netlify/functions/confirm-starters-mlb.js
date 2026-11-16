@@ -99,6 +99,44 @@ async function blobPut(store, key, value, token) {
   } catch (e) { /* fall through */ }
 }
 
+// Missing key is null. A transport failure throws so the card lock can tell
+// "no card yet" from "the store could not be read".
+async function blobGetStrict(store, key, token) {
+  try {
+    const { getStore } = await import("@netlify/blobs");
+    const s = getStore(store);
+    const value = await s.get(key, { type: "json" });
+    if (value != null) return value;
+  } catch (_) { /* REST below */ }
+  const resp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/${store}/${key}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new Error(`blob GET ${key} → ${resp.status}`);
+  return resp.json();
+}
+
+async function blobPutStrict(store, key, value, token) {
+  const body = JSON.stringify(value);
+  try {
+    const { getStore } = await import("@netlify/blobs");
+    const s = getStore(store);
+    if (typeof s.setJSON === "function") {
+      await s.setJSON(key, value);
+      return;
+    }
+    await s.set(key, body);
+    return;
+  } catch (sdkErr) {
+    const resp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/${store}/${key}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body,
+    });
+    if (!resp.ok) throw new Error(`blob PUT ${key} → ${resp.status}`);
+  }
+}
+
 function lookupEspn(currentStarters, pick) {
   const parts = matchupParts(pick.matchup);
   if (parts.length < 2) return null;
@@ -267,7 +305,23 @@ exports.handler = async () => {
       picksData.starterCheckAt = new Date().toISOString();
       picksData.starterScratchCount = stats.scratches;
       picksData.starterKilledCount = stats.killed;
-      await blobPut(store, `picks-${todayISO}`, picksData, token);
+      let payload = picksData;
+      if (store === 'edge-picks-omega') {
+        try {
+          const { guardCardWrite } = require('./lib/omega-vnext/card_lock');
+          payload = await guardCardWrite(todayISO, picksData, {
+            now: new Date(),
+            log: (msg) => console.error(msg),
+            readSnapshot: (key) => blobGetStrict(store, key, token),
+            writeSnapshot: (key, value) => blobPutStrict(store, key, value, token),
+            readCurrent: () => blobGetStrict(store, `picks-${todayISO}`, token),
+          });
+        } catch (lockErr) {
+          console.error(`[card-lock] confirm-starters ${lockErr && lockErr.message ? lockErr.message : lockErr}`);
+          payload = picksData;
+        }
+      }
+      await blobPut(store, `picks-${todayISO}`, payload, token);
       perStore.push({ store, date: todayISO, ...stats });
       console.log(`[confirm-starters] ${store}: remaining=${stats.remaining} scratches=${stats.scratches} killed=${stats.killed}`);
     }

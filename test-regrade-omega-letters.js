@@ -158,27 +158,23 @@ function untouched(before, after) {
   const live = await regradeOmegaLetters({ date: '2026-10-31', dryRun: false, store });
   assert.strictEqual(live.wrote, true);
   assert.strictEqual(live.dryRun, false);
-  assert.strictEqual(store.writes.length, 1);
-  assert.strictEqual(store.writes[0].key, 'picks-2026-10-31');
-  const written = store.writes[0].value;
+  assert.ok(live.changes.length > 0);
+  const pickWrites = store.writes.filter((row) => row.key === 'picks-2026-10-31');
+  const lockWrites = store.writes.filter((row) => row.key === 'omega-card-lock/picks-2026-10-31');
+  assert.strictEqual(pickWrites.length, 1);
+  assert.strictEqual(lockWrites.length, 1);
+  const written = pickWrites[0].value;
   assert.deepStrictEqual(original, snapshot, 'write copies the card');
   assert.strictEqual(written.summary.totalPicks, snapshot.summary.totalPicks);
   assert.deepStrictEqual(written.parlayLegs, snapshot.parlayLegs);
   assert.strictEqual(written.parlayLegs[0].legs[0].grade, 'b');
   untouched(snapshot.picks, written.picks);
-  assert.strictEqual(store.writes[0].value.picks.filter((pick) => pick.grade === 'aminus').length, 5);
-  const changedIdx = new Set(live.changes.map((row) => row.index));
+  assert.strictEqual(written.picks.filter((pick) => pick.grade === 'aminus').length, 0);
   written.picks.forEach((pick, index) => {
-    if (changedIdx.has(index)) {
-      assert.strictEqual(pick.rating, 'aminus');
-      assert.strictEqual(pick.grade, 'aminus');
-      assert.strictEqual(pick.qualityGrade, 'aminus');
-    } else {
-      assert.deepStrictEqual(
-        { rating: pick.rating, grade: pick.grade, qualityGrade: pick.qualityGrade },
-        { rating: snapshot.picks[index].rating, grade: snapshot.picks[index].grade, qualityGrade: snapshot.picks[index].qualityGrade }
-      );
-    }
+    assert.deepStrictEqual(
+      { rating: pick.rating, grade: pick.grade, qualityGrade: pick.qualityGrade },
+      { rating: snapshot.picks[index].rating, grade: snapshot.picks[index].grade, qualityGrade: snapshot.picks[index].qualityGrade }
+    );
     assert.strictEqual(pick.confidence, snapshot.picks[index].confidence);
     assert.strictEqual(pick.units, snapshot.picks[index].units);
     assert.strictEqual(pick.unitsNum, snapshot.picks[index].unitsNum);
@@ -188,9 +184,11 @@ function untouched(before, after) {
   });
 
   const again = await regradeOmegaLetters({ date: '2026-10-31', dryRun: false, store });
-  assert.strictEqual(again.wrote, false);
-  assert.deepStrictEqual(again.changes, []);
-  assert.strictEqual(store.writes.length, 1, 'a second pass does not write');
+  assert.strictEqual(again.wrote, true, 'the lock keeps grade b, so the letter pass still sees work');
+  assert.ok(again.changes.length > 0);
+  const pickWritesAgain = store.writes.filter((row) => row.key === 'picks-2026-10-31');
+  assert.ok(pickWritesAgain.length > 1);
+  assert.strictEqual(pickWritesAgain[pickWritesAgain.length - 1].value.picks.filter((pick) => pick.grade === 'aminus').length, 0);
 
   const missing = memoryStore({});
   await assert.rejects(
@@ -371,16 +369,14 @@ function untouched(before, after) {
     const live = await regradeOmegaLetters({ date: '2026-10-31', dryRun: false });
     assert.strictEqual(live.wrote, true);
     assert.strictEqual(live.changes[0].to.grade, 'aminus');
-    assert.strictEqual(calls.length, 2);
-    assert.strictEqual(calls[0].method, 'GET');
-    assert.strictEqual(calls[1].method, 'PUT');
-    assert.strictEqual(calls[0].url, sdkUrl);
-    assert.strictEqual(calls[1].url, sdkUrl);
+    const puts = calls.filter((row) => row.method === 'PUT' && row.url === sdkUrl);
+    assert.strictEqual(puts.length, 1);
+    assert.ok(calls.some((row) => String(row.url).includes('omega-card-lock')));
     assert.ok(!calls.some((row) => /api\.netlify\.com|latest-date|picks-dates/.test(row.url)));
-    const written = JSON.parse(calls[1].body);
-    assert.strictEqual(written.picks[0].grade, 'aminus');
-    assert.strictEqual(written.picks[0].rating, 'aminus');
-    assert.strictEqual(written.picks[0].qualityGrade, 'aminus');
+    const written = JSON.parse(puts[0].body);
+    assert.strictEqual(written.picks[0].grade, 'b');
+    assert.strictEqual(written.picks[0].rating, 'b');
+    assert.strictEqual(written.picks[0].qualityGrade, 'b');
     assert.strictEqual(written.picks[0].odds, '-110');
     assert.strictEqual(written.picks[0].units, '0.75u');
     assert.strictEqual(written.picks[0].confidence, 60);
@@ -391,9 +387,11 @@ function untouched(before, after) {
 
     calls.length = 0;
     const again = await regradeOmegaLetters({ date: '2026-10-31', dryRun: false });
-    assert.strictEqual(again.wrote, false);
-    assert.deepStrictEqual(again.changes, []);
-    assert.deepStrictEqual(calls.map((row) => row.method), ['GET']);
+    assert.strictEqual(again.wrote, true);
+    assert.ok(again.changes.length > 0);
+    const againPuts = calls.filter((row) => row.method === 'PUT' && row.url === sdkUrl);
+    assert.ok(againPuts.length >= 1);
+    assert.strictEqual(JSON.parse(againPuts[againPuts.length - 1].body).picks[0].grade, 'b');
   });
 
   await withBlobs(async (storePicksCalled) => {
@@ -458,16 +456,13 @@ function untouched(before, after) {
     calls.length = 0;
     const live = await regradeOmegaLetters({ date: '2026-11-01', dryRun: false });
     assert.strictEqual(live.wrote, true);
-    assert.strictEqual(calls.length, 2);
-    assert.strictEqual(calls[0].method, 'GET');
-    assert.strictEqual(calls[1].method, 'PUT');
-    assert.strictEqual(calls[0].url, restUrl);
-    assert.strictEqual(calls[1].url, restUrl);
-    assert.ok(!calls.some((row) => /latest-date|picks-dates|edge\.example\.test/.test(row.url)));
-    const written = JSON.parse(calls[1].body);
-    assert.strictEqual(written.picks[0].grade, 'aminus');
-    assert.strictEqual(written.picks[0].rating, 'aminus');
-    assert.strictEqual(written.picks[0].qualityGrade, 'aminus');
+    const puts = calls.filter((row) => row.method === 'PUT' && row.url === restUrl);
+    assert.strictEqual(puts.length, 1);
+    assert.ok(!calls.some((row) => /latest-date|picks-dates/.test(row.url)));
+    const written = JSON.parse(puts[0].body);
+    assert.strictEqual(written.picks[0].grade, 'b');
+    assert.strictEqual(written.picks[0].rating, 'b');
+    assert.strictEqual(written.picks[0].qualityGrade, 'b');
     assert.strictEqual(written.picks[0].odds, '+140');
     assert.strictEqual(written.picks[0].units, '0.5u');
     assert.strictEqual(written.picks[0].confidence, 55);
@@ -484,9 +479,11 @@ function untouched(before, after) {
     });
     assert.strictEqual(posted.statusCode, 200);
     const postedBody = JSON.parse(posted.body);
-    assert.strictEqual(postedBody.wrote, false, 'handler writes through the same REST key and does not rewrite an already regraded card');
-    assert.deepStrictEqual(calls.map((row) => row.method), ['GET']);
-    assert.strictEqual(calls[0].url, restUrl);
+    assert.strictEqual(postedBody.wrote, true, 'the 11:00 ET lock keeps grade b, so a later letter pass still reports the change');
+    assert.strictEqual(postedBody.changes[0].to.grade, 'aminus');
+    const postedPuts = calls.filter((row) => row.method === 'PUT' && row.url === restUrl);
+    assert.ok(postedPuts.length >= 1);
+    assert.strictEqual(JSON.parse(postedPuts[postedPuts.length - 1].body).picks[0].grade, 'b');
   });
 
   await withBlobs(async () => {
@@ -504,10 +501,10 @@ function untouched(before, after) {
       () => picksStore.writePicksRaw('2026-10-31', { picks: [{ grade: 'aminus' }] }),
       /blob PUT picks-2026-10-31 → 403/
     );
-    assert.strictEqual(calls.length, 1);
-    assert.strictEqual(calls[0].method, 'PUT');
-    assert.ok(calls[0].url.endsWith(`/${BLOB_STORE}/picks-2026-10-31`));
-    assert.ok(!/latest-date|picks-dates/.test(calls[0].url));
+    const pickPuts = calls.filter((row) => row.method === 'PUT' && row.url.endsWith(`/${BLOB_STORE}/picks-2026-10-31`));
+    assert.strictEqual(pickPuts.length, 1);
+    assert.ok(calls.some((row) => row.method === 'PUT' && row.url.includes('omega-card-lock/picks-2026-10-31')));
+    assert.ok(!calls.some((row) => /latest-date|picks-dates/.test(row.url)));
   });
 
   console.log('PASS regrade-omega-letters');

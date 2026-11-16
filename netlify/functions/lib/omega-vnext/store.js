@@ -1,6 +1,8 @@
 'use strict';
 
 const { SITE_ID, BLOB_STORE } = require('./config');
+const { replayNoWrite } = require('./no_write');
+const { guardCardWrite, liveStoreDeps } = require('./card_lock');
 
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
@@ -43,13 +45,38 @@ async function readPicks(dateISO) {
   return found ? found.card : null;
 }
 
+// Live picks-{date} only. Shadow, sim, replay, and dry-run opts skip the lock.
+async function lockRawCard(dateISO, data, opts) {
+  const options = opts || {};
+  try {
+    return await guardCardWrite(dateISO, data, Object.assign({
+      env: options.env,
+      now: options.now,
+      dryRun: !!options.dryRun,
+      shadow: !!options.shadow,
+      simMode: !!options.simMode,
+      replay: !!options.replay,
+      log: (msg) => console.error(msg),
+    }, liveStoreDeps(dateISO, null)));
+  } catch (err) {
+    console.error(`[card-lock] writePicksRaw ${err && err.message ? err.message : err}`);
+    return data;
+  }
+}
+
 /**
  * PUT picks-{date} through the readPicks REST URL only.
  * Does not touch latest-date or picks-dates.
+ * Pass cardLockApplied when the caller already ran the 11:00 ET card lock.
  */
 async function writePicksRaw(dateISO, data) {
+  const options = arguments[2] || {};
   const key = `picks-${dateISO}`;
-  const resp = await blobFetch(key, { method: 'PUT', body: data });
+  let body = data;
+  if (!options.cardLockApplied) {
+    body = await lockRawCard(dateISO, data, options);
+  }
+  const resp = await blobFetch(key, { method: 'PUT', body });
   if (!resp.ok) throw new Error(`blob PUT ${key} → ${resp.status}`);
   return true;
 }
@@ -103,6 +130,27 @@ function liveMainCardWrite(target, dateISO) {
     && target.touchLatestDate === true);
 }
 
+// Runs only for the live picks-{date} target. Force rewrites are locked too.
+// A guard failure returns the original payload so the card still publishes.
+async function lockLivePayload(dateISO, payload, opts, target) {
+  if (!liveMainCardWrite(target, dateISO)) return payload;
+  const options = opts || {};
+  if (options.dryRun || options.replay || options.simMode) return payload;
+  const env = options.env != null ? options.env : process.env;
+  if (replayNoWrite(env)) return payload;
+  try {
+    const store = options.stores && options.stores.main;
+    return await guardCardWrite(dateISO, payload, Object.assign({
+      env,
+      now: options.now,
+      log: (msg) => console.error(msg),
+    }, liveStoreDeps(dateISO, store || null)));
+  } catch (err) {
+    console.error(`[card-lock] storePicks ${err && err.message ? err.message : err}`);
+    return payload;
+  }
+}
+
 async function writeMainIndex(store, dateISO, target) {
   if (target.touchLatestDate) {
     await store.set('latest-date', dateISO);
@@ -145,7 +193,7 @@ async function storePicks(dateISO, picksData, opts = {}) {
   if (target.shadow && !String(pickKey).startsWith('omega-shadow/')) {
     throw new Error(`shadow store refused non-shadow key: ${pickKey}`);
   }
-  const payload = target.shadow ? shadowPayload(dateISO, picksData, pickKey) : picksData;
+  let payload = target.shadow ? shadowPayload(dateISO, picksData, pickKey) : picksData;
   const syncLive = liveMainCardWrite(target, dateISO);
 
   if (target.overwriteGuard && !force) {
@@ -156,6 +204,8 @@ async function storePicks(dateISO, picksData, opts = {}) {
       throw err;
     }
   }
+
+  payload = await lockLivePayload(dateISO, payload, opts, target);
 
   if (opts.stores && opts.stores.main) {
     const store = opts.stores.main;

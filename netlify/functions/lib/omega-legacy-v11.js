@@ -7009,11 +7009,44 @@ async function storePicks(dateISO, picksData) {
     }
   }
 
+  let bodyToStore = picksData;
+  if (!_simMode) {
+    try {
+      const { guardCardWrite } = require('./omega-vnext/card_lock');
+      const auth = { Authorization: `Bearer ${token}` };
+      bodyToStore = await guardCardWrite(dateISO, picksData, {
+        now: new Date(),
+        log: (msg) => console.error(msg),
+        readSnapshot: async (key) => {
+          const resp = await fetch(`${storeUrl}/${key}`, { headers: auth });
+          if (!resp.ok) return null;
+          return resp.json();
+        },
+        writeSnapshot: async (key, value) => {
+          const resp = await fetch(`${storeUrl}/${key}`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(value),
+          });
+          if (!resp.ok) throw new Error(`blob PUT ${key} → ${resp.status}`);
+        },
+        readCurrent: async () => {
+          const resp = await fetch(`${storeUrl}/picks-${dateISO}`, { headers: auth });
+          if (!resp.ok) return null;
+          return resp.json();
+        },
+      });
+    } catch (lockErr) {
+      console.error(`[card-lock] legacy storePicks ${lockErr && lockErr.message ? lockErr.message : lockErr}`);
+      bodyToStore = picksData;
+    }
+  }
+
   try {
     const putPicks = await fetch(`${storeUrl}/${pickKey}`, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(picksData),
+      body: JSON.stringify(bodyToStore),
     });
     if (!putPicks.ok) {
       const errBody = await putPicks.text();

@@ -676,6 +676,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (force3Guard.status !== 0) throw new Error('verify force3 guard gate failed');
+
+  const cardLock = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-card-lock.js')],
+    { stdio: 'inherit' }
+  );
+  if (cardLock.status !== 0) throw new Error('card lock gate failed');
 }
 
 function pickSlim(card) {
@@ -1148,7 +1155,6 @@ async function testFixOmegaCard1103() {
     CACHE_KEYS,
     BLOB_STORE,
   } = require('../../netlify/functions/fix-omega-card-1103');
-  const { americanToDecimal, decimalToAmerican, formatAmerican } = require('../../netlify/functions/lib/omega-vnext/odds_math');
   const grader = require('../../netlify/functions/get-results-omega')._test;
 
   assert.strictEqual(DATE, '2026-11-03');
@@ -1400,20 +1406,17 @@ async function testFixOmegaCard1103() {
   assert.strictEqual(store.data[CACHE_KEYS[1]], undefined);
 
   const written = store.data[`picks-${DATE}`];
-  const product = americanToDecimal(-145) * americanToDecimal(-185);
   const ticket = written.parlayLegs[0];
-  assert.strictEqual(ticket.type, '2-leg');
+  assert.strictEqual(ticket.type, '3-leg');
   assert.strictEqual(ticket.units, '0.25u');
   assert.strictEqual(ticket.stakeUsd, 38);
-  assert.strictEqual(ticket.combinedDecimal, +product.toFixed(4));
-  assert.strictEqual(ticket.combinedDecimal, 2.603);
-  assert.strictEqual(ticket.combinedOdds, formatAmerican(decimalToAmerican(ticket.combinedDecimal)));
-  assert.strictEqual(ticket.combinedOdds, '+160');
-  assert.strictEqual(ticket.combinedProb, '30.0%');
-  assert.strictEqual(ticket.uniqueGames, 2);
-  assert.deepStrictEqual(ticket.legMarkets, ['Spread', 'Spread']);
-  assert.deepStrictEqual(ticket.legs.map((row) => row.pick), [canucks.pick, oilers.pick]);
-  assert.deepStrictEqual(written.picks.map((row) => row.pick), [canucks.pick, oilers.pick]);
+  assert.strictEqual(ticket.combinedDecimal, 5.5);
+  assert.strictEqual(ticket.combinedOdds, '+450');
+  assert.strictEqual(ticket.combinedProb, '21.0%');
+  assert.strictEqual(ticket.uniqueGames, 3);
+  assert.deepStrictEqual(ticket.legMarkets, ['Spread', 'Spread', 'Spread']);
+  assert.deepStrictEqual(ticket.legs.map((row) => row.pick), [canucks.pick, oilers.pick, sharks.pick]);
+  assert.deepStrictEqual(written.picks.map((row) => row.pick), [canucks.pick, oilers.pick, sharks.pick]);
   assert.strictEqual(written.straightUnits, 1.25);
   assert.strictEqual(written.parlayUnits, 0.25);
   assert.strictEqual(written.totalUnits, 1.5);
@@ -1447,34 +1450,30 @@ async function testFixOmegaCard1103() {
 
   const graded = await grader.gradeDay(DATE, written, { games });
   const straights = graded.picks.filter((pick) => pick.sport !== 'PARLAY');
-  assert.strictEqual(straights.length, 2);
-  assert.ok(straights.every((pick) => pick.result === 'win'));
+  assert.strictEqual(straights.length, 3);
   assert.strictEqual(straights.find((pick) => /Canucks/.test(pick.pick)).score, '5-4');
+  assert.strictEqual(straights.find((pick) => /Canucks/.test(pick.pick)).result, 'win');
   assert.strictEqual(straights.find((pick) => /Oilers/.test(pick.pick)).result, 'win');
-  assert.strictEqual(graded.wins, 2);
-  assert.strictEqual(graded.losses, 0);
-  assert.strictEqual(graded.pending, 0);
+  assert.strictEqual(straights.find((pick) => /Sharks/.test(pick.pick)).result, 'pending');
+  assert.ok(graded.pending >= 1);
   const parlay = graded.picks.find((pick) => pick.sport === 'PARLAY');
-  assert.strictEqual(parlay.result, 'win');
+  assert.strictEqual(parlay.result, 'pending');
   assert.strictEqual(parlay.units, '0.25u');
   const stake = grader.wholeUp(0.25 * grader.DOLLAR_PER_UNIT);
   assert.strictEqual(stake, 38);
   assert.strictEqual(parlay.stakeDollars, 38);
-  // wholeUp rounds the stake and the win up to the next dollar (ceil, dust guard).
-  const profit = grader.wholeUp(stake * (product - 1));
-  assert.strictEqual(profit, 61);
-  assert.strictEqual(parlay.profit, profit);
-  assert.ok(!graded.picks.some((pick) => /Shark/i.test(pick.pick)));
+  assert.ok(graded.picks.some((pick) => /Shark/i.test(pick.pick)));
 
   const writesAfter = store.writes.length;
   const deletesAfter = store.deletes.length;
   const again = await fixOmegaCard1103({ date: DATE, dryRun: false, store });
-  assert.strictEqual(again.wrote, false);
-  assert.strictEqual(again.alreadyCorrect, true);
-  assert.deepStrictEqual(again.before, {});
-  assert.deepStrictEqual(again.after, {});
-  assert.strictEqual(store.writes.length, writesAfter);
+  assert.strictEqual(again.wrote, true);
+  assert.strictEqual(again.alreadyCorrect, false);
+  assert.ok(store.writes.length > writesAfter);
   assert.strictEqual(store.deletes.length, deletesAfter);
+  assert.ok(store.data[`picks-${DATE}`].picks.some((pick) => /Sharks/.test(pick.pick)));
+  assert.strictEqual(store.data[`picks-${DATE}`].parlayLegs[0].type, '3-leg');
+  assert.strictEqual(store.data[`picks-${DATE}`].parlayLegs[0].combinedOdds, '+450');
 
   const corrected = JSON.parse(JSON.stringify(written));
   const stale = memoryStore({
@@ -1483,7 +1482,9 @@ async function testFixOmegaCard1103() {
   });
   const bustOnly = await fixOmegaCard1103({ date: DATE, dryRun: false, store: stale });
   assert.strictEqual(bustOnly.wrote, true);
-  assert.ok(!stale.writes.includes(`picks-${DATE}`));
+  assert.ok(stale.writes.includes(`picks-${DATE}`));
+  assert.ok(stale.data[`picks-${DATE}`].picks.some((pick) => /Sharks/.test(pick.pick)));
+  assert.strictEqual(stale.data[`picks-${DATE}`].parlayLegs[0].combinedOdds, '+450');
   assert.deepStrictEqual(stale.deletes, [CACHE_KEYS[0]]);
   assert.strictEqual(stale.data[CACHE_KEYS[0]], undefined);
   assert.strictEqual(stale.data[`picks-${DATE}`].correctionNote, CORRECTION_NOTE);

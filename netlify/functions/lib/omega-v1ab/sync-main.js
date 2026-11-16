@@ -7,6 +7,9 @@
  * OMEGA_V1_SYNC_MAIN defaults on. Unset stays on. on/1/true/yes are on.
  * off/0/false/blank are off (=off rolls back). Errors are logged and
  * never thrown. OMEGA_REPLAY_NO_WRITE does not touch the v1 blob.
+ * This module does not write edge-picks-omega. Callers lock the main card
+ * (11:00 ET, OMEGA_CARD_LOCK_11AM) before they pass mainDoc here, so the
+ * v1 mirror copies the locked picks, legs, prices, and stakes.
  */
 const { replayNoWrite } = require('../omega-vnext/no_write');
 

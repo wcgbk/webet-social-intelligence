@@ -6,6 +6,8 @@
  * Never writes edge-picks-omega, edge-picks-v1lock, or any live Omega key.
  */
 const S = require('./lib/omega-v1ab/sharp');
+const { cardForV1 } = require('./lib/omega-v1ab/sync-main');
+const { cardLockEnabled, isCardLocked } = require('./lib/omega-vnext/card_lock');
 
 function todayET() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
@@ -69,14 +71,27 @@ exports.handler = async (event) => {
       return { statusCode: 503, body: JSON.stringify({ ok: false, error: `Omega card picks-${dateISO} not ready` }) };
     }
     const nowMs = body.asOf ? Date.parse(body.asOf) : Date.now();
-    const card = await buildCard(omegaCard, { dateISO, nowMs });
+    let card = await buildCard(omegaCard, { dateISO, nowMs });
+    // After 11:00 ET the site mirror is the locked main card, not a new sharp selection.
+    if (!dryRun && cardLockEnabled(process.env) && Number.isFinite(nowMs) && isCardLocked(dateISO, new Date(nowMs))) {
+      let existing = null;
+      try {
+        existing = await ab.getJSON(`picks-${dateISO}`);
+      } catch (readErr) {
+        console.error(`[card-lock] v1 mirror read picks-${dateISO}: ${readErr && readErr.message ? readErr.message : readErr}`);
+        existing = null;
+      }
+      card = cardForV1(existing, omegaCard);
+    }
     if (!dryRun) {
       await ab.setJSON(`picks-${dateISO}`, card);
       await ab.setJSON('latest-date', dateISO);
       let dates = (await ab.getJSON('picks-dates')) || [];
       if (!dates.includes(dateISO)) { dates.push(dateISO); dates.sort(); await ab.setJSON('picks-dates', dates); }
     }
-    return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun, date: dateISO, picks: card.picks.length, parlay: card.parlayLegs.length }) };
+    const pickCount = Array.isArray(card.picks) ? card.picks.length : 0;
+    const parlayCount = Array.isArray(card.parlayLegs) ? card.parlayLegs.length : 0;
+    return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun, date: dateISO, picks: pickCount, parlay: parlayCount }) };
   } catch (e) {
     console.error(`[omega-v1ab] ${e.message}`);
     return { statusCode: 500, body: e.message };

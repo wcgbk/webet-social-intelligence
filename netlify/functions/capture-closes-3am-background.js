@@ -6,13 +6,15 @@
  * The scheduled run writes closing lines from the last saved Pinnacle board
  * (10 AM, else 3 AM) and does not call the Odds API.
  * OMEGA_CLOSES_HISTORICAL=on restores the paid historical-close path.
- * A manual backfill sends { date, onlyMissing|picksOnly, retryNoClose, missingGames }
+ * A manual backfill sends { date, onlyMissing|picksOnly, retryNoClose, missingGames, replayArchives }
  * with x-picks-secret. retryNoClose reopens saved no-close card and
  * candidate legs (primary snapshot, then the 15-minute fallback).
  * missingGames plans buckets for slate games that have no close yet, plus
  * those no-close card and candidate legs, and does not overwrite a done-ev
- * close. Scheduled runs send { scheduled: true } and never set retryNoClose
- * or missingGames.
+ * close. replayArchives reads raw archives already paid for and writes
+ * every Pinnacle-priced event in them. It does not call the Odds API.
+ * Scheduled runs send { scheduled: true } and never set retryNoClose,
+ * missingGames, or replayArchives.
  * Dates must be within the last 7 ET days, and not today.
  * After the closes are saved, invokes track-clv-omega in stored-closes mode
  * (sweep on) so yesterday's CLV and settlement run with zero Odds API credits.
@@ -117,6 +119,7 @@ async function handle(event, deps) {
   const scheduled = truthy(body.scheduled) || truthy(qs.scheduled);
   const retryNoClose = !scheduled && (truthy(body.retryNoClose) || truthy(qs.retryNoClose));
   const missingGames = !scheduled && (truthy(body.missingGames) || truthy(qs.missingGames));
+  const replayArchives = !scheduled && (truthy(body.replayArchives) || truthy(qs.replayArchives));
   const fetchImpl = options.fetch || fetch;
   const blobs = options.blobs || S.blobClient(env, fetchImpl);
   let storeClose = null;
@@ -134,6 +137,8 @@ async function handle(event, deps) {
       picksOnly,
       retryNoClose,
       missingGames,
+      replayArchives,
+      scheduled,
       dryRun: !!options.dryRun,
       blobs,
       fetch: fetchImpl,
@@ -183,6 +188,7 @@ async function handle(event, deps) {
     reserveGuard: !!(result && result.reserveGuard),
     skippedDone: result ? result.skippedDone : 0,
     missingGames: !!(result && result.missingGames),
+    replayArchives: !!(result && result.replayArchives),
     picks: result ? result.picks : [],
     games: (result && result.games) || [],
     errors: result ? result.errors : [],

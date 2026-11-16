@@ -28,7 +28,10 @@ function memBlobs(seed) {
       data.set(`${store}:${key}`, JSON.parse(JSON.stringify(value)));
       return true;
     },
-    async list() { return []; },
+    async list(store, prefix) {
+      const head = `${store}:${prefix || ''}`;
+      return [...data.keys()].filter((key) => key.startsWith(head)).map((key) => key.slice(store.length + 1));
+    },
   };
 }
 
@@ -1393,6 +1396,289 @@ function wrapped(events, timestamp) {
   assert.strictEqual(siblingRun.games.find((row) => row.eventId === 'texans').status, 'closed');
   assert.deepStrictEqual(siblingBlobs.data.get('clv-close-capture:done-ev/NFL/texans'), liveClose);
   assert.ok(siblingBlobs.data.has('clv-close-capture:done-ev/NFL/chiefs'));
+
+  const tip1 = '2026-11-15T18:00:00Z';
+  const nflSeven = [
+    ['chiefs', 'Kansas City Chiefs', 'Atlanta Falcons'],
+    ['jets', 'Buffalo Bills', 'New York Jets'],
+    ['panthers', 'Carolina Panthers', 'New Orleans Saints'],
+    ['texans', 'Houston Texans', 'Cleveland Browns'],
+    ['vikings', 'Minnesota Vikings', 'Green Bay Packers'],
+    ['dolphins', 'Miami Dolphins', 'Indianapolis Colts'],
+    ['jaguars', 'Jacksonville Jaguars', 'Tennessee Titans'],
+  ];
+  function nflClose(id, away, home) {
+    return {
+      id,
+      sport_key: 'americanfootball_nfl',
+      commence_time: tip1,
+      home_team: home,
+      away_team: away,
+      bookmakers: [{
+        key: 'pinnacle',
+        last_update: '2026-11-15T17:59:00Z',
+        markets: [
+          { key: 'h2h', last_update: '2026-11-15T17:59:00Z', outcomes: [
+            { name: home, price: -150 }, { name: away, price: 130 },
+          ] },
+          { key: 'spreads', last_update: '2026-11-15T17:59:00Z', outcomes: [
+            { name: home, price: -110, point: -3.5 }, { name: away, price: -110, point: 3.5 },
+          ] },
+          { key: 'totals', last_update: '2026-11-15T17:59:00Z', outcomes: [
+            { name: 'Over', price: -110, point: 44.5 }, { name: 'Under', price: -110, point: 44.5 },
+          ] },
+        ],
+      }],
+    };
+  }
+  const sevenEvents = nflSeven.map(([id, away, home]) => nflClose(id, away, home));
+  const sevenIds = nflSeven.map(([id]) => id);
+  const sevenSlate = nflSeven.map(([id, away, home]) => ({
+    sport: 'NFL', eventId: id, awayTeam: away, homeTeam: home, commenceTime: tip1,
+  }));
+  const sevenIdsSet = new Set(sevenIds);
+  const jetsBucket = C.planBuckets([{
+    sport: 'NFL', eventId: 'jets', homeTeam: 'New York Jets', awayTeam: 'Buffalo Bills',
+    commenceTime: tip1, roles: new Set(['card']), picks: [],
+  }])[0];
+  assert.strictEqual(C.eventBelongsToBucket(sevenEvents[0], jetsBucket, sevenIdsSet), false);
+  assert.strictEqual(C.eventBelongsToBucket(sevenEvents[1], jetsBucket, sevenIdsSet), true);
+  const paidWrites = [];
+  const paidStored = [];
+  const paidBlobs = memBlobs({});
+  const paid = await C.applyBucketResponse(jetsBucket, {
+    events: sevenEvents,
+    timestamp: '2026-11-15T17:55:36Z',
+  }, {
+    now: new Date('2026-11-16T08:00:00Z'),
+    env: {},
+    blobs: paidBlobs,
+    slateIds: sevenIdsSet,
+    snapshotAt: jetsBucket.snapshotAt,
+    writeRows: async (built) => {
+      paidWrites.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    storeClose: async (ev) => {
+      paidStored.push(ev.id);
+      return { wrote: true };
+    },
+  });
+  assert.deepStrictEqual(paidWrites.slice().sort(), sevenIds.slice().sort());
+  assert.deepStrictEqual(paidStored.slice().sort(), sevenIds.slice().sort());
+  assert.strictEqual(paid.events.length, 7);
+  for (const id of sevenIds) {
+    assert.strictEqual(paidBlobs.data.get(`clv-close-capture:done-ev/NFL/${id}`).via, 'closes-3am');
+  }
+  assert.ok(![...paidBlobs.data.keys()].some((key) => /:done\/NFL\//.test(key)));
+
+  const keptJets = { at: '2026-11-15T18:05:00Z', via: 'live', eventId: 'jets' };
+  const keepWrites = [];
+  const keepStored = [];
+  const keepBlobs = memBlobs({ 'clv-close-capture:done-ev/NFL/jets': keptJets });
+  await C.applyBucketResponse(jetsBucket, {
+    events: sevenEvents,
+    timestamp: '2026-11-15T17:55:36Z',
+  }, {
+    now: new Date('2026-11-16T08:00:00Z'),
+    env: {},
+    blobs: keepBlobs,
+    slateIds: sevenIdsSet,
+    snapshotAt: jetsBucket.snapshotAt,
+    keepDoneEv: true,
+    writeRows: async (built) => {
+      keepWrites.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    storeClose: async (ev) => {
+      keepStored.push(ev.id);
+      return { wrote: true };
+    },
+  });
+  assert.deepStrictEqual(keepWrites.slice().sort(), sevenIds.filter((id) => id !== 'jets').sort());
+  assert.ok(!keepStored.includes('jets'));
+  assert.deepStrictEqual(keepBlobs.data.get('clv-close-capture:done-ev/NFL/jets'), keptJets);
+
+  const schedReplayFetches = [];
+  const schedReplayWrites = [];
+  const schedReplayBlobs = memBlobs({
+    'clv-close-capture:raw/2026-11-15/NFL/2026-11-15T17:55:36Z--2026-11-15T17:59:00Z.json': {
+      meta: { sport: 'NFL', snapshot: '2026-11-15T17:59:00Z', timestamp: '2026-11-15T17:55:36Z' },
+      body: wrapped(sevenEvents, '2026-11-15T17:55:36Z'),
+    },
+  });
+  const schedReplay = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15', replayArchives: true, scheduled: true }),
+  }, {
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    now: new Date('2026-11-16T09:30:00Z'),
+    blobs: schedReplayBlobs,
+    slateEvents: sevenSlate,
+    readBoard: async () => null,
+    readMaster: async () => null,
+    card: { picks: [] },
+    skipGrade: true,
+    skipMirror: true,
+    invokeTrack: async () => ({ ok: true, status: 200 }),
+    storeClose: async () => ({ wrote: true }),
+    writeRows: async (built) => {
+      schedReplayWrites.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    fetch: async () => {
+      schedReplayFetches.push('api');
+      throw new Error('odds api must not be called');
+    },
+  });
+  assert.strictEqual(schedReplay.statusCode, 200);
+  assert.strictEqual(schedReplayFetches.length, 0, 'scheduled runs ignore replayArchives');
+  assert.deepStrictEqual(schedReplayWrites, []);
+  const schedReplayBody = JSON.parse(schedReplay.body);
+  assert.strictEqual(schedReplayBody.replayArchives, false);
+  assert.strictEqual(schedReplayBody.calls, 0);
+  assert.ok(!schedReplayBlobs.data.has('clv-close-capture:done-ev/NFL/chiefs'));
+  const directIgnoredWrites = [];
+  const directIgnored = await C.runCloses({
+    now: new Date('2026-11-16T09:31:00Z'),
+    env: {},
+    date: '2026-11-15',
+    replayArchives: true,
+    scheduled: true,
+    slateEvents: [],
+    readBoard: async () => null,
+    readMaster: async () => null,
+    blobs: memBlobs({}),
+    fetch: async () => { throw new Error('odds api must not be called'); },
+    writeRows: async (built) => {
+      directIgnoredWrites.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+  });
+  assert.notStrictEqual(directIgnored.mode, 'replay-archives');
+  assert.deepStrictEqual(directIgnored.calls, []);
+  assert.deepStrictEqual(directIgnoredWrites, []);
+
+  let blockedFetches = 0;
+  const blockedReplay = await C.runCloses({
+    now: new Date('2026-11-16T09:32:00Z'),
+    env: {},
+    date: '2026-11-01',
+    replayArchives: true,
+    slateEvents: sevenSlate,
+    readBoard: async () => null,
+    blobs: schedReplayBlobs,
+    fetch: async () => { blockedFetches += 1; throw new Error('odds api must not be called'); },
+    writeRows: async () => { throw new Error('date window must not apply'); },
+  });
+  assert.strictEqual(blockedFetches, 0);
+  assert.deepStrictEqual(blockedReplay.calls, []);
+  assert.ok(blockedReplay.errors.includes('date-window'));
+
+  const liveJets = { at: '2026-11-15T18:05:00Z', via: 'live', eventId: 'jets' };
+  const liveTexans = { at: '2026-11-15T18:06:00Z', via: 'live', eventId: 'texans' };
+  const liveDolphins = { at: '2026-11-15T18:07:00Z', via: 'live', eventId: 'dolphins' };
+  function summaryGame(id, away, home, status, lead) {
+    return {
+      sport: 'NFL',
+      eventId: id,
+      matchup: `${away} @ ${home}`,
+      status,
+      reason: status === 'closed' ? null : 'not-in-historical-snapshot',
+      closeLeadMin: lead,
+    };
+  }
+  const replayWrites = [];
+  const replayStored = [];
+  let replayFetches = 0;
+  const replayBlobs = memBlobs({
+    'clv-close-capture:done-ev/NFL/jets': liveJets,
+    'clv-close-capture:done-ev/NFL/texans': liveTexans,
+    'clv-close-capture:done-ev/NFL/dolphins': liveDolphins,
+    'clv-close-capture:closes-3am/2026-11-15': {
+      date: '2026-11-15',
+      games: [
+        summaryGame('chiefs', 'Kansas City Chiefs', 'Atlanta Falcons', 'no-close', null),
+        summaryGame('panthers', 'Carolina Panthers', 'New Orleans Saints', 'no-close', null),
+        summaryGame('vikings', 'Minnesota Vikings', 'Green Bay Packers', 'no-close', null),
+        summaryGame('jaguars', 'Jacksonville Jaguars', 'Tennessee Titans', 'no-close', null),
+        summaryGame('jets', 'Buffalo Bills', 'New York Jets', 'closed', 4),
+        summaryGame('texans', 'Houston Texans', 'Cleveland Browns', 'closed', 3),
+        summaryGame('dolphins', 'Miami Dolphins', 'Indianapolis Colts', 'closed', 3),
+        summaryGame('still-open', 'Chicago Bears', 'Green Bay Packers', 'no-close', null),
+      ],
+    },
+    'clv-close-capture:raw/2026-11-15/NFL/2026-11-15T17:55:36Z--2026-11-15T17:59:00Z.json': {
+      meta: {
+        sport: 'NFL',
+        snapshot: '2026-11-15T17:59:00Z',
+        timestamp: '2026-11-15T17:55:36Z',
+        fetchedAt: '2026-11-15T17:55:36Z--2026-11-15T17:59:00Z',
+      },
+      body: wrapped(sevenEvents, '2026-11-15T17:55:36Z'),
+    },
+    'clv-close-capture:raw/2026-11-15/NFL/board.json': {
+      meta: { sport: 'NFL', snapshot: '2026-11-15T15:00:00Z' },
+      body: wrapped([nflClose('decoy', 'Dallas Cowboys', 'Philadelphia Eagles')], '2026-11-15T15:00:00Z'),
+    },
+  });
+  const replayed = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15', replayArchives: true }),
+  }, {
+    env: { PICKS_SECRET_KEY: 'secret', OMEGA_CLOSES_AT_3AM: 'on' },
+    now: new Date('2026-11-16T09:40:00Z'),
+    blobs: replayBlobs,
+    slateEvents: sevenSlate,
+    readBoard: async () => null,
+    readMaster: async () => null,
+    card: { picks: [] },
+    skipGrade: true,
+    skipMirror: true,
+    invokeTrack: async () => ({ ok: true, status: 200 }),
+    storeClose: async (ev) => {
+      replayStored.push(ev.id);
+      return { wrote: true };
+    },
+    writeRows: async (built) => {
+      replayWrites.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    fetch: async () => {
+      replayFetches += 1;
+      throw new Error('odds api must not be called');
+    },
+  });
+  assert.strictEqual(replayed.statusCode, 200);
+  assert.strictEqual(replayFetches, 0);
+  const replayBody = JSON.parse(replayed.body);
+  assert.strictEqual(replayBody.replayArchives, true);
+  assert.strictEqual(replayBody.calls, 0);
+  assert.deepStrictEqual(replayWrites, ['chiefs', 'panthers', 'vikings', 'jaguars']);
+  assert.deepStrictEqual(replayStored, ['chiefs', 'panthers', 'vikings', 'jaguars']);
+  assert.deepStrictEqual(replayBlobs.data.get('clv-close-capture:done-ev/NFL/jets'), liveJets);
+  assert.deepStrictEqual(replayBlobs.data.get('clv-close-capture:done-ev/NFL/texans'), liveTexans);
+  assert.deepStrictEqual(replayBlobs.data.get('clv-close-capture:done-ev/NFL/dolphins'), liveDolphins);
+  for (const id of ['chiefs', 'panthers', 'vikings', 'jaguars']) {
+    assert.strictEqual(replayBlobs.data.get(`clv-close-capture:done-ev/NFL/${id}`).via, 'closes-3am');
+  }
+  assert.ok(!replayBlobs.data.has('clv-close-capture:done-ev/NFL/decoy'));
+  assert.ok(![...replayBlobs.data.keys()].some((key) => /:done\/NFL\//.test(key)));
+  const replaySummary = replayBlobs.data.get('clv-close-capture:closes-3am/2026-11-15');
+  const replayGame = (id) => replaySummary.games.find((row) => row.eventId === id);
+  for (const id of ['chiefs', 'panthers', 'vikings', 'jaguars']) {
+    assert.strictEqual(replayGame(id).status, 'closed');
+    assert.strictEqual(replayGame(id).reason, null);
+    assert.strictEqual(replayGame(id).closeLeadMin, 1);
+  }
+  assert.strictEqual(replayGame('jets').status, 'closed');
+  assert.strictEqual(replayGame('jets').closeLeadMin, 4);
+  assert.strictEqual(replayGame('texans').closeLeadMin, 3);
+  assert.strictEqual(replayGame('dolphins').closeLeadMin, 3);
+  assert.strictEqual(replayGame('still-open').status, 'no-close');
+  assert.strictEqual(replayGame('still-open').reason, 'not-in-historical-snapshot');
+  assert.ok(replayBody.games.find((row) => row.eventId === 'chiefs').status === 'closed');
+  assert.ok(!JSON.stringify(replayBody).includes('test-key'));
 
   const billsGame = {
     awayTeam: 'New York Jets', awayAbbr: 'NYJ', awayScore: 12,

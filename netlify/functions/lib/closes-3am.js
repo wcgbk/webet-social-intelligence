@@ -19,6 +19,14 @@
  * A manual missingGames run plans buckets only for slate games that have
  * no close yet, plus card and candidate legs that are still no-close.
  * Scheduled runs never set that flag.
+ * A paid historical body writes every Pinnacle-priced slate event in that
+ * response. A sibling is not dropped because this bucket did not plan it.
+ * Another planned bucket still applies its own snapshot. An event that
+ * already has done-ev is not overwritten when keepDoneEv is set.
+ * A manual replayArchives run reads raw/${date}/ archives whose keys
+ * contain "--" and applies those paid bodies with keepDoneEv. It makes
+ * no Odds API call. Scheduled runs never set replayArchives. The date
+ * must pass dateAllowed. The default path stays the saved board.
  * OMEGA_CLOSES_AT_3AM defaults on. The worker still runs. Historical
  * purchases stay off unless OMEGA_CLOSES_HISTORICAL is on.
  * OMEGA_CLOSES_3AM_CAP defaults to the Saturday 2026-11-14 estimate plus
@@ -328,10 +336,12 @@ function slateIdSet(slateEvents) {
 }
 
 /**
- * A response event belongs to this bucket when its id is one of the bucket
- * games, or it is not on the slate and its commence falls inside
- * [earliest tip − 2 min, latest tip + 2 min]. Other events stay in the
- * archived body and are not written as closes.
+ * Bucket membership. True when the event id is one of the bucket games,
+ * or the event is not on the slate and its commence falls inside
+ * [earliest tip − 2 min, latest tip + 2 min]. A slate event this bucket
+ * did not plan is not a member. Membership is not the write filter: a
+ * paid body still writes that sibling when it has a Pinnacle price and
+ * no other planned bucket owns the id. See eventsForPaidBody.
  */
 function eventBelongsToBucket(event, bucket, slateIds) {
   if (!event || !bucket) return false;
@@ -571,11 +581,57 @@ function marketsForEvent(event, picks) {
   return wanted;
 }
 
+function bucketEventIds(bucket) {
+  const ids = new Set();
+  for (const game of (bucket && bucket.games) || []) {
+    if (game && game.eventId) ids.add(String(game.eventId));
+  }
+  return ids;
+}
+
+function otherPlannedIds(buckets, bucket) {
+  const ids = new Set();
+  for (const item of buckets || []) {
+    if (item === bucket) continue;
+    for (const id of bucketEventIds(item)) ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * Events from one paid body that this apply may write.
+ * Bucket members and in-window unlisted events stay. A Pinnacle-priced
+ * slate event is kept even when this bucket did not plan it, unless
+ * another planned bucket owns that id and will apply its own snapshot.
+ */
+function eventsForPaidBody(bucket, events, ctx) {
+  const slateIds = (ctx && ctx.slateIds) || slateIdSet(null);
+  const otherIds = ctx && ctx.otherBucketIds;
+  const out = [];
+  for (const event of events || []) {
+    if (!event) continue;
+    if (eventBelongsToBucket(event, bucket, slateIds)) {
+      out.push(event);
+      continue;
+    }
+    if (!eventHasPinnacle(event)) continue;
+    const id = event.id == null ? '' : String(event.id);
+    if (!id || !slateIds.has(id)) continue;
+    if (otherIds && otherIds.has(id)) continue;
+    out.push(event);
+  }
+  return out;
+}
+
 /**
  * Apply one historical body to the stores the old close job writes.
  * `events` must already be unwrapped. Does not call the Odds API.
- * Events outside this bucket are ignored here. The caller archives the raw body.
- * `ctx.onlyPicks` limits assessment and writes to those legs (fallback).
+ * The caller archives the raw body. Every Pinnacle-priced slate event in
+ * the body is written, not only `bucket.games`. `ctx.otherBucketIds`
+ * keeps another planned bucket's own snapshot.
+ * `ctx.onlyPicks` limits pick assessment and, on the fallback snapshot,
+ * which markets are written. The primary body does not use it to drop
+ * other priced events.
  * `ctx.keepDoneEv` skips row, done-marker, and odds-master writes for an
  * event that already has a done-ev marker. The old live close stays.
  */
@@ -583,8 +639,7 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
   const when = ctx.now instanceof Date ? ctx.now : new Date();
   const snapshotAt = ctx.snapshotAt || bucket.snapshotAt;
   const allEvents = unpacked.events || [];
-  const slateIds = ctx.slateIds || slateIdSet(null);
-  const belonging = allEvents.filter((event) => eventBelongsToBucket(event, bucket, slateIds));
+  const belonging = eventsForPaidBody(bucket, allEvents, ctx);
   const onlyPicks = Array.isArray(ctx.onlyPicks) ? ctx.onlyPicks : null;
   const events = onlyPicks
     ? belonging.filter((event) => marketsForEvent(event, onlyPicks).length > 0)
@@ -1187,8 +1242,192 @@ async function runSavedBoardCloses(ctx) {
   return result;
 }
 
+function isHistoricalArchiveKey(key) {
+  const base = String(key || '').split('/').pop();
+  return base.includes('--');
+}
+
+function sportFromRawKey(key) {
+  const parts = String(key || '').split('/').filter(Boolean);
+  const rawAt = parts.indexOf('raw');
+  if (rawAt >= 0 && parts[rawAt + 2]) return canonSport(parts[rawAt + 2]);
+  return null;
+}
+
+function blobListKeys(listed) {
+  const rows = Array.isArray(listed) ? listed : (listed && Array.isArray(listed.blobs) ? listed.blobs : []);
+  return rows.map((item) => (item && item.key) || item).filter(Boolean);
+}
+
+async function loadHistoricalArchives(blobs, date) {
+  if (!blobs || typeof blobs.list !== 'function' || typeof blobs.get !== 'function') return [];
+  let listed = [];
+  try { listed = await blobs.list(STORE, `raw/${date}/`); } catch (_) { listed = []; }
+  const out = [];
+  for (const rawKey of blobListKeys(listed)) {
+    const key = decodeBlobKey(rawKey);
+    if (!isHistoricalArchiveKey(key)) continue;
+    const sport = sportFromRawKey(key);
+    if (!sport || !SPORTS.includes(sport)) continue;
+    let doc = null;
+    try { doc = await blobs.get(STORE, key); } catch (_) { doc = null; }
+    if (!doc) continue;
+    out.push({
+      key,
+      sport,
+      doc,
+      unpacked: unwrapHistorical(doc.body),
+      snapMs: archiveSnapshotMs(doc),
+    });
+  }
+  return out;
+}
+
+function bucketForArchive(archive) {
+  const events = (archive.unpacked && archive.unpacked.events) || [];
+  const times = events.map((event) => Date.parse(event && event.commence_time)).filter(Number.isFinite);
+  const min = times.length ? Math.min(...times) : (archive.snapMs || 0);
+  const max = times.length ? Math.max(...times) : min;
+  const meta = archive.doc && archive.doc.meta;
+  const snapshotAt = (meta && (meta.snapshot || meta.timestamp))
+    || (archive.snapMs ? isoSecond(archive.snapMs) : isoSecond(min || Date.now()));
+  return {
+    sport: archive.sport,
+    sportKey: sportKeyOf(archive.sport),
+    snapshotAt,
+    startMs: min,
+    endMs: max,
+    games: [],
+    from: null,
+    to: null,
+  };
+}
+
+function mergeReplayGames(summary, written) {
+  const rows = ((summary && summary.games) || []).map((row) => Object.assign({}, row));
+  for (const item of written) {
+    const event = item.event;
+    if (!event || !eventHasPinnacle(event)) continue;
+    const id = event.id == null ? '' : String(event.id);
+    if (!id) continue;
+    const lead = leadMinutes(event.commence_time, item.snapshotAt);
+    const at = rows.findIndex((row) => row && String(row.eventId) === id && canonSport(row.sport) === canonSport(item.sport));
+    if (at < 0) continue;
+    if (rows[at].status === 'closed') continue;
+    rows[at] = Object.assign({}, rows[at], {
+      status: 'closed',
+      reason: null,
+      closeLeadMin: lead,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Ingest historical raw archives already stored under raw/${date}/.
+ * Zero Odds API calls. keepDoneEv so an existing close is not replaced.
+ * A summary game that was no-close becomes closed when this body has a
+ * Pinnacle price for it. The date must pass dateAllowed.
+ */
+async function runReplayArchives(ctx) {
+  const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
+  const env = ctx.env || process.env;
+  const date = ctx.date;
+  const dryRun = !!ctx.dryRun;
+  const result = {
+    ok: true,
+    date,
+    mode: 'replay-archives',
+    replayArchives: true,
+    cap: capFor(env),
+    estCost: 0,
+    creditFormula: 'replay-archives: 0 Odds API credits',
+    onlyMissing: false,
+    retryNoClose: false,
+    missingGames: false,
+    dryRun,
+    reserveGuard: false,
+    calls: [],
+    errors: [],
+    picks: [],
+    buckets: [],
+    games: [],
+    skippedDone: 0,
+    skippedCap: 0,
+  };
+  if (!dateAllowed(String(date || ''), S.etYmd(now))) {
+    result.ok = false;
+    result.errors.push('date-window');
+    return result;
+  }
+  const blobs = ctx.blobs;
+  const loaded = await loadInputs(date, ctx);
+  const slateIds = slateIdSet(loaded.slate);
+  let summary = null;
+  if (blobs) {
+    try { summary = await blobs.get(STORE, summaryKey(date)); } catch (_) { summary = null; }
+  }
+  const archives = await loadHistoricalArchives(blobs, date);
+  archives.sort((a, b) => b.snapMs - a.snapMs || String(b.key).localeCompare(String(a.key)));
+  const written = [];
+  for (const archive of archives) {
+    const bucket = bucketForArchive(archive);
+    try {
+      const applied = await applyBucketResponse(bucket, archive.unpacked, {
+        now,
+        env,
+        fetch: ctx.fetch,
+        blobs,
+        dryRun,
+        writeRows: ctx.writeRows,
+        storeClose: ctx.storeClose,
+        slateIds,
+        snapshotAt: bucket.snapshotAt,
+        keepDoneEv: true,
+      });
+      for (const event of applied.events || []) {
+        if (!eventHasPinnacle(event)) continue;
+        written.push({ event, sport: archive.sport, snapshotAt: bucket.snapshotAt });
+      }
+      result.buckets.push({
+        sport: archive.sport,
+        snapshotAt: bucket.snapshotAt,
+        nEvents: (archive.unpacked.events || []).length,
+        nKept: applied.events.length,
+        status: 'replayed',
+      });
+    } catch (err) {
+      result.ok = false;
+      result.errors.push(scrub(err && err.message));
+      safeLog(`[closes-3am] replay ${archive.sport}: ${err && err.message}`);
+    }
+  }
+  const gameRows = mergeReplayGames(summary, written);
+  result.games = gameRows;
+  result.picks = (summary && summary.picks) || [];
+  const summaryDoc = Object.assign({}, summary || {}, {
+    date,
+    ranAt: now.toISOString(),
+    mode: 'replay-archives',
+    replayArchives: true,
+    calls: [],
+    games: gameRows,
+    errors: result.errors,
+  });
+  result.summary = summaryDoc;
+  if (blobs && !dryRun) {
+    try { await blobs.set(STORE, summaryKey(date), summaryDoc); } catch (err) {
+      result.ok = false;
+      result.errors.push(scrub(err && err.message));
+      safeLog(`[closes-3am] summary: ${err && err.message}`);
+    }
+  }
+  return result;
+}
+
 async function runCloses(ctx) {
   const gateEnv = (ctx && ctx.env) || process.env;
+  if (ctx && truthyFlag(ctx.replayArchives) && !truthyFlag(ctx.scheduled)) return runReplayArchives(ctx);
   if (!closesHistoricalEnabled(gateEnv)) return runSavedBoardCloses(ctx || {});
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
   const env = ctx.env || process.env;
@@ -1424,6 +1663,7 @@ async function runCloses(ctx) {
         writeRows: ctx.writeRows,
         storeClose: ctx.storeClose,
         slateIds,
+        otherBucketIds: otherPlannedIds(buckets, bucket),
         snapshotAt,
         onlyPicks: onlyPicks || null,
         keepDoneEv: missingGames,
@@ -1703,7 +1943,9 @@ module.exports = {
   gameHasClose,
   missingGameTargets,
   loadSavedPinnacle,
+  eventsForPaidBody,
   applyBucketResponse,
+  runReplayArchives,
   runCloses,
   loadStoredEventsForSport,
   dateAllowed,

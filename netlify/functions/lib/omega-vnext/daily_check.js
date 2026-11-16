@@ -14,11 +14,12 @@
 const { etParts } = require('../et-schedule');
 const { replayNoWrite } = require('./no_write');
 const { opsAlert } = require('./ops_alert');
-const { americanToDecimal } = require('./odds_math');
+const { americanToDecimal, americanToImplied } = require('./odds_math');
 const { stakeUsd } = require('../omega-v2/size');
 const { SITE_ID, BLOB_STORE } = require('./config');
 const { blobRestUrl } = require('./blob_key');
 const { resolveFetch } = require('./audit_log');
+const { SPORTS: ODDS_MASTER_SPORTS } = require('../odds-master/pull');
 
 const REPORT_STORE = BLOB_STORE;
 const NEWS_SNAPSHOT_STORE = 'omega-news-snapshots';
@@ -44,7 +45,16 @@ const GITHUB_TIMEOUT_MS = 10 * 1000;
 const EXTERNAL_WINDOW_MS = 48 * 60 * 60 * 1000;
 const DEPLOY_PAIR_MS = 120 * 1000;
 const LEDGER_STORE = 'omega-ops';
+/**
+ * CLI `netlify blobs:set` uses getStore({ name, siteID, token }).
+ * @netlify/blobs prefixes that name with `site:` (site-wide store).
+ * Function REST (store.js blobFetch) uses the bare store name, which is
+ * the legacy namespace. Both are read. deploy.sh writes the legacy URL.
+ */
+const SITE_LEDGER_STORE = 'site:omega-ops';
 const LEDGER_PREFIX = 'deploy-ledger/';
+const NEWS_FIRST_DAY = '2026-11-16';
+const PULL_SPORTS = ODDS_MASTER_SPORTS.map((row) => row[0]);
 const GITHUB_COMMITS_URL = 'https://api.github.com/repos/wcgbk/webet-social-intelligence/commits';
 const DEFAULT_DEPLOY_ACTORS = 'edge-executor';
 
@@ -280,8 +290,10 @@ function straightsOf(card) {
 }
 
 /**
- * Same slot scan as monitor-omega-missed-pull. A stored odds-master pull
- * doc is the board. A good done marker without that board is not a landed pull.
+ * capture-done markers are written only by writeCaptureDone, which the
+ * post-10/18 odds-master pull does not call. The live record is
+ * odds-master pulls/{date}/{slot}: every sport key, errors[], games.
+ * A complete doc is a finished pull. A missing or partial doc still fails.
  */
 function hasSlotCheck(doc, slot) {
   for (const eventDoc of (doc && doc.events) || []) {
@@ -298,24 +310,47 @@ function pullDocPresent(pullDoc, slot) {
   return true;
 }
 
+function livePullComplete(pullDoc, slot) {
+  if (!pullDocPresent(pullDoc, slot)) return false;
+  if (pullDoc.ok === false || pullDoc.complete === false) return false;
+  if (!Array.isArray(pullDoc.errors) || pullDoc.errors.length) return false;
+  const sports = pullDoc.sports;
+  if (!sports || typeof sports !== 'object' || Array.isArray(sports)) return false;
+  for (const label of PULL_SPORTS) {
+    if (!Object.prototype.hasOwnProperty.call(sports, label)) return false;
+  }
+  const requests = pullDoc.requests != null ? pullDoc.requests : pullDoc.requestCount;
+  if (requests != null && !(Number(requests) >= PULL_SPORTS.length)) return false;
+  if (pullDoc.games != null && !Number.isFinite(Number(pullDoc.games))) return false;
+  return true;
+}
+
 function assessPullSlot(slot, input) {
   const src = input || {};
   const marker = src.marker;
   const board = pullDocPresent(src.pullDoc, slot);
-  if (marker && marker.ok !== false) {
-    if (!board) return { status: 'fail', code: 'board-missing', marker: true, board: false, slot };
-    return { status: 'ok', code: 'ok', marker: true, board: true, slot, phase: marker.phase || null };
+  if (livePullComplete(src.pullDoc, slot)) {
+    return {
+      status: 'ok',
+      code: 'ok',
+      marker: !!(marker && marker.ok !== false),
+      board: true,
+      slot,
+      phase: (marker && marker.phase) || null,
+      games: src.pullDoc.games,
+      errors: 0,
+    };
   }
-  if (marker && marker.ok === false) {
-    return { status: 'fail', code: `partial-${slot}-pull`, marker: true, board, slot };
+  if (board || (marker && marker.ok === false)) {
+    return { status: 'fail', code: `partial-${slot}-pull`, marker: !!marker, board, slot };
+  }
+  if (marker && marker.ok !== false) {
+    return { status: 'fail', code: 'board-missing', marker: true, board: false, slot };
   }
   if (src.started) {
     return { status: 'fail', code: 'capture-started-not-finished', marker: false, board, slot, started: true };
   }
-  if (hasSlotCheck(src.lineMoves, slot) || board) {
-    return { status: 'warn', code: 'marker-missing-data-present', marker: false, board, slot };
-  }
-  if (Array.isArray(src.sports) && src.sports.length === 0) {
+  if (Array.isArray(src.sports) && src.sports.length === 0 && !hasSlotCheck(src.lineMoves, slot)) {
     return { status: 'ok', code: 'no-slate', marker: false, board: false, slot, sports: [] };
   }
   return {
@@ -562,12 +597,16 @@ function findClose(rows, pick, has) {
   return pool.find((row) => has(row)) || null;
 }
 
-function assessCloses(card, clvDoc, candidateDoc) {
+function assessCloses(card, clvDoc, candidateDoc, extraRows) {
   const missing = [];
   const clvRows = []
     .concat((clvDoc && clvDoc.picks) || [])
     .concat((clvDoc && clvDoc.pickClv) || []);
-  const candidates = (candidateDoc && candidateDoc.candidates) || (Array.isArray(candidateDoc) ? candidateDoc : []);
+  const candidates = []
+    .concat((candidateDoc && candidateDoc.candidates) || (Array.isArray(candidateDoc) ? candidateDoc : []))
+    .concat((clvDoc && clvDoc.candidates) || [])
+    .concat((clvDoc && clvDoc.pickClv) || [])
+    .concat(extraRows || []);
   for (const pick of straightsOf(card)) {
     const pickClose = findClose(clvRows, pick, rowHasPickClose);
     const candidateClose = findClose(candidates, pick, rowHasCandidateClose);
@@ -1110,6 +1149,155 @@ async function checkKpis(ctx) {
   return Object.assign({}, assessed, { corrected: ['results-cache'], rebuild: rebuilt });
 }
 
+function compactName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function pickTeamCompact(pick) {
+  const text = String((pick && pick.pick) || '')
+    .replace(/[+-]?\d+(?:\.\d+)?/g, ' ')
+    .replace(/\b(?:ml|moneyline)\b/ig, ' ');
+  return compactName(text);
+}
+
+function splitMatchup(matchup) {
+  const parts = String(matchup || '').trim().split(/\s+@\s+|\s+vs\.?\s+/i);
+  if (parts.length < 2) return null;
+  return { left: compactName(parts[0]), right: compactName(parts[1]) };
+}
+
+function gameMatchesPick(game, pick) {
+  const sides = splitMatchup(pick && pick.matchup);
+  if (!sides || !sides.left || !sides.right) return false;
+  const home = compactName(game && game.home_team);
+  const away = compactName(game && game.away_team);
+  if (!home || !away) return false;
+  return (away === sides.left && home === sides.right) || (away === sides.right && home === sides.left);
+}
+
+function apiMarket(pick) {
+  const kind = marketKind(pick);
+  if (kind === 'spread') return 'spreads';
+  if (kind === 'total') return 'totals';
+  return 'h2h';
+}
+
+function finiteImplied(value) {
+  const n = americanToImplied(value);
+  return n != null && Number.isFinite(n) ? n : null;
+}
+
+function closeFromStoredRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  if (row.closing_novig != null && row.closing_novig !== '') {
+    const n = Number(row.closing_novig);
+    if (Number.isFinite(n)) return n;
+  }
+  return finiteImplied(row.closing_odds);
+}
+
+function snapshotClose(snaps, pick) {
+  const market = apiMarket(pick);
+  const rows = (snaps || []).filter((row) => row && String(row.market || '') === market && finiteImplied(row.price) != null);
+  if (!rows.length) return null;
+  const team = pickTeamCompact(pick);
+  const matched = team ? rows.find((row) => compactName(row.side) === team) : null;
+  return finiteImplied((matched || rows[0]).price);
+}
+
+function serviceRoleKey(ctx) {
+  const source = ctx && ctx.env != null ? ctx.env : process.env;
+  if (!source || source.SUPABASE_SERVICE_ROLE_KEY == null) return '';
+  return String(source.SUPABASE_SERVICE_ROLE_KEY).trim();
+}
+
+async function supabaseSelect(ctx, pathAndQuery) {
+  const key = serviceRoleKey(ctx);
+  if (!key) return [];
+  const doFetch = externalFetch(ctx);
+  const resp = await raceTimeout(() => doFetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
+    method: 'GET',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: 'application/json',
+      'Accept-Profile': 'clv',
+    },
+  }), GITHUB_TIMEOUT_MS);
+  if (!responseOk(resp)) return [];
+  const data = typeof resp.json === 'function' ? await resp.json() : null;
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Live candidate closes are not clv-candidates-v2. capture-candidate-closes
+ * returns before that write. supa-mirror writes clv.pick_clv. capture-pick-closes
+ * writes clv.odds_snapshots pinnacle closing rows. No service key returns no
+ * rows, so a missing blob close still fails.
+ */
+async function defaultReadStoredCandidateCloses(dateISO, ctx) {
+  if (!serviceRoleKey(ctx)) return [];
+  const picks = straightsOf(ctx && ctx.prevCard);
+  const rows = [];
+  let stored = [];
+  try {
+    const qs = new URLSearchParams();
+    qs.set('date', `eq.${dateISO}`);
+    qs.set('select', 'pick,matchup,closing_novig,closing_odds');
+    stored = await supabaseSelect(ctx, `pick_clv?${qs.toString()}`);
+  } catch (_) {
+    stored = [];
+  }
+  const unmatched = [];
+  for (const pick of picks) {
+    const hit = (stored || []).find((row) => pickText(row) === pickText(pick) && closeFromStoredRow(row) != null);
+    if (!hit) {
+      unmatched.push(pick);
+      continue;
+    }
+    rows.push({
+      pick: hit.pick || pick.pick,
+      matchup: hit.matchup || pick.matchup,
+      closeNoVig: closeFromStoredRow(hit),
+    });
+  }
+  if (!unmatched.length) return rows;
+  try {
+    const from = `${shiftYmd(dateISO, -1)}T00:00:00.000Z`;
+    const to = `${shiftYmd(dateISO, 2)}T00:00:00.000Z`;
+    const gameQs = new URLSearchParams();
+    gameQs.set('select', 'game_id,home_team,away_team,commence_time');
+    gameQs.set('commence_time', `gte.${from}`);
+    gameQs.append('commence_time', `lt.${to}`);
+    const games = await supabaseSelect(ctx, `games?${gameQs.toString()}`);
+    const wanted = new Map();
+    for (const pick of unmatched) {
+      const game = (games || []).find((row) => gameMatchesPick(row, pick));
+      const gameId = game && game.game_id ? String(game.game_id) : '';
+      if (!/^[A-Za-z0-9_.-]+$/.test(gameId)) continue;
+      if (!wanted.has(gameId)) wanted.set(gameId, []);
+      wanted.get(gameId).push(pick);
+    }
+    const ids = [...wanted.keys()];
+    if (!ids.length) return rows;
+    const snapQs = new URLSearchParams();
+    snapQs.set('select', 'game_id,market,side,point,price');
+    snapQs.set('game_id', `in.(${ids.join(',')})`);
+    snapQs.set('book', 'eq.pinnacle');
+    snapQs.set('line_type', 'eq.closing');
+    const snaps = await supabaseSelect(ctx, `odds_snapshots?${snapQs.toString()}`);
+    for (const [gameId, gamePicks] of wanted) {
+      const mine = (snaps || []).filter((row) => String(row.game_id) === gameId);
+      for (const pick of gamePicks) {
+        const closeNoVig = snapshotClose(mine, pick);
+        if (closeNoVig == null) continue;
+        rows.push({ pick: pick.pick, matchup: pick.matchup, closeNoVig });
+      }
+    }
+  } catch (_) { /* keep the pick_clv rows already found */ }
+  return rows;
+}
+
 async function checkCloses(ctx) {
   if (!ctx.prevCard) {
     const readCard = ctx.readCard || defaultReadCard;
@@ -1118,11 +1306,16 @@ async function checkCloses(ctx) {
   if (!ctx.prevCard) return { status: 'fail', code: 'card-missing' };
   const readClv = ctx.readClv || defaultReadClv;
   const readCandidates = ctx.readCandidateCloses || defaultReadCandidates;
+  const readStored = ctx.readStoredCandidateCloses
+    || ((dateISO) => defaultReadStoredCandidateCloses(dateISO, ctx));
   let clv = null;
   let candidates = null;
+  let extra = [];
   try { clv = await readClv(ctx.prev); } catch (_) { clv = null; }
   try { candidates = await readCandidates(ctx.prev); } catch (_) { candidates = null; }
-  return assessCloses(ctx.prevCard, clv, candidates);
+  try { extra = await readStored(ctx.prev, ctx); } catch (_) { extra = []; }
+  if (!Array.isArray(extra)) extra = [];
+  return assessCloses(ctx.prevCard, clv, candidates, extra);
 }
 
 async function checkNews(ctx) {
@@ -1131,6 +1324,7 @@ async function checkNews(ctx) {
   if (doc && (doc.present === true || doc.date === ctx.date || doc.key)) {
     return { status: 'ok', code: 'ok', key: doc.key || null };
   }
+  if (String(ctx.date) < NEWS_FIRST_DAY) return { status: 'warn', code: 'news-missing' };
   return { status: 'fail', code: 'news-missing' };
 }
 
@@ -1346,7 +1540,7 @@ async function readLedgerSdk() {
   return entries;
 }
 
-async function readLedgerRest(ctx) {
+async function readLedgerStore(ctx, storeName) {
   const token = netlifyToken(ctx);
   if (!token) throw new Error('netlify-unreadable');
   const doFetch = externalFetch(ctx);
@@ -1360,8 +1554,11 @@ async function readLedgerRest(ctx) {
     const qs = new URLSearchParams();
     qs.set('prefix', LEDGER_PREFIX);
     if (cursor) qs.set('cursor', cursor);
-    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${LEDGER_STORE}?${qs.toString()}`;
-    const { data } = await fetchJson(doFetch, url, { method: 'GET', headers });
+    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${storeName}?${qs.toString()}`;
+    const resp = await raceTimeout(() => doFetch(url, { method: 'GET', headers }), GITHUB_TIMEOUT_MS);
+    if (resp && Number(resp.status) === 404) return [];
+    if (!responseOk(resp)) throw new Error('ledger-unreadable');
+    const data = typeof resp.json === 'function' ? await resp.json() : null;
     const blobs = data && Array.isArray(data.blobs) ? data.blobs : (Array.isArray(data) ? data : null);
     if (!blobs) throw new Error('ledger-unreadable');
     for (const blob of blobs) if (blob && blob.key) keys.push(String(blob.key));
@@ -1372,10 +1569,10 @@ async function readLedgerRest(ctx) {
   const entries = [];
   let matched = 0;
   for (const key of keys) {
-    if (!key.startsWith(LEDGER_PREFIX)) continue;
+    if (!String(key).startsWith(LEDGER_PREFIX)) continue;
     matched += 1;
     try {
-      const url = blobRestUrl(SITE_ID, LEDGER_STORE, key, 'canonical');
+      const url = blobRestUrl(SITE_ID, storeName, key, 'canonical');
       const { data } = await fetchJson(doFetch, url, { method: 'GET', headers });
       const entry = normalizeLedger(data);
       if (entry) entries.push(entry);
@@ -1385,17 +1582,37 @@ async function readLedgerRest(ctx) {
   return entries;
 }
 
+function mergeLedger(buckets) {
+  const out = [];
+  const seen = new Set();
+  for (const bucket of buckets || []) {
+    for (const entry of bucket || []) {
+      const id = `${entry.sha}|${entry.at || ''}|${entry.actor || ''}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(entry);
+    }
+  }
+  return out;
+}
+
 async function loadLedger(ctx) {
+  const buckets = [];
+  let anyOk = false;
   if (!(ctx && typeof ctx.fetch === 'function')) {
     try {
-      return { ok: true, entries: await readLedgerSdk() };
-    } catch (_) { /* REST below */ }
+      buckets.push(await readLedgerSdk());
+      anyOk = true;
+    } catch (_) { /* REST below. A throw is the only SDK fallback. */ }
   }
-  try {
-    return { ok: true, entries: await readLedgerRest(ctx) };
-  } catch (_) {
-    return { ok: false, entries: [] };
+  for (const storeName of [LEDGER_STORE, SITE_LEDGER_STORE]) {
+    try {
+      buckets.push(await readLedgerStore(ctx, storeName));
+      anyOk = true;
+    } catch (_) { /* the other namespace may still be readable */ }
   }
+  if (!anyOk) return { ok: false, entries: [] };
+  return { ok: true, entries: mergeLedger(buckets) };
 }
 
 function earliestLedgerMs(entries) {

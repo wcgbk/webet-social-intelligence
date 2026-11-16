@@ -29,11 +29,29 @@ const {
 const { handle: backgroundHandle, handler: backgroundHandler } = require('./netlify/functions/check-omega-daily-background');
 const { handle: getHandle } = require('./netlify/functions/get-omega-daily-check');
 const { handler: gradeBoards } = require('./netlify/functions/grade-boards-omega');
+const { SPORTS } = require('./netlify/functions/lib/odds-master/pull');
 
 const DATE = '2026-11-15';
 const PREV = '2026-11-14';
 const DEC = americanToDecimal(-110);
 const TEST_BLOB_TOKEN = 'test-token';
+const TEST_SERVICE_KEY = 'sb-service-test-key';
+const NEWS_FIRST_DAY = '2026-11-16';
+
+function livePullDoc(slot, at) {
+  const sports = {};
+  for (const [label] of SPORTS) sports[label] = 0;
+  sports.NFL = 3;
+  return {
+    date: DATE,
+    slot,
+    at,
+    games: 3,
+    books: ['draftkings'],
+    errors: [],
+    sports,
+  };
+}
 
 function jsonResp(body, status = 200) {
   return {
@@ -313,6 +331,24 @@ async function main() {
     pullDoc: null,
     sports: ['NFL'],
   }).code, 'board-missing');
+  const completePull = livePullDoc('0300', '2026-11-15T08:00:00.000Z');
+  assert.strictEqual(assessPullSlot('0300', { pullDoc: completePull, sports: ['NFL'] }).code, 'ok');
+  assert.strictEqual(assessPullSlot('0300', {
+    marker: { ok: false },
+    pullDoc: completePull,
+    sports: ['NFL'],
+  }).code, 'ok');
+  const thinPull = { date: DATE, slot: '0300', at: '2026-11-15T08:00:00.000Z', games: 1 };
+  assert.strictEqual(assessPullSlot('0300', { pullDoc: thinPull, sports: ['NFL'] }).code, 'partial-0300-pull');
+  const erredPull = livePullDoc('0300', '2026-11-15T08:00:00.000Z');
+  erredPull.errors = ['NHL: HTTP 500'];
+  assert.strictEqual(assessPullSlot('0300', { pullDoc: erredPull }).code, 'partial-0300-pull');
+  const shortPull = livePullDoc('0300', '2026-11-15T08:00:00.000Z');
+  shortPull.requests = SPORTS.length - 1;
+  assert.strictEqual(assessPullSlot('0300', { pullDoc: shortPull }).code, 'partial-0300-pull');
+  const droppedSport = livePullDoc('0300', '2026-11-15T08:00:00.000Z');
+  delete droppedSport.sports.MLB;
+  assert.strictEqual(assessPullSlot('0300', { pullDoc: droppedSport }).code, 'partial-0300-pull');
   assert.throws(() => refuseCardKey('picks-2026-11-15'));
   assert.throws(() => refuseCardKey('latest-date'));
   assert.throws(() => refuseCardKey('omega-ops/capture-health-latest'));
@@ -334,8 +370,8 @@ async function main() {
       moves: null,
       sports: ['NFL'],
       pulls: {
-        '0300': { date: DATE, slot: '0300', at: '2026-11-15T08:00:00.000Z', games: 3 },
-        '1000': { date: DATE, slot: '1000', at: '2026-11-15T15:00:00.000Z', games: 3 },
+        '0300': livePullDoc('0300', '2026-11-15T08:00:00.000Z'),
+        '1000': livePullDoc('1000', '2026-11-15T15:00:00.000Z'),
       },
       card,
       prevCard,
@@ -377,6 +413,20 @@ async function main() {
         if (ext.failFetch) throw new Error('network down');
         const headers = (init && init.headers) || {};
         const auth = headers.Authorization || headers.authorization || '';
+        if (href.includes('.supabase.co')) {
+          const sbKey = deps.env.SUPABASE_SERVICE_ROLE_KEY || '';
+          const apiKey = headers.apikey || headers.Apikey || '';
+          const profile = headers['Accept-Profile'] || headers['accept-profile'] || '';
+          if (!sbKey || auth !== `Bearer ${sbKey}` || apiKey !== sbKey) throw new Error('supabase auth mismatch');
+          if (profile !== 'clv') throw new Error('supabase profile');
+          ext.hits = ext.hits || [];
+          ext.hits.push(href);
+          const sb = ext.supabase || {};
+          if (href.includes('/rest/v1/pick_clv')) return jsonResp(sb.pickClv || []);
+          if (href.includes('/rest/v1/games')) return jsonResp(sb.games || []);
+          if (href.includes('/rest/v1/odds_snapshots')) return jsonResp(sb.snapshots || []);
+          return jsonResp([], 404);
+        }
         if (href.includes('api.github.com')) {
           if (auth) throw new Error('github must stay unauthenticated');
           if (!href.includes('/commits?') || !href.includes('sha=main') || !href.includes('since=')) {
@@ -389,15 +439,18 @@ async function main() {
           if (!href.includes('/deploys?per_page=50')) throw new Error('deploys url');
           return jsonResp(ext.deploys);
         }
+        const siteStore = href.includes('/site:omega-ops') || href.includes('/site%3Aomega-ops');
+        const ledgerRows = siteStore ? (ext.siteLedger || []) : ext.ledger;
         if (href.includes('/blobs/') && href.includes('/deploy-ledger/')) {
           const sha = decodeURIComponent(href.split('/deploy-ledger/').pop().split('?')[0]);
-          const row = ext.ledger.find((item) => item.sha === sha);
+          const row = ledgerRows.find((item) => item.sha === sha);
           if (!row) return jsonResp({}, 404);
           return jsonResp(row);
         }
-        if (href.includes('/blobs/') && href.includes('/omega-ops')) {
+        if (href.includes('/blobs/') && (siteStore || href.includes('/omega-ops'))) {
+          if (!siteStore && ext.legacyMissing) return jsonResp({ message: 'missing' }, 404);
           return jsonResp({
-            blobs: ext.ledger.map((row) => ({ key: `deploy-ledger/${row.sha}` })),
+            blobs: ledgerRows.map((row) => ({ key: `deploy-ledger/${row.sha}` })),
           });
         }
         throw new Error(`unexpected url ${href.split('?')[0]}`);
@@ -476,8 +529,8 @@ async function main() {
   const failCases = [
     ['missed 0300', (data) => { data.markers['0300'] = null; data.pulls['0300'] = null; }, 'pulls', 'fail', 'missed-0300-pull'],
     ['missed 1000', (data) => { data.markers['1000'] = null; data.pulls['1000'] = null; }, 'pulls', 'fail', 'missed-1000-pull'],
-    ['partial 0300', (data) => { data.markers['0300'] = { ok: false }; }, 'pulls', 'fail', 'partial-0300-pull'],
-    ['partial 1000', (data) => { data.markers['1000'] = { ok: false }; }, 'pulls', 'fail', 'partial-1000-pull'],
+    ['partial 0300', (data) => { data.pulls['0300'].errors = ['NFL: HTTP 500']; }, 'pulls', 'fail', 'partial-0300-pull'],
+    ['partial 1000', (data) => { data.pulls['1000'].ok = false; }, 'pulls', 'fail', 'partial-1000-pull'],
     ['started 0300', (data) => { data.markers['0300'] = null; data.pulls['0300'] = null; data.starts['0300'] = { at: '2026-11-15T08:01:00.000Z' }; }, 'pulls', 'fail', 'capture-started-not-finished'],
     ['board missing', (data) => { data.pulls['0300'] = null; }, 'pulls', 'fail', 'board-missing'],
     ['late card', (data) => { data.card.generatedAt = '2026-11-15T16:00:01.000Z'; }, 'card', 'fail', 'generated-after-1100-et'],
@@ -528,7 +581,7 @@ async function main() {
     ['win probability', (data) => { data.card.picks[0].winProbability = '40.0%'; }, 'bounds', 'fail', 'win-probability'],
     ['pick close missing', (data) => { data.clv = { picks: [] }; }, 'closes', 'fail', 'pick-close-missing'],
     ['candidate close missing', (data) => { data.candidates = { candidates: [] }; }, 'closes', 'fail', 'candidate-close-missing'],
-    ['news missing', (data) => { data.news = null; }, 'news', 'fail', 'news-missing'],
+    ['news missing', (data) => { data.news = null; }, 'news', 'warn', 'news-missing'],
     ['credits warn', (data) => { data.credits = { remaining: 11999, source: 'clv-close-capture' }; }, 'credits', 'warn', 'credits-warn'],
     ['credits low', (data) => { data.credits = { remaining: 9999, source: 'audit-log' }; }, 'credits', 'fail', 'credits-low'],
     ['credits boundary warn', (data) => { data.credits = { remaining: 10000, source: 'line-move' }; }, 'credits', 'warn', 'credits-warn'],
@@ -547,19 +600,41 @@ async function main() {
     }
   }
 
-  const warnPull = await runCase((data) => {
+  const liveNoMarker = await runCase((data) => {
     data.markers['0300'] = null;
-    data.pulls['0300'] = { date: DATE, slot: '0300', at: '2026-11-15T08:00:00.000Z', games: 1 };
+    data.markers['1000'] = { ok: false };
   });
-  assertCheck(warnPull.report, 'pulls', 'warn', 'marker-missing-data-present', 'marker missing');
-  assert.strictEqual(warnPull.report.ok, false);
+  assertCheck(liveNoMarker.report, 'pulls', 'ok', 'ok', 'complete pull doc');
+  assert.strictEqual(liveNoMarker.report.ok, true);
+  assert.strictEqual(liveNoMarker.report.checks.find((row) => row.id === 'pulls').evidence.slots['0300'].marker, false);
 
-  const lineWarn = await runCase((data) => {
+  const partialDoc = await runCase((data) => {
+    data.markers['0300'] = null;
+    data.pulls['0300'] = livePullDoc('0300', '2026-11-15T08:00:00.000Z');
+    data.pulls['0300'].errors = ['NBA: HTTP 500'];
+  });
+  assertCheck(partialDoc.report, 'pulls', 'fail', 'partial-0300-pull', 'partial live pull');
+  assert.strictEqual(partialDoc.report.ok, false);
+
+  const lineMiss = await runCase((data) => {
     data.markers['1000'] = null;
     data.pulls['1000'] = null;
     data.moves = { events: [{ checks: [{ slot: '1000', at: '2026-11-15T15:00:00.000Z' }] }] };
   });
-  assertCheck(lineWarn.report, 'pulls', 'warn', 'marker-missing-data-present', 'line-move warn');
+  assertCheck(lineMiss.report, 'pulls', 'fail', 'missed-1000-pull', 'line-move without a pull doc');
+
+  const newsWarn = await runCase((data) => { data.news = null; });
+  const newsWarnEv = checkOf(newsWarn.report, 'news').evidence;
+  assert.ok(!Object.prototype.hasOwnProperty.call(newsWarnEv, 'firstSnapshotExpected'));
+  assert.deepStrictEqual(Object.keys(newsWarnEv).sort(), ['code']);
+
+  const newsFirstDay = await runCase((data, deps) => {
+    data.news = null;
+    deps.date = NEWS_FIRST_DAY;
+  });
+  assertCheck(newsFirstDay.report, 'news', 'fail', 'news-missing', 'news on first snapshot day');
+  assert.ok(!Object.prototype.hasOwnProperty.call(checkOf(newsFirstDay.report, 'news').evidence, 'firstSnapshotExpected'));
+  assert.strictEqual(newsFirstDay.report.ok, false);
 
   const noSlate = await runCase((data) => {
     data.sports = [];
@@ -1152,17 +1227,157 @@ async function main() {
   assertCheck(missingToken.report, 'external-changes', 'warn', 'netlify-unreadable', 'missing netlify token');
   assertCheck(missingToken.report, 'pulls', 'ok', 'ok', 'missing token leaves pulls');
 
+  const siteOnly = await runCase((data) => {
+    data.external.siteLedger = data.external.ledger.map((row) => Object.assign({}, row, { commits: row.commits.slice() }));
+    data.external.ledger = [];
+    data.external.legacyMissing = true;
+  });
+  assertCheck(siteOnly.report, 'external-changes', 'ok', 'ok', 'site ledger namespace');
+  assert.strictEqual(checkOf(siteOnly.report, 'external-changes').evidence.ledger, 1);
+  assert.ok(!JSON.stringify(siteOnly.report).includes(TEST_BLOB_TOKEN));
+
+  const bothNamespaces = await runCase((data) => {
+    data.external.siteLedger = data.external.ledger.map((row) => Object.assign({}, row, { commits: row.commits.slice() }));
+  });
+  assertCheck(bothNamespaces.report, 'external-changes', 'ok', 'ok', 'deduped ledger');
+  assert.strictEqual(checkOf(bothNamespaces.report, 'external-changes').evidence.ledger, 1);
+
+  const siteActor = await runCase((data) => {
+    data.external.ledger = [];
+    data.external.legacyMissing = true;
+    data.external.siteLedger = [{
+      sha: 'a'.repeat(40),
+      prevMain: 'b'.repeat(40),
+      commits: ['a'.repeat(40)],
+      actor: 'stranger',
+      at: '2026-11-14T16:00:00.000Z',
+    }];
+  });
+  assertCheck(siteActor.report, 'external-changes', 'fail', 'unknown-actor', 'site ledger actor');
+
+  function withService(data, deps, supabase) {
+    data.candidates = { candidates: [] };
+    deps.env = Object.assign({}, deps.env, { SUPABASE_SERVICE_ROLE_KEY: TEST_SERVICE_KEY });
+    data.external.supabase = supabase;
+  }
+
+  const fromPickClv = await runCase((data, deps) => {
+    withService(data, deps, {
+      pickClv: data.prevCard.picks.map((row, index) => ({
+        pick: row.pick,
+        matchup: row.matchup,
+        closing_novig: index === 2 ? null : 0.51,
+        closing_odds: -110,
+      })),
+    });
+  });
+  assertCheck(fromPickClv.report, 'closes', 'ok', 'ok', 'pick_clv candidate close');
+  assert.ok(!JSON.stringify(fromPickClv.report).includes(TEST_SERVICE_KEY));
+  const pickHits = fromPickClv.world.data.external.hits || [];
+  assert.ok(pickHits.some((href) => href.includes('/rest/v1/pick_clv')));
+  assert.ok(!pickHits.some((href) => href.includes('/rest/v1/games')), 'pick_clv covers every pick');
+
+  const fromSnaps = await runCase((data, deps) => {
+    withService(data, deps, {
+      pickClv: [],
+      games: [
+        { game_id: 'g-lions', home_team: 'Bears', away_team: 'Lions', commence_time: '2026-11-14T18:00:00.000Z' },
+        { game_id: 'g-pack', home_team: 'Vikings', away_team: 'Packers', commence_time: '2026-11-14T18:00:00.000Z' },
+        { game_id: 'g-chiefs', home_team: 'Raiders', away_team: 'Chiefs', commence_time: '2026-11-15T01:00:00.000Z' },
+        { game_id: 'g-sc', home_team: 'South Carolina', away_team: 'Clemson', commence_time: '2026-11-14T18:00:00.000Z' },
+      ],
+      snapshots: [
+        { game_id: 'g-lions', market: 'h2h', side: 'Lions', price: -108 },
+        { game_id: 'g-pack', market: 'h2h', side: 'Packers', price: -115 },
+        { game_id: 'g-chiefs', market: 'h2h', side: 'Chiefs', price: -120 },
+        { game_id: 'g-sc', market: 'h2h', side: 'Carolina', price: -110 },
+      ],
+    });
+  });
+  assertCheck(fromSnaps.report, 'closes', 'ok', 'ok', 'snapshot candidate close');
+  const snapHits = fromSnaps.world.data.external.hits || [];
+  const gameHit = snapHits.find((href) => href.includes('/rest/v1/games'));
+  const snapHit = snapHits.find((href) => href.includes('/rest/v1/odds_snapshots'));
+  assert.ok(gameHit && gameHit.includes('2026-11-13') && gameHit.includes('2026-11-16'), gameHit);
+  assert.ok(snapHit && snapHit.includes('book=eq.pinnacle') && snapHit.includes('line_type=eq.closing'), snapHit);
+  assert.ok(!JSON.stringify(fromSnaps.report).includes(TEST_SERVICE_KEY));
+
+  const wrongMarket = await runCase((data, deps) => {
+    data.prevCard.picks[0].pick = 'Lions -3.5';
+    data.clv.picks[0].pick = 'Lions -3.5';
+    withService(data, deps, {
+      pickClv: data.prevCard.picks.slice(1).map((row) => ({
+        pick: row.pick,
+        matchup: row.matchup,
+        closing_novig: 0.52,
+      })),
+      games: [
+        { game_id: 'g-lions', home_team: 'Bears', away_team: 'Lions', commence_time: '2026-11-14T18:00:00.000Z' },
+      ],
+      snapshots: [
+        { game_id: 'g-lions', market: 'h2h', side: 'Lions', price: -110 },
+      ],
+    });
+  });
+  assertCheck(wrongMarket.report, 'closes', 'fail', 'candidate-close-missing', 'h2h does not close a spread');
+
+  const spreadSnap = await runCase((data, deps) => {
+    data.prevCard.picks[0].pick = 'Lions -3.5';
+    data.clv.picks[0].pick = 'Lions -3.5';
+    withService(data, deps, {
+      pickClv: data.prevCard.picks.slice(1).map((row) => ({
+        pick: row.pick,
+        matchup: row.matchup,
+        closing_novig: 0.52,
+      })),
+      games: [
+        { game_id: 'g-lions', home_team: 'Bears', away_team: 'Lions', commence_time: '2026-11-14T18:00:00.000Z' },
+      ],
+      snapshots: [
+        { game_id: 'g-lions', market: 'spreads', side: 'Lions', point: -3, price: -110 },
+      ],
+    });
+  });
+  assertCheck(spreadSnap.report, 'closes', 'ok', 'ok', 'spread snapshot close');
+
+  const decoyTeam = await runCase((data, deps) => {
+    withService(data, deps, {
+      pickClv: [],
+      games: [
+        { game_id: 'g-sc', home_team: 'South Carolina', away_team: 'Clemson', commence_time: '2026-11-14T18:00:00.000Z' },
+      ],
+      snapshots: [
+        { game_id: 'g-sc', market: 'h2h', side: 'Carolina', price: -110 },
+      ],
+    });
+  });
+  assertCheck(decoyTeam.report, 'closes', 'fail', 'candidate-close-missing', 'carolina is not south carolina');
+
+  const storedEmpty = await runCase((data, deps) => {
+    withService(data, deps, { pickClv: [], games: [], snapshots: [] });
+  });
+  assertCheck(storedEmpty.report, 'closes', 'fail', 'candidate-close-missing', 'stored closes empty');
+  assert.ok(!JSON.stringify(storedEmpty.report).includes(TEST_SERVICE_KEY));
+
   const deploySrc = fs.readFileSync(path.join(__dirname, 'deploy.sh'), 'utf8');
   const deployAt = deploySrc.indexOf('npx netlify deploy --prod');
-  const ledgerAt = deploySrc.indexOf('npx netlify blobs:set omega-ops');
+  const tokenLine = 'NETLIFY_AUTH_TOKEN_LEDGER="$(npx netlify env:get NETLIFY_AUTH_TOKEN 2>/dev/null)"';
+  const tokenAt = deploySrc.indexOf(tokenLine);
   const pushAt = deploySrc.indexOf('git push origin HEAD:main');
   const prevAt = deploySrc.indexOf('PREV_MAIN=');
+  const plusX = deploySrc.indexOf('set +x');
+  const curlAt = deploySrc.indexOf('curl -sS -o /dev/null');
   assert.ok(deployAt > 0, 'deploy line');
-  assert.ok(ledgerAt > deployAt, 'ledger write follows the deploy');
+  assert.ok(tokenAt > deployAt, 'ledger token follows the deploy');
+  assert.ok(plusX > deployAt && plusX < tokenAt, 'set +x before the token');
   assert.ok(prevAt > 0 && prevAt < pushAt, 'prevMain is captured before the push');
-  const ledgerLine = deploySrc.slice(ledgerAt).split('\n')[0];
-  assert.ok(ledgerLine.includes('deploy-ledger/'), ledgerLine);
-  assert.ok(ledgerLine.includes('|| true'), ledgerLine);
+  assert.ok(deploySrc.includes('https://api.netlify.com/api/v1/blobs/'));
+  assert.ok(deploySrc.includes('/omega-ops/deploy-ledger/'));
+  assert.ok(curlAt > tokenAt, 'curl follows the token');
+  assert.ok(deploySrc.slice(curlAt, curlAt + 700).includes('|| true'), 'ledger curl soft-fails');
+  assert.ok(deploySrc.includes('unset NETLIFY_AUTH_TOKEN_LEDGER'));
+  assert.ok(!/echo\b[^\n]*NETLIFY_AUTH_TOKEN_LEDGER/.test(deploySrc));
+  assert.ok(!deploySrc.includes('npx netlify blobs:set'));
   const dailySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/daily_check.js'), 'utf8');
   assert.ok(dailySrc.includes('const GITHUB_TIMEOUT_MS = 10 * 1000'));
   assert.ok(dailySrc.includes('https://api.github.com/repos/wcgbk/webet-social-intelligence/commits'));

@@ -64,8 +64,11 @@ npx netlify deploy --prod --dir . --skip-functions-cache
 
 # 4) Record the deploy on the omega-ops ledger. Soft-fail: the site is already
 #    live, so a ledger miss must not fail this script. Do not echo the payload
-#    (actor comes from DEPLOY_ACTOR).
+#    or the token (actor comes from DEPLOY_ACTOR).
+#    Functions read the legacy blob namespace (bare store name on the blobs
+#    REST API). `netlify blobs:set` writes site:omega-ops, which that read misses.
 (
+  set +x
   head_sha="$(git rev-parse HEAD)" || exit 0
   ledger_json="$(PREV_MAIN="$PREV_MAIN" HEAD_SHA="$head_sha" node <<'JS'
 const { execFileSync } = require('child_process');
@@ -88,7 +91,17 @@ process.stdout.write(JSON.stringify({
 JS
 )" || exit 0
   if [ -n "$head_sha" ] && [ -n "$ledger_json" ]; then
-    npx netlify blobs:set omega-ops "deploy-ledger/${head_sha}" "$ledger_json" >/dev/null || true
+    NETLIFY_AUTH_TOKEN_LEDGER="$(npx netlify env:get NETLIFY_AUTH_TOKEN 2>/dev/null)" || true
+    if [ -n "${NETLIFY_AUTH_TOKEN_LEDGER:-}" ]; then
+      curl -sS -o /dev/null \
+        -X PUT \
+        -H "Authorization: Bearer ${NETLIFY_AUTH_TOKEN_LEDGER}" \
+        -H "Content-Type: application/json" \
+        --data-binary "$ledger_json" \
+        "https://api.netlify.com/api/v1/blobs/${SITE_ID:-87d7bcd9-e95a-479c-bc44-6432a2ffc606}/omega-ops/deploy-ledger/${head_sha}" \
+        >/dev/null 2>&1 || true
+    fi
+    unset NETLIFY_AUTH_TOKEN_LEDGER
   fi
 ) || true
 

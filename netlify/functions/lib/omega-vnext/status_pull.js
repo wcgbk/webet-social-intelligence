@@ -10,12 +10,19 @@
  * that team. The public roster has no starter flag. Depth charts are
  * ordered but have no starter boolean and are one call per team, so they
  * are not the fallback. A missing rate file is a soft-fail (no veto).
- * NHL goalies are added behind OMEGA_V2_NHL_GOALIE in a later commit.
+ * NHL starters: one ESPN scoreboard call. competitor.probables named
+ * probableStartingGoalie. status.type confirmed (or starter true) is
+ * confirmed. expected, probable, and a missing slot are unconfirmed.
+ * api-web.nhle.com score/now has no goalies. gamecenter landing has
+ * season goalie stats, not a confirmed starter, so it is not used.
+ * The 2026-11-15 scoreboard has no confirmation timestamp.
  */
 
 const NBA_INJURY_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries';
 const NBA_RATES_URL = 'https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete?region=us&lang=en&contentorigin=espn&isqualified=true&page=1&limit=400&sort=general.avgMinutes:desc';
 const NBA_INJURY_TIMEOUT_MS = 5000;
+const NHL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard';
+const NHL_GOALIE_TIMEOUT_MS = 5000;
 
 function normTeamName(name) {
   return String(name || '')
@@ -327,10 +334,152 @@ async function fetchNbaInjuryReport(opts) {
   }
 }
 
+function nhlScoreboardUrl(dateISO) {
+  const compact = String(dateISO || '').trim().replace(/-/g, '');
+  if (!/^\d{8}$/.test(compact)) return NHL_SCOREBOARD_URL;
+  return `${NHL_SCOREBOARD_URL}?dates=${compact}`;
+}
+
+function positionAbbr(pos) {
+  if (pos == null) return '';
+  if (typeof pos === 'string') return pos;
+  return pos.abbreviation || pos.name || '';
+}
+
+function isSkaterPos(pos) {
+  const p = String(pos || '').toUpperCase();
+  return p === 'C' || p === 'LW' || p === 'RW' || p === 'D' || p === 'F' || p === 'W';
+}
+
+function pickGoalieRaw(competitor) {
+  const list = competitor && Array.isArray(competitor.probables) ? competitor.probables : [];
+  let fallback = null;
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object') continue;
+    const athlete = raw.athlete && typeof raw.athlete === 'object' ? raw.athlete : {};
+    const pos = positionAbbr(athlete.position || raw.position).toUpperCase();
+    if (isSkaterPos(pos)) continue;
+    const slot = String(raw.name || '');
+    if (/goalie/i.test(slot) || pos === 'G' || pos === 'GOALIE') return raw;
+    if (!fallback) fallback = raw;
+  }
+  return fallback;
+}
+
+/**
+ * Confirmed only when ESPN says confirmed/starter, or starter is true.
+ * expected and probable stay unconfirmed. A missing slot is unconfirmed.
+ */
+function goalieRecord(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { name: null, confirmed: false, status: 'missing' };
+  }
+  const athlete = raw.athlete && typeof raw.athlete === 'object' ? raw.athlete : {};
+  const name = athlete.displayName || athlete.fullName || raw.displayName || null;
+  const statusObj = raw.status && typeof raw.status === 'object' ? raw.status : null;
+  let status = '';
+  if (statusObj) status = statusObj.type || statusObj.name || statusObj.abbreviation || '';
+  else if (typeof raw.status === 'string') status = raw.status;
+  status = String(status || '').trim().toLowerCase();
+  const confirmedFlag = raw.starter === true || raw.confirmed === true
+    || status === 'confirmed' || status === 'starter';
+  const confirmed = !!(confirmedFlag && name);
+  if (!name) return { name: null, confirmed: false, status: status || 'missing' };
+  if (!status) status = confirmed ? 'confirmed' : 'unconfirmed';
+  return { name, confirmed, status };
+}
+
+function teamDisplayName(competitor) {
+  const team = competitor && competitor.team;
+  if (!team) return '';
+  return team.displayName || team.name || team.shortDisplayName || '';
+}
+
+function parseNhlScoreboard(data) {
+  const events = data && Array.isArray(data.events) ? data.events : [];
+  const games = [];
+  for (const event of events) {
+    const competitions = event && Array.isArray(event.competitions) ? event.competitions : [];
+    const comp = competitions[0] || null;
+    const competitors = comp && Array.isArray(comp.competitors) ? comp.competitors : [];
+    const home = competitors.find((c) => c && c.homeAway === 'home') || null;
+    const away = competitors.find((c) => c && c.homeAway === 'away') || null;
+    const homeName = teamDisplayName(home);
+    const awayName = teamDisplayName(away);
+    if (!homeName && !awayName) continue;
+    const homeGoalie = goalieRecord(pickGoalieRaw(home));
+    const awayGoalie = goalieRecord(pickGoalieRaw(away));
+    games.push({
+      away: awayName,
+      home: homeName,
+      awayKey: normTeamName(awayName),
+      homeKey: normTeamName(homeName),
+      awayGoalie,
+      homeGoalie,
+      bothConfirmed: !!(awayGoalie.confirmed && homeGoalie.confirmed),
+    });
+  }
+  return games;
+}
+
+function emptyNhlGoalieReport(pulledAt, source, error) {
+  return {
+    ok: false,
+    softFail: true,
+    pulledAt: pulledAt || null,
+    source: source || NHL_SCOREBOARD_URL,
+    games: [],
+    gamesOnBoard: 0,
+    confirmedGames: 0,
+    error: error || 'soft-fail',
+  };
+}
+
+function buildNhlGoalieReport(data, opts) {
+  const pulledAt = isoStamp(opts && (opts.pulledAt != null ? opts.pulledAt : opts.now));
+  const source = (opts && opts.source) || NHL_SCOREBOARD_URL;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return emptyNhlGoalieReport(pulledAt, source, 'soft-fail');
+  }
+  const games = parseNhlScoreboard(data);
+  return {
+    ok: true,
+    softFail: false,
+    pulledAt,
+    source,
+    games,
+    gamesOnBoard: games.length,
+    confirmedGames: games.reduce((n, game) => n + (game.bothConfirmed ? 1 : 0), 0),
+    error: null,
+  };
+}
+
+/**
+ * One scoreboard call for the card's ET date (dates=YYYYMMDD).
+ * Failure returns a soft-fail report and does not throw.
+ */
+async function fetchNhlGoalieReport(opts) {
+  const timeoutMs = opts && Number.isFinite(Number(opts.timeoutMs))
+    ? Number(opts.timeoutMs)
+    : NHL_GOALIE_TIMEOUT_MS;
+  const pulledAt = isoStamp(opts && opts.now);
+  const source = nhlScoreboardUrl(opts && opts.dateISO);
+  try {
+    const body = await pullJson(source, timeoutMs, opts && opts.fetchImpl);
+    const report = buildNhlGoalieReport(body, { pulledAt, source });
+    if (!report.ok) report.pulledAt = pulledAt;
+    return report;
+  } catch (_) {
+    return emptyNhlGoalieReport(pulledAt, source, 'soft-fail');
+  }
+}
+
 module.exports = {
   NBA_INJURY_URL,
   NBA_RATES_URL,
   NBA_INJURY_TIMEOUT_MS,
+  NHL_SCOREBOARD_URL,
+  NHL_GOALIE_TIMEOUT_MS,
   normTeamName,
   normPlayerName,
   uncertainStatus,
@@ -338,4 +487,8 @@ module.exports = {
   parseRatePlayers,
   buildNbaReport,
   fetchNbaInjuryReport,
+  nhlScoreboardUrl,
+  parseNhlScoreboard,
+  buildNhlGoalieReport,
+  fetchNhlGoalieReport,
 };

@@ -613,6 +613,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (qbAdj.status !== 0) throw new Error('nfl qb margin scale gate failed');
+
+  const nhlGoalie = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-nhl-goalie.js')],
+    { stdio: 'inherit' }
+  );
+  if (nhlGoalie.status !== 0) throw new Error('nhl goalie gate failed');
 }
 
 function pickSlim(card) {

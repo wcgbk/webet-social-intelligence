@@ -1,13 +1,16 @@
 'use strict';
 
 /**
- * Drop a candidate before top-3 selection. Flag off returns the same row.
+ * Drop a candidate before top-3 selection. Both flags off returns the same row.
  * NBA: OMEGA_V2_NBA_INJURY. A game with an important player whose status is
  * still Questionable, Doubtful, Day-To-Day, or Game-Time-Decision is out.
  * Announced Out is not a veto. No report, or a soft-fail report, is a no-op.
+ * NHL: OMEGA_V2_NHL_GOALIE. veto drops a game when either starter is
+ * unconfirmed. shadow only stamps statusShadow. A game missing from the
+ * scoreboard is not a veto. Soft-fail does not drop the slate.
  */
 
-const { nbaInjuryEnabled } = require('./constants');
+const { nbaInjuryEnabled, nhlGoalieMode } = require('./constants');
 const { normTeamName } = require('../omega-vnext/status_pull');
 
 function teamsOf(row) {
@@ -45,25 +48,91 @@ function nbaHit(row, report) {
   return players;
 }
 
+function nhlGame(report, row) {
+  if (String(row && row.sport || '').toUpperCase() !== 'NHL') return null;
+  if (!report || report.ok === false || report.softFail === true) return null;
+  const sides = teamsOf(row);
+  const away = normTeamName(sides.away);
+  const home = normTeamName(sides.home);
+  if (!away || !home || away === home) return null;
+  const games = Array.isArray(report.games) ? report.games : [];
+  for (const game of games) {
+    const gAway = game.awayKey || normTeamName(game.away);
+    const gHome = game.homeKey || normTeamName(game.home);
+    const sameOrder = gAway === away && gHome === home;
+    const swapped = gAway === home && gHome === away;
+    if (sameOrder || swapped) return game;
+  }
+  return null;
+}
+
+function nhlUnconfirmed(row, report) {
+  const game = nhlGame(report, row);
+  if (!game || game.bothConfirmed) return null;
+  return {
+    matchup: row.matchup || null,
+    pick: row.pick || row.side || null,
+    market: row.market || null,
+    sport: 'NHL',
+    away: game.away || null,
+    home: game.home || null,
+    awayGoalie: game.awayGoalie || null,
+    homeGoalie: game.homeGoalie || null,
+  };
+}
+
 function applyStatusVeto(row, opts) {
-  if (!row || !nbaInjuryEnabled(opts && opts.env)) return row;
-  const players = nbaHit(row, opts && opts.nbaInjury);
-  if (!players) return row;
+  if (!row) return row;
+  const env = opts && opts.env;
+  const nbaOn = nbaInjuryEnabled(env);
+  const mode = nhlGoalieMode(env);
+  if (!nbaOn && mode === 'off') return row;
+  if (nbaOn) {
+    const players = nbaHit(row, opts && opts.nbaInjury);
+    if (players) {
+      const dropped = row.qualified === true;
+      return {
+        ...row,
+        qualified: false,
+        parlayQualified: false,
+        forcePlaceable: false,
+        rejectReason: dropped ? 'nba-uncertain-star' : (row.rejectReason || 'nba-uncertain-star'),
+        statusVeto: {
+          kind: 'nba-uncertain-star',
+          dropped,
+          matchup: row.matchup || null,
+          pick: row.pick || row.side || null,
+          market: row.market || null,
+          sport: 'NBA',
+          players,
+        },
+      };
+    }
+  }
+  if (mode === 'off') return row;
+  const goalies = nhlUnconfirmed(row, opts && opts.nhlGoalies);
+  if (!goalies) return row;
+  if (mode === 'shadow') {
+    return {
+      ...row,
+      statusShadow: {
+        kind: 'nhl-goalie-unconfirmed',
+        dropped: false,
+        ...goalies,
+      },
+    };
+  }
   const dropped = row.qualified === true;
   return {
     ...row,
     qualified: false,
     parlayQualified: false,
     forcePlaceable: false,
-    rejectReason: dropped ? 'nba-uncertain-star' : (row.rejectReason || 'nba-uncertain-star'),
+    rejectReason: dropped ? 'nhl-goalie-unconfirmed' : (row.rejectReason || 'nhl-goalie-unconfirmed'),
     statusVeto: {
-      kind: 'nba-uncertain-star',
+      kind: 'nhl-goalie-unconfirmed',
       dropped,
-      matchup: row.matchup || null,
-      pick: row.pick || row.side || null,
-      market: row.market || null,
-      sport: 'NBA',
-      players,
+      ...goalies,
     },
   };
 }
@@ -73,15 +142,19 @@ function applyStatusVeto(row, opts) {
  * stays the same shape as today.
  */
 function statusDiagnostics(annotated, opts) {
-  if (!nbaInjuryEnabled(opts && opts.env)) return null;
-  const report = opts && opts.nbaInjury;
-  const vetoes = [];
-  for (const row of annotated || []) {
-    const veto = row && row.statusVeto;
-    if (veto && veto.kind === 'nba-uncertain-star') vetoes.push(veto);
-  }
-  return {
-    nbaInjury: {
+  const env = opts && opts.env;
+  const nbaOn = nbaInjuryEnabled(env);
+  const mode = nhlGoalieMode(env);
+  if (!nbaOn && mode === 'off') return null;
+  const out = {};
+  if (nbaOn) {
+    const report = opts && opts.nbaInjury;
+    const vetoes = [];
+    for (const row of annotated || []) {
+      const veto = row && row.statusVeto;
+      if (veto && veto.kind === 'nba-uncertain-star') vetoes.push(veto);
+    }
+    out.nbaInjury = {
       pulledAt: report && report.pulledAt ? report.pulledAt : null,
       source: report && report.source ? report.source : null,
       importanceSource: report && report.importanceSource ? report.importanceSource : null,
@@ -91,8 +164,34 @@ function statusDiagnostics(annotated, opts) {
         ? Number(report.uncertainPlayers)
         : 0,
       vetoes,
-    },
-  };
+    };
+  }
+  if (mode !== 'off') {
+    const report = opts && opts.nhlGoalies;
+    const vetoes = [];
+    const wouldVeto = [];
+    for (const row of annotated || []) {
+      const veto = row && row.statusVeto;
+      if (veto && veto.kind === 'nhl-goalie-unconfirmed') vetoes.push(veto);
+      const shadow = row && row.statusShadow;
+      if (shadow && shadow.kind === 'nhl-goalie-unconfirmed') wouldVeto.push(shadow);
+    }
+    out.nhlGoalie = {
+      mode,
+      pulledAt: report && report.pulledAt ? report.pulledAt : null,
+      source: report && report.source ? report.source : null,
+      softFail: !report || report.ok === false || report.softFail === true,
+      gamesOnBoard: report && Number.isFinite(Number(report.gamesOnBoard))
+        ? Number(report.gamesOnBoard)
+        : 0,
+      confirmedGames: report && Number.isFinite(Number(report.confirmedGames))
+        ? Number(report.confirmedGames)
+        : 0,
+      vetoes,
+      wouldVeto,
+    };
+  }
+  return out;
 }
 
 module.exports = {

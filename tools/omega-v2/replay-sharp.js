@@ -26,6 +26,7 @@ const FLAG_KEYS = [
   'OMEGA_V2_EV_FIRST_CAPPED',
   'OMEGA_V2_NBA_INJURY',
   'OMEGA_NFL_QB_ADJ',
+  'OMEGA_V2_NHL_GOALIE',
 ];
 for (const key of FLAG_KEYS) {
   if (process.env[key] == null || String(process.env[key]).trim() === '') {

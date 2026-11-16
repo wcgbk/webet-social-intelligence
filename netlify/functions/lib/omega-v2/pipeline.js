@@ -300,6 +300,7 @@ async function buildCard(input) {
     pregameAsOfMs: asOfMs,
     linePolls: linePollsPresent ? linePolls : null,
     nbaInjury: input && input.nbaInjury ? input.nbaInjury : null,
+    nhlGoalies: input && input.nhlGoalies ? input.nhlGoalies : null,
   };
   const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
   const prepared = [];
@@ -626,6 +627,7 @@ async function publishFromOmegaCandidates(input) {
     boardBySport: input.boardBySport || null,
     linePolls: input.linePolls || null,
     nbaInjury: input.nbaInjury || null,
+    nhlGoalies: input.nhlGoalies || null,
   });
   // Context log only. The card object above is already final.
   try {

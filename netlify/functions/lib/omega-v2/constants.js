@@ -525,6 +525,26 @@ function nbaInjuryEnabled(env) {
   return false;
 }
 
+/**
+ * NHL starter confirmation at build time. Default off.
+ * Unset, blank, off, 0, and false stay off.
+ * shadow records a would-veto and does not drop the candidate.
+ * veto, and on/1/true/yes, drop a game when either goalie is unconfirmed.
+ * Pinnacle limit is not on the public feed, so there is no full-limit mode.
+ */
+const NHL_GOALIE_ENV = 'OMEGA_V2_NHL_GOALIE';
+
+function nhlGoalieMode(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[NHL_GOALIE_ENV];
+  if (raw == null) return 'off';
+  const text = String(raw).trim().toLowerCase();
+  if (text === '' || text === 'off' || text === '0' || text === 'false') return 'off';
+  if (text === 'shadow') return 'shadow';
+  if (text === 'veto' || text === 'on' || text === '1' || text === 'true' || text === 'yes') return 'veto';
+  return 'off';
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -612,4 +632,6 @@ module.exports = {
   evFirstCappedEnabled,
   NBA_INJURY_ENV,
   nbaInjuryEnabled,
+  NHL_GOALIE_ENV,
+  nhlGoalieMode,
 };

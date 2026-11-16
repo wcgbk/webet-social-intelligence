@@ -545,6 +545,26 @@ function nhlGoalieMode(env) {
   return 'off';
 }
 
+/**
+ * Compact ESPN news log on each live v2 generate, for a later backtest of
+ * the held NBA injury, NHL goalie, and NFL QB flags. Default on.
+ * Unset uses the default. on/1/true/yes stay on.
+ * off/0/false and a blank value turn it off (=off is the rollback).
+ * Any other string is off. The snapshot is not a pick input.
+ */
+const NEWS_SNAPSHOT_ENV = 'OMEGA_NEWS_SNAPSHOT';
+const NEWS_SNAPSHOT_DEFAULT_ON = true;
+
+function newsSnapshotEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[NEWS_SNAPSHOT_ENV];
+  if (raw == null) return NEWS_SNAPSHOT_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
+  if (text === '' || text === 'off' || text === '0' || text === 'false') return false;
+  return false;
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -634,4 +654,7 @@ module.exports = {
   nbaInjuryEnabled,
   NHL_GOALIE_ENV,
   nhlGoalieMode,
+  NEWS_SNAPSHOT_ENV,
+  NEWS_SNAPSHOT_DEFAULT_ON,
+  newsSnapshotEnabled,
 };

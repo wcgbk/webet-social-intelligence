@@ -27,6 +27,8 @@ const FLAG_KEYS = [
   'OMEGA_V2_NBA_INJURY',
   'OMEGA_NFL_QB_ADJ',
   'OMEGA_V2_NHL_GOALIE',
+  // News log is not read on this path. Unset stays off so a replay does not fetch.
+  'OMEGA_NEWS_SNAPSHOT',
 ];
 for (const key of FLAG_KEYS) {
   if (process.env[key] == null || String(process.env[key]).trim() === '') {

@@ -634,6 +634,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (v1Sync.status !== 0) throw new Error('v1 sync main gate failed');
+
+  const newsSnapshot = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-news-snapshot.js')],
+    { stdio: 'inherit' }
+  );
+  if (newsSnapshot.status !== 0) throw new Error('news snapshot gate failed');
 }
 
 function pickSlim(card) {

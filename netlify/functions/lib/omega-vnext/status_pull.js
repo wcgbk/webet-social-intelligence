@@ -275,6 +275,32 @@ function buildNbaReport(injuryPayload, ratePayload, meta) {
   };
 }
 
+/**
+ * One generate can both veto and log a snapshot. The share remembers a
+ * body (or null after a failed pull) so the second caller does not fetch.
+ * Unbound, every pull hits the network exactly as before.
+ */
+let newsShare = null;
+
+function bindNewsShare(slot) {
+  newsShare = slot && typeof slot === 'object' ? slot : {};
+  return newsShare;
+}
+
+function clearNewsShare() {
+  newsShare = null;
+}
+
+function readNewsShare(key) {
+  if (!newsShare || !Object.prototype.hasOwnProperty.call(newsShare, key)) return undefined;
+  return newsShare[key];
+}
+
+function writeNewsShare(key, value) {
+  if (!newsShare) return;
+  if (!Object.prototype.hasOwnProperty.call(newsShare, key)) newsShare[key] = value;
+}
+
 function pullJson(url, timeoutMs, fetchImpl) {
   const pull = fetchImpl || globalThis.fetch;
   const ms = Number.isFinite(Number(timeoutMs)) ? Number(timeoutMs) : NBA_INJURY_TIMEOUT_MS;
@@ -312,6 +338,29 @@ function pullJson(url, timeoutMs, fetchImpl) {
 }
 
 /**
+ * Cached body when this generate already pulled the URL. A stored null is
+ * a failed pull and rejects without a second request. Otherwise one pull,
+ * remembered only while a share is bound.
+ */
+function pullNewsJson(key, url, timeoutMs, fetchImpl) {
+  const cached = readNewsShare(key);
+  if (cached !== undefined) {
+    if (cached) return Promise.resolve(cached);
+    return Promise.reject(new Error('soft-fail'));
+  }
+  return pullJson(url, timeoutMs, fetchImpl).then(
+    (body) => {
+      writeNewsShare(key, body);
+      return body;
+    },
+    (err) => {
+      writeNewsShare(key, null);
+      throw err;
+    },
+  );
+}
+
+/**
  * One injuries call and one rate call, in parallel, each capped at timeoutMs.
  * Any failure returns a soft-fail report. Callers must not throw on it.
  */
@@ -323,8 +372,8 @@ async function fetchNbaInjuryReport(opts) {
   const fetchImpl = opts && opts.fetchImpl;
   try {
     const [injuries, rates] = await Promise.all([
-      pullJson(NBA_INJURY_URL, timeoutMs, fetchImpl),
-      pullJson(NBA_RATES_URL, timeoutMs, fetchImpl),
+      pullNewsJson('nbaInjuries', NBA_INJURY_URL, timeoutMs, fetchImpl),
+      pullNewsJson('nbaRates', NBA_RATES_URL, timeoutMs, fetchImpl),
     ]);
     const report = buildNbaReport(injuries, rates, { pulledAt });
     if (!report.ok) report.pulledAt = pulledAt;
@@ -465,7 +514,7 @@ async function fetchNhlGoalieReport(opts) {
   const pulledAt = isoStamp(opts && opts.now);
   const source = nhlScoreboardUrl(opts && opts.dateISO);
   try {
-    const body = await pullJson(source, timeoutMs, opts && opts.fetchImpl);
+    const body = await pullNewsJson('nhlBoard', source, timeoutMs, opts && opts.fetchImpl);
     const report = buildNhlGoalieReport(body, { pulledAt, source });
     if (!report.ok) report.pulledAt = pulledAt;
     return report;
@@ -491,4 +540,8 @@ module.exports = {
   parseNhlScoreboard,
   buildNhlGoalieReport,
   fetchNhlGoalieReport,
+  bindNewsShare,
+  clearNewsShare,
+  pullJson,
+  pullNewsJson,
 };

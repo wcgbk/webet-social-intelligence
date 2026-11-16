@@ -14,8 +14,9 @@ const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble')
 const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
 const { narrateTextOnly } = require('./narrate_text');
-const { nbaInjuryEnabled, nhlGoalieMode } = require('../omega-v2/constants');
-const { fetchNbaInjuryReport, fetchNhlGoalieReport } = require('./status_pull');
+const { nbaInjuryEnabled, nhlGoalieMode, newsSnapshotEnabled } = require('../omega-v2/constants');
+const { fetchNbaInjuryReport, fetchNhlGoalieReport, bindNewsShare, clearNewsShare } = require('./status_pull');
+const { captureNewsSnapshot } = require('./news_snapshot');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, readJson } = require('./store');
@@ -218,6 +219,7 @@ async function emitCaptureHealthOps(dateISO, captureHealth, meta = {}) {
 }
 
 async function generateOmegaVnext(opts = {}) {
+  clearNewsShare();
   const dateISO = opts.date || todayET();
   const dateFormatted = formatDateLong(dateISO);
   const force = !!opts.force;
@@ -541,6 +543,7 @@ async function generateOmegaVnext(opts = {}) {
   // v2 is the live card. OMEGA_PIPELINE_V2=0 keeps the v1 fill, narration, and caps.
   const usePipelineV2 = pipelineV2Enabled(opts);
   let publishInput = null;
+  let newsPromise = null;
   if (usePipelineV2) {
     let history = [];
     let boardRows = [];
@@ -555,6 +558,8 @@ async function generateOmegaVnext(opts = {}) {
     // Prior morning boards, graded once and cached. Flag off skips the call.
     // An injected gradedBoardRows list (offline replay) skips it too.
     const wantSkill = shouldLoadMarketSkill(opts) && !fixtureCandidates;
+    // Snapshot reuses these pulls. Bind first so a veto and the log share one body.
+    if (!replayLike && newsSnapshotEnabled()) bindNewsShare({});
     let nbaInjury = null;
     if (!replayLike && nbaInjuryEnabled()) {
       nbaInjury = await fetchNbaInjuryReport({ timeoutMs: 5000 });
@@ -564,6 +569,23 @@ async function generateOmegaVnext(opts = {}) {
     if (!replayLike && nhlGoalieMode() !== 'off') {
       nhlGoalies = await fetchNhlGoalieReport({ timeoutMs: 5000, dateISO });
       console.log(`[omega-v2] nhl-goalie mode=${nhlGoalieMode()} softFail=${!!(nhlGoalies && nhlGoalies.softFail)} pulledAt=${nhlGoalies && nhlGoalies.pulledAt ? nhlGoalies.pulledAt : ''} games=${nhlGoalies && nhlGoalies.gamesOnBoard ? nhlGoalies.gamesOnBoard : 0} confirmed=${nhlGoalies && nhlGoalies.confirmedGames ? nhlGoalies.confirmedGames : 0}`);
+    }
+    // Log only. The promise is not an input to publishFromOmegaCandidates.
+    if (!replayLike && newsSnapshotEnabled()) {
+      newsPromise = captureNewsSnapshot({
+        dateISO,
+        now,
+        candidates,
+        oddsBySport: (snap && snap.oddsBySport) || null,
+        ncaafQb: snap && snap.gameDay && snap.gameDay.qbStatusBySport
+          ? snap.gameDay.qbStatusBySport.NCAAF
+          : null,
+        timeoutMs: 5000,
+      }).catch((err) => {
+        const msg = err && err.message ? err.message : 'error';
+        console.warn(`[omega-news] snapshot soft-fail: ${msg}`);
+        return null;
+      });
     }
     if (wantHistory || wantBoards || wantSkill) {
       const raced = (promise, label) => {
@@ -891,6 +913,15 @@ async function generateOmegaVnext(opts = {}) {
     picksData.storeKey = `omega-shadow/picks-${dateISO}`;
     picksData.meta.storeKey = picksData.storeKey;
   }
+  if (newsPromise) {
+    try {
+      await newsPromise;
+    } catch (_) {
+      // captureNewsSnapshot does not throw. A late rejection stays off the card.
+    }
+  }
+  clearNewsShare();
+
   if (empty) {
     // "No Qualifying Plays Today" card (lib/no-plays). Only a COMPLETED run gets here.
     const slateCounts = slateCountsFor(snap);

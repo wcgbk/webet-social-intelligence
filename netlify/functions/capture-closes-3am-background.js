@@ -3,10 +3,13 @@
  * Historical closes for the previous ET day. No schedule.
  * capture-odds-3am fires this after the board pull when OMEGA_CLOSES_AT_3AM
  * is on (default). OMEGA_CLOSES_AT_3AM=off returns immediately.
- * A manual backfill sends { date, onlyMissing|picksOnly, retryNoClose }
+ * A manual backfill sends { date, onlyMissing|picksOnly, retryNoClose, missingGames }
  * with x-picks-secret. retryNoClose reopens saved no-close card and
  * candidate legs (primary snapshot, then the 15-minute fallback).
- * Scheduled runs send { scheduled: true } and never set retryNoClose.
+ * missingGames plans buckets for slate games that have no close yet, plus
+ * those no-close card and candidate legs, and does not overwrite a done-ev
+ * close. Scheduled runs send { scheduled: true } and never set retryNoClose
+ * or missingGames.
  * Dates must be within the last 7 ET days, and not today.
  * After the closes are saved, invokes track-clv-omega in stored-closes mode
  * (sweep on) so yesterday's CLV and settlement run with zero Odds API credits.
@@ -110,6 +113,7 @@ async function handle(event, deps) {
   const onlyMissing = picksOnly || truthy(body.onlyMissing) || truthy(qs.onlyMissing);
   const scheduled = truthy(body.scheduled) || truthy(qs.scheduled);
   const retryNoClose = !scheduled && (truthy(body.retryNoClose) || truthy(qs.retryNoClose));
+  const missingGames = !scheduled && (truthy(body.missingGames) || truthy(qs.missingGames));
   const fetchImpl = options.fetch || fetch;
   const blobs = options.blobs || S.blobClient(env, fetchImpl);
   let storeClose = null;
@@ -126,6 +130,7 @@ async function handle(event, deps) {
       onlyMissing,
       picksOnly,
       retryNoClose,
+      missingGames,
       dryRun: !!options.dryRun,
       blobs,
       fetch: fetchImpl,
@@ -173,7 +178,9 @@ async function handle(event, deps) {
     calls: result ? result.calls.length : 0,
     reserveGuard: !!(result && result.reserveGuard),
     skippedDone: result ? result.skippedDone : 0,
+    missingGames: !!(result && result.missingGames),
     picks: result ? result.picks : [],
+    games: (result && result.games) || [],
     errors: result ? result.errors : [],
     track,
     graded,

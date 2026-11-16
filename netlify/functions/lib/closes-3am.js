@@ -8,6 +8,11 @@
  * minutes after the latest. Close rows are written only for events that
  * belong to the bucket. Card and candidate legs still missing Pinnacle
  * are retried once at the earliest tip minus 15 minutes.
+ * A manual missingGames run plans buckets only for slate games that have
+ * no close yet, plus card and candidate legs that are still no-close.
+ * It ignores done-bucket markers, does not overwrite a done-ev close, and
+ * keeps the earlier snapshot for those legs only. Scheduled runs never
+ * set the flag.
  * OMEGA_CLOSES_AT_3AM defaults on. OMEGA_CLOSES_3AM_CAP defaults to the
  * Saturday 2026-11-14 estimate plus about 25% headroom (see DEFAULT_CAP).
  * No schedule of its own. capture-odds-3am fires the background worker.
@@ -147,6 +152,18 @@ function scrub(text) {
 
 function bucketDoneKey(sport, snapshotAt) {
   return `done-bucket/${sport}/${snapshotAt}`;
+}
+
+function canonSport(sport) {
+  const label = String(sport || '').toUpperCase();
+  if (label === 'CFB') return 'NCAAF';
+  if (label === 'NCAAB') return 'NCAAM';
+  return label;
+}
+
+async function hasBlob(blobs, key) {
+  if (!blobs || !key) return false;
+  try { return !!(await blobs.get(STORE, key)); } catch (_) { return false; }
 }
 
 function summaryKey(date) {
@@ -550,6 +567,8 @@ function marketsForEvent(event, picks) {
  * `events` must already be unwrapped. Does not call the Odds API.
  * Events outside this bucket are ignored here. The caller archives the raw body.
  * `ctx.onlyPicks` limits assessment and writes to those legs (fallback).
+ * `ctx.keepDoneEv` skips row, done-marker, and odds-master writes for an
+ * event that already has a done-ev marker. The old live close stays.
  */
 async function applyBucketResponse(bucket, unpacked, ctx) {
   const when = ctx.now instanceof Date ? ctx.now : new Date();
@@ -561,6 +580,12 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
   const events = onlyPicks
     ? belonging.filter((event) => marketsForEvent(event, onlyPicks).length > 0)
     : belonging;
+  const writable = [];
+  for (const event of events) {
+    if (!event) continue;
+    if (ctx.keepDoneEv && event.id != null && await hasBlob(ctx.blobs, FB.doneEvKey(bucket.sport, event.id))) continue;
+    writable.push(event);
+  }
   const picks = onlyPicks || (bucket.games || []).reduce((list, game) => list.concat(game.picks || []), []);
   const rows = { games: [], snaps: [] };
   const pickResults = [];
@@ -580,7 +605,7 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
     const ctPick = FB.normalizeCommence(pick.commenceTime) || pick.commenceTime;
     if (assessed.status !== 'closed') blockedCommence.add(`${ctPick}|${market}`);
   }
-  for (const event of events) {
+  for (const event of writable) {
     if (!event) continue;
     const markets = marketsForEvent(event, onlyPicks);
     for (const market of markets) {
@@ -605,7 +630,7 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
   }
   const doneWrites = [];
   if (!ctx.dryRun && ctx.blobs) {
-    for (const event of events) {
+    for (const event of writable) {
       if (!event || event.id == null) continue;
       const ct = FB.normalizeCommence(event.commence_time);
       const markets = marketsForEvent(event, onlyPicks);
@@ -618,7 +643,7 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
         const payload = {
           at: when.toISOString(),
           via: 'closes-3am',
-          events: events.length,
+          events: writable.length,
           posted,
           eventId: String(event.id),
         };
@@ -636,7 +661,7 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
       }
     }
     if (ctx.storeClose) {
-      for (const event of events) {
+      for (const event of writable) {
         if (!event || !pinnacleBook(event)) continue;
         const markets = marketsForEvent(event, onlyPicks);
         const priced = eventWithMarkets(event, markets);
@@ -655,7 +680,7 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
       }
     }
   }
-  return { events, rows, posted, pickResults, doneWrites, satisfiedEventMarkets };
+  return { events: writable, belonging, rows, posted, pickResults, doneWrites, satisfiedEventMarkets };
 }
 
 async function loadInputs(date, ctx) {
@@ -717,6 +742,109 @@ function bucketRetryNoClose(bucket, prior, retryNoClose) {
   return false;
 }
 
+function summaryRowMatchesGame(row, game) {
+  if (!row || row.status !== 'closed' || !game) return false;
+  const rowSport = canonSport(row.sport);
+  const gameSport = canonSport(game.sport);
+  if (rowSport && gameSport && rowSport !== gameSport) return false;
+  if (game.eventId && row.eventId) return String(game.eventId) === String(row.eventId);
+  const names = row.matchup ? teamsFromMatchup(row.matchup) : {};
+  const probe = {
+    sport: game.sport,
+    eventId: row.eventId || game.eventId || '',
+    homeTeam: row.homeTeam || names.homeTeam || null,
+    awayTeam: row.awayTeam || names.awayTeam || null,
+    commenceTime: row.commenceTime || game.commenceTime,
+  };
+  if (!probe.homeTeam || !probe.awayTeam) return false;
+  return sameGame(game, probe);
+}
+
+function summaryHasClosed(summary, game) {
+  const rows = [].concat((summary && summary.games) || [], (summary && summary.picks) || []);
+  return rows.some((row) => summaryRowMatchesGame(row, game));
+}
+
+/** True when the old live job, market markers, or this summary already closed the game. */
+async function gameHasClose(game, blobs, summary) {
+  if (!game) return false;
+  if (game.eventId && await hasBlob(blobs, FB.doneEvKey(game.sport, game.eventId))) return true;
+  const ct = FB.normalizeCommence(game.commenceTime);
+  if (ct) {
+    let allMarkets = true;
+    for (const market of MARKETS) {
+      if (!(await hasBlob(blobs, FB.doneMarketKey(game.sport, ct, market)))) {
+        allMarkets = false;
+        break;
+      }
+    }
+    if (allMarkets) return true;
+  }
+  return summaryHasClosed(summary, game);
+}
+
+function legStillOpen(game, prior) {
+  for (const pick of (game && game.picks) || []) {
+    if (pick.kind !== 'card' && pick.kind !== 'candidate') continue;
+    if (pickMissing(pick, prior, true)) return true;
+  }
+  return false;
+}
+
+/**
+ * Slate games with no close, plus games whose card or candidate leg is
+ * still open the way retryNoClose would reopen it.
+ */
+async function missingGameTargets(games, blobs, summary, prior) {
+  const out = [];
+  for (const game of games || []) {
+    const onSlate = !!(game.roles && game.roles.has('board'));
+    if (onSlate && !(await gameHasClose(game, blobs, summary))) {
+      out.push(game);
+      continue;
+    }
+    if (legStillOpen(game, prior)) out.push(game);
+  }
+  return out;
+}
+
+function gameMatchup(game) {
+  if (game && game.awayTeam && game.homeTeam) return `${game.awayTeam} @ ${game.homeTeam}`;
+  const pick = ((game && game.picks) || []).find((row) => row && row.matchup);
+  return (pick && pick.matchup) || null;
+}
+
+function gameRowKey(row) {
+  if (row && row.eventId) return `${row.sport || ''}|${row.eventId}`;
+  return `${(row && row.sport) || ''}|${(row && row.matchup) || ''}`;
+}
+
+function gameResultRow(game, status, reason, snapshotAt, eventId) {
+  const id = eventId != null && eventId !== '' ? String(eventId) : (game.eventId || null);
+  return {
+    sport: game.sport,
+    eventId: id,
+    matchup: gameMatchup(game),
+    status,
+    reason: status === 'closed' ? null : (reason || null),
+    closeLeadMin: snapshotAt ? leadMinutes(game.commenceTime, snapshotAt) : null,
+  };
+}
+
+function assessGame(game, events, snapshotAt) {
+  const found = eventInResponse({
+    eventId: game.eventId,
+    homeTeam: game.homeTeam,
+    awayTeam: game.awayTeam,
+    commenceTime: game.commenceTime,
+  }, events);
+  if (!found) return gameResultRow(game, 'no-close', 'not-in-historical-snapshot', snapshotAt);
+  const eventId = found.id != null ? found.id : game.eventId;
+  const priced = MARKETS.some((market) => pinnacleMarket(found, market));
+  if (!priced) return gameResultRow(game, 'no-close', 'pinnacle-not-priced', snapshotAt, eventId);
+  return gameResultRow(game, 'closed', null, snapshotAt, eventId);
+}
+
 function trackedLegs(bucket) {
   const out = [];
   for (const game of bucket.games || []) {
@@ -734,6 +862,7 @@ async function runCloses(ctx) {
   const cap = capFor(env);
   const onlyMissing = !!(ctx.onlyMissing || ctx.picksOnly);
   const retryNoClose = !!ctx.retryNoClose;
+  const missingGames = !!ctx.missingGames;
   const dryRun = !!ctx.dryRun;
   const result = {
     ok: true,
@@ -743,6 +872,7 @@ async function runCloses(ctx) {
     creditFormula: `${HISTORICAL_MULTIPLIER} x ${MARKETS.length} markets x ${REGION_EQUIVALENTS} region-equivalents (${BOOKS.length} books) = ${EST_COST}`,
     onlyMissing,
     retryNoClose,
+    missingGames,
     dryRun,
     reserveGuard: false,
     calls: [],
@@ -760,14 +890,19 @@ async function runCloses(ctx) {
   const loaded = await loadInputs(date, ctx);
   const games = loaded.games;
   const slateIds = slateIdSet(loaded.slate);
-  let buckets = planBuckets(games);
   const blobs = ctx.blobs;
   let summary = null;
   if (blobs) {
     try { summary = await blobs.get(STORE, summaryKey(date)); } catch (_) { summary = null; }
   }
   const prior = priorStatus(summary);
-  if (onlyMissing) {
+  const hadGames = !!(summary && Array.isArray(summary.games));
+  let planned = games;
+  if (missingGames) planned = await missingGameTargets(games, blobs, summary, prior);
+  let buckets = planBuckets(planned);
+  // missingGames already kept the open card and candidate legs. onlyMissing
+  // must not drop the slate-only buckets that have no pick rows.
+  if (onlyMissing && !missingGames) {
     buckets = buckets.filter((bucket) => bucket.games.some((game) => (game.picks || []).some((pick) => pickMissing(pick, prior, retryNoClose))));
   }
   const runDate = S.etYmd(now);
@@ -814,6 +949,31 @@ async function runCloses(ctx) {
     try { return !!(await blobs.get(STORE, key)); } catch (_) { return false; }
   }
 
+  const gameRows = [];
+  const seenGames = new Set();
+  const priorGames = new Map();
+  for (const row of (summary && summary.games) || []) {
+    if (row) priorGames.set(gameRowKey(row), row);
+  }
+  function rememberGame(row) {
+    if (!row) return;
+    const key = gameRowKey(row);
+    if (seenGames.has(key)) return;
+    seenGames.add(key);
+    const prev = priorGames.get(key);
+    const merged = prev && prev.status === 'closed' ? prev : row;
+    gameRows.push(merged);
+  }
+  function stampGames(list, status, reason, snapshotAt, belonging, isFallback) {
+    if (!missingGames || isFallback) return;
+    for (const game of list || []) {
+      const row = belonging
+        ? assessGame(game, belonging, snapshotAt)
+        : gameResultRow(game, status, reason, snapshotAt);
+      rememberGame(row);
+    }
+  }
+
   const calledPrimary = new Set();
 
   async function attempt(bucket, snapshotAt, options) {
@@ -854,16 +1014,19 @@ async function runCloses(ctx) {
           }
         }
       }
+      stampGames(bucket.games, 'no-close', 'cap', null, null, fallback);
       return mark('cap');
     }
     if (reserveBlocks(remaining, EST_COST)) {
       result.reserveGuard = true;
       result.ok = false;
       safeLog('[closes-3am] reserve-guard');
+      stampGames(bucket.games, 'no-close', 'reserve-guard', null, null, fallback);
       return mark('reserve-guard');
     }
     if (!bucket.sportKey) {
       result.errors.push(`sport-key ${bucket.sport}`);
+      stampGames(bucket.games, 'no-close', 'sport-key', null, null, fallback);
       return 'error';
     }
     const url = buildHistoricalUrl(env.ODDS_API_KEY || '', bucket.sportKey, snapshotAt, bucket.from, bucket.to);
@@ -929,8 +1092,10 @@ async function runCloses(ctx) {
         slateIds,
         snapshotAt,
         onlyPicks: onlyPicks || null,
+        keepDoneEv: missingGames,
       });
       remember(applied.pickResults);
+      stampGames(bucket.games, null, null, snapshotAt, applied.belonging || [], fallback);
       if (blobs && !dryRun) {
         await blobs.set(STORE, doneKey, {
           at: now.toISOString(),
@@ -965,13 +1130,14 @@ async function runCloses(ctx) {
       for (const pick of failed) {
         remember([Object.assign({}, pick, { status: 'no-close', reason: 'fetch-failed', market: pickMarket(pick) })]);
       }
+      stampGames(bucket.games, 'no-close', 'fetch-failed', snapshotAt, null, fallback);
       return mark('error');
     }
   }
 
   let halt = false;
   for (const bucket of buckets) {
-    const ignoreDone = bucketRetryNoClose(bucket, prior, retryNoClose);
+    const ignoreDone = missingGames || bucketRetryNoClose(bucket, prior, retryNoClose);
     const status = await attempt(bucket, bucket.snapshotAt, { ignoreDone, fallback: false });
     if (status === 'called') calledPrimary.add(bucket);
     if (status === 'reserve-guard') {
@@ -982,6 +1148,7 @@ async function runCloses(ctx) {
               remember([Object.assign({}, pick, { status: 'no-close', reason: 'reserve-guard', market: pickMarket(pick) })]);
             }
           }
+          stampGames([game], 'no-close', 'reserve-guard', null, null, false);
         }
       }
       halt = true;
@@ -1002,7 +1169,7 @@ async function runCloses(ctx) {
       } else {
         const primaryDone = await blobHas(bucketDoneKey(bucket.sport, bucket.snapshotAt));
         const fallbackDone = await blobHas(bucketDoneKey(bucket.sport, bucket.fallbackAt));
-        const reopen = bucketRetryNoClose(bucket, prior, retryNoClose);
+        const reopen = missingGames || bucketRetryNoClose(bucket, prior, retryNoClose);
         if (primaryDone && (!fallbackDone || reopen)) {
           unresolved = legs.filter((pick) => {
             const row = rowFor(pick);
@@ -1013,7 +1180,7 @@ async function runCloses(ctx) {
         }
       }
       if (!unresolved.length) continue;
-      const ignoreDone = bucketRetryNoClose(bucket, prior, retryNoClose);
+      const ignoreDone = missingGames || bucketRetryNoClose(bucket, prior, retryNoClose);
       const status = await attempt(bucket, bucket.fallbackAt, {
         ignoreDone,
         fallback: true,
@@ -1044,6 +1211,8 @@ async function runCloses(ctx) {
     }
   }
   result.picks = pickRows;
+  for (const row of (summary && summary.games) || []) rememberGame(row);
+  result.games = gameRows;
   const summaryDoc = {
     date,
     ranAt: now.toISOString(),
@@ -1053,6 +1222,7 @@ async function runCloses(ctx) {
     books: BOOKS,
     onlyMissing,
     retryNoClose,
+    missingGames,
     reserveGuard: result.reserveGuard,
     remaining: remaining,
     calls: result.calls,
@@ -1060,6 +1230,7 @@ async function runCloses(ctx) {
     picks: pickRows,
     errors: result.errors,
   };
+  if (missingGames || hadGames) summaryDoc.games = gameRows;
   result.summary = summaryDoc;
   if (blobs && !dryRun) {
     try { await blobs.set(STORE, summaryKey(date), summaryDoc); } catch (err) {

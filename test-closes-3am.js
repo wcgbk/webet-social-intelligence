@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const C = require('./netlify/functions/lib/closes-3am');
+const FB = require('./netlify/functions/lib/full-board-closes');
 const cap = require('./netlify/functions/capture-pick-closes');
 const pull3 = require('./netlify/functions/capture-odds-3am');
 const bg = require('./netlify/functions/capture-closes-3am-background');
@@ -986,6 +987,227 @@ function wrapped(events, timestamp) {
   assert.strictEqual(storedEvents.length, 1);
   const storedMarkets = storedEvents[0].bookmakers[0].markets.map((market) => market.key).sort();
   assert.deepStrictEqual(storedMarkets, ['h2h', 'spreads']);
+
+  const liveEv = { at: '2026-11-15T18:05:00Z', via: 'live' };
+  const gapBlobs = memBlobs({
+    'clv-close-capture:done-ev/NFL/already': liveEv,
+    'clv-close-capture:done-ev/NFL/walkin-done': liveEv,
+    'clv-close-capture:done-ev/NHL/nhl-retry': liveEv,
+    'clv-close-capture:done-bucket/NFL/2026-11-15T14:32:33Z': { at: '2026-11-16T08:00:00Z' },
+    'clv-close-capture:done-bucket/NHL/2026-11-16T02:09:00Z': { at: '2026-11-16T08:00:00Z' },
+    'clv-close-capture:done-bucket/NHL/2026-11-16T01:55:00Z': { at: '2026-11-16T08:00:00Z' },
+    [`clv-close-capture:${FB.doneMarketKey('NBA', '2026-11-15T23:30:00Z', 'h2h')}`]: { at: 'live' },
+    [`clv-close-capture:${FB.doneMarketKey('NBA', '2026-11-15T23:30:00Z', 'spreads')}`]: { at: 'live' },
+    [`clv-close-capture:${FB.doneMarketKey('NBA', '2026-11-15T23:30:00Z', 'totals')}`]: { at: 'live' },
+    [`clv-close-capture:${FB.doneMarketKey('NFL', '2026-11-15T19:00:00Z', 'h2h')}`]: { at: 'live' },
+    [`clv-close-capture:${FB.doneMarketKey('NFL', '2026-11-15T19:00:00Z', 'spreads')}`]: { at: 'live' },
+    'clv-close-capture:closes-3am/2026-11-15': {
+      date: '2026-11-15',
+      picks: [
+        {
+          kind: 'card', sport: 'NCAAM', eventId: 'summary-closed',
+          matchup: 'Quinnipiac @ Central Connecticut', pick: 'Quinnipiac ML',
+          betType: 'Moneyline', commenceTime: '2026-11-16T01:00:00Z', status: 'closed',
+        },
+        {
+          kind: 'card', sport: 'NHL', eventId: 'nhl-retry',
+          matchup: 'Vancouver Canucks @ Vegas Golden Knights', pick: 'Vancouver Canucks +2.5',
+          betType: 'Spread', commenceTime: '2026-11-16T02:10:00Z',
+          status: 'no-close', reason: 'pinnacle-not-priced',
+        },
+        {
+          kind: 'candidate', sport: 'NHL', eventId: 'nhl-retry',
+          matchup: 'Vancouver Canucks @ Vegas Golden Knights', pick: 'Vancouver Canucks ML',
+          betType: 'Moneyline', commenceTime: '2026-11-16T02:10:00Z',
+          status: 'no-close', reason: 'pinnacle-not-priced',
+        },
+      ],
+      games: [{
+        sport: 'NCAAF', eventId: 'games-closed', matchup: 'Clemson @ South Carolina',
+        status: 'closed', reason: null, closeLeadMin: 1,
+      }],
+    },
+  });
+  const gapWritten = [];
+  const gapStored = [];
+  const gapCalls = [];
+  const gaps = await C.runCloses({
+    now: new Date('2026-11-16T09:00:00Z'),
+    env,
+    date: '2026-11-15',
+    onlyMissing: true,
+    missingGames: true,
+    slateEvents: [
+      { sport: 'NFL', eventId: 'ne-det', awayTeam: 'New England Patriots', homeTeam: 'Detroit Lions', commenceTime: '2026-11-15T14:33:33Z' },
+      { sport: 'NFL', eventId: 'partial', awayTeam: 'Jacksonville Jaguars', homeTeam: 'Tennessee Titans', commenceTime: '2026-11-15T19:00:00Z' },
+      { sport: 'NFL', eventId: 'already', awayTeam: 'Chicago Bears', homeTeam: 'Green Bay Packers', commenceTime: '2026-11-15T21:25:00Z' },
+      { sport: 'NBA', eventId: 'nba-done', awayTeam: 'Knicks', homeTeam: 'Celtics', commenceTime: '2026-11-15T23:30:00Z' },
+      { sport: 'NCAAM', eventId: 'summary-closed', awayTeam: 'Quinnipiac', homeTeam: 'Central Connecticut', commenceTime: '2026-11-16T01:00:00Z' },
+      { sport: 'NCAAF', eventId: 'games-closed', awayTeam: 'Clemson', homeTeam: 'South Carolina', commenceTime: '2026-11-15T17:00:00Z' },
+      { sport: 'NHL', eventId: 'nhl-retry', awayTeam: 'Vancouver Canucks', homeTeam: 'Vegas Golden Knights', commenceTime: '2026-11-16T02:10:00Z' },
+    ],
+    card: { picks: [{
+      sport: 'NHL', eventId: 'nhl-retry', matchup: 'Vancouver Canucks @ Vegas Golden Knights',
+      pick: 'Vancouver Canucks +2.5', betType: 'Spread',
+      awayTeam: 'Vancouver Canucks', homeTeam: 'Vegas Golden Knights',
+      commenceTime: '2026-11-16T02:10:00Z',
+    }] },
+    candidates: { candidates: [{
+      sport: 'NHL', eventId: 'nhl-retry', matchup: 'Vancouver Canucks @ Vegas Golden Knights',
+      pick: 'Vancouver Canucks ML', betType: 'Moneyline',
+      awayTeam: 'Vancouver Canucks', homeTeam: 'Vegas Golden Knights',
+      commenceTime: '2026-11-16T02:10:00Z',
+    }] },
+    blobs: gapBlobs,
+    requestsRemaining: 50000,
+    writeRows: async (built) => {
+      gapWritten.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    storeClose: async (ev) => {
+      gapStored.push(ev.id);
+      return { wrote: true };
+    },
+    fetch: async (url) => {
+      gapCalls.push(String(url));
+      const date = new URL(String(url)).searchParams.get('date');
+      if (date === '2026-11-15T14:32:33Z') {
+        return oddsResponse(wrapped([
+          event('walkin-done', 'Chicago Bears', 'Dallas Cowboys', '2026-11-15T14:34:00Z'),
+        ], date));
+      }
+      if (date === '2026-11-15T18:59:00Z') {
+        return oddsResponse(wrapped([
+          event('partial', 'Tennessee Titans', 'Jacksonville Jaguars', '2026-11-15T19:00:00Z'),
+          event('already', 'Green Bay Packers', 'Chicago Bears', '2026-11-15T21:25:00Z'),
+        ], date));
+      }
+      if (date === '2026-11-16T02:09:00Z') {
+        return oddsResponse(wrapped([
+          event('nhl-retry', 'Vegas Golden Knights', 'Vancouver Canucks', '2026-11-16T02:10:00Z'),
+        ], date));
+      }
+      if (date === '2026-11-16T01:55:00Z') {
+        return oddsResponse(wrapped([
+          event('nhl-retry', 'Vegas Golden Knights', 'Vancouver Canucks', '2026-11-16T02:10:00Z', [
+            pinnacleBook('Vegas Golden Knights', 'Vancouver Canucks', 'spreads'),
+          ]),
+        ], date));
+      }
+      return oddsResponse(wrapped([], date));
+    },
+  });
+  const gapDates = gapCalls.map((url) => new URL(url).searchParams.get('date'));
+  assert.deepStrictEqual(gapDates, [
+    '2026-11-16T02:09:00Z',
+    '2026-11-15T14:32:33Z',
+    '2026-11-15T18:59:00Z',
+    '2026-11-16T01:55:00Z',
+  ], 'missingGames plans only buckets that still need a close');
+  assert.ok(!gapDates.includes('2026-11-15T21:24:00Z'), 'done-ev game is not its own bucket');
+  assert.ok(!gapDates.includes('2026-11-15T23:29:00Z'), 'all three market markers count as a close');
+  assert.ok(!gapDates.includes('2026-11-16T00:59:00Z'), 'closed summary pick is not refetched');
+  assert.ok(!gapDates.includes('2026-11-15T16:59:00Z'), 'closed summary game is not refetched');
+  assert.ok(!gapDates.includes('2026-11-15T14:18:33Z'), 'slate no-close does not take the card fallback');
+  assert.deepStrictEqual(gapWritten, ['partial']);
+  assert.deepStrictEqual(gapStored, ['partial']);
+  assert.deepStrictEqual(gapBlobs.data.get('clv-close-capture:done-ev/NFL/already'), liveEv);
+  assert.deepStrictEqual(gapBlobs.data.get('clv-close-capture:done-ev/NFL/walkin-done'), liveEv);
+  assert.deepStrictEqual(gapBlobs.data.get('clv-close-capture:done-ev/NHL/nhl-retry'), liveEv);
+  assert.strictEqual(gapBlobs.data.get('clv-close-capture:done-ev/NFL/partial').via, 'closes-3am');
+  assert.strictEqual(gaps.missingGames, true);
+  const gapSummary = gapBlobs.data.get('clv-close-capture:closes-3am/2026-11-15');
+  const gapGame = (id) => gapSummary.games.find((row) => row.eventId === id);
+  assert.deepStrictEqual(gapGame('ne-det'), {
+    sport: 'NFL', eventId: 'ne-det', matchup: 'New England Patriots @ Detroit Lions',
+    status: 'no-close', reason: 'not-in-historical-snapshot', closeLeadMin: 1,
+  });
+  assert.deepStrictEqual(gapGame('partial'), {
+    sport: 'NFL', eventId: 'partial', matchup: 'Jacksonville Jaguars @ Tennessee Titans',
+    status: 'closed', reason: null, closeLeadMin: 1,
+  });
+  assert.strictEqual(gapGame('nhl-retry').status, 'closed');
+  assert.strictEqual(gapGame('nhl-retry').closeLeadMin, 1);
+  assert.strictEqual(gapGame('games-closed').status, 'closed');
+  assert.strictEqual(gapGame('already'), undefined);
+  const gapSpread = gaps.picks.find((row) => row.pick === 'Vancouver Canucks +2.5');
+  const gapMl = gaps.picks.find((row) => row.pick === 'Vancouver Canucks ML');
+  assert.strictEqual(gapSpread.status, 'closed');
+  assert.strictEqual(gapSpread.closeLeadMin, 15);
+  assert.strictEqual(gapMl.status, 'closed');
+  assert.strictEqual(gapMl.closeLeadMin, 1);
+  assert.ok(gaps.calls.every((call) => call.path === 'closes-3am-historical' && call.estCost === 60));
+
+  const schedCalls = [];
+  const sched = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15', missingGames: true, scheduled: true }),
+  }, {
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    now: new Date('2026-11-16T09:10:00Z'),
+    blobs: memBlobs({
+      'clv-close-capture:done-bucket/NFL/2026-11-15T14:32:33Z': { at: '2026-11-16T08:00:00Z' },
+    }),
+    slateEvents: [
+      { sport: 'NFL', eventId: 'ne-det', awayTeam: 'New England Patriots', homeTeam: 'Detroit Lions', commenceTime: '2026-11-15T14:33:33Z' },
+    ],
+    card: { picks: [] },
+    skipGrade: true,
+    skipMirror: true,
+    invokeTrack: async () => ({ ok: true, status: 200 }),
+    storeClose: async () => ({ wrote: true }),
+    writeRows: async () => ({ games: 0, odds_snapshots: 0, requests: 0 }),
+    fetch: async (url) => { schedCalls.push(String(url)); return oddsResponse(wrapped([])); },
+  });
+  assert.strictEqual(sched.statusCode, 200);
+  assert.strictEqual(schedCalls.length, 0, 'scheduled runs ignore missingGames');
+  assert.strictEqual(JSON.parse(sched.body).missingGames, false);
+
+  const manualCalls = [];
+  const manualWritten = [];
+  const manualBlobs = memBlobs({
+    'clv-close-capture:done-bucket/NFL/2026-11-15T14:32:33Z': { at: '2026-11-16T08:00:00Z' },
+    'clv-close-capture:done-ev/NFL/keep-live': liveEv,
+    'clv-close-capture:done-ev/NFL/walkin-done': liveEv,
+  });
+  const manual = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15', missingGames: true }),
+  }, {
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    now: new Date('2026-11-16T09:20:00Z'),
+    blobs: manualBlobs,
+    slateEvents: [
+      { sport: 'NFL', eventId: 'ne-det', awayTeam: 'New England Patriots', homeTeam: 'Detroit Lions', commenceTime: '2026-11-15T14:33:33Z' },
+      { sport: 'NFL', eventId: 'keep-live', awayTeam: 'Chicago Bears', homeTeam: 'Green Bay Packers', commenceTime: '2026-11-15T21:25:00Z' },
+    ],
+    card: { picks: [] },
+    skipGrade: true,
+    skipMirror: true,
+    invokeTrack: async () => ({ ok: true, status: 200 }),
+    storeClose: async (ev) => ({ wrote: true, id: ev.id }),
+    writeRows: async (built) => {
+      manualWritten.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    fetch: async (url) => {
+      manualCalls.push(String(url));
+      return oddsResponse(wrapped([
+        event('ne-det', 'Detroit Lions', 'New England Patriots', '2026-11-15T14:33:33Z'),
+        event('keep-live', 'Green Bay Packers', 'Chicago Bears', '2026-11-15T14:34:00Z'),
+        event('walkin-done', 'Dallas Cowboys', 'Philadelphia Eagles', '2026-11-15T14:34:30Z'),
+      ], '2026-11-15T14:32:33Z'));
+    },
+  });
+  assert.strictEqual(manual.statusCode, 200);
+  assert.deepStrictEqual(manualCalls.map((url) => new URL(url).searchParams.get('date')), ['2026-11-15T14:32:33Z']);
+  const gapManualBody = JSON.parse(manual.body);
+  assert.strictEqual(gapManualBody.missingGames, true);
+  assert.strictEqual(gapManualBody.games.find((row) => row.eventId === 'ne-det').status, 'closed');
+  assert.deepStrictEqual(manualWritten, ['ne-det']);
+  assert.deepStrictEqual(manualBlobs.data.get('clv-close-capture:done-ev/NFL/keep-live'), liveEv);
+  assert.deepStrictEqual(manualBlobs.data.get('clv-close-capture:done-ev/NFL/walkin-done'), liveEv);
+  assert.ok(!JSON.stringify(gapManualBody).includes('test-key'));
 
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
   const pickBlock = toml.split('[functions."capture-pick-closes"]')[1].split('[functions.')[0];

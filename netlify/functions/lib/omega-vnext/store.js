@@ -280,6 +280,20 @@ async function storeJson(key, data) {
   return true;
 }
 
+async function deleteJson(key) {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore(BLOB_STORE);
+    if (store && typeof store.delete === 'function') {
+      await store.delete(key);
+      return true;
+    }
+  } catch (_) { /* REST below */ }
+  const resp = await blobFetch(key, { method: 'DELETE' });
+  if (!resp.ok && resp.status !== 404) throw new Error(`blob DELETE ${key} → ${resp.status}`);
+  return true;
+}
+
 async function readJson(key) {
   try {
     const { getStore } = await import('@netlify/blobs');
@@ -580,7 +594,7 @@ async function readUnmatchedTeams(dateISO) {
 module.exports = {
   readHealthRecord,
   readHealthLatest,
-  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, readPicksLocated, writePicksRaw, storeJson, readJson,
+  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, readPicksLocated, writePicksRaw, storeJson, readJson, deleteJson,
   storePmObserver, readPmObserver, storePmObserverOpen, readPmObserverOpen,
   pmObserverStorageKey, pmObserverAliasKey,
   WALKFORWARD_KEY_RE, assertWalkforwardKey,

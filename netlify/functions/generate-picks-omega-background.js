@@ -25,6 +25,7 @@ exports.handler = async (event) => {
     const force = !!(body.force || qs.force === 'true' || body.scheduled || qs.scheduled === 'true');
     const shadow = body.shadow === true || body.shadow === 'true' || qs.shadow === 'true';
     const skipNarrate = body.skipNarrate === true || body.skipNarrate === 'true' || qs.skipNarrate === 'true';
+    const storedBoardOnly = body.storedBoardOnly === true || body.storedBoardOnly === 'true' || qs.storedBoardOnly === 'true';
     const opts = {
       date: body.date || qs.date,
       force,
@@ -33,6 +34,7 @@ exports.handler = async (event) => {
       dryRun: !!body.dryRun,
       shadow,
       skipNarrate,
+      storedBoardOnly,
     };
 
     const result = await generateOmegaVnext(opts);

@@ -531,6 +531,13 @@ async function main() {
   );
   if (marketP.status !== 0) throw new Error('market probability and favorite cap gate failed');
 
+  const blendP = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-blend-p.js')],
+    { stdio: 'inherit' }
+  );
+  if (blendP.status !== 0) throw new Error('blend probability gate failed');
+
   const boardOrder = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-odds-master-board-order.js')],

@@ -32,4 +32,27 @@ function letterFromPrintedEdge(raw) {
   return 'b';
 }
 
-module.exports = { shownEdgePoints, letterFromPrintedEdge };
+/**
+ * Standing letter from price EV when the blend is on the row.
+ * A >= 3% EV, B >= 1% and under 3%, C under 1% (including negative).
+ * An exact boundary takes the higher letter. The edge ladder does not run.
+ */
+function letterFromEv(raw) {
+  const shown = shownEdgePoints(raw);
+  if (shown == null) return null;
+  if (shown >= 3) return 'a';
+  if (shown >= 1) return 'b';
+  return 'c';
+}
+
+/**
+ * Confidence for a printed letter. C is 45. Every other letter uses the
+ * frozen price map. That map has no C entry, and the price file stays unchanged.
+ */
+function confidenceForLetter(letter) {
+  if (letter === 'c') return 45;
+  const { ratingToConfidence } = require('../omega-vnext/odds_math');
+  return ratingToConfidence(letter);
+}
+
+module.exports = { shownEdgePoints, letterFromPrintedEdge, letterFromEv, confidenceForLetter };

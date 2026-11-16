@@ -63,11 +63,10 @@ const { refillKilledParlay } = require('./lib/omega-vnext/parlay');
 const {
   decimalToAmerican,
   formatAmerican,
-  ratingToConfidence,
   EDGE_B_UNIT_CAP,
   isEdgeGradeB,
 } = require('./lib/omega-vnext/odds_math');
-const { letterFromPrintedEdge, shownEdgePoints } = require('./lib/omega-v2/letter');
+const { letterFromPrintedEdge, letterFromEv, shownEdgePoints, confidenceForLetter } = require('./lib/omega-v2/letter');
 const { verifyCleanStampEnabled, defaultOnFlag } = require('./lib/default_on_flag');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
@@ -274,18 +273,21 @@ function runMathChecks(pick, opts) {
     }
   }
 
-  // Grade check — printed edge tenth, NOT units.
-  // A+ ≥5.0, A ≥3.5, A− ≥2.0, else B. Exact boundary rounds up to the higher letter.
-  const edgeSource = pick.edgePct != null && pick.edgePct !== '' ? pick.edgePct : pick.ev;
-  const expectedGrade = letterFromPrintedEdge(edgeSource);
+  // Grade check. Blend rows use price EV (A >= 3%, B >= 1%, else C).
+  // Every other row uses the printed edge tenth: A+ ≥5.0, A ≥3.5, A− ≥2.0, else B.
+  const blend = !!(pick && (pick.blendApplied === true || (pick.pBlend != null && pick.pBlend !== '')));
+  const gradeSource = blend
+    ? (pick.evRaw != null && pick.evRaw !== '' ? pick.evRaw : pick.ev)
+    : (pick.edgePct != null && pick.edgePct !== '' ? pick.edgePct : pick.ev);
+  const expectedGrade = blend ? letterFromEv(gradeSource) : letterFromPrintedEdge(gradeSource);
   if (expectedGrade && pick.rating) {
     const norm = String(pick.rating || '').toLowerCase().replace(/\+/g, 'plus').replace(/-/g, 'minus');
-    const normMap = { 'a+': 'aplus', aplus: 'aplus', a: 'a', 'a-': 'aminus', aminus: 'aminus', b: 'b', 'b+': 'bplus', bplus: 'bplus' };
+    const normMap = { 'a+': 'aplus', aplus: 'aplus', a: 'a', 'a-': 'aminus', aminus: 'aminus', b: 'b', 'b+': 'bplus', bplus: 'bplus', c: 'c' };
     const have = normMap[norm] || norm;
     if (have !== expectedGrade) {
       checks.gradeMatch = false;
-      const shown = shownEdgePoints(edgeSource);
-      warnings.push(`Grade mismatch: "${pick.rating}" but edge ${shown}% should be "${expectedGrade}"`);
+      const shown = shownEdgePoints(gradeSource);
+      warnings.push(`Grade mismatch: "${pick.rating}" but ${blend ? 'EV' : 'edge'} ${shown}% should be "${expectedGrade}"`);
     }
   }
 
@@ -558,7 +560,7 @@ function decisionForPick(pick, hr, { feedDown = false, gameMissing = false, live
   });
 }
 
-async function runHardRockCheck(picksData) {
+async function runHardRockCheck(picksData, opts) {
   const summary = { book: "Hard Rock Bet", checked: 0, available: 0, warnings: 0, errors: 0, skipped: false, apiDown: false };
   const pickResults = [];
   const parlayFindings = [];
@@ -568,6 +570,20 @@ async function runHardRockCheck(picksData) {
   // picks take the existing feed-down warn path (never dropped on it).
   let storedBoard = null;
   try { const { loadMasterBoard } = require('./lib/odds-master/board'); storedBoard = await loadMasterBoard(picksData.date); } catch (_) {}
+  const storedBoardOnly = !!(opts && (opts.storedBoardOnly === true || opts.storedBoardOnly === 'true'));
+  if (storedBoardOnly && !storedBoard) {
+    summary.skipped = true;
+    summary.apiDown = true;
+    summary.reason = 'stored-board-only';
+    const decision = verifyPlaceabilityDecision({ apiDown: true });
+    for (const _p of (picksData.picks || [])) {
+      pickResults.push({
+        available: false, hrOdds: null, hrPoint: null,
+        warnings: [decision.warning], errors: [], notes: [], decision,
+      });
+    }
+    return { summary, pickResults, parlayFindings, legDecisions };
+  }
   const apiKey = storedBoard ? 'stored' : process.env.ODDS_API_KEY;
   if (!apiKey) {
     summary.skipped = true;
@@ -856,11 +872,22 @@ function straightUnitsOf(row) {
  * Set rating, grade, qualityGrade, and confidence from the printed edgePct.
  * Does not touch the stake. Missing edgePct leaves the stored letter alone.
  */
+function blendGradeRow(row) {
+  return !!(row && (row.blendApplied === true || (row.pBlend != null && row.pBlend !== '')));
+}
+
 function rewriteLetterFromEdge(row, notes) {
-  if (!row || row.edgePct == null || row.edgePct === '') return false;
-  const letter = letterFromPrintedEdge(row.edgePct);
+  if (!row) return false;
+  let letter;
+  if (blendGradeRow(row)) {
+    const ev = row.evRaw != null && row.evRaw !== '' ? row.evRaw : row.ev;
+    letter = letterFromEv(ev);
+  } else {
+    if (row.edgePct == null || row.edgePct === '') return false;
+    letter = letterFromPrintedEdge(row.edgePct);
+  }
   if (!letter) return false;
-  const conf = ratingToConfidence(letter);
+  const conf = confidenceForLetter(letter);
   if (row.rating === letter && row.grade === letter && row.qualityGrade === letter && Number(row.confidence) === conf) {
     return false;
   }
@@ -1648,6 +1675,12 @@ exports.handler = async (event) => {
 
   try {
     const params = event.queryStringParameters || {};
+    let body = {};
+    if (event && event.body) {
+      try { body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body; }
+      catch (_) { body = {}; }
+    }
+    const storedBoardOnly = body.storedBoardOnly === true || body.storedBoardOnly === 'true' || params.storedBoardOnly === 'true';
     let dateKey = params.date || null;
 
     if (!dateKey) {
@@ -1730,7 +1763,7 @@ exports.handler = async (event) => {
     let placeabilityDropped = 0;
     let droppedSteam = 0;
     try {
-      hrCheck = await runHardRockCheck(picksData);
+      hrCheck = await runHardRockCheck(picksData, { storedBoardOnly });
       const decisions = (hrCheck.pickResults || []).map(r => (r && r.decision) || { drop: false });
       const legDecisions = hrCheck.legDecisions || [];
       for (let i = 0; i < pickReports.length; i++) {

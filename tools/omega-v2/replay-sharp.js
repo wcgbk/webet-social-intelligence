@@ -29,6 +29,9 @@ const FLAG_KEYS = [
   'OMEGA_V2_NHL_GOALIE',
   // News log is not read on this path. Unset stays off so a replay does not fetch.
   'OMEGA_NEWS_SNAPSHOT',
+  // Default-on blend. A bare replay stays the pre-blend card. Set =on to replay it.
+  // Weight and trim env vars are not here: an unset value would become the string off.
+  'OMEGA_V2_BLEND_P',
 ];
 for (const key of FLAG_KEYS) {
   if (process.env[key] == null || String(process.env[key]).trim() === '') {
@@ -177,6 +180,13 @@ function buildDay(date, B, pollDoc) {
       ...(p.lineMovePinn ? { lineMovePinn: p.lineMovePinn } : {}),
       ...(p.staleSoft ? { staleSoft: true, softLagPp: p.softLagPp != null ? p.softLagPp : null } : {}),
       ...(p.pushQ ? { pushQ: p.pushQ } : {}),
+      ...(p.blendApplied ? {
+        pPinnacle: p.pPinnacle != null ? p.pPinnacle : null,
+        pModel: p.pModel != null ? p.pModel : null,
+        pBlend: p.pBlend != null ? p.pBlend : null,
+        blendW: p.blendW != null ? p.blendW : 0,
+        breakeven: p.breakeven != null ? p.breakeven : null,
+      } : {}),
     })),
     parlay: card.parlayLegs[0] ? {
       combinedOdds: card.parlayLegs[0].combinedOdds,

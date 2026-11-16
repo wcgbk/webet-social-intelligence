@@ -401,10 +401,11 @@ function qbFetch(url) {
   });
   assert.strictEqual(offReplaced.changed, true);
   assert.strictEqual(offReplaced.reason, 'v2-hard-news');
-  // Flag off does not force in-band first. Cap is off in ENV, so the
-  // -450 row wins the stored growth order while Delta is still in the pool.
+  // Missing-imports off does not force the old in-band fill. The favorite
+  // cap is off. Blend rank is price EV, so Delta (-110, p 0.54, about +3.1%)
+  // beats Echo (-450, p 0.84, about +2.7%). Growth order would have kept Echo.
   assert.deepStrictEqual(offReplaced.card.picks.map((pick) => pick.pick), [
-    'Alpha Side', 'Bravo Side', 'Echo Side',
+    'Alpha Side', 'Bravo Side', 'Delta Side',
   ]);
   same3(offReplaced.card);
   assert.deepStrictEqual(offCard, offBefore);

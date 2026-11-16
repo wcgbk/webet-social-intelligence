@@ -162,9 +162,11 @@ try {
   assert.strictEqual(fixed.stakeUsd, 38);
   assert.strictEqual(fixed.filler, true);
   assert.strictEqual(fixed.fillerReason, 'negative-ev');
-  assert.strictEqual(fixed.rating, inflated.letter.rating);
-  assert.strictEqual(fixed.grade, inflated.letter.grade);
-  assert.strictEqual(fixed.qualityGrade, inflated.letter.qualityGrade);
+  // Blend rewrites the letter from EV. A negative price is C, confidence 45.
+  assert.strictEqual(fixed.rating, 'c');
+  assert.strictEqual(fixed.grade, 'c');
+  assert.strictEqual(fixed.qualityGrade, 'c');
+  assert.strictEqual(fixed.confidence, 45);
   assert.strictEqual(fixed.edgePct, inflated.letter.edgePct);
   assert.strictEqual(fixed.winProbability, inflated.letter.winProbability);
   assert.strictEqual(fixed.odds, inflated.letter.odds);
@@ -189,11 +191,13 @@ try {
   const offCard = autoCorrectCard(JSON.parse(JSON.stringify(inflated.card)), { pregameAsOfMs: AS_OF });
   const offFixed = offCard.picks.find((p) => p.pick === 'Fill Side');
   const offKept = offCard.picks.find((p) => p.pick === 'Keep Side');
-  assert.strictEqual(offFixed.unitsNum, 0.75);
-  assert.strictEqual(offFixed.units, '0.75u');
-  assert.strictEqual(offFixed.stakeUsd, 113);
+  // Filler is off, so the row is not marked. The blend C stake is still 0.25u.
+  assert.strictEqual(offFixed.unitsNum, 0.25);
+  assert.strictEqual(offFixed.units, '0.25u');
+  assert.strictEqual(offFixed.stakeUsd, 38);
   assert.notStrictEqual(offFixed.filler, true);
-  assert.strictEqual(offFixed.rating, inflated.letter.rating);
+  assert.strictEqual(offFixed.rating, 'c');
+  assert.strictEqual(offFixed.confidence, 45);
   assert.strictEqual(offFixed.edgePct, inflated.letter.edgePct);
   assert.strictEqual(offFixed.odds, inflated.letter.odds);
   assert.strictEqual(offKept.unitsNum, inflated.posUnits);

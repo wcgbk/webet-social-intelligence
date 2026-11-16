@@ -5,7 +5,7 @@ const {
   forceTop3From, fillerEnabled,
 } = require('./constants');
 const { americanToDecimal, EDGE_B_UNIT_CAP } = require('../omega-vnext/odds_math');
-const { letterFromPrintedEdge } = require('./letter');
+const { letterFromPrintedEdge, letterFromEv } = require('./letter');
 
 function roundQuarter(n) {
   return Math.round((Number(n) + 1e-12) * 4) / 4;
@@ -83,7 +83,11 @@ function sizeStraight(candidate, opts) {
     return { ...candidate, units: 0, stakeUsd: 0, skipped: true, skipReason: 'kelly-round-zero' };
   }
   let units = sized.units;
-  if (force && letterFromPrintedEdge(candidate.edge) === 'b' && units > EDGE_B_UNIT_CAP) {
+  if (force && candidate && candidate.blendApplied) {
+    const letter = letterFromEv(candidate.ev);
+    if (letter === 'c') units = 0.25;
+    else if (letter === 'b' && units > EDGE_B_UNIT_CAP) units = EDGE_B_UNIT_CAP;
+  } else if (force && letterFromPrintedEdge(candidate.edge) === 'b' && units > EDGE_B_UNIT_CAP) {
     units = EDGE_B_UNIT_CAP;
   }
   return {
@@ -130,6 +134,7 @@ function trimBudget(rows, budget, opts) {
 /**
  * Quarter-Kelly on pBet. f <= 0 or a step under 0.25u prints 0.25u.
  * Cap is 2u, then 0.5u when the printed price edge is a B.
+ * A blend row uses the EV letter: C is exactly 0.25u, B stays at 0.5u.
  * The 3.5u straight budget trims by 0.25u and never goes under 0.25u.
  * When OMEGA_V2_FILLER is on, a negative price EV (pBet × decimal − 1)
  * is capped at exactly 0.25u and marked filler. The letter is not touched.
@@ -145,7 +150,11 @@ function sizeForcedStraights(selected) {
     const kelly = quarterKellyFromDecimal(p, decimal, PER_BET_CAP, { floorToQuarter: true });
     let units = kelly.units >= 0.25 ? kelly.units : 0.25;
     if (units > PER_BET_CAP) units = PER_BET_CAP;
-    if (letterFromPrintedEdge(row.edge) === 'b' && units > EDGE_B_UNIT_CAP) units = EDGE_B_UNIT_CAP;
+    if (row && row.blendApplied) {
+      const letter = letterFromEv(row.ev);
+      if (letter === 'c') units = 0.25;
+      else if (letter === 'b' && units > EDGE_B_UNIT_CAP) units = EDGE_B_UNIT_CAP;
+    } else if (letterFromPrintedEdge(row.edge) === 'b' && units > EDGE_B_UNIT_CAP) units = EDGE_B_UNIT_CAP;
     const priceEv = priceEvAtBet(row);
     const filler = markFiller && priceEv != null && priceEv < 0;
     if (filler) units = 0.25;

@@ -146,8 +146,10 @@ async function main() {
   assert.strictEqual(pick.coverProb, '55.0%');
   assert.strictEqual(pick.edgePct, '5.0%');
   assert.strictEqual(pick.ev, '10.0%');
-  assert.strictEqual(pick.rating, 'aplus');
-  assert.strictEqual(pick.grade, 'aplus');
+  // Blend is default on. EV is 10%, so the card letter is A. The edge ladder
+  // still calls this printed 5.0% edge A+ (asserted above).
+  assert.strictEqual(pick.rating, 'a');
+  assert.strictEqual(pick.grade, 'a');
   assert.strictEqual(pick.units, '2u');
   assert.strictEqual(pick.stakeUsd, 300);
   assert.strictEqual(pick.pCal, 0.60);
@@ -196,10 +198,11 @@ async function main() {
   assert.ok(kellyGrowth(far.pBet, far.decimal) > kellyGrowth(near.pBet, near.decimal));
   const filled = selectForcedTop3([in1, in2, far, near], PREGAME);
   assert.strictEqual(filled.length, 3);
-  const nearRow = filled.find((row) => row.pick === 'Near Fill');
-  assert.ok(nearRow && nearRow.favCapFill === true);
-  assert.ok(!filled.some((row) => row.pick === 'Far Fill'));
-  assert.ok(filled.filter((row) => row.pick !== 'Near Fill').every((row) => row.favCapFill !== true));
+  // Blend ranks the out-of-band fill by EV. Far Fill's EV is higher than Near Fill.
+  const farRow = filled.find((row) => row.pick === 'Far Fill');
+  assert.ok(farRow && farRow.favCapFill === true);
+  assert.ok(!filled.some((row) => row.pick === 'Near Fill'));
+  assert.ok(filled.filter((row) => row.pick !== 'Far Fill').every((row) => row.favCapFill !== true));
 
   const negNear = band('Neg Near', 7, -310, 0.72);
   const posFar = band('Pos Far', 8, -900, 0.93);

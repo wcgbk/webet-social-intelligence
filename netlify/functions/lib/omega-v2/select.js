@@ -5,7 +5,9 @@ const {
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
   marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
   evFirstEnabled, evFirstCappedEnabled, KELLY_FRACTION,
+  blendPEnabled, blendWeightFor, blendTrimEnabled,
 } = require('./constants');
+const { blendProb, modelProbForBlend } = require('./blend');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
 const { applyStatusVeto } = require('./status_veto');
@@ -222,11 +224,13 @@ function favoriteOutOfBand(row) {
  * market no-vig (or pCal, when that flag is off) minus the longshot
  * penalty. edge and ev are at pBet versus the DK/HR price. pModelCal
  * keeps the calibrated probability for audit. edgeNovig stays pCal - pMkt.
- * Rank is quarter-Kelly expected log growth at that pBet, not raw EV.
+ * Rank is quarter-Kelly expected log growth at that pBet, not raw EV,
+ * unless OMEGA_V2_BLEND_P is on. Then each band ranks by price EV.
  * Negative EV and the uncertainty floor do not remove the row.
  */
 function annotateCandidate(candidate, opts) {
   const force = forceTop3From(opts);
+  const origPMkt = candidate && candidate.calibration ? candidate.calibration.pMkt : null;
   const prep = applySharpPrep(candidate, opts);
   if (prep && prep.rejectReason) {
     return {
@@ -302,18 +306,42 @@ function annotateCandidate(candidate, opts) {
     rejectReason: straightReject,
   };
   if (!force) return finish(row);
-  const pBet = forcedBetProb(cal.pCal, pMkt, {
+  const env = opts && opts.env;
+  const probOpts = {
     ...(opts || {}),
     pMktPower: candidate.pMktPower != null ? candidate.pMktPower : (opts && opts.pMktPower),
-  });
+  };
+  let pBet;
+  let pPinnacle = null;
+  let pModelBlend = null;
+  let blendW = null;
+  let blendApplied = false;
+  if (blendPEnabled(env)) {
+    const power = Number(probOpts.pMktPower);
+    const usePower = powerDevigEnabled(env) && Number.isFinite(power) && power > 0 && power < 1;
+    const base = usePower ? power : (marketPEnabled(env) ? Number(pMkt) : Number(cal.pCal));
+    pPinnacle = Number.isFinite(base) ? base : null;
+    let pPin = base;
+    if (!usePower && blendTrimEnabled(env)) {
+      const penalty = smoothedNovigStats(pMkt).penalty;
+      if (Number.isFinite(penalty)) pPin -= penalty;
+    }
+    pPin = clampBetProb(pPin);
+    pModelBlend = modelProbForBlend(candidate, origPMkt);
+    blendW = pModelBlend == null ? 0 : blendWeightFor(candidate.sport, env);
+    pBet = pPin == null ? null : blendProb(pPin, pModelBlend, blendW);
+    blendApplied = true;
+  } else {
+    pBet = forcedBetProb(cal.pCal, pMkt, probOpts);
+  }
   let reason = straightReject;
   if (reason == null && pBet == null) reason = 'no-calibration';
   const priceEdge = pBet == null ? edge : pBet - implied;
   // Full-range pair check is above. This is the price edge, not edgeNovig.
   if (reason == null && pBet != null && (pBet - implied) > MAX_EDGE) reason = 'price-edge-over-10pp';
-  const priceEv = pBet == null ? ev : (pBet * (dec - 1) - (1 - pBet));
+  const priceEv = pBet == null ? ev : (pBet * dec - 1);
   const forcePlaceable = reason == null;
-  return finish({
+  const finished = finish({
     ...row,
     pBet,
     edge: priceEdge,
@@ -323,7 +351,17 @@ function annotateCandidate(candidate, opts) {
     qualified: forcePlaceable,
     parlayQualified: forcePlaceable,
     rejectReason: reason,
+    ...(blendApplied ? {
+      blendApplied: true,
+      pPinnacle,
+      pModelBlend,
+      pBlend: pBet,
+      blendW,
+      breakeven: implied,
+    } : {}),
   });
+  if (finished && finished.blendApplied && finished.pBet != null) finished.pBlend = finished.pBet;
+  return finished;
 }
 
 /** Price EV after the no-vig shrink. Callers that only stored `ev` keep that order. */
@@ -384,6 +422,27 @@ function compareForcedGrowth(a, b) {
     const bStale = b.staleSoft === true;
     if (aStale !== bStale) return aStale ? -1 : 1;
   }
+  return (finiteRank(b.edge) - finiteRank(a.edge))
+    || String(a.pick).localeCompare(String(b.pick));
+}
+
+/**
+ * Price EV desc (p * decimal - 1), then the stale-soft tie-break, then edge,
+ * then pick name. A stored row.ev is used only when the price EV is missing.
+ * A stored-fair fallback still sorts after every sharp-fair row.
+ * Used inside each band when OMEGA_V2_BLEND_P is on.
+ */
+function compareForcedEv(a, b) {
+  const aFall = storedFairFallback(a);
+  const bFall = storedFairFallback(b);
+  if (aFall !== bFall) return aFall ? 1 : -1;
+  const aEv = betPriceEv(a && a.pBet, a && a.decimal);
+  const bEv = betPriceEv(b && b.pBet, b && b.decimal);
+  const ev = finiteRank(bEv != null ? bEv : b.ev) - finiteRank(aEv != null ? aEv : a.ev);
+  if (ev) return ev;
+  const aStale = a.staleSoft === true;
+  const bStale = b.staleSoft === true;
+  if (aStale !== bStale) return aStale ? -1 : 1;
   return (finiteRank(b.edge) - finiteRank(a.edge))
     || String(a.pick).localeCompare(String(b.pick));
 }
@@ -559,8 +618,9 @@ function selectForcedTop3(annotated, opts) {
     if (cap && favoriteOutOfBand(c)) outBand.push(c);
     else inBand.push(c);
   }
-  inBand.sort(compareForcedGrowth);
-  if (cap) outBand.sort(compareFavFill);
+  const byEv = blendPEnabled(opts && opts.env);
+  inBand.sort(byEv ? compareForcedEv : compareForcedGrowth);
+  if (cap) outBand.sort(byEv ? compareForcedEv : compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
   const env = opts && opts.env;
@@ -594,8 +654,9 @@ function orderForcedPool(annotated, opts) {
     if (cap && favoriteOutOfBand(c)) outBand.push(c);
     else inBand.push(c);
   }
-  inBand.sort(compareForcedGrowth);
-  if (cap) outBand.sort(compareFavFill);
+  const byEv = blendPEnabled(opts && opts.env);
+  inBand.sort(byEv ? compareForcedEv : compareForcedGrowth);
+  if (cap) outBand.sort(byEv ? compareForcedEv : compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
   const env = opts && opts.env;

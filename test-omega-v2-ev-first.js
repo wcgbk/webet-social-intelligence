@@ -246,14 +246,15 @@ const fallOut = row({
 });
 assert.ok([inHigh, inMid, near, far, fallIn, fallOut].every((item) => !(item.ev > 0)));
 const dead = [fallOut, far, fallIn, inMid, near, inHigh];
-const deadExpect = ['In High', 'In Mid', 'Near Heavy', 'Far Heavy', 'Fall In', 'Fall Out'];
+// Blend ranks the out-of-band fill by price EV. Far Heavy is less negative than Near Heavy.
+const deadExpect = ['In High', 'In Mid', 'Far Heavy', 'Near Heavy', 'Fall In', 'Fall Out'];
 putFlag(true);
 assert.deepStrictEqual(names(orderForcedPool(dead, PREGAME)), deadExpect);
-assert.deepStrictEqual(names(selectForcedTop3(dead, PREGAME)), ['In High', 'In Mid', 'Near Heavy']);
+assert.deepStrictEqual(names(selectForcedTop3(dead, PREGAME)), ['In High', 'In Mid', 'Far Heavy']);
 assert.strictEqual(selectForcedTop3(dead, PREGAME)[2].favCapFill, true);
 putFlag(false);
 assert.deepStrictEqual(names(orderForcedPool(dead, PREGAME)), deadExpect);
-assert.deepStrictEqual(names(selectForcedTop3(dead, PREGAME)), ['In High', 'In Mid', 'Near Heavy']);
+assert.deepStrictEqual(names(selectForcedTop3(dead, PREGAME)), ['In High', 'In Mid', 'Far Heavy']);
 
 // Stored-fair +EV still waits for sharp +EV in both bands. A -EV sharp does not jump the +EV favorite.
 putFlag(true);

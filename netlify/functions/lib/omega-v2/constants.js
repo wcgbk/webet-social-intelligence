@@ -1,5 +1,7 @@
 'use strict';
 
+const { canonSport } = require('./blend');
+
 /** Live Omega card. OMEGA_PIPELINE_V2=0 (or opts.pipelineV2 false) falls back to v1. */
 const MODEL_VERSION = 'omega-v2-sharp-2026-11-01-dkhr';
 const UNIT_DOLLARS = 150;
@@ -565,6 +567,85 @@ function newsSnapshotEnabled(env) {
   return false;
 }
 
+/**
+ * Logit blend of the Pinnacle power no-vig and the calibrated model.
+ * Default on. OMEGA_V2_BLEND_P=off / 0 / false / no is the current card
+ * (=off rollback): same probability, same Kelly rank, same edge letter.
+ * Weights were fit offline by tools/omega-v2/fit-blend-weights.js on rows
+ * dated strictly before 2026-11-01. p_pin and the target are fairAt
+ * Pinnacle power no-vig (key_convert within 1.5) at 10:00 and at the close.
+ * p_model is the calibrated cover probability. Loss is soft log-loss of
+ * p_blend against that closing probability. Grid 0, 0.05, ..., 0.35.
+ * A tie within 1e-12 keeps the smaller w. n < 30 ships 0.
+ *   NFL   n=442  w=0    logloss 0.681842  brier 0.000246  (grid min)
+ *   NHL   n=305  w=0    logloss 0.667847  brier 0.000251  (grid min)
+ *   NCAAF n=1615 w=0    logloss 0.669028  brier 0.000208  (grid min)
+ *   MLB   n=590  w=0.05 logloss 0.677902  brier 0.0000689
+ *         w=0 logloss 0.677904. Delta 1.3e-6, above the 1e-12 tie.
+ *   NBA   n=0    w=0    no distinct model joined to a Pinnacle close
+ *   NCAAM n=0    w=0    no model
+ * Joined 2952. 1228 had no 10:00 Pinnacle pair. 449 had no Pinnacle close.
+ */
+const BLEND_W_CAP = 0.35;
+const BLEND_W = {
+  NFL: 0,
+  NHL: 0,
+  NCAAF: 0,
+  MLB: 0.05,
+  NBA: 0,
+  NCAAM: 0,
+};
+const BLEND_P_ENV = 'OMEGA_V2_BLEND_P';
+
+function blendPEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[BLEND_P_ENV];
+  if (raw == null) return true;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
+  return true;
+}
+
+/**
+ * Sport weight in [0, 0.35]. NCAAM is always 0. A finite
+ * OMEGA_V2_BLEND_W_<SPORT> overrides the fitted constant for every other sport.
+ */
+function blendWeightFor(sport, env) {
+  const name = canonSport(sport);
+  if (name === 'NCAAM') return 0;
+  const source = env == null ? process.env : env;
+  const raw = source[`OMEGA_V2_BLEND_W_${name}`];
+  if (raw != null && String(raw).trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return Math.min(BLEND_W_CAP, Math.max(0, n));
+  }
+  const fitted = Number(BLEND_W[name]);
+  if (!Number.isFinite(fitted)) return 0;
+  return Math.min(BLEND_W_CAP, Math.max(0, fitted));
+}
+
+/**
+ * Longshot trim inside the blend, subtracted from p_pin before the logit.
+ * Default on, so w = 0 matches the live trimmed Pinnacle probability.
+ * OMEGA_V2_BLEND_TRIM=off / 0 / false / no skips that haircut.
+ * This does not change OMEGA_V2_LONGSHOT_ADJ. Flag-off cards still use that.
+ * 2026-09-15..2026-11-14 replay, CLV first: trim on full-window CLV -0.246
+ * versus trim off -0.254 (n=147 and 146). Holdout CLV was +0.238 versus
+ * +0.249 (n=42). Holdout profit was $2017 versus $1861. The trim stays.
+ */
+const BLEND_TRIM_ENV = 'OMEGA_V2_BLEND_TRIM';
+const BLEND_APPLY_LONGSHOT_TRIM = true;
+
+function blendTrimEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[BLEND_TRIM_ENV];
+  if (raw == null || String(raw).trim() === '') return BLEND_APPLY_LONGSHOT_TRIM;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
+  return BLEND_APPLY_LONGSHOT_TRIM;
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -657,4 +738,12 @@ module.exports = {
   NEWS_SNAPSHOT_ENV,
   NEWS_SNAPSHOT_DEFAULT_ON,
   newsSnapshotEnabled,
+  BLEND_W_CAP,
+  BLEND_W,
+  BLEND_P_ENV,
+  blendPEnabled,
+  blendWeightFor,
+  BLEND_TRIM_ENV,
+  BLEND_APPLY_LONGSHOT_TRIM,
+  blendTrimEnabled,
 };

@@ -29,6 +29,9 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
   if (opts.storedOddsBySport) {
     return { bySport: opts.storedOddsBySport, fetchedAt: opts.storedFetchedAt || new Date().toISOString(), snapshotNote: 'stored-odds-master-1000' };
   }
+  if (opts.storedBoardOnly === true || opts.storedBoardOnly === 'true') {
+    return { bySport: {}, fetchedAt: null, snapshotNote: 'stored-board-only-missing', storedBoardOnly: true };
+  }
   const apiKey = process.env.ODDS_API_KEY;
   const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live' };
   if (!apiKey) {

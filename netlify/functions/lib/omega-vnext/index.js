@@ -227,6 +227,7 @@ async function generateOmegaVnext(opts = {}) {
   const dryRun = !!opts.dryRun;
   const shadow = !!opts.shadow;
   const skipNarrate = !!opts.skipNarrate;
+  const storedBoardOnly = opts.storedBoardOnly === true || opts.storedBoardOnly === 'true';
   const now = new Date();
   // Historical replay has no morning snap series. Do not retry live Odds into
   // the line-path store and do not hard-fail the eval day.
@@ -270,6 +271,7 @@ async function generateOmegaVnext(opts = {}) {
       historicalSnapshot: opts.historicalSnapshot,
       storedOddsBySport,
       storedFetchedAt: masterBoard ? (masterBoard.at1000 || masterBoard.at0300) : null,
+      storedBoardOnly,
     });
     console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
 

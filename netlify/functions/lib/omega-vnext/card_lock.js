@@ -346,13 +346,77 @@ function liveStoreDeps(dateISO, store) {
   return {
     readSnapshot: (key) => readStoreKey(store, key),
     writeSnapshot: (key, value) => writeStoreKey(store, key, value),
+    deleteSnapshot: (key) => deleteStoreKey(store, key),
     readCurrent: () => readStoreKey(store, `picks-${dateISO}`),
   };
+}
+
+async function deleteStoreKey(store, key) {
+  if (store && typeof store.delete === 'function') return store.delete(key);
+  const { deleteJson } = require('./store');
+  return deleteJson(key);
+}
+
+/** One live storePicks may pass while the 11:00 lock is on. The blob deletes itself. */
+const REGEN_ONCE_MS = 30 * 60 * 1000;
+
+function regenOnceKey(dateISO) {
+  return `omega-card-lock/regen-once-${dateISO}`;
+}
+
+function regenOnceValid(blob, nowMs) {
+  if (!blob || typeof blob !== 'object' || Array.isArray(blob)) return false;
+  if (blob.allow !== true) return false;
+  const reason = typeof blob.reason === 'string' ? blob.reason.trim() : '';
+  if (!reason) return false;
+  const exp = Date.parse(blob.expiresAt);
+  if (!Number.isFinite(exp) || !Number.isFinite(nowMs)) return false;
+  if (!(nowMs < exp)) return false;
+  if (exp - nowMs > REGEN_ONCE_MS) return false;
+  return true;
+}
+
+/**
+ * A valid regen-once blob lets this write through, then the blob is gone
+ * and the new card is the lock. Delete runs first. A failed delete does
+ * not bypass. A read that throws, or a blob that is not this shape, does
+ * not bypass. Callers whose readSnapshot ignores the key keep the old lock.
+ */
+async function consumeRegenOnce(dateISO, nextCard, options) {
+  const key = regenOnceKey(dateISO);
+  let blob = null;
+  try {
+    if (typeof options.readSnapshot === 'function') blob = await options.readSnapshot(key);
+    else blob = await readStoreKey(null, key);
+  } catch (_) {
+    return false;
+  }
+  if (!regenOnceValid(blob, toMillis(options.now))) return false;
+  if (typeof options.deleteSnapshot !== 'function') return false;
+  try {
+    await options.deleteSnapshot(key);
+  } catch (err) {
+    emit(options.log, `[card-lock] regen-once delete failed for ${dateISO}; write stays locked`);
+    return false;
+  }
+  if (usableCard(nextCard)) {
+    const taken = snapshotFromCard(nextCard);
+    taken.date = dateISO || taken.date;
+    try {
+      const write = options.writeSnapshot || ((storeKey, value) => writeStoreKey(null, storeKey, value));
+      await write(snapshotKey(dateISO), taken);
+      emit(options.log, `[card-lock] regen-once consumed for ${dateISO}; lock re-snapshotted (${taken.picks.length} picks)`);
+    } catch (err) {
+      emit(options.log, `[card-lock] regen-once resnapshot failed for ${dateISO}: ${err && err.message ? err.message : err}`);
+    }
+  }
+  return true;
 }
 
 async function guardCardWrite(dateISO, nextCard, deps) {
   const options = deps || {};
   if (skipGuard(dateISO, options)) return nextCard;
+  if (await consumeRegenOnce(dateISO, nextCard, options)) return nextCard;
   const log = options.log;
   const key = snapshotKey(dateISO);
 
@@ -459,6 +523,9 @@ module.exports = {
   lockTimeUtc,
   isCardLocked,
   snapshotKey,
+  regenOnceKey,
+  regenOnceValid,
+  REGEN_ONCE_MS,
   applyCardLock,
   snapshotFromCard,
   guardCardWrite,

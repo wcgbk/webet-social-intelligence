@@ -9,8 +9,8 @@ const { marketFamily, pastPregameCutoff, pregameClockMs, annotateCandidate } = r
 const { bannedPairReason, sizeParlay, quotedLeg, canonicalPlaceBook, PLACEABLE_BOOKS } = require('./parlay');
 const { dkHrLineAgrees } = require('./board');
 const { quarterKellyFromDecimal, priceEvAtBet } = require('./size');
-const { americanJuiceDelta, americanToDecimal, ratingToConfidence, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
-const { letterFromPrintedEdge } = require('./letter');
+const { americanJuiceDelta, americanToDecimal, EDGE_B_UNIT_CAP, isEdgeGradeB } = require('../omega-vnext/odds_math');
+const { letterFromPrintedEdge, letterFromEv, confidenceForLetter } = require('./letter');
 
 const STALE_CENTS = 15;
 
@@ -147,10 +147,18 @@ function ratingFor(edge) {
  * Missing edgePct leaves the stored letter alone. Returns true when a field changes.
  */
 function stampPrintedLetter(row, notes) {
-  if (!row || row.edgePct == null || row.edgePct === '') return false;
-  const letter = letterFromPrintedEdge(row.edgePct);
+  if (!row) return false;
+  const blend = row.blendApplied === true || (row.pBlend != null && row.pBlend !== '');
+  let letter;
+  if (blend) {
+    const ev = row.evRaw != null && row.evRaw !== '' ? row.evRaw : row.ev;
+    letter = letterFromEv(ev);
+  } else {
+    if (row.edgePct == null || row.edgePct === '') return false;
+    letter = letterFromPrintedEdge(row.edgePct);
+  }
   if (!letter) return false;
-  const conf = ratingToConfidence(letter);
+  const conf = confidenceForLetter(letter);
   if (row.rating === letter && row.grade === letter && row.qualityGrade === letter && Number(row.confidence) === conf) {
     return false;
   }
@@ -165,7 +173,8 @@ function stampPrintedLetter(row, notes) {
 
 function toPick(row) {
   const forced = !!row.forced;
-  const rating = ratingFor(forced ? row.edge : row.edgeNovig);
+  const blend = row.blendApplied === true;
+  const rating = blend ? (letterFromEv(row.ev) || 'c') : ratingFor(forced ? row.edge : row.edgeNovig);
   const coverP = forced && row.pBet != null ? row.pBet : row.calibration.pCal;
   const edgePct = forced
     ? (row.edge != null ? pct(row.edge) : null)
@@ -191,7 +200,7 @@ function toPick(row) {
     edgeNovig: row.edgeNovig != null ? row.edgeNovig : null,
     ev: pct(row.ev),
     evRaw: row.ev,
-    confidence: ratingToConfidence(rating),
+    confidence: confidenceForLetter(rating),
     coverProb: pct(coverP),
     winProbability: pct(coverP),
     pModel: row.calibration.pModel,
@@ -234,6 +243,14 @@ function toPick(row) {
     if (row.softLagPp != null) pick.softLagPp = row.softLagPp;
   }
   if (row.pushQ) pick.pushQ = row.pushQ;
+  if (blend) {
+    pick.blendApplied = true;
+    pick.pPinnacle = row.pPinnacle != null ? row.pPinnacle : null;
+    pick.pModel = row.pModelBlend != null ? row.pModelBlend : null;
+    pick.pBlend = row.pBlend != null ? row.pBlend : row.pBet;
+    pick.blendW = row.blendW != null ? row.blendW : 0;
+    pick.breakeven = row.breakeven != null ? row.breakeven : null;
+  }
   return pick;
 }
 
@@ -545,6 +562,17 @@ function autoCorrectCard(card, opts) {
     gradeMoved = false;
     for (const p of picks) {
       if (stampPrintedLetter(p, notes)) gradeMoved = true;
+      if ((p.blendApplied === true || p.pBlend != null)
+        && letterFromEv(p.evRaw != null && p.evRaw !== '' ? p.evRaw : p.ev) === 'c'
+        && unitsOf(p) > 0.25 + 1e-9) {
+        p.units = '0.25u';
+        if (Object.prototype.hasOwnProperty.call(p, 'unitsNum')) p.unitsNum = 0.25;
+        const cStake = Math.ceil(0.25 * UNIT_DOLLARS - 1e-9);
+        if (Object.prototype.hasOwnProperty.call(p, 'stakeUsd')) p.stakeUsd = cStake;
+        if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = cStake;
+        notes.push(`c-grade stake ${p.pick || p.side}`);
+        gradeMoved = true;
+      }
       if (!(isEdgeGradeB(p.rating) || isEdgeGradeB(p.grade) || isEdgeGradeB(p.qualityGrade))) continue;
       if (!(unitsOf(p) > EDGE_B_UNIT_CAP)) continue;
       p.units = '0.5u';

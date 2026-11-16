@@ -217,16 +217,18 @@ const ranked = selectForcedTop3([other, stale], baseOpts);
 assert.strictEqual(ranked[0].pick, stale.pick);
 
 const equalEv = [
-  { ...other, pick: 'Alpha', staleSoft: false, ev: -0.02, kellyGrowth: null, qualified: true, pBet: 0.4, decimal: americanToDecimal(-110) },
-  { ...other, pick: 'Bravo', matchup: 'C @ D', gameKey: 'c @ d', staleSoft: true, ev: -0.02, kellyGrowth: null, qualified: true, pBet: 0.4, decimal: americanToDecimal(-110) },
+  { ...other, pick: 'Side A', staleSoft: false, ev: -0.02, kellyGrowth: null, qualified: true, pBet: 0.4, decimal: americanToDecimal(-110) },
+  { ...other, pick: 'Side B', matchup: 'C @ D', gameKey: 'c @ d', staleSoft: true, ev: -0.02, kellyGrowth: null, qualified: true, pBet: 0.4, decimal: americanToDecimal(-110) },
 ];
 const negOrder = selectForcedTop3(equalEv, baseOpts);
-assert.strictEqual(negOrder[0].pick, 'Bravo');
+assert.strictEqual(negOrder[0].pick, 'Side B');
+// Same pBet, so the same price EV. The stored ev numbers are not the rank key.
+// The stale row wins the tie.
 const worse = selectForcedTop3([
   { ...equalEv[0], ev: -0.01, staleSoft: false },
   { ...equalEv[1], ev: -0.04 },
 ], baseOpts);
-assert.strictEqual(worse[0].pick, 'Alpha');
+assert.strictEqual(worse[0].pick, 'Side B');
 
 process.env.OMEGA_V2_LINE_MOVE = 'off';
 process.env.OMEGA_V2_MOVE_SHRINK = 'on';

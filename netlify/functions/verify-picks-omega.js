@@ -1250,6 +1250,9 @@ exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
 exports.straightRefillAllowed = straightRefillAllowed;
 exports.resolveLockedParlay = resolveLockedParlay;
+exports.applyV2VerifyRefill = function applyV2VerifyRefill(picksData, opts) {
+  return require('./lib/omega-vnext/rerank').applyV2VerifyRefill(picksData, opts);
+};
 exports.formatCombinedAmerican = formatCombinedAmerican;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
@@ -1296,6 +1299,20 @@ exports.handler = async (event) => {
     const picksData = result.data;
     const dateFormatted = dateKey;
     const lockedStraightPicks = (picksData.picks || []).map(p => p.pick).filter(Boolean);
+    const v2LockSnapshot = JSON.parse(JSON.stringify({
+      picks: picksData.picks,
+      parlayLegs: picksData.parlayLegs,
+      rankedPool: picksData.rankedPool,
+      v2RankedPool: picksData.v2RankedPool,
+      engine: picksData.engine,
+      selectionRule: picksData.selectionRule,
+      pipelineV2: picksData.pipelineV2,
+      model: picksData.model,
+      modelVersion: picksData.modelVersion,
+      qaHardFails: picksData.qaHardFails,
+      hardFails: picksData.hardFails,
+      summary: picksData.summary,
+    }));
 
     // ── Step 1: Math + Narrative checks ──
     let totalWarnings = 0, totalErrors = 0;
@@ -1492,6 +1509,17 @@ exports.handler = async (event) => {
       if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
         console.log(`[verify-final] Straight refill blocked — publishing ${picksData.picks.length} pick(s) from the locked card`);
       }
+      let skipLockedParlay = false;
+      if (removedSinceLock.length) {
+        const v2Verify = require('./lib/omega-vnext/rerank').applyV2VerifyRefill(picksData, {
+          snapshot: v2LockSnapshot,
+          pregameAsOfMs: Date.now(),
+        });
+        if (v2Verify && v2Verify.skipLockedParlay) {
+          skipLockedParlay = true;
+          console.log(`[verify-final] v2 ranked-pool refill ${v2Verify.changed ? 'applied' : 'kept the locked card'} (${v2Verify.reason || 'unchanged'})`);
+        }
+      }
 
       // Strip stale sharp-review annotations only.
       // Letters follow the printed edgePct. They are never rewritten from units.
@@ -1639,32 +1667,37 @@ Return ONLY valid JSON array:
       if (blockParlayRefill) {
         console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
       }
-      const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
+      if (skipLockedParlay) {
+        console.log(`[verify-final] v2 card skipped locked-parlay resize`);
+      }
+      const resolvedParlay = skipLockedParlay ? null : resolveLockedParlay(picksData.parlayLegs, {
         removedPicks,
         straightCard: picksData.picks,
         pool: blockParlayRefill ? [] : (picksData.parlayPool || []),
         forceTop3: picksData.selectionRule === 'force-top3',
         selectionRule: picksData.selectionRule,
       });
-      if (resolvedParlay.rebuilt) {
-        throw new Error('[verify] refused: parlay rebuild is not a verify action');
-      }
-      picksData.parlayLegs = resolvedParlay.parlayLegs;
-      if (resolvedParlay.action === 'preserved') {
-        const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
-        console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
-      } else if (resolvedParlay.action === 'refilled') {
-        delete picksData.parlayKilledReason;
-        finalFixCount++;
-        console.log(`[verify-final] Parlay refilled from the stored pool — legs: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
-      } else if (resolvedParlay.action === 'resized') {
-        finalFixCount++;
-        console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
-      } else if (resolvedParlay.action === 'cleared') {
-        console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
-      }
-      if (resolvedParlay.action === 'refilled' || resolvedParlay.action === 'resized' || resolvedParlay.action === 'cleared') {
-        enforceOmegaDailyUnitCap(picksData);
+      if (resolvedParlay) {
+        if (resolvedParlay.rebuilt) {
+          throw new Error('[verify] refused: parlay rebuild is not a verify action');
+        }
+        picksData.parlayLegs = resolvedParlay.parlayLegs;
+        if (resolvedParlay.action === 'preserved') {
+          const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
+          console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
+        } else if (resolvedParlay.action === 'refilled') {
+          delete picksData.parlayKilledReason;
+          finalFixCount++;
+          console.log(`[verify-final] Parlay refilled from the stored pool — legs: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
+        } else if (resolvedParlay.action === 'resized') {
+          finalFixCount++;
+          console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
+        } else if (resolvedParlay.action === 'cleared') {
+          console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
+        }
+        if (resolvedParlay.action === 'refilled' || resolvedParlay.action === 'resized' || resolvedParlay.action === 'cleared') {
+          enforceOmegaDailyUnitCap(picksData);
+        }
       }
 
       // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──

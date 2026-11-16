@@ -120,6 +120,14 @@ function verdictOf(data, lines) {
   return !straightFail && !parlayFail ? 'PASS' : 'FAIL';
 }
 
+/** v2 cards rebuild with the same-3 builder when the import flag is on. */
+function parlayForCard(card, picks, opts) {
+  const { missingImportsC } = require('./missing_import_flag');
+  const { isV2Card, parlayLegsForCard } = require('./rerank');
+  if (isV2Card(card) && missingImportsC()) return parlayLegsForCard(card, picks, opts);
+  return parlayFromStraights(picks, opts);
+}
+
 /**
  * Rough draft of the top 3 plus the parlay, then the Hard Rock check at the
  * displayed best US price. Straights are flagged only. A failed parlay is
@@ -132,7 +140,7 @@ function draftAndCheckHardRock(card, opts = {}) {
   if (sort.changed && Array.isArray(sort.picks) && sort.picks.length) {
     data.picks = sort.picks;
     data.bugLog = (data.bugLog || []).concat(sort.entry ? [sort.entry] : []);
-    data.parlayLegs = parlayFromStraights(data.picks, { pool: poolFrom(data) });
+    data.parlayLegs = parlayForCard(data, data.picks, { pool: poolFrom(data) });
   }
   const sportGames = (opts && opts.sportGames) || {};
   let reviewed = (opts && opts.reviewed && opts.reviewed.lines)
@@ -143,7 +151,7 @@ function draftAndCheckHardRock(card, opts = {}) {
     && byKind(reviewed.lines, 'parlay').some((row) => !row.placeable);
   let repriced = false;
   if (parlayFail) {
-    const remedy = parlayFromStraights(data.picks, { pool: poolFrom(data) });
+    const remedy = parlayForCard(data, data.picks, { pool: poolFrom(data) });
     const next = remedy && remedy[0];
     if (ticketPositive(next) && legsPlaceable(next, data)) {
       data.parlayLegs = remedy.map((row) => {

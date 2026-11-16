@@ -8,6 +8,8 @@
  * refill exists. OMEGA_V2_NEWS_RERANK=off returns the 10:00 card.
  */
 
+process.env.OMEGA_FIX_MISSING_IMPORTS_C = 'off';
+
 const assert = require('assert');
 const {
   annotateCandidate, orderForcedPool, gameKey,

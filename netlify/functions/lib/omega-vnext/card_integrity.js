@@ -36,6 +36,20 @@ function legRows(card) {
   return out;
 }
 
+function postponedFail(fail) {
+  if (!fail || typeof fail !== 'object') return false;
+  const code = String(fail.code || fail.status || '').toLowerCase();
+  if (code === 'postponed' || code === 'canceled' || code === 'cancelled') return true;
+  return /postpon|cancel/i.test(String(fail.reason || ''));
+}
+
+function v2HardFailRefill(card) {
+  const { missingImportsC } = require('./missing_import_flag');
+  if (!missingImportsC()) return false;
+  const { isV2Card } = require('./rerank');
+  return isV2Card(card);
+}
+
 function enforceHardFailGate(card) {
   const fails = hardFailRows(card);
   const report = { droppedStraights: [], droppedLegs: [], refilled: [], parlayRebuilt: false };
@@ -50,7 +64,23 @@ function enforceHardFailGate(card) {
   const blocked = blockedRowsFor(card);
   const reserve = (card.reserve || []).filter((r) => !sideBlocked(r, blocked));
   const pool = picks.concat(reserve).concat(legRows(card).filter((l) => !sideBlocked(l, blocked)));
-  const finished = finishShortCard({ picks, reserve, blocked, parlayPool: pool });
+  const dropIndexes = new Set();
+  if (v2HardFailRefill(card)) {
+    (card.picks || []).forEach((pick, i) => {
+      if (sideBlocked(pick, fails)) dropIndexes.add(i);
+    });
+  }
+  const postponed = dropIndexes.size > 0 && [...dropIndexes].every((i) => (
+    fails.some((fail) => sideBlocked(card.picks[i], [fail]) && postponedFail(fail))
+  ));
+  const finished = finishShortCard({
+    picks,
+    reserve,
+    blocked,
+    parlayPool: pool,
+    ...(dropIndexes.size ? { card, dropIndexes, postponed } : {}),
+  });
+  if (finished.keptOriginal) return { card, changed: false, report };
   card.picks = finished.picks;
   card.parlayLegs = finished.parlayLegs;
   card.reserve = finished.reserve;

@@ -47,7 +47,8 @@ const { GATES } = require('./config');
 const { CONTEXT_INPUTS } = require('./timeline');
 const { defaultOnFlag } = require('../default_on_flag');
 const { summaryFrom } = require('./assemble');
-const { gameKey, orderForcedPool } = require('../omega-v2/select');
+const { gameKey, orderForcedPool, favoriteOutOfBand } = require('../omega-v2/select');
+const { missingImportsC } = require('./missing_import_flag');
 const { sizeForcedStraights } = require('../omega-v2/size');
 const { buildForcedParlay } = require('../omega-v2/parlay');
 const { toPick, toParlay } = require('../omega-v2/guards');
@@ -391,6 +392,325 @@ function refreshStakeSummary(card) {
   card.totalUnits = +(straightU + parlayU).toFixed(2);
 }
 
+function rowOutOfBand(row) {
+  if (row && row.inBand === false) return true;
+  if (row && row.inBand === true) return false;
+  return favoriteOutOfBand(row);
+}
+
+/** Stored forced order, then in-band rows ahead of out-of-band when asked. */
+function orderRefillPool(pool, opts) {
+  const ordered = orderForcedPool(pool || [], {
+    pregameAsOfMs: opts && opts.pregameAsOfMs,
+    env: opts && opts.env,
+  });
+  if (!opts || opts.inBandFirst !== true) return ordered;
+  const inBand = [];
+  const outBand = [];
+  for (const row of ordered) {
+    if (rowOutOfBand(row)) outBand.push(row);
+    else inBand.push(row);
+  }
+  return inBand.concat(outBand);
+}
+
+function actionIsPostponed(action) {
+  if (!action) return false;
+  const code = String(action.code || action.status || '').toLowerCase();
+  if (code === 'postponed' || code === 'canceled' || code === 'cancelled') return true;
+  return /postpon|cancel/i.test(String(action.reason || ''));
+}
+
+function newsMatchesPick(action, pick) {
+  if (!action || !pick) return false;
+  const name = action.pick || action.side;
+  const matchup = action.matchup;
+  if (name && !namesMatch(name, pick.pick || pick.side)) return false;
+  if (matchup && !namesMatch(matchup, pick.matchup)) return false;
+  if (!name && !matchup) return false;
+  return true;
+}
+
+/** Every dropped index is a postponed or cancelled game, not a reprice. */
+function dropsArePostponed(card, news, dropIndexes) {
+  const picks = (card && card.picks) || [];
+  const fails = [].concat((card && card.qaHardFails) || [], (card && card.hardFails) || []);
+  for (const i of dropIndexes) {
+    const pick = picks[i];
+    if (!pick) return false;
+    const fromNews = ((news && news.actions) || []).some((action) => (
+      action && action.action === 'drop' && actionIsPostponed(action) && newsMatchesPick(action, pick)
+    ));
+    const fromQa = fails.some((fail) => qaMatchesPick(pick, fail) && actionIsPostponed(fail));
+    if (!fromNews && !fromQa) return false;
+  }
+  return dropIndexes.size > 0;
+}
+
+function stampRefillCard(original, nextPicks, parlayLegs, meta) {
+  const next = JSON.parse(JSON.stringify(original));
+  next.picks = nextPicks;
+  next.parlayLegs = parlayLegs;
+  next.parlaySource = 'top3-straights';
+  next.v2Refill = meta;
+  refreshStakeSummary(next);
+  return next;
+}
+
+function publishShortV2(original, drops) {
+  const nextPicks = [];
+  const sources = [];
+  const removed = [];
+  for (let i = 0; i < original.picks.length; i += 1) {
+    if (drops.has(i)) {
+      removed.push(original.picks[i].pick || original.picks[i].side || `leg ${i}`);
+      continue;
+    }
+    const kept = JSON.parse(JSON.stringify(original.picks[i]));
+    nextPicks.push(kept);
+    sources.push(publishedPickToLeg(kept));
+  }
+  console.warn(`[omega-v2] v2 refill published ${nextPicks.length} straights: postponed/cancelled and ranked pool empty (${removed.join(', ')})`);
+  let parlayLegs = [];
+  if (sources.length >= 2) {
+    try {
+      const ticket = buildForcedParlay(sources);
+      if (ticket && ticket.publish && (ticket.legs || []).length === sources.length) {
+        parlayLegs = toParlay(ticket, sources.length);
+      }
+    } catch (e) {
+      console.warn(`[omega-v2] v2 short parlay failed (${e && e.message ? e.message : 'error'})`);
+      parlayLegs = [];
+    }
+  }
+  const next = stampRefillCard(original, nextPicks, parlayLegs, {
+    type: 'short',
+    removed,
+    reason: 'postponed-empty-pool',
+  });
+  return {
+    changed: true,
+    card: next,
+    reason: 'v2-short',
+    refilled: [],
+    short: true,
+    keptOriginal: false,
+  };
+}
+
+/**
+ * Replace dropped v2 straights from the stored ranked pool.
+ * In-band rows go first when opts.inBandFirst is set. Started games are
+ * already out of orderForcedPool. Same game and blocked games are skipped.
+ * No eligible row keeps the original card. allowShort publishes fewer than
+ * 3 only when the pool itself is missing.
+ */
+function refillV2Dropped(original, opts = {}) {
+  const drops = opts.dropIndexes instanceof Set ? opts.dropIndexes : new Set(opts.dropIndexes || []);
+  if (!original || !Array.isArray(original.picks) || !drops.size) {
+    return {
+      changed: false, card: original, reason: 'unchanged', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  const pool = storedRankedPool(original, opts.pool);
+  if (!pool) {
+    if (opts.allowShort) return publishShortV2(original, drops);
+    console.warn('[omega-v2] v2 refill kept card: no stored ranked pool');
+    return {
+      changed: false, card: original, reason: 'no-v2-pool', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  const blocked = new Set();
+  const used = new Set();
+  for (let i = 0; i < original.picks.length; i += 1) {
+    const g = gameOf(original.picks[i]);
+    if (!g) continue;
+    if (drops.has(i)) blocked.add(g);
+    else used.add(g);
+  }
+  let ordered;
+  try {
+    ordered = orderRefillPool(pool, opts);
+  } catch (e) {
+    console.warn(`[omega-v2] v2 refill kept card: pool order failed (${e && e.message ? e.message : 'error'})`);
+    return {
+      changed: false, card: original, reason: 'no-v2-pool', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  let cursor = 0;
+  const takeNext = () => {
+    while (cursor < ordered.length) {
+      const row = ordered[cursor];
+      cursor += 1;
+      const g = gameOf(row);
+      if (!g || blocked.has(g) || used.has(g)) continue;
+      const built = materializeReplacement(row);
+      if (!built) continue;
+      used.add(g);
+      return built;
+    }
+    return null;
+  };
+  const nextPicks = [];
+  const sources = [];
+  const refilled = [];
+  for (let i = 0; i < original.picks.length; i += 1) {
+    if (!drops.has(i)) {
+      const kept = JSON.parse(JSON.stringify(original.picks[i]));
+      nextPicks.push(kept);
+      sources.push(publishedPickToLeg(kept));
+      continue;
+    }
+    const built = takeNext();
+    if (!built) {
+      console.warn('[omega-v2] v2 refill kept card: ranked pool could not refill');
+      return {
+        changed: false, card: original, reason: 'pool-short', refilled: [], short: false, keptOriginal: true,
+      };
+    }
+    nextPicks.push(built.pick);
+    sources.push(built.leg);
+    refilled.push(built.pick.pick || built.pick.side);
+  }
+  let ticket;
+  try {
+    ticket = buildForcedParlay(sources);
+  } catch (e) {
+    console.warn(`[omega-v2] v2 refill kept card: parlay builder failed (${e && e.message ? e.message : 'error'})`);
+    return {
+      changed: false, card: original, reason: 'parlay-rebuild-failed', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  if (!ticket || !ticket.publish || (ticket.legs || []).length !== nextPicks.length) {
+    console.warn('[omega-v2] v2 refill kept card: v2 parlay did not publish the same straights');
+    return {
+      changed: false, card: original, reason: 'parlay-rebuild-failed', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  let parlayLegs;
+  try {
+    parlayLegs = toParlay(ticket, sources.length);
+  } catch (e) {
+    console.warn(`[omega-v2] v2 refill kept card: parlay format failed (${e && e.message ? e.message : 'error'})`);
+    return {
+      changed: false, card: original, reason: 'parlay-rebuild-failed', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  if (!parlayLegs.length || (parlayLegs[0].legs || []).length !== nextPicks.length) {
+    console.warn('[omega-v2] v2 refill kept card: parlay leg count drifted');
+    return {
+      changed: false, card: original, reason: 'parlay-rebuild-failed', refilled: [], short: false, keptOriginal: true,
+    };
+  }
+  const next = stampRefillCard(original, nextPicks, parlayLegs, {
+    type: 'refill',
+    refilled,
+    reason: 'ranked-pool',
+  });
+  return {
+    changed: true,
+    card: next,
+    reason: 'v2-refill',
+    refilled,
+    short: false,
+    keptOriginal: false,
+  };
+}
+
+/**
+ * v2 cards use the same-3 builder. Every other card still uses
+ * parlayFromStraights, which throws while the flag is off.
+ */
+function parlayLegsForCard(card, picks, opts) {
+  if (isV2Card(card) && missingImportsC()) {
+    const legs = (picks || []).map((pick) => publishedPickToLeg(pick));
+    try {
+      const ticket = buildForcedParlay(legs);
+      if (!ticket || !ticket.publish || (ticket.legs || []).length !== legs.length) {
+        console.warn('[omega-v2] v2 parlay kept: same-3 builder did not publish');
+        return Array.isArray(card && card.parlayLegs) ? card.parlayLegs : [];
+      }
+      const built = toParlay(ticket, legs.length);
+      if (!built.length || (built[0].legs || []).length !== legs.length) {
+        console.warn('[omega-v2] v2 parlay kept: same-3 leg count drifted');
+        return Array.isArray(card && card.parlayLegs) ? card.parlayLegs : [];
+      }
+      return built;
+    } catch (e) {
+      console.warn(`[omega-v2] v2 parlay kept: same-3 builder failed (${e && e.message ? e.message : 'error'})`);
+      return Array.isArray(card && card.parlayLegs) ? card.parlayLegs : [];
+    }
+  }
+  return parlayFromStraights(picks, opts);
+}
+
+/**
+ * 10:45 kill on a v2 card. Refill from the locked snapshot's ranked pool
+ * and skip the locked-parlay resize. A miss restores that snapshot.
+ */
+function applyV2VerifyRefill(picksData, opts = {}) {
+  if (!missingImportsC() || !isV2Card(picksData)) {
+    return { handled: false, restored: false, changed: false, skipLockedParlay: false };
+  }
+  const snapshot = opts.snapshot;
+  if (!snapshot || !Array.isArray(snapshot.picks)) {
+    return { handled: false, restored: false, changed: false, skipLockedParlay: false };
+  }
+  const current = Array.isArray(picksData.picks) ? picksData.picks : [];
+  const dropIndexes = new Set();
+  snapshot.picks.forEach((pick, i) => {
+    const still = current.some((row) => (
+      namesMatch(row && (row.pick || row.side), pick && (pick.pick || pick.side))
+      && (!pick.matchup || !(row && row.matchup) || namesMatch(row.matchup, pick.matchup))
+    ));
+    if (!still) dropIndexes.add(i);
+  });
+  if (!dropIndexes.size) {
+    return { handled: true, restored: false, changed: false, skipLockedParlay: false, reason: 'unchanged' };
+  }
+  const source = {
+    ...snapshot,
+    rankedPool: snapshot.rankedPool || picksData.rankedPool,
+    engine: snapshot.engine || picksData.engine,
+    selectionRule: snapshot.selectionRule || picksData.selectionRule,
+  };
+  const postponed = opts.postponed === true || dropsArePostponed(source, opts.news, dropIndexes);
+  const pool = storedRankedPool(source, opts.pool);
+  const filled = refillV2Dropped(source, {
+    dropIndexes,
+    pool: opts.pool,
+    env: opts.env,
+    pregameAsOfMs: opts.pregameAsOfMs != null ? opts.pregameAsOfMs : Date.now(),
+    allowShort: postponed && !pool,
+    inBandFirst: true,
+  });
+  if (!filled.changed) {
+    picksData.picks = JSON.parse(JSON.stringify(snapshot.picks));
+    picksData.parlayLegs = JSON.parse(JSON.stringify(snapshot.parlayLegs || []));
+    console.warn(`[omega-v2] verify kept locked v2 card: ${filled.reason}`);
+    return {
+      handled: true,
+      restored: true,
+      changed: false,
+      skipLockedParlay: true,
+      reason: filled.reason,
+    };
+  }
+  picksData.picks = filled.card.picks;
+  picksData.parlayLegs = filled.card.parlayLegs;
+  picksData.parlaySource = 'top3-straights';
+  picksData.v2Refill = filled.card.v2Refill;
+  return {
+    handled: true,
+    restored: false,
+    changed: true,
+    skipLockedParlay: true,
+    reason: filled.reason,
+    refilled: filled.refilled,
+    short: filled.short === true,
+  };
+}
+
 /**
  * v2 card: hard news only. Surviving straights keep price, units, and grade.
  * The open slot is the next row in v2 order on a game that is still on.
@@ -430,109 +750,45 @@ async function rerankV2Card(original, opts, now) {
     };
   }
   const pool = storedRankedPool(original, opts.pool);
-  if (!pool) {
-    console.warn('[omega-v2] news rerank kept 10:00 card: no stored ranked pool');
-    return keepOriginal(original, 'no-v2-pool', { dropped: drops.size });
+  const flagOn = missingImportsC();
+  const postponed = dropsArePostponed(original, news, drops);
+  const filled = refillV2Dropped(original, {
+    dropIndexes: drops,
+    pool: opts.pool,
+    env: opts.env,
+    pregameAsOfMs: now.getTime(),
+    allowShort: flagOn && postponed && !pool,
+    inBandFirst: flagOn,
+  });
+  if (!filled.changed) {
+    return keepOriginal(original, filled.reason, { dropped: drops.size });
   }
-  const blocked = new Set();
-  const used = new Set();
-  for (let i = 0; i < original.picks.length; i += 1) {
-    const g = gameOf(original.picks[i]);
-    if (!g) continue;
-    if (drops.has(i)) blocked.add(g);
-    else used.add(g);
-  }
-  let ordered;
-  try {
-    ordered = orderForcedPool(pool, { pregameAsOfMs: now.getTime(), env: opts.env });
-  } catch (e) {
-    console.warn(`[omega-v2] news rerank kept 10:00 card: pool order failed (${e && e.message ? e.message : 'error'})`);
-    return keepOriginal(original, 'no-v2-pool', { dropped: drops.size });
-  }
-  let cursor = 0;
-  const takeNext = () => {
-    while (cursor < ordered.length) {
-      const row = ordered[cursor];
-      cursor += 1;
-      const g = gameOf(row);
-      if (!g || blocked.has(g) || used.has(g)) continue;
-      const built = materializeReplacement(row);
-      if (!built) continue;
-      used.add(g);
-      return built;
-    }
-    return null;
-  };
-  const nextPicks = [];
-  const parlaySources = [];
-  const refilled = [];
-  for (let i = 0; i < original.picks.length; i += 1) {
-    if (!drops.has(i)) {
-      const kept = JSON.parse(JSON.stringify(original.picks[i]));
-      nextPicks.push(kept);
-      parlaySources.push(publishedPickToLeg(kept));
-      continue;
-    }
-    const built = takeNext();
-    if (!built) {
-      console.warn('[omega-v2] news rerank kept 10:00 card: ranked pool could not refill');
-      return keepOriginal(original, 'pool-short', { dropped: drops.size });
-    }
-    nextPicks.push(built.pick);
-    parlaySources.push(built.leg);
-    refilled.push(built.pick.pick || built.pick.side);
-  }
-  let ticket;
-  try {
-    ticket = buildForcedParlay(parlaySources);
-  } catch (e) {
-    console.warn(`[omega-v2] news rerank kept 10:00 card: parlay builder failed (${e && e.message ? e.message : 'error'})`);
-    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
-  }
-  if (!ticket || !ticket.publish || (ticket.legs || []).length !== nextPicks.length) {
-    console.warn('[omega-v2] news rerank kept 10:00 card: v2 parlay did not publish the same straights');
-    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
-  }
-  let parlayLegs;
-  try {
-    parlayLegs = toParlay(ticket, parlaySources.length);
-  } catch (e) {
-    console.warn(`[omega-v2] news rerank kept 10:00 card: parlay format failed (${e && e.message ? e.message : 'error'})`);
-    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
-  }
-  if (!parlayLegs.length || (parlayLegs[0].legs || []).length !== nextPicks.length) {
-    console.warn('[omega-v2] news rerank kept 10:00 card: parlay leg count drifted');
-    return keepOriginal(original, 'parlay-rebuild-failed', { dropped: drops.size });
-  }
-  const next = JSON.parse(JSON.stringify(original));
-  next.picks = nextPicks;
-  next.parlayLegs = parlayLegs;
-  next.parlaySource = 'top3-straights';
+  const next = filled.card;
+  const short = filled.short === true;
   next.selection = next.selection && typeof next.selection === 'object' ? next.selection : {};
   next.selection.window = '10:00-10:15';
   next.selection.rerankWindow = '10:15-10:30';
   next.selection.rerankedAt = now.toISOString();
-  next.selection.rerankReason = 'v2-hard-news';
+  next.selection.rerankReason = short ? 'v2-short' : 'v2-hard-news';
   next.selection.rankedBy = 'v2-growth';
   next.selection.onePerGame = true;
   next.selection.oddsApi = false;
   next.selection.v2NewsRerank = true;
   next.newsRerank = {
-    type: 'v2-hard-news',
+    type: short ? 'v2-short' : 'v2-hard-news',
     dropped: drops.size,
-    refilled,
+    refilled: filled.refilled,
     oddsApi: false,
   };
-  refreshStakeSummary(next);
   return {
     card: next,
     changed: true,
     lastKnownGood: false,
-    reason: 'v2-hard-news',
+    reason: short ? 'v2-short' : 'v2-hard-news',
     oddsApi: false,
     dropped: drops.size,
-    picks: nextPicks.length,
-    parlayLegs: (parlayLegs[0].legs || []).length,
+    picks: next.picks.length,
+    parlayLegs: next.parlayLegs.length ? (next.parlayLegs[0].legs || []).length : 0,
   };
 }
 
@@ -662,7 +918,7 @@ async function rerankCard(opts = {}) {
     if (prev && prev.coreReasoning) built.coreReasoning = prev.coreReasoning;
     return built;
   });
-  let parlayLegs = parlayFromStraights(nextPicks, { pool });
+  let parlayLegs = parlayLegsForCard(original, nextPicks, { pool });
   working.picks = nextPicks;
   working.parlayLegs = parlayLegs;
   const topped = topUpFromReserve(working, news, pool);
@@ -765,4 +1021,9 @@ module.exports = {
   newsFailed,
   isV2Card,
   newsRerankEnabled,
+  hardDropIndexes,
+  refillV2Dropped,
+  parlayLegsForCard,
+  applyV2VerifyRefill,
+  dropsArePostponed,
 };

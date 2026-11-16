@@ -497,7 +497,55 @@ function reserveLeft(reserve, picks, blocked) {
  * blocked sides removed, then apply the daily unit cap. Placeability
  * rounds run only when `decide` or `checkPlaceability` is set.
  */
+function v2FinishRequested(card) {
+  const { missingImportsC } = require('./missing_import_flag');
+  if (!missingImportsC()) return false;
+  const { isV2Card } = require('./rerank');
+  return isV2Card(card);
+}
+
+function finishV2FromPool(opts) {
+  const { refillV2Dropped } = require('./rerank');
+  const card = opts.card;
+  const drops = opts.dropIndexes instanceof Set
+    ? opts.dropIndexes
+    : new Set(Array.isArray(opts.dropIndexes) ? opts.dropIndexes : []);
+  const ranked = card && Array.isArray(card.rankedPool) ? card.rankedPool : null;
+  const filled = refillV2Dropped(card, {
+    dropIndexes: drops,
+    env: opts.env,
+    pregameAsOfMs: opts.pregameAsOfMs != null ? opts.pregameAsOfMs : Date.now(),
+    allowShort: opts.postponed === true && !(ranked && ranked.length),
+    inBandFirst: true,
+  });
+  if (!filled.changed) {
+    return {
+      picks: card.picks,
+      parlayLegs: card.parlayLegs,
+      added: [],
+      exhausted: false,
+      reserve: opts.reserve || [],
+      topUps: [],
+      rebuilt: false,
+      keptOriginal: true,
+    };
+  }
+  const added = (filled.refilled || []).map((name) => ({ pick: name, side: name }));
+  return {
+    picks: filled.card.picks,
+    parlayLegs: filled.card.parlayLegs,
+    added,
+    exhausted: filled.card.picks.length < (Number(opts.target) || MAX_STRAIGHTS),
+    reserve: [],
+    topUps: [],
+    rebuilt: true,
+    keptOriginal: false,
+    short: filled.short === true,
+  };
+}
+
 function finishShortCard(opts = {}) {
+  if (opts && opts.card && v2FinishRequested(opts.card)) return finishV2FromPool(opts);
   const target = Number.isFinite(Number(opts.target)) ? Number(opts.target) : MAX_STRAIGHTS;
   const checking = typeof opts.decide === 'function' || opts.checkPlaceability === true;
   const up = checking

@@ -593,6 +593,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (rankedPool.status !== 0) throw new Error('ranked pool gate failed');
+
+  const v2Refill = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-v2-refill.js')],
+    { stdio: 'inherit' }
+  );
+  if (v2Refill.status !== 0) throw new Error('v2 refill gate failed');
 }
 
 function pickSlim(card) {

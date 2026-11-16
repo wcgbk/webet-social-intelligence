@@ -533,6 +533,110 @@ function wrapped(events, timestamp) {
   assert.strictEqual(tracked, '2026-11-15');
   assert.ok(!JSON.stringify(JSON.parse(ran.body)).includes('test-key'));
 
+  const mirrorOpts = {
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    now: new Date('2026-11-16T08:00:00Z'),
+    blobs: memBlobs({}),
+    slateEvents: [],
+    card: { picks: [] },
+    candidates: { candidates: [] },
+    readBoard: async () => null,
+    skipGrade: true,
+    fetch: async () => { throw new Error('mirror test must not fetch'); },
+  };
+  const steps = [];
+  let mirrorStarted = false;
+  const mirrored = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: '{}',
+  }, {
+    ...mirrorOpts,
+    invokeTrack: async (date) => {
+      steps.push({ step: 'track', date });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      steps.push({ step: 'track-done', mirrorStarted });
+      return { ok: true, status: 200 };
+    },
+    mirrorTodayCard: async (date, opts) => {
+      mirrorStarted = true;
+      steps.push({
+        step: 'mirror',
+        date,
+        hasFetch: typeof opts.fetch === 'function',
+        hasBlobs: !!opts.blobs,
+        hasEnv: !!(opts.env && opts.env.PICKS_SECRET_KEY),
+      });
+      return { ok: true, counts: { card_picks: 2 } };
+    },
+  });
+  const mirroredBody = JSON.parse(mirrored.body);
+  assert.strictEqual(mirrored.statusCode, 200);
+  assert.strictEqual(mirroredBody.ok, true);
+  assert.strictEqual(mirroredBody.date, '2026-11-15');
+  assert.deepStrictEqual(steps.map((row) => row.step), ['track', 'track-done', 'mirror']);
+  assert.strictEqual(steps[0].date, '2026-11-15');
+  assert.strictEqual(steps[1].mirrorStarted, false);
+  assert.strictEqual(steps[2].date, '2026-11-15');
+  assert.strictEqual(steps[2].hasFetch, true);
+  assert.strictEqual(steps[2].hasBlobs, true);
+  assert.strictEqual(steps[2].hasEnv, true);
+  assert.strictEqual(mirroredBody.mirror.ok, true);
+  assert.strictEqual(mirroredBody.mirror.counts.card_picks, 2);
+
+  const blew = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15' }),
+  }, {
+    ...mirrorOpts,
+    invokeTrack: async () => ({ ok: true, status: 200 }),
+    mirrorTodayCard: async () => { throw new Error('mirror exploded'); },
+  });
+  const blewBody = JSON.parse(blew.body);
+  assert.strictEqual(blew.statusCode, 200);
+  assert.strictEqual(blewBody.ok, true);
+  assert.strictEqual(blewBody.mirror.ok, false);
+  assert.match(blewBody.mirror.error, /mirror exploded/);
+
+  const dryCalls = [];
+  const dry = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15' }),
+  }, {
+    ...mirrorOpts,
+    dryRun: true,
+    invokeTrack: async () => { dryCalls.push('track'); return { ok: true, status: 200 }; },
+    mirrorTodayCard: async () => { dryCalls.push('mirror'); return { ok: true }; },
+  });
+  const dryBody = JSON.parse(dry.body);
+  assert.strictEqual(dry.statusCode, 200);
+  assert.deepStrictEqual(dryCalls, []);
+  assert.strictEqual(dryBody.mirror, null);
+  assert.strictEqual(dryBody.track, null);
+
+  const skipCalls = [];
+  const skippedMirror = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: '{}',
+  }, {
+    ...mirrorOpts,
+    skipMirror: true,
+    invokeTrack: async (date) => { skipCalls.push(date); return { ok: true, status: 200 }; },
+    mirrorTodayCard: async () => { skipCalls.push('mirror'); return { ok: true }; },
+  });
+  assert.strictEqual(skippedMirror.statusCode, 200);
+  assert.deepStrictEqual(skipCalls, ['2026-11-15']);
+  assert.strictEqual(JSON.parse(skippedMirror.body).mirror, null);
+
+  const flaggedMirror = await bg.handle({
+    headers: { 'x-picks-secret': 'secret' },
+    body: JSON.stringify({ date: '2026-11-15' }),
+  }, {
+    ...mirrorOpts,
+    env: { ...mirrorOpts.env, SUPABASE_MIRROR_V2: 'off' },
+    invokeTrack: async () => ({ ok: true, status: 200 }),
+  });
+  assert.strictEqual(JSON.parse(flaggedMirror.body).mirror.skipped, 'flag-off');
+
   const tip = '2026-11-16T02:10:00Z';
   const vanGame = {
     sport: 'NHL', eventId: 'van-vgk', homeTeam: 'Vegas Golden Knights', awayTeam: 'Vancouver Canucks', commenceTime: tip,

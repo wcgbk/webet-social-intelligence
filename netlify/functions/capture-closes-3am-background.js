@@ -10,7 +10,11 @@
  * Dates must be within the last 7 ET days, and not today.
  * After the closes are saved, invokes track-clv-omega in stored-closes mode
  * (sweep on) so yesterday's CLV and settlement run with zero Odds API credits.
- * Legacy track-clv / track-clv-nfl / track-clv-cfb are not called.
+ * Then grades stored candidate closes, then mirrors that date's card into
+ * Supabase (card_picks result/profit). The mirror is hash-gated inside
+ * mirrorTodayCard, soft-fails inside a 20s budget, and does not write picks
+ * or the card. dryRun and skipMirror skip it. Legacy track-clv /
+ * track-clv-nfl / track-clv-cfb are not called.
  */
 
 const S = require('./lib/clv-supabase');
@@ -18,6 +22,21 @@ const C = require('./lib/closes-3am');
 const { closesAt3amEnabled } = require('./lib/default_on_flag');
 
 const TRACK_TIMEOUT_MS = 60000;
+const MIRROR_BUDGET_MS = 20000;
+
+function raceTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, timedOut: true }), ms);
+  });
+  return Promise.race([
+    Promise.resolve(promise).then(
+      (v) => v,
+      (e) => ({ ok: false, error: C.scrub(e && e.message ? e.message : e) })
+    ),
+    timeout,
+  ]).finally(() => clearTimeout(timer));
+}
 
 function readBody(event) {
   if (!event || event.body == null || event.body === '') return {};
@@ -135,6 +154,18 @@ async function handle(event, deps) {
       graded = { ok: false, error: C.scrub(err && err.message) };
     }
   }
+  // Settled card only. Hash-gated inside mirrorTodayCard; no picks or card writes.
+  let mirror = null;
+  if (!options.skipMirror && !options.dryRun) {
+    try {
+      const pending = options.mirrorTodayCard
+        ? options.mirrorTodayCard(date, { env, fetch: fetchImpl, blobs })
+        : require('./lib/supa-mirror').mirrorTodayCard(date, { env, fetch: fetchImpl, blobs });
+      mirror = await raceTimeout(pending, MIRROR_BUDGET_MS);
+    } catch (err) {
+      mirror = { ok: false, error: C.scrub(err && err.message ? err.message : err) };
+    }
+  }
   const status = result && result.ok ? 200 : 207;
   return S.json(status, {
     ok: !!(result && result.ok),
@@ -146,6 +177,7 @@ async function handle(event, deps) {
     errors: result ? result.errors : [],
     track,
     graded,
+    mirror,
   });
 }
 

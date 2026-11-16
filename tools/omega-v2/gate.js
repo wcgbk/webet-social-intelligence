@@ -662,6 +662,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (dailyCheck.status !== 0) throw new Error('daily check gate failed');
+
+  const missedPull = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-missed-pull.js')],
+    { stdio: 'inherit' }
+  );
+  if (missedPull.status !== 0) throw new Error('missed pull monitor gate failed');
 }
 
 function pickSlim(card) {

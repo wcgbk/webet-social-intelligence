@@ -4,6 +4,10 @@
  * upserts clv.* tables. No omega-vnext imports. No pick, grading, or card writes.
  * SUPABASE_MIRROR_V2 defaults on. off | 0 | false disables every entry point.
  * Writes are idempotent upserts and must not throw into the caller.
+ * OMEGA_MIRROR_PRUNE_CARD_PICKS defaults on. After a successful card_picks
+ * upsert for a date, stale rows of the kinds just written are deleted.
+ * Unset stays on. on/1/true/yes are on. off/0/false/blank are off (=off rolls back).
+ * A dry run does not delete. A missing, empty, or non-3-straight card does not delete.
  */
 const crypto = require('crypto');
 const S = require('./clv-supabase');
@@ -75,6 +79,111 @@ function enabled(env) {
   if (raw == null || String(raw).trim() === '') return true;
   const text = String(raw).trim().toLowerCase();
   return text !== 'off' && text !== '0' && text !== 'false';
+}
+
+const PRUNE_CARD_PICKS_FLAG = 'OMEGA_MIRROR_PRUNE_CARD_PICKS';
+
+/** Default on. Unset stays on. Blank, off, 0, and false turn it off. */
+function pruneCardPicksEnabled(env) {
+  const source = env == null ? process.env : env;
+  if (source == null || source[PRUNE_CARD_PICKS_FLAG] == null) return true;
+  const v = String(source[PRUNE_CARD_PICKS_FLAG]).trim().toLowerCase();
+  if (v === 'on' || v === '1' || v === 'true' || v === 'yes') return true;
+  if (v === 'off' || v === '0' || v === 'false' || v === '') return false;
+  return false;
+}
+
+function pgLiteral(value) {
+  const s = String(value);
+  if (/^[A-Za-z0-9_]+$/.test(s)) return s;
+  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function straightPickKeys(rows) {
+  const keys = new Set();
+  for (const row of rows || []) {
+    if (!row || row.kind !== 'straight' || row.pick_key == null || row.pick_key === '') continue;
+    keys.add(String(row.pick_key));
+  }
+  return keys;
+}
+
+async function deleteStaleCardPicks(date, kind, keys, env, fetchImpl) {
+  S.requireEnv(env, ['SUPABASE_SERVICE_ROLE_KEY']);
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const list = keys.map(pgLiteral).join(',');
+  const url = `${S.SUPABASE_URL}/rest/v1/card_picks?date=eq.${date}&kind=eq.${kind}&pick_key=not.in.(${list})`;
+  const f = fetchImpl || fetch;
+  const resp = await f(url, {
+    method: 'DELETE',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'Content-Profile': 'clv',
+      Prefer: 'return=representation',
+    },
+  });
+  if (!resp || !resp.ok) {
+    const text = resp && resp.text ? await resp.text().catch(() => '') : '';
+    const status = resp && resp.status;
+    throw new Error(redact(`supabase card_picks prune HTTP ${status}: ${String(text).slice(0, 300)}`, env));
+  }
+  let body = null;
+  if (typeof resp.json === 'function') {
+    try { body = await resp.json(); } catch (_) { body = null; }
+  }
+  if (Array.isArray(body)) return body.length;
+  const range = resp.headers && typeof resp.headers.get === 'function'
+    ? resp.headers.get('content-range')
+    : null;
+  const match = range && String(range).match(/\/(\d+)\s*$/);
+  return match ? Number(match[1]) : 0;
+}
+
+/**
+ * Drop card_picks for this date whose pick_key is no longer on the card.
+ * Same kinds that were just upserted. Never throws. Never deletes when the
+ * built set is empty or the card does not have exactly 3 straights.
+ */
+async function pruneStaleCardPicks(rows, env, fetchImpl, counts, errors) {
+  try {
+    if (!pruneCardPicksEnabled(env)) return;
+    const list = dedupeLast(rows, PK.card_picks);
+    if (!list.length || straightPickKeys(list).size !== 3) return;
+    const byDate = new Map();
+    for (const row of list) {
+      if (!row || !row.date || !row.kind || row.pick_key == null || row.pick_key === '') continue;
+      if (!byDate.has(row.date)) byDate.set(row.date, []);
+      byDate.get(row.date).push(row);
+    }
+    let pruned = 0;
+    let attempted = false;
+    for (const [date, dateRows] of byDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) continue;
+      if (!dateRows.length || straightPickKeys(dateRows).size !== 3) continue;
+      const byKind = new Map();
+      for (const row of dateRows) {
+        const kind = String(row.kind);
+        if (!/^[a-z_]+$/.test(kind)) continue;
+        if (!byKind.has(kind)) byKind.set(kind, new Set());
+        byKind.get(kind).add(String(row.pick_key));
+      }
+      for (const kind of [...byKind.keys()].sort()) {
+        const keys = [...byKind.get(kind)].filter(Boolean).sort();
+        if (!keys.length) continue;
+        attempted = true;
+        try {
+          pruned += await deleteStaleCardPicks(date, kind, keys, env, fetchImpl);
+        } catch (e) {
+          errors.push(redact(`card_picks prune ${date} ${kind}: ${e.message}`, env));
+        }
+      }
+    }
+    if (attempted) counts.card_picks_pruned = (counts.card_picks_pruned || 0) + pruned;
+  } catch (e) {
+    errors.push(redact(`card_picks prune: ${e.message}`, env));
+  }
 }
 
 function sha1(s) {
@@ -729,11 +838,16 @@ async function writeTable(table, rows, env, fetchImpl, dry, counts, errors) {
     counts[table] = (counts[table] || 0) + dedupeLast(rows, PK[table]).length;
     return;
   }
+  let wrote = false;
   try {
     const posted = await upsert(table, rows, env, fetchImpl);
     counts[table] = (counts[table] || 0) + posted;
+    wrote = true;
   } catch (e) {
     errors.push(redact(e.message, env));
+  }
+  if (wrote && table === 'card_picks') {
+    await pruneStaleCardPicks(rows, env, fetchImpl, counts, errors);
   }
 }
 
@@ -963,6 +1077,7 @@ async function mirrorAfterSync(date, deps = {}) {
 
 module.exports = {
   enabled,
+  pruneCardPicksEnabled,
   sha1,
   asNum,
   etMidnightUtc,

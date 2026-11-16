@@ -620,6 +620,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (nhlGoalie.status !== 0) throw new Error('nhl goalie gate failed');
+
+  const mirrorPrune = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-mirror-prune-card-picks.js')],
+    { stdio: 'inherit' }
+  );
+  if (mirrorPrune.status !== 0) throw new Error('mirror prune card picks gate failed');
 }
 
 function pickSlim(card) {

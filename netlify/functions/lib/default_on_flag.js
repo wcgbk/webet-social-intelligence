@@ -25,9 +25,14 @@ function v1BoardMapEnabled(env) {
   return defaultOnFlag('OMEGA_V1_BOARD_MAP', env);
 }
 
+function ncaamGradeEnabled(env) {
+  return defaultOnFlag('OMEGA_NCAAM_GRADE', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
   copyVenueCheckEnabled,
   v1BoardMapEnabled,
+  ncaamGradeEnabled,
 };

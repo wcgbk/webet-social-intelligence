@@ -8,6 +8,7 @@ const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 const { canonicalSchool, schoolsEqual } = require('./lib/ncaaf-names');
+const { ncaamTeamsMatch, collegeHoopsMatchEnabled } = require('./lib/ncaam-names');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -60,6 +61,7 @@ function parseStakeUnits(value) {
 }
 
 function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
+  if (collegeHoopsMatchEnabled(sport)) return ncaamTeamsMatch(pickTeam, espnTeam, espnAbbr);
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
   if (!p || !e) return false;
@@ -92,6 +94,7 @@ function disambiguateDoubleheader(matches, pick) {
 function findGame(pick, games) {
   const sport = pick.sport || '';
   const ncaaf = sport === 'NCAAF';
+  const ncaam = collegeHoopsMatchEnabled(sport);
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const looseKey = (team) => {
@@ -99,7 +102,7 @@ function findGame(pick, games) {
     return normalizeTeam(team).split(' ').pop();
   };
   const keyInMatchup = (key) => {
-    if (!key) return false;
+    if (!key || ncaam) return false;
     if (ncaaf) return matchupParts.some(part => schoolsEqual(part, key) || canonicalSchool(part) === key);
     return key.length > 3 && matchup.includes(key);
   };
@@ -123,7 +126,7 @@ function findGame(pick, games) {
       if (awayHit || homeHit) {
         const otherTeam = awayHit ? g.homeTeam : g.awayTeam;
         const otherAbbr = awayHit ? g.homeAbbr : g.awayAbbr;
-        const otherOk = ncaaf
+        const otherOk = (ncaaf || ncaam)
           ? matchupParts.some(part => teamsMatch(part, otherTeam, otherAbbr, sport))
           : keyInMatchup(looseKey(otherTeam));
         if (otherOk) secondary.push(g);
@@ -137,7 +140,7 @@ function findGame(pick, games) {
       const awayHit = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport));
       const homeHit = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport));
       if (awayHit && homeHit) tertiary.push(g);
-      else if (!ncaaf) {
+      else if (!ncaaf && !ncaam) {
         const awayKey = looseKey(g.awayTeam);
         const homeKey = looseKey(g.homeTeam);
         const part0 = normalizeTeam(matchupParts[0]);

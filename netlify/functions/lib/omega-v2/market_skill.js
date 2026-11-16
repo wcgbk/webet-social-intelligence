@@ -371,6 +371,13 @@ function scoreMerge(lists) {
 }
 
 async function fetchNcaamScores(dateISO) {
+  const { ncaamGradeEnabled } = require('../default_on_flag');
+  if (ncaamGradeEnabled()) {
+    const { fetchESPNScores } = require('../espn-scoreboard');
+    const games = await fetchESPNScores(dateISO, 'NCAAM');
+    for (const game of games || []) game._sport = 'NCAAM';
+    return games || [];
+  }
   const { scoreboardDates, gamesFromScoreboard } = require('../espn-scoreboard');
   const { fetchScoreboardJson, ESPN_WEB_HOST } = require('../../../../js/live-score');
   const lists = [];

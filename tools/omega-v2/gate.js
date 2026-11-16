@@ -648,6 +648,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (newsSnapshot.status !== 0) throw new Error('news snapshot gate failed');
+
+  const ncaamGrade = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-ncaam-grade.js')],
+    { stdio: 'inherit' }
+  );
+  if (ncaamGrade.status !== 0) throw new Error('ncaam grade gate failed');
 }
 
 function pickSlim(card) {

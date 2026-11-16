@@ -5,15 +5,20 @@
 // - Omega MAIN is MLB+NFL+NCAAF but get-results-omega previously had no NFL/NCAAF
 //   endpoints, so football picks stayed `pending` forever.
 // - NCAAF without groups=80/90 collapses to Top-25 and misses most FBS/FCS games.
+// - Men's college basketball without groups=50 is a short featured slate.
+//   OMEGA_NCAAM_GRADE (default on) maps NCAAM and asks for groups=50&limit=400
+//   plus the plain board. =off keeps the old map: no NCAAM urls, NCAAB plain.
 // - Late-night / Hawaii / UTC spill: a pick stored on ET date D may live on ESPN
 //   date D-1 or D+1. We fetch the adjacent calendar days and merge.
 
 const { fetchScoreboardJson, ESPN_WEB_HOST } = require('../../../js/live-score');
+const { ncaamGradeEnabled } = require('./default_on_flag');
 
 const ESPN_ENDPOINTS = {
   NBA: 'basketball/nba',
   NHL: 'hockey/nhl',
   NCAAB: 'basketball/mens-college-basketball',
+  NCAAM: 'basketball/mens-college-basketball',
   MLB: 'baseball/mlb',
   NFL: 'football/nfl',
   NCAAF: 'football/college-football',
@@ -47,16 +52,21 @@ function scoreboardDates(dateISO) {
 }
 
 function scoreboardUrls(sport, dateISO) {
+  const hoopsOn = ncaamGradeEnabled();
+  // Flag off: NCAAM had no endpoint, so it builds no urls. The key stays on
+  // the map for callers that only need the path; the fetch stays empty.
+  if (sport === 'NCAAM' && !hoopsOn) return [];
   const endpoint = ESPN_ENDPOINTS[sport];
   if (!endpoint) return [];
   const isNcaaf = sport === 'NCAAF';
+  const collegeHoops = hoopsOn && (sport === 'NCAAM' || sport === 'NCAAB');
   const urls = [];
-  const push = (d, groups) => {
+  const push = (d, groups, limit) => {
     const q = [];
     if (d) q.push('dates=' + String(d).replace(/-/g, ''));
     if (groups) {
       q.push('groups=' + groups);
-      q.push('limit=300');
+      q.push('limit=' + String(limit || 300));
     }
     urls.push(`${ESPN_WEB_HOST}/apis/site/v2/sports/${endpoint}/scoreboard${q.length ? '?' + q.join('&') : ''}`);
   };
@@ -64,8 +74,13 @@ function scoreboardUrls(sport, dateISO) {
     if (isNcaaf) {
       // groups=90 = D1 (FBS+FCS). groups=80 = FBS (and some ESPN views treat it as
       // the featured/FBS slate). Merge both so FCS legs still grade.
-      push(d, '90');
-      push(d, '80');
+      push(d, '90', 300);
+      push(d, '80', 300);
+    } else if (collegeHoops) {
+      // groups=50 is Division I. The plain board is the short featured slate.
+      // Keep it and merge so a caller that only has the featured game still grades.
+      push(d, '50', 400);
+      push(d, null);
     } else {
       push(d, null);
     }

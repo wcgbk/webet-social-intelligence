@@ -9,6 +9,7 @@ const {
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { defaultOnFlag } = require('./lib/default_on_flag');
+const { ncaamTeamsMatch, collegeHoopsMatchEnabled } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
 const { applyToRecord } = require('./lib/clv-line-adj');
 
@@ -537,7 +538,8 @@ async function fetchEventF5(sportKey, eventId, atISO) {
   } catch (e) { return null; }
 }
 
-// ── ESPN score fetching for settlement grading (unchanged) ──
+// ESPN finals for settlement. Men's college basketball uses the shared D1
+// board when OMEGA_NCAAM_GRADE is on. Other sports keep this local fetch.
 const ESPN_ENDPOINTS = {
   'NBA': 'basketball/nba', 'NHL': 'hockey/nhl', 'NCAAB': 'basketball/mens-college-basketball',
   'MLB': 'baseball/mlb', 'EPL': 'soccer/eng.1', 'La Liga': 'soccer/esp.1',
@@ -547,6 +549,27 @@ const ESPN_ENDPOINTS = {
 };
 
 async function fetchESPNScores(dateISO, sport) {
+  if (collegeHoopsMatchEnabled(sport)) {
+    const shared = require('./lib/espn-scoreboard');
+    const games = await shared.fetchESPNScores(dateISO, sport);
+    return (games || []).map((g) => ({
+      awayTeam: g.awayTeam,
+      awayAbbr: g.awayAbbr,
+      awayScore: g.awayScore,
+      homeTeam: g.homeTeam,
+      homeAbbr: g.homeAbbr,
+      homeScore: g.homeScore,
+      state: g.state,
+      statusName: g.statusName || '',
+      completed: g.completed,
+      startISO: g.startISO || null,
+      awayScoreF5: null,
+      homeScoreF5: null,
+      awayInnings: 0,
+      homeInnings: 0,
+      f5Complete: false,
+    }));
+  }
   const endpoint = ESPN_ENDPOINTS[sport];
   if (!endpoint) return [];
   try {
@@ -591,15 +614,24 @@ async function fetchESPNScores(dateISO, sport) {
   } catch (e) { return []; }
 }
 
+function gradeSideMatch(pickSide, espnTeam, espnAbbr, sport) {
+  if (collegeHoopsMatchEnabled(sport)) return ncaamTeamsMatch(pickSide, espnTeam, espnAbbr);
+  return teamsMatch(pickSide, espnTeam);
+}
+
 function findGameForGrading(pick, games) {
+  const sport = pick.sport || '';
+  const college = collegeHoopsMatchEnabled(sport);
   const matchup = (pick.matchup || '').toLowerCase();
   const parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const matches = [];
   for (const g of games) {
     const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
     const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
-    const awayMatch = parts.some(p => teamsMatch(p, g.awayTeam)) || (awayLast.length > 3 && matchup.includes(awayLast));
-    const homeMatch = parts.some(p => teamsMatch(p, g.homeTeam)) || (homeLast.length > 3 && matchup.includes(homeLast));
+    const awayMatch = parts.some(p => gradeSideMatch(p, g.awayTeam, g.awayAbbr, sport))
+      || (!college && awayLast.length > 3 && matchup.includes(awayLast));
+    const homeMatch = parts.some(p => gradeSideMatch(p, g.homeTeam, g.homeAbbr, sport))
+      || (!college && homeLast.length > 3 && matchup.includes(homeLast));
     if (awayMatch && homeMatch) matches.push(g);
   }
   if (matches.length <= 1) return matches[0] || null;
@@ -636,8 +668,8 @@ function gradePick(pick, game) {
   const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
   const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
-  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
+  const pickedAway = gradeSideMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+  const pickedHome = gradeSideMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
 
   if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);

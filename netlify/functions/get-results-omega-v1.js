@@ -5,6 +5,7 @@
 //   - 0-0 placeholder rows for dates with no picks in either pipeline
 
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
+const { ncaamTeamsMatch, collegeHoopsMatchEnabled } = require('./lib/ncaam-names');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 
@@ -45,6 +46,7 @@ function schoolKey(name) {
 }
 
 function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
+  if (collegeHoopsMatchEnabled(sport)) return ncaamTeamsMatch(pickTeam, espnTeam, espnAbbr);
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
   if (!p || !e) return false;
@@ -74,6 +76,7 @@ function disambiguateDoubleheader(matches, pick) {
 function findGame(pick, games) {
   const sport = pick.sport || '';
   const ncaaf = sport === 'NCAAF';
+  const ncaam = collegeHoopsMatchEnabled(sport);
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const primary = [];
@@ -81,9 +84,9 @@ function findGame(pick, games) {
     const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
     const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
     const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport)) ||
-                       (awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
+                       (!ncaam && awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
     const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport)) ||
-                       (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
+                       (!ncaam && homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
     if (awayMatch && homeMatch) primary.push(g);
   }
   if (primary.length) return disambiguateDoubleheader(primary, pick);
@@ -94,15 +97,21 @@ function findGame(pick, games) {
       const awayHit = teamsMatch(pickTeam, g.awayTeam, g.awayAbbr, sport);
       const homeHit = teamsMatch(pickTeam, g.homeTeam, g.homeAbbr, sport);
       if (awayHit || homeHit) {
-        const otherKey = ncaaf
-          ? schoolKey(awayHit ? g.homeTeam : g.awayTeam)
-          : normalizeTeam(awayHit ? g.homeTeam : g.awayTeam).split(' ').pop();
-        if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
+        if (ncaam) {
+          const otherTeam = awayHit ? g.homeTeam : g.awayTeam;
+          const otherAbbr = awayHit ? g.homeAbbr : g.awayAbbr;
+          if (matchupParts.some(part => teamsMatch(part, otherTeam, otherAbbr, sport))) secondary.push(g);
+        } else {
+          const otherKey = ncaaf
+            ? schoolKey(awayHit ? g.homeTeam : g.awayTeam)
+            : normalizeTeam(awayHit ? g.homeTeam : g.awayTeam).split(' ').pop();
+          if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
+        }
       }
     }
     if (secondary.length) return disambiguateDoubleheader(secondary, pick);
   }
-  if (matchupParts.length >= 2) {
+  if (matchupParts.length >= 2 && !ncaam) {
     const tertiary = [];
     for (const g of games) {
       const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
@@ -556,3 +565,5 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to compute results' }) };
   }
 };
+
+exports._test = { teamsMatch, findGame, gradePick };

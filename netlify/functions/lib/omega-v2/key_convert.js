@@ -126,7 +126,10 @@ function convertCoverProb(input) {
   if (from == null || to == null || p0 == null) return null;
   if (!(p0 > 0 && p0 < 1)) return null;
   const dist = Math.abs(to - from);
-  if (dist > MAX_DIST + 1e-9) return null;
+  // maxDist is optional. Callers that omit it keep the 1.5 pricing cap.
+  const requested = num(q.maxDist);
+  const limit = requested == null ? MAX_DIST : requested;
+  if (dist > limit + 1e-9) return null;
   if (!conversionAllowed(sport, market)) {
     if (dist < 1e-9) return { p: p0, q: 0, distance: 0 };
     return null;

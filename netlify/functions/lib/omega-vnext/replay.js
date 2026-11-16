@@ -194,7 +194,12 @@ function scoreReplayDay(card, dateISO, opts = {}) {
         nClv += 1;
         clvSum += cents;
         if (row.beatClose) beats += 1;
-      } else if (clvRec.closingOdds && (pick.odds || pick.pickTimeOdds || clvRec.pickTimeOdds)) {
+      } else if (
+        clvRec.clvMethod !== 'side-flip'
+        && clvRec.clvMethod !== 'over-cap'
+        && clvRec.closingOdds
+        && (pick.odds || pick.pickTimeOdds || clvRec.pickTimeOdds)
+      ) {
         const betA = parseAmerican(pick.odds || pick.pickTimeOdds || clvRec.pickTimeOdds);
         const closeA = parseAmerican(clvRec.closingOdds);
         const ov = Number(clvRec.closingOverround) || 1.045;

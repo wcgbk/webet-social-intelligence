@@ -468,6 +468,13 @@ async function main() {
   );
   if (trueClose.status !== 0) throw new Error('clv true close gate failed');
 
+  const clvLineAdj = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-clv-line-adj.js')],
+    { stdio: 'inherit' }
+  );
+  if (clvLineAdj.status !== 0) throw new Error('clv line adj gate failed');
+
   const pickClvFill = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-pick-clv-fill.js')],

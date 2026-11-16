@@ -481,6 +481,17 @@ function applyCloseToLedgerRow(rec, close) {
   rec.anchor = 'pinnacle';
   rec.anchorBook = 'pinnacle';
   rec.closeSource = closeSourceLabel(close && close.rowSource);
+  // A same-line true close replaces a shifted number. Only rows that already
+  // carry a line method are relabeled, so a flag-off record stays as it was.
+  if (rec.clvMethod != null) {
+    const betLine = num(rec.betLine != null ? rec.betLine : rec.line);
+    const closeLine = num(close.closingLine);
+    const same = betLine == null || closeLine == null || Math.abs(betLine - closeLine) <= 1e-6;
+    if (same) {
+      rec.clvMethod = 'same-line';
+      rec.lineDiff = betLine == null || closeLine == null ? rec.lineDiff : 0;
+    }
+  }
   refreshAliases(rec);
 }
 

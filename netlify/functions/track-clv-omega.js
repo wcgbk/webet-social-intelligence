@@ -10,6 +10,7 @@ const {
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { defaultOnFlag } = require('./lib/default_on_flag');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
+const { applyToRecord } = require('./lib/clv-line-adj');
 
 function trueCloseOn(env) {
   return defaultOnFlag('OMEGA_CLV_TRUE_CLOSE', env);
@@ -314,10 +315,73 @@ function sourceKey(pick) {
   return 'full-game';
 }
 
+function pointsClose(a, b) {
+  if (a == null || b == null) return false;
+  const x = Number(a);
+  const y = Number(b);
+  return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= 1e-6;
+}
+
+function outcomeIsSide(o, sideInfo, gameObj, pick) {
+  const n = (o.name || '').toLowerCase();
+  if (sideInfo.marketBase === 'totals') {
+    return (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
+  }
+  if (sideInfo.isDraw) return n === 'draw';
+  const teamText = stripLine(pick.pick || '');
+  const pickedHome = teamsMatch(teamText, gameObj.home_team);
+  const pickedAway = teamsMatch(teamText, gameObj.away_team);
+  return (pickedHome && teamsMatch(o.name, gameObj.home_team))
+    || (pickedAway && teamsMatch(o.name, gameObj.away_team));
+}
+
+function altMarketKeys(sideInfo) {
+  if (!sideInfo) return [];
+  if (sideInfo.marketBase === 'spreads') {
+    return [sideInfo.marketKey, sideInfo.isF5 ? 'alternate_spreads_1st_5_innings' : 'alternate_spreads'];
+  }
+  if (sideInfo.marketBase === 'totals') {
+    return [sideInfo.marketKey, sideInfo.isF5 ? 'alternate_totals_1st_5_innings' : 'alternate_totals'];
+  }
+  return [];
+}
+
+// Two-sided price at the bet's own number on this book, when the main line moved.
+function altQuoteOnBook(gameObj, bookKey, sideInfo, pick, mainLine) {
+  const betLine = parseBetLine(pick, sideInfo);
+  if (betLine == null || mainLine == null || pointsClose(betLine, mainLine)) return null;
+  if (!gameObj || !bookKey) return null;
+  const book = (gameObj.bookmakers || []).find((b) => (b.key || '').toLowerCase() === bookKey);
+  if (!book) return null;
+  const keys = new Set(altMarketKeys(sideInfo));
+  const outcomes = [];
+  for (const m of book.markets || []) {
+    if (!keys.has(m.key)) continue;
+    for (const o of m.outcomes || []) outcomes.push(o);
+  }
+  let side = null;
+  let opp = null;
+  for (const o of outcomes) {
+    const point = o.point !== undefined ? o.point : null;
+    if (outcomeIsSide(o, sideInfo, gameObj, pick)) {
+      if (!side && pointsClose(point, betLine)) side = o;
+    } else if (sideInfo.marketBase === 'totals') {
+      if (!opp && pointsClose(point, betLine)) opp = o;
+    } else if (sideInfo.marketBase === 'spreads') {
+      if (!opp && pointsClose(point, -Number(betLine))) opp = o;
+    }
+  }
+  if (!side || !opp || side.price == null || opp.price == null) return null;
+  if (impliedProbability(side.price) == null || impliedProbability(opp.price) == null) return null;
+  return { sideOdds: side.price, oppOdds: opp.price };
+}
+
 // ── Extract the sharp-anchor closing price + market overround for a pick's side ──
 // gameObj may be a full-game bulk game object OR a per-event (F5) object — both carry
 // { home_team, away_team, bookmakers:[{ key, title, markets:[{ key, outcomes:[{name, price, point}] }] }] }.
-// Returns { sideOdds, sideRaw, overround, closingLine, anchor, anchorBook } or null.
+// Returns { sideOdds, sideRaw, overround, closingLine, anchor, anchorBook, altQuote } or null.
+// altQuote is the anchor book's two-sided price at the bet's own number, when that
+// number is posted and the main line is somewhere else. Consensus anchors have none.
 function extractClose(gameObj, sideInfo, pick) {
   if (!gameObj || !gameObj.bookmakers) return null;
   const teamText = stripLine(pick.pick || '');
@@ -388,6 +452,7 @@ function extractClose(gameObj, sideInfo, pick) {
       sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
       oppOdds: s.oppPrice != null ? s.oppPrice : null,
       anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
+      altQuote: altQuoteOnBook(gameObj, b.key, sideInfo, pick, s.line),
     };
   }
 
@@ -400,6 +465,7 @@ function extractClose(gameObj, sideInfo, pick) {
       overround: median(sharps.map(s => s.overround)),
       closingLine: median(sharps.map(s => s.line).filter(v => v != null)),
       anchor: 'sharp-consensus', anchorBook: `${sharps.length} sharp books`,
+      altQuote: null,
     };
   }
 
@@ -412,6 +478,7 @@ function extractClose(gameObj, sideInfo, pick) {
       overround: median(all.map(s => s.overround)),
       closingLine: median(all.map(s => s.line).filter(v => v != null)),
       anchor: 'soft-median', anchorBook: `${all.length}-book median`,
+      altQuote: null,
     };
   }
   return null;
@@ -613,6 +680,19 @@ function calcProfit(result, units, oddsStr) {
 }
 
 // Aggregation bucket helper — keeps the {count, clvSum, beat} contract shape.
+// Closer-to-pitch still wins. An explicit line exclusion replaces a stored
+// number from the same or a worse snapshot, so a side flip does not stick.
+function chooseCapture(prev, rec) {
+  const prevScore = (prev && prev.clv != null && typeof prev.captureScore === 'number') ? prev.captureScore : Infinity;
+  const excluded = rec && (rec.clvMethod === 'side-flip' || rec.clvMethod === 'over-cap');
+  if (excluded && typeof rec.captureScore === 'number' && rec.captureScore <= prevScore) return rec;
+  if (rec && rec.clv != null && rec.captureScore <= prevScore) return rec;
+  if (prev && prev.clv != null) {
+    return { ...prev, betType: rec.betType, market: rec.market, segment: rec.segment, source: rec.source };
+  }
+  return rec;
+}
+
 function bump(map, key, clv, beat) {
   if (!map[key]) map[key] = { count: 0, clvSum: 0, beat: 0 };
   map[key].count++;
@@ -1043,18 +1123,21 @@ async function handle(event, deps) {
           captureMinsToCommence,
           captureScore,
         };
+        // Moved spread/total: score the bet's own number. Flag off keeps rec.
+        rec = applyToRecord(rec, {
+          sport: pick.sport,
+          market: pick.betType || pick.market,
+          side: sideInfo,
+          betLine: baseRecord.betLine,
+          closeLine: close.closingLine,
+          altQuote: close.altQuote || null,
+          betOdds: pick.odds,
+        }, env);
         console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
       }
 
       // Merge: keep whichever capture is closer to first pitch (and ideally pre-pitch).
-      const prevScore = (prev && prev.clv != null && typeof prev.captureScore === 'number') ? prev.captureScore : Infinity;
-      if (rec.clv != null && rec.captureScore <= prevScore) {
-        clvPicks.push(rec);
-      } else if (prev && prev.clv != null) {
-        clvPicks.push({ ...prev, ...{ betType: rec.betType, market: rec.market, segment: rec.segment, source: rec.source } });
-      } else {
-        clvPicks.push(rec);
-      }
+      clvPicks.push(chooseCapture(prev, rec));
     }
 
     // ── Step 4: Grade outcomes via ESPN final scores (unchanged contract) ──
@@ -1174,8 +1257,8 @@ async function handle(event, deps) {
           const byKey = new Map((clvData.picks || []).map(p => [`${p.pick}||${p.matchup}`, p]));
           clvData.parlayLegs = flatLegs.map(leg => {
             const hit = byKey.get(`${leg.pick}||${leg.matchup}`);
-            if (hit && hit.clv != null) {
-              return attachRealizedAliases({
+            if (hit && (hit.clv != null || hit.clvMethod === 'side-flip' || hit.clvMethod === 'over-cap')) {
+              const matched = {
                 ...leg,
                 closingOdds: hit.closingOdds,
                 clv: hit.clv,
@@ -1184,7 +1267,13 @@ async function handle(event, deps) {
                 anchorBook: hit.anchorBook,
                 closeSnapshotAt: hit.closeSnapshotAt,
                 note: 'matched-straight-close',
-              });
+              };
+              if (hit.clvMethod != null) {
+                matched.clvMethod = hit.clvMethod;
+                matched.lineDiff = hit.lineDiff == null ? null : hit.lineDiff;
+                matched.clvRawLine = hit.clvRawLine == null ? null : hit.clvRawLine;
+              }
+              return attachRealizedAliases(matched);
             }
             return { ...leg, clv: null, beatClose: null, note: 'parlay-leg-close-pending' };
           });
@@ -1345,5 +1434,5 @@ module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
-  summarizeTrackedPicks,
+  summarizeTrackedPicks, chooseCapture,
 };

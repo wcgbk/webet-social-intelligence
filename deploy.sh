@@ -17,6 +17,23 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# 0) Netlify bundles functions with nft, which does NOT follow a symlinked
+#    node_modules: the zip gets a dangling "node_modules" link, deps are missing
+#    and Netlify fails with 500 "Failed to wait for function to become active"
+#    (11/15: four failed deploys from worktrees whose node_modules was a symlink).
+#    Materialize a real copy so ./deploy.sh works from any worktree.
+if [ -L node_modules ]; then
+  NM_REAL="$(readlink -f node_modules)"
+  if [ ! -d "$NM_REAL" ]; then echo "✋ node_modules symlink is dangling ($NM_REAL) — run npm ci first."; exit 1; fi
+  echo "→ node_modules is a symlink; replacing it with a real copy for nft bundling…"
+  rm node_modules
+  cp -a "$NM_REAL" node_modules
+fi
+if [ ! -f node_modules/@netlify/blobs/package.json ]; then
+  echo "✋ node_modules missing or incomplete — run npm ci first. Not deploying."
+  exit 1
+fi
+
 # 1) Refuse to deploy uncommitted tracked changes.
 #    (Untracked experiment dirs — the many `??` entries — are intentionally ignored.)
 DIRTY="$(git status --porcelain | grep -vE '^\?\?' || true)"

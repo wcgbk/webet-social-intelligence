@@ -25,6 +25,10 @@ const {
   newsBlobKey,
   captureNewsSnapshot,
 } = require('./netlify/functions/lib/omega-vnext/news_snapshot');
+const { SITE_ID } = require('./netlify/functions/lib/omega-vnext/config');
+const { blobRestUrl } = require('./netlify/functions/lib/omega-vnext/blob_key');
+
+const FAKE_BLOB_TOKEN = 'offline-news-snapshot-token';
 
 const NOW = '2026-11-15T15:00:00.000Z';
 const DATE = '2026-11-15';
@@ -177,6 +181,32 @@ function countUrl(calls, part) {
   return calls.filter((url) => url.includes(part)).length;
 }
 
+async function withFakeBlobToken(fn) {
+  const prev = process.env.NETLIFY_AUTH_TOKEN;
+  process.env.NETLIFY_AUTH_TOKEN = FAKE_BLOB_TOKEN;
+  try {
+    return await fn();
+  } finally {
+    if (prev == null) delete process.env.NETLIFY_AUTH_TOKEN;
+    else process.env.NETLIFY_AUTH_TOKEN = prev;
+  }
+}
+
+function spyConsole(fn) {
+  const lines = [];
+  const log = console.log;
+  const warn = console.warn;
+  console.log = (...args) => { lines.push(args.map((part) => String(part)).join(' ')); };
+  console.warn = (...args) => { lines.push(args.map((part) => String(part)).join(' ')); };
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      console.log = log;
+      console.warn = warn;
+    })
+    .then((result) => ({ result, lines }));
+}
+
 function cardFixture() {
   return {
     date: DATE,
@@ -204,6 +234,7 @@ async function main() {
   const before = JSON.parse(JSON.stringify(card));
   const calls = [];
   const store = memoryBlobs();
+  let sdkRestCalls = 0;
   const written = await captureNewsSnapshot({
     env: {},
     dateISO: DATE,
@@ -214,9 +245,12 @@ async function main() {
     ncaafQb: NCAAF,
     fetchImpl: fakeFetch(calls),
     store,
+    blobFetch: () => { sdkRestCalls += 1; throw new Error('rest should not run'); },
     timeoutMs: 5000,
   });
   assert.strictEqual(written.wrote, true);
+  assert.strictEqual(written.path, 'sdk');
+  assert.strictEqual(sdkRestCalls, 0, 'a successful SDK write does not call REST');
   assert.strictEqual(written.key, KEY);
   assert.deepStrictEqual(card, before, 'a written snapshot does not change the card');
   assert.strictEqual(store.rows.size, 1);
@@ -330,19 +364,147 @@ async function main() {
   assert.deepStrictEqual(hungCard, hungBefore);
   assert.strictEqual(hung.error, undefined);
 
+  const blobDownCard = cardFixture();
+  const blobDownBefore = JSON.parse(JSON.stringify(blobDownCard));
   const blobDown = await captureNewsSnapshot({
     env: {},
     dateISO: DATE,
     now: NOW,
+    card: blobDownCard,
     candidates: [],
     fetchImpl: () => { throw new Error('espn down'); },
     store: {
       setJSON() { throw new Error('blob down'); },
     },
+    blobFetch: () => { throw new Error('rest should stay offline'); },
     timeoutMs: 40,
   });
   assert.strictEqual(blobDown.wrote, false);
   assert.strictEqual(blobDown.error, 'soft-fail');
+  assert.strictEqual(blobDown.path, 'failed');
+  assert.deepStrictEqual(blobDownCard, blobDownBefore);
+
+  await withFakeBlobToken(async () => {
+    const puts = [];
+    const restCard = cardFixture();
+    const restBefore = JSON.parse(JSON.stringify(restCard));
+    const { result: viaRest, lines } = await spyConsole(() => captureNewsSnapshot({
+      env: {},
+      dateISO: DATE,
+      now: NOW,
+      card: restCard,
+      candidates: CANDIDATES,
+      oddsBySport: ODDS,
+      ncaafQb: NCAAF,
+      fetchImpl: fakeFetch([]),
+      store: {
+        setJSON() { throw new Error('sdk down'); },
+      },
+      blobFetch: async (url, init) => {
+        puts.push({
+          url: String(url),
+          method: init && init.method,
+          headers: init && init.headers,
+          body: init && init.body,
+        });
+        return { ok: true, status: 200 };
+      },
+      timeoutMs: 5000,
+    }));
+    assert.strictEqual(viaRest.wrote, true);
+    assert.strictEqual(viaRest.path, 'rest');
+    assert.strictEqual(viaRest.key, KEY);
+    assert.strictEqual(viaRest.error, undefined);
+    assert.deepStrictEqual(restCard, restBefore, 'REST write does not change the card');
+    assert.strictEqual(puts.length, 1);
+    const expectedUrl = blobRestUrl(SITE_ID, NEWS_SNAPSHOT_STORE, KEY, 'canonical');
+    assert.strictEqual(puts[0].url, expectedUrl);
+    assert.ok(puts[0].url.includes(`/${NEWS_SNAPSHOT_STORE}/2026-11-15/1000-ET`), 'slash key stays a path');
+    assert.ok(!puts[0].url.includes('%2F'), 'the slash is not encoded as %2F');
+    assert.strictEqual(puts[0].method, 'PUT');
+    assert.ok(puts[0].headers && puts[0].headers.Authorization, 'auth header present');
+    assert.strictEqual(puts[0].headers.Authorization, `Bearer ${FAKE_BLOB_TOKEN}`);
+    assert.strictEqual(puts[0].headers['Content-Type'], 'application/json');
+    assert.deepStrictEqual(JSON.parse(puts[0].body), store.rows.get(KEY), 'REST body matches the SDK document');
+    const newsLines = lines.filter((line) => line.includes('[omega-news] snapshot'));
+    assert.strictEqual(newsLines.length, 1, newsLines.join(' | '));
+    assert.ok(newsLines[0].includes('path=rest'));
+    assert.ok(!newsLines[0].includes(FAKE_BLOB_TOKEN));
+
+    const hungPuts = [];
+    const hungRest = await Promise.race([
+      captureNewsSnapshot({
+        env: {},
+        dateISO: DATE,
+        now: NOW,
+        candidates: [],
+        fetchImpl: () => { throw new Error('espn down'); },
+        store: {
+          setJSON() { return new Promise(() => {}); },
+        },
+        blobFetch: async (url, init) => {
+          hungPuts.push({ url: String(url), method: init && init.method });
+          return { ok: true, status: 200 };
+        },
+        timeoutMs: 30,
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('rest fallback blocked')), 400)),
+    ]);
+    assert.strictEqual(hungRest.path, 'rest');
+    assert.strictEqual(hungRest.wrote, true);
+    assert.strictEqual(hungPuts.length, 1);
+    assert.strictEqual(hungPuts[0].method, 'PUT');
+    assert.strictEqual(hungPuts[0].url, expectedUrl);
+
+    const bothCard = cardFixture();
+    const bothBefore = JSON.parse(JSON.stringify(bothCard));
+    let bothPuts = 0;
+    const { result: bothFail, lines: failLines } = await spyConsole(() => captureNewsSnapshot({
+      env: {},
+      dateISO: DATE,
+      now: NOW,
+      card: bothCard,
+      candidates: CANDIDATES,
+      oddsBySport: ODDS,
+      fetchImpl: fakeFetch([]),
+      store: {
+        setJSON() { throw new Error('sdk down'); },
+      },
+      blobFetch: async () => {
+        bothPuts += 1;
+        throw new Error('rest down');
+      },
+      timeoutMs: 40,
+    }));
+    assert.strictEqual(bothFail.wrote, false);
+    assert.strictEqual(bothFail.path, 'failed');
+    assert.strictEqual(bothFail.error, 'soft-fail');
+    assert.strictEqual(bothPuts, 1);
+    assert.deepStrictEqual(bothCard, bothBefore, 'both stores failing leaves the card unchanged');
+    const failNews = failLines.filter((line) => line.includes('[omega-news] snapshot'));
+    assert.strictEqual(failNews.length, 1);
+    assert.ok(failNews[0].includes('path=failed'));
+    assert.ok(!failNews[0].includes(FAKE_BLOB_TOKEN));
+
+    const statusCard = cardFixture();
+    const statusBefore = JSON.parse(JSON.stringify(statusCard));
+    const statusFail = await captureNewsSnapshot({
+      env: {},
+      dateISO: DATE,
+      now: NOW,
+      card: statusCard,
+      candidates: [],
+      fetchImpl: () => { throw new Error('espn down'); },
+      store: {
+        setJSON() { throw new Error('sdk down'); },
+      },
+      blobFetch: async () => ({ ok: false, status: 503 }),
+      timeoutMs: 40,
+    });
+    assert.strictEqual(statusFail.wrote, false);
+    assert.strictEqual(statusFail.path, 'failed');
+    assert.deepStrictEqual(statusCard, statusBefore);
+  });
 
   let offFetches = 0;
   let offWrites = 0;

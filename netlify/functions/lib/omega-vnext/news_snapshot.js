@@ -9,6 +9,8 @@
  */
 
 const { newsSnapshotEnabled } = require('../omega-v2/constants');
+const { SITE_ID } = require('./config');
+const { blobRestUrl } = require('./blob_key');
 const {
   NBA_INJURY_URL,
   NBA_RATES_URL,
@@ -279,27 +281,91 @@ async function openNewsStore() {
   return getStore(NEWS_SNAPSHOT_STORE);
 }
 
-async function writeDoc(store, key, doc, timeoutMs) {
-  const write = typeof store.setJSON === 'function'
-    ? store.setJSON(key, doc)
-    : store.set(key, JSON.stringify(doc));
+function raceTimeout(work, timeoutMs) {
   let timer;
-  try {
-    await Promise.race([
-      Promise.resolve(write),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
-      }),
-    ]);
-  } finally {
+  const pending = Promise.resolve().then(work);
+  return Promise.race([
+    pending,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+    }),
+  ]).finally(() => {
     if (timer) clearTimeout(timer);
+  });
+}
+
+function safeDetail(msg) {
+  return String(msg || 'error').replace(/Bearer\s+\S+/g, 'Bearer [redacted]');
+}
+
+async function writeDoc(store, key, doc, timeoutMs) {
+  await raceTimeout(() => {
+    if (typeof store.setJSON === 'function') return store.setJSON(key, doc);
+    return store.set(key, JSON.stringify(doc));
+  }, timeoutMs);
+}
+
+/**
+ * SDK miss uses the same Blobs REST PUT as the other omega-vnext writers.
+ * A slash key stays a path (`date/1000-ET`). Encoding the whole key would
+ * store a different object (`date%2F1000-ET`).
+ */
+async function restPutNews(key, doc, timeoutMs, opts) {
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
+  const url = blobRestUrl(SITE_ID, NEWS_SNAPSHOT_STORE, key, 'canonical');
+  const doFetch = opts && typeof opts.blobFetch === 'function' ? opts.blobFetch : fetch;
+  const resp = await raceTimeout(() => doFetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(doc),
+  }), timeoutMs);
+  if (!resp || resp.ok !== true) {
+    const status = resp && resp.status != null ? resp.status : 'no-response';
+    throw new Error(`blob PUT ${key} → ${status}`);
   }
+}
+
+/** 'sdk' or 'rest'. Throws when both miss. Any SDK error, including timeout, tries REST. */
+async function writeSnapshot(key, doc, timeoutMs, opts) {
+  let sdkErr = null;
+  try {
+    const store = (opts && opts.store) || await openNewsStore();
+    await writeDoc(store, key, doc, timeoutMs);
+    return 'sdk';
+  } catch (err) {
+    sdkErr = err;
+  }
+  try {
+    await restPutNews(key, doc, timeoutMs, opts || {});
+    return 'rest';
+  } catch (restErr) {
+    const msg = (restErr && restErr.message) || (sdkErr && sdkErr.message) || 'error';
+    throw new Error(safeDetail(msg));
+  }
+}
+
+function logSnapshot(pathUsed, key, doc, detail) {
+  if (pathUsed === 'failed') {
+    console.warn(`[omega-news] snapshot path=failed key=${key} soft-fail: ${safeDetail(detail)}`);
+    return;
+  }
+  const rates = doc && doc.nba ? doc.nba.rates : null;
+  const nba = doc && doc.nba && Array.isArray(doc.nba.injuries) ? doc.nba.injuries.length : 0;
+  const nhl = doc && doc.nhl && Array.isArray(doc.nhl.probables) ? doc.nhl.probables.length : 0;
+  const nfl = Array.isArray(doc && doc.nflQb) ? doc.nflQb.length : 0;
+  console.log(`[omega-news] snapshot path=${pathUsed} key=${key} nba=${nba} rates=${rates ? rates.length : 0} nhl=${nhl} nflQb=${nfl}`);
 }
 
 /**
  * Fetch the compact snapshot and write `{date}/{HHMM-ET}`.
  * Returns without throwing. Flag off and replay do not fetch or write.
  * opts.store injects an in-memory blob store for tests.
+ * opts.blobFetch injects the REST client. Production uses global fetch.
+ * The summary path is 'sdk', 'rest', or 'failed'. This function does not throw.
  */
 async function captureNewsSnapshot(opts = {}) {
   const env = opts.env == null ? process.env : opts.env;
@@ -346,14 +412,13 @@ async function captureNewsSnapshot(opts = {}) {
     if (!nflBody) doc.nflQbError = 'soft-fail';
     const key = newsBlobKey(dateISO, when);
     try {
-      const store = opts.store || await openNewsStore();
-      await writeDoc(store, key, doc, timeoutMs);
-      console.log(`[omega-news] snapshot key=${key} nba=${doc.nba.injuries.length} rates=${rates ? rates.length : 0} nhl=${doc.nhl.probables.length} nflQb=${doc.nflQb.length}`);
-      return { wrote: true, key, skipped: null };
+      const pathUsed = await writeSnapshot(key, doc, timeoutMs, opts);
+      logSnapshot(pathUsed, key, doc);
+      return { wrote: true, key, skipped: null, path: pathUsed };
     } catch (err) {
       const msg = err && err.message ? err.message : 'error';
-      console.warn(`[omega-news] snapshot soft-fail: ${msg}`);
-      return { wrote: false, key, skipped: null, error: 'soft-fail' };
+      logSnapshot('failed', key, doc, msg);
+      return { wrote: false, key, skipped: null, error: 'soft-fail', path: 'failed' };
     }
   } catch (err) {
     const msg = err && err.message ? err.message : 'error';

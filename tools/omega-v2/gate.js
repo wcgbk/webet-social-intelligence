@@ -669,6 +669,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (missedPull.status !== 0) throw new Error('missed pull monitor gate failed');
+
+  const force3Guard = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'tests/test-verify-force3-guard.js')],
+    { stdio: 'inherit' }
+  );
+  if (force3Guard.status !== 0) throw new Error('verify force3 guard gate failed');
 }
 
 function pickSlim(card) {

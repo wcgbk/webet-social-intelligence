@@ -12,6 +12,7 @@
 // Verify may drop, flag, or resize inside the existing unit cap.
 // It may refill a killed parlay leg from the stored pool when 3 legs remain.
 // It does not add a straight and it does not rebuild a parlay from the straight card.
+// OMEGA_VERIFY_FORCE3_GUARD (default on; =off/0/false rolls back): a force-top3 card stays 3 straights + its parlay. Verify annotates; it does not shrink that card.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -67,7 +68,7 @@ const {
   isEdgeGradeB,
 } = require('./lib/omega-vnext/odds_math');
 const { letterFromPrintedEdge, shownEdgePoints } = require('./lib/omega-v2/letter');
-const { verifyCleanStampEnabled } = require('./lib/default_on_flag');
+const { verifyCleanStampEnabled, defaultOnFlag } = require('./lib/default_on_flag');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -353,6 +354,7 @@ const {
   assessPlaceability,
   verifyPlaceabilityDecision,
   applyPlaceabilityDrops,
+  PLACEABILITY_VETO_REASON,
 } = require('./lib/omega-vnext/edge');
 const HR_BOOK_KEYS = new Set(["hardrockbet", "hardrockbet_oh", "hardrock"]);
 const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl", NCAAF: "americanfootball_ncaaf" };
@@ -1259,6 +1261,324 @@ async function stampCleanVerifiedCard(picksData, opts = {}) {
   return { stamped: true, reason: 'clean', card: picksData, verifiedAt: picksData.verifiedAt };
 }
 
+// OMEGA_VERIFY_FORCE3_GUARD. Unset, on, 1, true, and yes stay on.
+// off, 0, and false restore the old drop path.
+function force3GuardEnabled(env) {
+  return defaultOnFlag('OMEGA_VERIFY_FORCE3_GUARD', env);
+}
+
+function isForceTop3VerifyCard(picksData) {
+  if (!picksData || typeof picksData !== 'object') return false;
+  if (picksData.selectionRule === 'force-top3') return true;
+  const pipe = picksData.pipelineV2;
+  return !!(pipe && typeof pipe === 'object' && pipe.selectionRule === 'force-top3');
+}
+
+function shouldEnforceForceTop3(picksData, snapshot, env) {
+  if (!force3GuardEnabled(env)) return false;
+  return isForceTop3VerifyCard(picksData) || isForceTop3VerifyCard(snapshot);
+}
+
+function pushVerifyAnnotation(picksData, row) {
+  if (!picksData || !row) return;
+  if (!Array.isArray(picksData.verifyAnnotations)) picksData.verifyAnnotations = [];
+  picksData.verifyAnnotations.push(row);
+}
+
+function alreadyAnnotated(picksData, side, matchup, reason) {
+  return (picksData.verifyAnnotations || []).some((a) => (
+    a && a.action === 'annotated' && a.side === side && a.matchup === matchup && a.reason === reason
+  ));
+}
+
+function reportForPick(pickReports, pick) {
+  if (!Array.isArray(pickReports) || !pick) return null;
+  const label = `${pick.pick} ${pick.odds}`;
+  return pickReports.find((rep) => rep && (rep.pick === label || rep.pick === pick.pick)) || null;
+}
+
+/**
+ * Placeability soft-veto. Flag off, or a card that is not force-top3, drops
+ * exactly as applyPlaceabilityDrops always has. A guarded force-top3 card
+ * keeps the straight and the parlay and records an annotation instead.
+ */
+function applyPlaceabilityVerifyPass(picksData, decisions, legDecisions, pickReports, opts = {}) {
+  const guard = force3GuardEnabled(opts && opts.env) && isForceTop3VerifyCard(picksData);
+  const decs = Array.isArray(decisions) ? decisions : [];
+  if (!guard) {
+    const applied = applyPlaceabilityDrops(picksData, decisions, legDecisions);
+    if (Array.isArray(pickReports)) {
+      for (let i = pickReports.length - 1; i >= 0; i--) {
+        if (decs[i] && decs[i].drop) pickReports.splice(i, 1);
+      }
+    }
+    return { dropped: applied.dropped, parlayCleared: applied.parlayCleared, annotated: 0 };
+  }
+  let annotated = 0;
+  (picksData.picks || []).forEach((pick, i) => {
+    const d = decs[i];
+    if (!d || !d.drop) return;
+    const reason = d.reason || PLACEABILITY_VETO_REASON;
+    pushVerifyAnnotation(picksData, {
+      side: pick.pick, matchup: pick.matchup, reason, action: 'annotated',
+    });
+    const rep = Array.isArray(pickReports) ? pickReports[i] : null;
+    if (rep) {
+      rep.warnings = Array.isArray(rep.warnings) ? rep.warnings : [];
+      rep.warnings.push(reason);
+      if (rep.severity === 'clean') rep.severity = 'warning';
+    }
+    annotated += 1;
+  });
+  for (const d of legDecisions || []) {
+    if (!d || !d.drop) continue;
+    const side = d.pick || d.side;
+    const reason = d.reason || PLACEABILITY_VETO_REASON;
+    if (alreadyAnnotated(picksData, side, d.matchup, reason)) continue;
+    pushVerifyAnnotation(picksData, {
+      side, matchup: d.matchup, reason, action: 'annotated',
+    });
+    annotated += 1;
+  }
+  return { dropped: 0, parlayCleared: false, annotated };
+}
+
+/**
+ * Verify steam-drop pass. Flag off drops and may clear an empty card's parlay.
+ * A guarded force-top3 card keeps the pick and the parlay.
+ */
+function applySteamVerifyPass(picksData, pickReports, opts = {}) {
+  const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
+  const guard = force3GuardEnabled(opts && opts.env) && isForceTop3VerifyCard(picksData);
+  const kept = [];
+  let droppedSteam = 0;
+  let annotated = 0;
+  for (const pick of (picksData && picksData.picks) || []) {
+    const r = pick.lineMove ? adverseSteamReason(pick.lineMove, { verify: true }) : null;
+    if (!r) {
+      kept.push(pick);
+      continue;
+    }
+    if (guard) {
+      const reason = `QA_HARDFAIL: ${r}`;
+      pushVerifyAnnotation(picksData, {
+        side: pick.pick, matchup: pick.matchup, reason, action: 'annotated',
+      });
+      const rep = reportForPick(pickReports, pick);
+      if (rep) {
+        rep.warnings = Array.isArray(rep.warnings) ? rep.warnings : [];
+        rep.warnings.push(reason);
+        if (rep.severity === 'clean') rep.severity = 'warning';
+      }
+      annotated += 1;
+      kept.push(pick);
+      console.log(`[verify-steam] annotating ${pick.pick}: ${r}`);
+      continue;
+    }
+    console.log(`[verify-steam] dropping ${pick.pick}: ${r}`);
+    picksData.rejections = picksData.rejections || [];
+    picksData.rejections.unshift({
+      matchup: pick.matchup, side: pick.pick,
+      reason: `QA_HARDFAIL: ${r}`, hardFail: true,
+    });
+    droppedSteam++;
+  }
+  if (droppedSteam > 0) {
+    picksData.picks = kept;
+    if (kept.length === 0) {
+      picksData.parlayLegs = [];
+      Object.assign(picksData, require('./lib/no-plays').noPlaysFields(
+        "The line moved against today's candidates after they were priced, so the card is a pass."));
+      picksData.edgeSummary = picksData.noPlaysReason;
+    }
+    if (picksData.summary) {
+      picksData.summary.totalStraightBets = kept.length;
+      picksData.summary.totalPicks = kept.length;
+    }
+    enforceOmegaDailyUnitCap(picksData);
+  }
+  return { droppedSteam, annotated };
+}
+
+function pickSideOf(row) {
+  return String((row && (row.pick || row.side)) || '').trim();
+}
+
+function picksMatch(a, b) {
+  if (!a || !b) return false;
+  if (a.pickId && b.pickId) return String(a.pickId) === String(b.pickId);
+  const sideA = pickSideOf(a);
+  const sideB = pickSideOf(b);
+  return sideA !== '' && sideA === sideB && String(a.matchup || '').trim() === String(b.matchup || '').trim();
+}
+
+function findPickIndex(list, pick, claimed) {
+  if (!Array.isArray(list) || !pick) return -1;
+  return list.findIndex((row) => row && !(claimed && claimed.has(row)) && picksMatch(row, pick));
+}
+
+function insertionIndex(next, locked, lp) {
+  const lockedIdx = locked.indexOf(lp);
+  for (let j = lockedIdx - 1; j >= 0; j -= 1) {
+    const prevPos = findPickIndex(next, locked[j], null);
+    if (prevPos >= 0) return prevPos + 1;
+  }
+  for (let j = lockedIdx + 1; j < locked.length; j += 1) {
+    const nextPos = findPickIndex(next, locked[j], null);
+    if (nextPos >= 0) return nextPos;
+  }
+  return next.length;
+}
+
+function parlayLegCount(parlayLegs) {
+  if (!Array.isArray(parlayLegs) || parlayLegs.length === 0) return 0;
+  const legs = parlayLegs[0] && parlayLegs[0].legs;
+  return Array.isArray(legs) ? legs.length : 0;
+}
+
+function parlayTicketUnits(pl) {
+  if (!pl) return 0;
+  if (pl.unitsNum != null && pl.unitsNum !== '' && Number.isFinite(Number(pl.unitsNum))) return Number(pl.unitsNum);
+  const n = parseUnits(pl.units);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function recomputeForce3Summary(picksData) {
+  if (!picksData.summary || typeof picksData.summary !== 'object') return;
+  const { formatUnitsTotal } = require('./lib/omega-vnext/assemble');
+  const straightU = (picksData.picks || []).reduce((s, p) => s + straightUnitsOf(p), 0);
+  const parlayU = (picksData.parlayLegs || []).reduce((s, pl) => s + parlayTicketUnits(pl), 0);
+  picksData.summary.totalPicks = (picksData.picks || []).length;
+  picksData.summary.totalStraightBets = (picksData.picks || []).length;
+  picksData.summary.totalUnits = formatUnitsTotal(straightU + parlayU);
+  if (Array.isArray(picksData.summary.sportsCovered)) {
+    picksData.summary.sportsCovered = [...new Set((picksData.picks || []).map((p) => p.sport).filter(Boolean))];
+  }
+}
+
+function clearNoPlaysStamp(picksData, snap) {
+  const had = !!(picksData.noPlays || picksData.noPlaysTitle || picksData.noPlaysReason);
+  if (!had) return;
+  const reason = picksData.noPlaysReason;
+  for (const key of ['noPlays', 'noPlaysTitle', 'noPlaysReason', 'noGames', 'runComplete']) {
+    if (snap && Object.prototype.hasOwnProperty.call(snap, key)) picksData[key] = snap[key];
+    else delete picksData[key];
+  }
+  if (snap && Object.prototype.hasOwnProperty.call(snap, 'edgeSummary')) {
+    picksData.edgeSummary = snap.edgeSummary;
+  } else if (reason && picksData.edgeSummary === reason) {
+    delete picksData.edgeSummary;
+  }
+}
+
+function rejectionIdentity(r) {
+  return [
+    String(r && r.side || '').trim().toLowerCase(),
+    String(r && r.matchup || '').trim().toLowerCase(),
+    String(r && r.reason || ''),
+  ].join('|');
+}
+
+function rejectionMatchesPick(rej, pick) {
+  const side = String(rej && rej.side || '').trim();
+  const pickSide = pickSideOf(pick);
+  if (!side || side.toLowerCase() !== pickSide.toLowerCase()) return false;
+  const rm = String(rej && rej.matchup || '').trim().toLowerCase();
+  const pm = String(pick && pick.matchup || '').trim().toLowerCase();
+  if (rm && pm && rm !== pm) return false;
+  return true;
+}
+
+function isVerifyRunRejection(rej) {
+  const reason = String(rej && rej.reason || '');
+  if (rej && (rej.hardFail === true || rej.placeability === true)) return true;
+  return reason.startsWith('QA_HARDFAIL:') || reason.startsWith('placeability-soft-veto');
+}
+
+function stripRestoredRejections(picksData, snap, restoredRows) {
+  if (!restoredRows.length || !Array.isArray(picksData.rejections)) return;
+  const prior = snap && Array.isArray(snap.rejections) ? snap.rejections : null;
+  const priorKeys = prior ? new Set(prior.map(rejectionIdentity)) : null;
+  picksData.rejections = picksData.rejections.filter((rej) => {
+    const hit = restoredRows.some((p) => rejectionMatchesPick(rej, p));
+    if (!hit) return true;
+    if (priorKeys) return priorKeys.has(rejectionIdentity(rej));
+    return !isVerifyRunRejection(rej);
+  });
+}
+
+function restoreLockedPicks(picksData, locked) {
+  const current = Array.isArray(picksData.picks) ? picksData.picks : [];
+  if (!Array.isArray(locked) || locked.length < 3 || current.length >= 3) return [];
+  const next = current.slice();
+  const claimed = new Set();
+  const restoredRows = [];
+  for (const lp of locked) {
+    if (next.length >= 3) break;
+    const idx = findPickIndex(next, lp, claimed);
+    if (idx >= 0) {
+      claimed.add(next[idx]);
+      continue;
+    }
+    const clone = JSON.parse(JSON.stringify(lp));
+    next.splice(insertionIndex(next, locked, lp), 0, clone);
+    claimed.add(clone);
+    restoredRows.push(clone);
+  }
+  if (restoredRows.length) picksData.picks = next;
+  return restoredRows;
+}
+
+/**
+ * Put a force-top3 card back to 3 locked straights and its locked parlay.
+ * A no-op (already 3 straights and an intact parlay) does not add fields.
+ * In-place replacements that already leave 3 straights are left alone.
+ */
+function enforceForceTop3Floor(picksData, v2LockSnapshot) {
+  if (!picksData || typeof picksData !== 'object') return { restored: 0, parlayRestored: false };
+  const snap = v2LockSnapshot && typeof v2LockSnapshot === 'object' ? v2LockSnapshot : {};
+  const locked = Array.isArray(snap.picks) ? snap.picks : [];
+  const current = Array.isArray(picksData.picks) ? picksData.picks : [];
+  const snapParlay = Array.isArray(snap.parlayLegs) ? snap.parlayLegs : [];
+  const snapLegs = parlayLegCount(snapParlay);
+  const curLegs = parlayLegCount(picksData.parlayLegs);
+  const needPicks = locked.length >= 3 && current.length < 3;
+  const needParlay = snapParlay.length > 0 && (
+    !Array.isArray(picksData.parlayLegs) || picksData.parlayLegs.length === 0 || curLegs < snapLegs
+  );
+  if (!needPicks && !needParlay) return { restored: 0, parlayRestored: false };
+
+  const restoredRows = needPicks ? restoreLockedPicks(picksData, locked) : [];
+  let parlayRestored = false;
+  if (needParlay) {
+    picksData.parlayLegs = JSON.parse(JSON.stringify(snapParlay));
+    parlayRestored = true;
+  }
+  if (!restoredRows.length && !parlayRestored) return { restored: 0, parlayRestored: false };
+
+  recomputeForce3Summary(picksData);
+  clearNoPlaysStamp(picksData, snap);
+  stripRestoredRejections(picksData, snap, restoredRows);
+  for (const p of restoredRows) {
+    pushVerifyAnnotation(picksData, {
+      side: p.pick || p.side,
+      matchup: p.matchup,
+      reason: 'restored locked force-top3 straight',
+      action: 'restored-force-top3',
+    });
+  }
+  if (parlayRestored) {
+    const ticket = picksData.parlayLegs && picksData.parlayLegs[0];
+    pushVerifyAnnotation(picksData, {
+      side: 'parlay',
+      matchup: (ticket && ticket.type) || '',
+      reason: 'restored locked force-top3 parlay',
+      action: 'restored-force-top3',
+    });
+  }
+  return { restored: restoredRows.length, parlayRestored };
+}
+
 exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
 exports.straightRefillAllowed = straightRefillAllowed;
@@ -1278,6 +1598,12 @@ exports.pickFieldsWouldChange = pickFieldsWouldChange;
 exports.updatePicksBlob = updatePicksBlob;
 exports.fetchBetaPicks = fetchBetaPicks;
 exports.enforceOmegaDailyUnitCap = enforceOmegaDailyUnitCap;
+exports.force3GuardEnabled = force3GuardEnabled;
+exports.isForceTop3VerifyCard = isForceTop3VerifyCard;
+exports.shouldEnforceForceTop3 = shouldEnforceForceTop3;
+exports.applyPlaceabilityVerifyPass = applyPlaceabilityVerifyPass;
+exports.applySteamVerifyPass = applySteamVerifyPass;
+exports.enforceForceTop3Floor = enforceForceTop3Floor;
 
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
@@ -1298,12 +1624,22 @@ exports.handler = async (event) => {
 
     console.log(`[verify] Starting verification for ${dateKey}`);
 
+    // Every blob write in this handler goes through here so the force-top3
+    // floor runs first. An empty card has no snapshot yet, so the floor is skipped.
+    let v2LockSnapshot = null;
+    async function writeVerifiedCard(key, data, deps) {
+      if (v2LockSnapshot && shouldEnforceForceTop3(data, v2LockSnapshot)) {
+        enforceForceTop3Floor(data, v2LockSnapshot);
+      }
+      return updatePicksBlob(key, data, deps);
+    }
+
     const result = await fetchBetaPicks(dateKey);
     if (!result || !result.data || !result.data.picks || result.data.picks.length === 0) {
       // A stored empty card can already say claudeVerified: true. Clear that stamp.
       // Do not invent picks, and do not mark the empty card verified.
       if (result && result.data && require('./lib/no-plays').unstampEmptyCard(result.data)) {
-        try { await updatePicksBlob(result.dateKey || dateKey, result.data); }
+        try { await writeVerifiedCard(result.dateKey || dateKey, result.data); }
         catch (e) { console.log(`[verify] empty unstamp skipped: ${e.message}`); }
       }
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ date: dateKey, verified: false, summary: "No picks found" }) };
@@ -1312,7 +1648,7 @@ exports.handler = async (event) => {
     const picksData = result.data;
     const dateFormatted = dateKey;
     const lockedStraightPicks = (picksData.picks || []).map(p => p.pick).filter(Boolean);
-    const v2LockSnapshot = JSON.parse(JSON.stringify({
+    v2LockSnapshot = JSON.parse(JSON.stringify({
       picks: picksData.picks,
       parlayLegs: picksData.parlayLegs,
       rankedPool: picksData.rankedPool,
@@ -1325,6 +1661,13 @@ exports.handler = async (event) => {
       qaHardFails: picksData.qaHardFails,
       hardFails: picksData.hardFails,
       summary: picksData.summary,
+      rejections: picksData.rejections,
+      edgeSummary: picksData.edgeSummary,
+      noPlays: picksData.noPlays,
+      noPlaysTitle: picksData.noPlaysTitle,
+      noPlaysReason: picksData.noPlaysReason,
+      noGames: picksData.noGames,
+      runComplete: picksData.runComplete,
     }));
 
     // ── Step 1: Math + Narrative checks ──
@@ -1375,15 +1718,17 @@ exports.handler = async (event) => {
       totalWarnings += hrCheck.parlayFindings.filter(f => f.level === "warning").length;
       const anyDrop = decisions.some(d => d.drop) || legDecisions.some(d => d.drop);
       if (anyDrop && !hrCheck.summary.apiDown && !hrCheck.summary.skipped) {
-        const applied = applyPlaceabilityDrops(picksData, decisions, legDecisions);
-        for (let i = pickReports.length - 1; i >= 0; i--) {
-          if (decisions[i] && decisions[i].drop) pickReports.splice(i, 1);
-        }
+        const applied = applyPlaceabilityVerifyPass(picksData, decisions, legDecisions, pickReports, { env: process.env });
         placeabilityDropped = applied.dropped;
         if (applied.dropped > 0) blockStraightRefill = true;
         if (applied.parlayCleared) blockParlayRefill = true;
-        console.log(`[verify-placeability] soft-veto dropped ${applied.dropped} straight(s); parlayCleared=${applied.parlayCleared}; remaining=${picksData.picks.length}`);
-        await updatePicksBlob(dateKey, picksData);
+        if (applied.annotated > 0) totalWarnings += applied.annotated;
+        if (applied.annotated > 0) {
+          console.log(`[verify-placeability] force-top3 guard annotated ${applied.annotated}; remaining=${picksData.picks.length}`);
+        } else {
+          console.log(`[verify-placeability] soft-veto dropped ${applied.dropped} straight(s); parlayCleared=${applied.parlayCleared}; remaining=${picksData.picks.length}`);
+        }
+        await writeVerifiedCard(dateKey, picksData);
       } else if (hrCheck.summary.apiDown || hrCheck.summary.skipped) {
         console.log(`[verify-placeability] odds API unavailable — card left intact (${hrCheck.summary.reason || "feed down"})`);
       }
@@ -1409,47 +1754,22 @@ exports.handler = async (event) => {
     if (fixResult.fixed) {
       console.log(`[verify] Auto-fixed ${fixResult.replacements.length} pick(s)`);
       // Write updated picks back to blob so the page shows clean data
-      await updatePicksBlob(dateKey, picksData);
+      await writeVerifiedCard(dateKey, picksData);
     }
 
-    // Steam hard-fails still on card after autofix → drop (empty OK; no TARGET_PICKS refill)
+    // Steam hard-fails still on card after autofix → drop (empty OK; no TARGET_PICKS refill).
+    // A guarded force-top3 card annotates the same hard-fail and keeps the pick.
     try {
-      const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
-      const kept = [];
-      droppedSteam = 0;
-      for (const pick of picksData.picks) {
-        const r = pick.lineMove ? adverseSteamReason(pick.lineMove, { verify: true }) : null;
-        if (r) {
-          console.log(`[verify-steam] dropping ${pick.pick}: ${r}`);
-          picksData.rejections = picksData.rejections || [];
-          picksData.rejections.unshift({
-            matchup: pick.matchup, side: pick.pick,
-            reason: `QA_HARDFAIL: ${r}`, hardFail: true,
-          });
-          droppedSteam++;
-          continue;
-        }
-        kept.push(pick);
-      }
+      const steamPass = applySteamVerifyPass(picksData, pickReports, { env: process.env });
+      droppedSteam = steamPass.droppedSteam;
+      if (steamPass.annotated > 0) totalWarnings += steamPass.annotated;
       // Adverse steam must not be undone by TARGET_PICKS backfill (same flag as placeability).
       if (steamDropBlocksStraightRefill(droppedSteam, steamCheck.failed)) {
         blockStraightRefill = true;
       }
-      if (droppedSteam > 0) {
-        picksData.picks = kept;
-        if (kept.length === 0) {
-          picksData.parlayLegs = [];
-          Object.assign(picksData, require('./lib/no-plays').noPlaysFields(
-            "The line moved against today's candidates after they were priced, so the card is a pass."));
-          picksData.edgeSummary = picksData.noPlaysReason;
-        }
-        if (picksData.summary) {
-          picksData.summary.totalStraightBets = kept.length;
-          picksData.summary.totalPicks = kept.length;
-        }
-        enforceOmegaDailyUnitCap(picksData);
-        await updatePicksBlob(dateKey, picksData);
-        console.log(`[verify-steam] dropped ${droppedSteam} adverse-steam pick(s); remaining=${kept.length}`);
+      if (droppedSteam > 0 || steamPass.annotated > 0) {
+        await writeVerifiedCard(dateKey, picksData);
+        console.log(`[verify-steam] ${steamPass.annotated > 0 ? `annotated ${steamPass.annotated}` : `dropped ${droppedSteam}`} adverse-steam pick(s); remaining=${picksData.picks.length}`);
       }
     } catch (e) {
       console.log(`[verify-steam] drop pass skipped: ${e.message}`);
@@ -1465,7 +1785,7 @@ exports.handler = async (event) => {
         cleanV2Stamp = await stampCleanVerifiedCard(picksData, {
           dateKey,
           now: new Date(),
-          writer: updatePicksBlob,
+          writer: writeVerifiedCard,
         });
         if (cleanV2Stamp.stamped) {
           console.log(`[verify] clean v2 card stamped verifiedAt=${picksData.verifiedAt}`);
@@ -1840,7 +2160,7 @@ Return ONLY valid JSON array:
       picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
 
       // Write the final clean card
-      await updatePicksBlob(dateKey, picksData);
+      await writeVerifiedCard(dateKey, picksData);
       console.log(`[verify-final] Final pass complete: ${finalFixCount} fixes applied and saved`);
     }
 

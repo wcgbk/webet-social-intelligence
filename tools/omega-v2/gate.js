@@ -586,6 +586,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (evFirstCapped.status !== 0) throw new Error('ev-first capped fill gate failed');
+
+  const rankedPool = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-ranked-pool.js')],
+    { stdio: 'inherit' }
+  );
+  if (rankedPool.status !== 0) throw new Error('ranked pool gate failed');
 }
 
 function pickSlim(card) {

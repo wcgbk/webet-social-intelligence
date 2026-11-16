@@ -21,6 +21,7 @@ const { americanToImplied } = require('../omega-vnext/odds_math');
 const { applySportCoverage, stampQualified } = require('./coverage');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { inputsLoggingEnabled, recordCandidateInputs } = require('./candidate_inputs');
+const { buildStoredRankedPool } = require('./ranked_pool');
 
 const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
@@ -474,6 +475,11 @@ async function buildCard(input) {
     ...(forceTop3 ? { selectionRule: 'force-top3' } : {}),
     sportCoverage,
   };
+  // Additive only. Flag off leaves the key off the card.
+  if (forceTop3) {
+    const rankedPool = buildStoredRankedPool(kept, straights, pregameOpts);
+    if (Array.isArray(rankedPool)) card.rankedPool = rankedPool;
+  }
   const published = autoCorrectCard(card, pregameOpts);
   // Published line names the rank: quarter-Kelly growth, not raw EV.
   if (published.selectionRule === 'force-top3') {

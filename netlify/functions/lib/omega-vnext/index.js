@@ -865,6 +865,7 @@ async function generateOmegaVnext(opts = {}) {
       ...(built.selectionRule ? { selectionRule: built.selectionRule } : {}),
     };
     if (built.selectionRule) picksData.selectionRule = built.selectionRule;
+    if (Array.isArray(built.rankedPool)) picksData.rankedPool = built.rankedPool;
     picksData.sportCoverage = built.sportCoverage || null;
     picksData.v1WouldParlay = built.v1WouldParlay === true;
     picksData.meta.pipelineV2 = true;

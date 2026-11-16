@@ -1,26 +1,34 @@
 'use strict';
 
 /**
- * 3 AM ET historical closes for the previous ET day.
- * One Odds API historical call per (sport, 10-minute commence bucket).
- * Snapshot time is the earliest tip in the bucket minus 60 seconds.
- * The commence filter is 30 minutes before the earliest tip through 30
- * minutes after the latest. Close rows are written only for events that
- * belong to the bucket. Card and candidate legs still missing Pinnacle
- * are retried once at the earliest tip minus 15 minutes.
+ * 3 AM ET closes for the previous ET day, from the last saved odds-master
+ * board. Prefer the 10 AM Pinnacle line. Use the 3 AM line when that is
+ * the latest saved pull (no 10 AM board for the game, or 10 AM has no
+ * Pinnacle price). The scheduled step does not call the Odds API and
+ * spends zero credits.
+ * OMEGA_CLOSES_HISTORICAL=on restores the paid historical path: one Odds
+ * API historical call per (sport, 10-minute commence bucket). Snapshot
+ * time is the earliest tip in the bucket minus 60 seconds. The commence
+ * filter is 30 minutes before the earliest tip through 30 minutes after
+ * the latest. Card and candidate legs still missing Pinnacle are retried
+ * once at the earliest tip minus 15 minutes.
+ * Done markers are per event (`done-ev/{sport}/{eventId}`). A sibling
+ * `done/{sport}/{commence}/{market}` marker is not a close. A sport and
+ * snapshot `done-bucket` is written only after every event in that bucket
+ * is a close or a no-close. An existing done-ev close is never overwritten.
  * A manual missingGames run plans buckets only for slate games that have
  * no close yet, plus card and candidate legs that are still no-close.
- * It ignores done-bucket markers, does not overwrite a done-ev close, and
- * keeps the earlier snapshot for those legs only. Scheduled runs never
- * set the flag.
- * OMEGA_CLOSES_AT_3AM defaults on. OMEGA_CLOSES_3AM_CAP defaults to the
- * Saturday 2026-11-14 estimate plus about 25% headroom (see DEFAULT_CAP).
- * No schedule of its own. capture-odds-3am fires the background worker.
+ * Scheduled runs never set that flag.
+ * OMEGA_CLOSES_AT_3AM defaults on. The worker still runs. Historical
+ * purchases stay off unless OMEGA_CLOSES_HISTORICAL is on.
+ * OMEGA_CLOSES_3AM_CAP defaults to the Saturday 2026-11-14 estimate plus
+ * about 25% headroom (see DEFAULT_CAP) and applies only to the historical
+ * path. No schedule of its own. capture-odds-3am fires the background worker.
  */
 
 const S = require('./clv-supabase');
 const FB = require('./full-board-closes');
-const { closesAt3amEnabled } = require('./default_on_flag');
+const { closesAt3amEnabled, closesHistoricalEnabled } = require('./default_on_flag');
 
 const SPORTS = ['NFL', 'NBA', 'NCAAF', 'NCAAM', 'NHL'];
 const MARKETS = ['h2h', 'spreads', 'totals'];
@@ -49,6 +57,7 @@ const CLOSE_BOOK = 'pinnacle';
 const STORE = 'clv-close-capture';
 const PICKS_STORE = 'edge-picks-omega';
 const SOURCE = 'oddsapi-historical:capture-closes-3am';
+const BOARD_SOURCE = 'odds-master-board:capture-closes-3am';
 const BUCKET_MS = 10 * 60 * 1000;
 const SNAPSHOT_LEAD_MS = 60 * 1000;
 /** Odds API commenceTimeFrom / commenceTimeTo around the bucket tips. */
@@ -590,7 +599,6 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
   const rows = { games: [], snaps: [] };
   const pickResults = [];
   const satisfiedEventMarkets = new Set();
-  const blockedCommence = new Set();
   for (const pick of picks) {
     const assessed = assessPick(pick, belonging);
     const market = assessed.market || pickMarket(pick);
@@ -602,8 +610,6 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
       closeLeadMin: leadMinutes(pick.commenceTime, snapshotAt),
     });
     pickResults.push(row);
-    const ctPick = FB.normalizeCommence(pick.commenceTime) || pick.commenceTime;
-    if (assessed.status !== 'closed') blockedCommence.add(`${ctPick}|${market}`);
   }
   for (const event of writable) {
     if (!event) continue;
@@ -636,29 +642,20 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
       const markets = marketsForEvent(event, onlyPicks);
       let any = false;
       for (const market of markets) {
-        if (!pinnacleMarket(event, market)) continue;
-        any = true;
-        if (ct && blockedCommence.has(`${ct}|${market}`)) continue;
-        const key = FB.doneMarketKey(bucket.sport, ct, market);
-        const payload = {
-          at: when.toISOString(),
-          via: 'closes-3am',
-          events: writable.length,
-          posted,
-          eventId: String(event.id),
-        };
-        doneWrites.push(key);
-        await ctx.blobs.set(STORE, key, payload);
+        if (pinnacleMarket(event, market)) any = true;
       }
-      if (any) {
-        const key = FB.doneEvKey(bucket.sport, event.id);
-        doneWrites.push(key);
-        await ctx.blobs.set(STORE, key, {
-          at: when.toISOString(),
-          commenceTime: ct,
-          via: 'closes-3am',
-        });
-      }
+      // Per-event marker only. done/{sport}/{commence}/{market} covers every
+      // sibling that tips at the same second, so this step does not write it.
+      if (!any) continue;
+      const key = FB.doneEvKey(bucket.sport, event.id);
+      if (await hasBlob(ctx.blobs, key)) continue;
+      doneWrites.push(key);
+      await ctx.blobs.set(STORE, key, {
+        at: when.toISOString(),
+        commenceTime: ct,
+        via: 'closes-3am',
+        eventId: String(event.id),
+      });
     }
     if (ctx.storeClose) {
       for (const event of writable) {
@@ -683,8 +680,13 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
   return { events: writable, belonging, rows, posted, pickResults, doneWrites, satisfiedEventMarkets };
 }
 
+function masterReader(ctx) {
+  if (ctx && typeof ctx.readMaster === 'function') return ctx.readMaster;
+  return (key) => require('./odds-master/store').readJson(key);
+}
+
 async function loadInputs(date, ctx) {
-  const readBoard = ctx.readBoard || ((key) => require('./odds-master/store').readJson(key));
+  const readBoard = (ctx && ctx.readBoard) || masterReader(ctx);
   let slate = [];
   try {
     const doc = await readBoard(`by-date/${date}`);
@@ -765,21 +767,11 @@ function summaryHasClosed(summary, game) {
   return rows.some((row) => summaryRowMatchesGame(row, game));
 }
 
-/** True when the old live job, market markers, or this summary already closed the game. */
+/** True only for this event's done-ev marker or a closed summary row for this event.
+ *  Sibling done/{sport}/{commence}/{market} markers do not count. */
 async function gameHasClose(game, blobs, summary) {
   if (!game) return false;
   if (game.eventId && await hasBlob(blobs, FB.doneEvKey(game.sport, game.eventId))) return true;
-  const ct = FB.normalizeCommence(game.commenceTime);
-  if (ct) {
-    let allMarkets = true;
-    for (const market of MARKETS) {
-      if (!(await hasBlob(blobs, FB.doneMarketKey(game.sport, ct, market)))) {
-        allMarkets = false;
-        break;
-      }
-    }
-    if (allMarkets) return true;
-  }
   return summaryHasClosed(summary, game);
 }
 
@@ -806,6 +798,77 @@ async function missingGameTargets(games, blobs, summary, prior) {
     if (legStillOpen(game, prior)) out.push(game);
   }
   return out;
+}
+
+function summaryAccounted(summary, game) {
+  const rows = [].concat((summary && summary.games) || []);
+  return rows.some((row) => {
+    if (!row || (row.status !== 'closed' && row.status !== 'no-close')) return false;
+    if (!game.eventId || !row.eventId || String(game.eventId) !== String(row.eventId)) return false;
+    const rowSport = canonSport(row.sport);
+    const gameSport = canonSport(game.sport);
+    if (rowSport && gameSport && rowSport !== gameSport) return false;
+    return true;
+  });
+}
+
+/** A bucket is done only when every planned event is a close or a no-close. */
+async function everyGameAccounted(bucket, belonging, blobs, summary) {
+  for (const game of (bucket && bucket.games) || []) {
+    if (await gameHasClose(game, blobs, summary)) continue;
+    if (summaryAccounted(summary, game)) continue;
+    if (!belonging) return false;
+    const row = assessGame(game, belonging, null);
+    if (row && (row.status === 'closed' || row.status === 'no-close')) continue;
+    return false;
+  }
+  return true;
+}
+
+function indexHasClose(index) {
+  if (!index || typeof index !== 'object') return false;
+  if (index.close) return true;
+  const prices = index.prices;
+  if (!prices || typeof prices !== 'object') return false;
+  for (const meta of Object.values(prices)) {
+    if (!meta) continue;
+    if (meta.role === 'close') return true;
+    if (Array.isArray(meta.roles) && meta.roles.includes('close')) return true;
+  }
+  return false;
+}
+
+function eventHasPinnacle(event) {
+  return MARKETS.some((market) => pinnacleMarket(event, market));
+}
+
+async function readMasterKey(readMaster, key) {
+  try { return await readMaster(key); } catch (err) {
+    safeLog(`[closes-3am] board ${key}: ${err && err.message}`);
+    return null;
+  }
+}
+
+/** Last saved Pinnacle event. 10 AM wins when that raw board prices Pinnacle. */
+async function loadSavedPinnacle(sport, eventId, readMaster) {
+  const empty = { index: null, event: null, slot: null, at: null, reason: 'not-in-saved-board' };
+  if (!sport || eventId == null || eventId === '') return empty;
+  const index = await readMasterKey(readMaster, `index/${sport}/${eventId}`);
+  if (!index) return empty;
+  const at10 = index.checks && index.checks['1000'] && index.checks['1000'].at;
+  const at03 = index.baseline0300 && index.baseline0300.at;
+  const raw10 = at10 ? await readMasterKey(readMaster, `${sport}/${eventId}/raw/${at10}`) : null;
+  const raw03 = at03 ? await readMasterKey(readMaster, `${sport}/${eventId}/raw/${at03}`) : null;
+  if (eventHasPinnacle(raw10)) return { index, event: raw10, slot: '1000', at: at10, reason: null };
+  if (eventHasPinnacle(raw03)) return { index, event: raw03, slot: '0300', at: at03, reason: null };
+  if (!raw10 && !raw03) return { index, event: null, slot: null, at: null, reason: 'not-in-saved-board' };
+  return { index, event: null, slot: null, at: null, reason: 'pinnacle-not-priced' };
+}
+
+function withEventId(event, eventId) {
+  if (!event) return event;
+  if (event.id != null && String(event.id) !== '') return event;
+  return Object.assign({}, event, { id: eventId });
 }
 
 function gameMatchup(game) {
@@ -855,7 +918,278 @@ function trackedLegs(bucket) {
   return out;
 }
 
+async function runSavedBoardCloses(ctx) {
+  const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
+  const env = ctx.env || process.env;
+  const date = ctx.date;
+  const missingGames = !!ctx.missingGames;
+  const dryRun = !!ctx.dryRun;
+  const result = {
+    ok: true,
+    date,
+    cap: capFor(env),
+    estCost: 0,
+    creditFormula: 'saved-board: 0 Odds API credits',
+    onlyMissing: !!(ctx.onlyMissing || ctx.picksOnly),
+    retryNoClose: !!ctx.retryNoClose,
+    missingGames,
+    dryRun,
+    reserveGuard: false,
+    calls: [],
+    errors: [],
+    picks: [],
+    buckets: [],
+    games: [],
+    skippedDone: 0,
+    skippedCap: 0,
+    mode: 'saved-board',
+  };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) {
+    result.ok = false;
+    result.errors.push('bad-date');
+    return result;
+  }
+  const readMaster = masterReader(ctx);
+  const loaded = await loadInputs(date, ctx);
+  const games = loaded.games;
+  const blobs = ctx.blobs;
+  let summary = null;
+  if (blobs) {
+    try { summary = await blobs.get(STORE, summaryKey(date)); } catch (_) { summary = null; }
+  }
+  const prior = priorStatus(summary);
+  let targets = games;
+  if (missingGames) targets = await missingGameTargets(games, blobs, summary, prior);
+  let remaining = ctx.requestsRemaining != null ? ctx.requestsRemaining : null;
+  if (remaining == null && blobs) {
+    try { remaining = await latestRemaining(blobs, now); } catch (_) { remaining = null; }
+  }
+  result.remainingBefore = remaining;
+  result.remaining = remaining;
+
+  const pickRows = [];
+  const seenPicks = new Set();
+  function remember(rows) {
+    for (const row of rows || []) {
+      if (!row) continue;
+      const key = pickKey(row);
+      seenPicks.add(key);
+      const at = pickRows.findIndex((item) => pickKey(item) === key);
+      const existing = at >= 0 ? pickRows[at] : prior.get(key);
+      const merged = mergePickRow(existing, row);
+      if (at >= 0) pickRows[at] = merged;
+      else pickRows.push(merged);
+    }
+  }
+  const gameRows = [];
+  const seenGames = new Set();
+  const priorGames = new Map();
+  for (const row of (summary && summary.games) || []) {
+    if (row) priorGames.set(gameRowKey(row), row);
+  }
+  function rememberGame(row) {
+    if (!row) return;
+    const key = gameRowKey(row);
+    if (seenGames.has(key)) return;
+    seenGames.add(key);
+    const prev = priorGames.get(key);
+    const merged = prev && prev.status === 'closed' ? prev : row;
+    gameRows.push(merged);
+  }
+  function rememberClosedPicks(game) {
+    for (const pick of game.picks || []) {
+      const prev = prior.get(pickKey(pick));
+      if (prev) remember([prev]);
+      else remember([Object.assign({}, pick, { status: 'closed', reason: null, market: pickMarket(pick) })]);
+    }
+  }
+
+  const targetIds = new Set((targets || []).map((game) => game && game.eventId).filter(Boolean).map(String));
+  for (const game of games) {
+    const wanted = !missingGames || targetIds.has(String(game.eventId)) || (game.picks || []).some((pick) => pickMissing(pick, prior, true));
+    if (!wanted) continue;
+    const already = await gameHasClose(game, blobs, summary);
+    if (already) {
+      result.skippedDone += 1;
+      const prev = priorGames.get(gameRowKey(game));
+      rememberGame(prev && prev.status === 'closed' ? prev : gameResultRow(game, 'closed', null, null, game.eventId));
+      rememberClosedPicks(game);
+      continue;
+    }
+    const saved = await loadSavedPinnacle(game.sport, game.eventId, readMaster);
+    if (indexHasClose(saved.index)) {
+      result.skippedDone += 1;
+      const row = gameResultRow(game, 'closed', null, saved.at, game.eventId);
+      row.slot = saved.slot;
+      rememberGame(row);
+      rememberClosedPicks(game);
+      if (!dryRun && blobs && game.eventId && !(await hasBlob(blobs, FB.doneEvKey(game.sport, game.eventId)))) {
+        await blobs.set(STORE, FB.doneEvKey(game.sport, game.eventId), {
+          at: now.toISOString(),
+          commenceTime: FB.normalizeCommence(game.commenceTime),
+          via: 'closes-3am',
+          source: BOARD_SOURCE,
+        });
+      }
+      continue;
+    }
+    if (!saved.event) {
+      const reason = saved.reason || 'not-in-saved-board';
+      const row = gameResultRow(game, 'no-close', reason, null, game.eventId);
+      rememberGame(row);
+      for (const pick of game.picks || []) {
+        remember([Object.assign({}, pick, { status: 'no-close', reason, market: pickMarket(pick), eventId: game.eventId || null })]);
+      }
+      continue;
+    }
+    const event = withEventId(saved.event, game.eventId);
+    const built = S.rowsFromOddsEvent(game.sport, event, {
+      lineType: 'closing',
+      source: BOARD_SOURCE,
+      books: BOOKS,
+      markets: MARKETS,
+    });
+    if (built.game) {
+      built.game.slot = saved.slot;
+      built.game.boardAt = saved.at;
+    }
+    for (const snap of built.snaps || []) snap.slot = saved.slot;
+    let posted = { games: built.game ? 1 : 0, odds_snapshots: (built.snaps || []).length, requests: 0, dryRun: true };
+    if (!dryRun) {
+      try {
+        const writeRows = ctx.writeRows || S.writeRows;
+        posted = await writeRows({ games: built.game ? [built.game] : [], snaps: built.snaps || [] }, env);
+      } catch (err) {
+        result.ok = false;
+        result.errors.push(scrub(err && err.message));
+        safeLog(`[closes-3am] saved board ${game.sport}/${game.eventId}: ${err && err.message}`);
+        rememberGame(gameResultRow(game, 'no-close', 'write-failed', saved.at, event.id));
+        for (const pick of game.picks || []) {
+          remember([Object.assign({}, pick, { status: 'no-close', reason: 'write-failed', market: pickMarket(pick) })]);
+        }
+        continue;
+      }
+      if (ctx.storeClose && pinnacleBook(event)) {
+        try {
+          await ctx.storeClose(event, {
+            sport: game.sport,
+            snapshotAt: saved.at,
+            requestedAt: saved.at,
+            commenceTime: event.commence_time || game.commenceTime,
+            source: BOARD_SOURCE,
+            slot: saved.slot,
+          });
+        } catch (err) {
+          safeLog(`[closes-3am] odds-master ${game.sport}: ${err && err.message}`);
+        }
+      }
+      if (blobs && event.id != null) {
+        const key = FB.doneEvKey(game.sport, event.id);
+        if (!(await hasBlob(blobs, key))) {
+          await blobs.set(STORE, key, {
+            at: now.toISOString(),
+            commenceTime: FB.normalizeCommence(event.commence_time || game.commenceTime),
+            via: 'closes-3am',
+            slot: saved.slot,
+            source: BOARD_SOURCE,
+          });
+        }
+      }
+    }
+    const row = gameResultRow(game, 'closed', null, saved.at, event.id);
+    row.slot = saved.slot;
+    rememberGame(row);
+    for (const pick of game.picks || []) {
+      const assessed = assessPick(pick, [event]);
+      remember([Object.assign({}, pick, {
+        market: assessed.market || pickMarket(pick),
+        status: assessed.status,
+        reason: assessed.reason,
+        eventId: (assessed.event && assessed.event.id) || game.eventId || null,
+        closeLeadMin: leadMinutes(pick.commenceTime, saved.at),
+        slot: saved.slot,
+      })]);
+    }
+    result.buckets.push({
+      sport: game.sport,
+      eventId: String(event.id),
+      slot: saved.slot,
+      snapshotAt: saved.at,
+      status: 'saved-board',
+      posted,
+    });
+  }
+
+  for (const game of games) {
+    for (const pick of game.picks || []) {
+      if (!seenPicks.has(pickKey(pick))) {
+        const prev = prior.get(pickKey(pick));
+        if (prev) remember([prev]);
+        else remember([Object.assign({}, pick, { status: 'no-close', reason: 'not-in-saved-board' })]);
+      }
+    }
+    if (!seenGames.has(gameRowKey(game))) {
+      const prev = priorGames.get(gameRowKey(game));
+      if (prev && prev.status === 'closed') rememberGame(prev);
+      else if (await gameHasClose(game, blobs, summary)) {
+        rememberGame(gameResultRow(game, 'closed', null, null, game.eventId));
+      } else if (prev) rememberGame(prev);
+      else if (game.roles && game.roles.has('board')) {
+        rememberGame(gameResultRow(game, 'no-close', 'not-in-saved-board', null, game.eventId));
+      }
+    }
+  }
+  for (const row of (summary && summary.games) || []) rememberGame(row);
+  result.picks = pickRows;
+  result.games = gameRows;
+  const summaryDoc = {
+    date,
+    ranAt: now.toISOString(),
+    mode: 'saved-board',
+    cap: result.cap,
+    estCostPerCall: 0,
+    creditFormula: result.creditFormula,
+    books: BOOKS,
+    onlyMissing: result.onlyMissing,
+    retryNoClose: result.retryNoClose,
+    missingGames,
+    reserveGuard: false,
+    remaining,
+    calls: [],
+    buckets: result.buckets,
+    picks: pickRows,
+    games: gameRows,
+    errors: result.errors,
+  };
+  result.summary = summaryDoc;
+  if (blobs && !dryRun) {
+    const buckets = planBuckets(games);
+    for (const bucket of buckets) {
+      const accounted = await everyGameAccounted(bucket, null, blobs, summaryDoc);
+      if (!accounted) continue;
+      const doneKey = bucketDoneKey(bucket.sport, bucket.snapshotAt);
+      if (await hasBlob(blobs, doneKey)) continue;
+      await blobs.set(STORE, doneKey, {
+        at: now.toISOString(),
+        sport: bucket.sport,
+        snapshotAt: bucket.snapshotAt,
+        from: bucket.from,
+        to: bucket.to,
+        via: 'closes-3am',
+        source: BOARD_SOURCE,
+      });
+    }
+    try { await blobs.set(STORE, summaryKey(date), summaryDoc); } catch (err) {
+      result.ok = false;
+      safeLog(`[closes-3am] summary: ${err && err.message}`);
+    }
+  }
+  return result;
+}
+
 async function runCloses(ctx) {
+  const gateEnv = (ctx && ctx.env) || process.env;
+  if (!closesHistoricalEnabled(gateEnv)) return runSavedBoardCloses(ctx || {});
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
   const env = ctx.env || process.env;
   const date = ctx.date;
@@ -1097,15 +1431,18 @@ async function runCloses(ctx) {
       remember(applied.pickResults);
       stampGames(bucket.games, null, null, snapshotAt, applied.belonging || [], fallback);
       if (blobs && !dryRun) {
-        await blobs.set(STORE, doneKey, {
-          at: now.toISOString(),
-          sport: bucket.sport,
-          snapshotAt,
-          from: bucket.from,
-          to: bucket.to,
-          nEvents: unpacked.events.length,
-          ...(fallback ? { fallback: true } : {}),
-        });
+        const accounted = await everyGameAccounted(bucket, applied.belonging || [], blobs, summary);
+        if (accounted) {
+          await blobs.set(STORE, doneKey, {
+            at: now.toISOString(),
+            sport: bucket.sport,
+            snapshotAt,
+            from: bucket.from,
+            to: bucket.to,
+            nEvents: unpacked.events.length,
+            ...(fallback ? { fallback: true } : {}),
+          });
+        }
         await blobs.set(STORE, creditKey, credits);
       }
       const entry = {
@@ -1332,6 +1669,7 @@ module.exports = {
   CLOSE_BOOK,
   STORE,
   SOURCE,
+  BOARD_SOURCE,
   BUCKET_MS,
   SNAPSHOT_LEAD_MS,
   QUERY_PAD_MS,
@@ -1344,6 +1682,7 @@ module.exports = {
   ALLOWED_NO_CLOSE,
   REGION_EQUIVALENTS,
   closesAt3amEnabled,
+  closesHistoricalEnabled,
   capFor,
   isoSecond,
   etDateOf,
@@ -1361,6 +1700,9 @@ module.exports = {
   reserveBlocks,
   collectGames,
   trackedPicks,
+  gameHasClose,
+  missingGameTargets,
+  loadSavedPinnacle,
   applyBucketResponse,
   runCloses,
   loadStoredEventsForSport,

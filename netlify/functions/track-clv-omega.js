@@ -546,6 +546,7 @@ async function fetchEventF5(sportKey, eventId, atISO) {
 // generic matcher would run while the grade flag is off.
 const ESPN_ENDPOINTS = {
   'NBA': 'basketball/nba', 'NHL': 'hockey/nhl', 'NCAAB': 'basketball/mens-college-basketball',
+  'NFL': 'football/nfl', 'NCAAF': 'football/college-football',
   'MLB': 'baseball/mlb', 'EPL': 'soccer/eng.1', 'La Liga': 'soccer/esp.1',
   'Serie A': 'soccer/ita.1', 'Bundesliga': 'soccer/ger.1', 'Ligue 1': 'soccer/fra.1',
   'MLS': 'soccer/usa.1', 'UCL': 'soccer/uefa.champions', 'UEL': 'soccer/uefa.europa',
@@ -878,30 +879,109 @@ async function writePicksData(dateISO, picksData) {
   } catch (e) { return false; }
 }
 
-// Grade every unsettled pick for a date via ESPN finals and write results back to the picks
-// blob. Mutates picksData in place (so later steps in the same run see the results and the
-// Step 6.5 guard doesn't re-write). Returns the number of picks settled this call.
-async function settleResultsForDate(dateISO, picksData) {
-  const unsettled = (picksData.picks || []).filter(p => !p.result || p.result === 'pending');
-  if (!unsettled.length) return 0;
-  const sports = [...new Set(unsettled.map(p => p.sport).filter(Boolean))];
-  const scoresBySport = {};
-  await Promise.all(sports.map(async s => { scoresBySport[s] = await fetchESPNScores(dateISO, s); }));
-  let settledCount = 0;
-  for (const p of picksData.picks) {
-    if (p.result && p.result !== 'pending') continue;
-    const game = findGameForGrading(p, scoresBySport[p.sport] || []);
-    if (!game) continue;
-    const result = gradePick(p, game);
-    if (result === 'pending') continue;
-    p.result = result;
-    p.profit = calcProfit(result, p.units, p.odds || p.pickTimeOdds);
-    p.finalScore = `${game.awayScore}-${game.homeScore}`;
-    p.settledAt = new Date().toISOString();
-    settledCount++;
+function parlayLegKey(row) {
+  return [
+    String((row && (row.pick || row.side)) || '').trim(),
+    String((row && row.matchup) || '').trim(),
+  ].join('||');
+}
+
+// Same push rules as gradeParlay: a loss loses the ticket, a win needs every
+// live leg to win, and an all-push ticket pushes. Pending stays pending.
+function parlayTicketResult(legs) {
+  const results = (legs || []).map((leg) => (leg && leg.result) || 'pending');
+  if (results.length < 2) return null;
+  if (results.includes('loss')) return 'loss';
+  if (results.includes('pending')) return 'pending';
+  if (results.every((row) => row === 'win')) return 'win';
+  const live = results.filter((row) => row !== 'push');
+  if (!live.length) return 'push';
+  if (live.every((row) => row === 'win')) return 'win';
+  return 'pending';
+}
+
+function parlayNeedsWork(picksData) {
+  const straights = new Map();
+  for (const pick of (picksData && picksData.picks) || []) {
+    if (pick && pick.result && pick.result !== 'pending') straights.set(parlayLegKey(pick), pick);
   }
-  if (settledCount > 0) {
-    const ok = await writePicksData(dateISO, picksData);
+  for (const ticket of (picksData && picksData.parlayLegs) || []) {
+    if (!ticket || !Array.isArray(ticket.legs)) continue;
+    for (const leg of ticket.legs) {
+      if (!leg || (leg.result && leg.result !== 'pending')) continue;
+      if (straights.has(parlayLegKey(leg))) return true;
+    }
+    const next = parlayTicketResult(ticket.legs);
+    if (next && next !== 'pending' && ticket.result !== next) return true;
+  }
+  return false;
+}
+
+// Copy a settled straight onto the matching parlay leg, then grade the ticket.
+function stampParlayLegs(picksData) {
+  const straights = new Map();
+  for (const pick of (picksData && picksData.picks) || []) {
+    if (pick && pick.result && pick.result !== 'pending') straights.set(parlayLegKey(pick), pick);
+  }
+  let changed = false;
+  for (const ticket of (picksData && picksData.parlayLegs) || []) {
+    if (!ticket || !Array.isArray(ticket.legs)) continue;
+    for (const leg of ticket.legs) {
+      if (!leg || (leg.result && leg.result !== 'pending')) continue;
+      const straight = straights.get(parlayLegKey(leg));
+      if (!straight) continue;
+      leg.result = straight.result;
+      leg.profit = straight.profit;
+      leg.finalScore = straight.finalScore;
+      leg.settledAt = straight.settledAt;
+      changed = true;
+    }
+    const next = parlayTicketResult(ticket.legs);
+    if (next && ticket.result !== next) {
+      ticket.result = next;
+      if (next === 'loss' && ticket.units != null) {
+        ticket.profit = calcProfit('loss', ticket.units, ticket.odds || ticket.combinedOdds);
+      } else if (next === 'push') {
+        ticket.profit = 0;
+      }
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+// Grade every unsettled pick for a date via ESPN finals and write results back to the picks
+// blob. Also stamps matching parlayLegs[].legs[] from the straight, then sets the ticket
+// result (loss if any leg loses, win only if every leg wins). Mutates picksData in place
+// (so later steps in the same run see the results and the Step 6.5 guard doesn't re-write).
+// Returns the number of straights settled this call.
+async function settleResultsForDate(dateISO, picksData, deps) {
+  if (!picksData || typeof picksData !== 'object') return 0;
+  const fetchScores = (deps && deps.fetchESPNScores) || fetchESPNScores;
+  const write = (deps && deps.writePicksData) || writePicksData;
+  const unsettled = (picksData.picks || []).filter(p => !p.result || p.result === 'pending');
+  if (!unsettled.length && !parlayNeedsWork(picksData)) return 0;
+  let settledCount = 0;
+  if (unsettled.length) {
+    const sports = [...new Set(unsettled.map(p => p.sport).filter(Boolean))];
+    const scoresBySport = {};
+    await Promise.all(sports.map(async s => { scoresBySport[s] = await fetchScores(dateISO, s); }));
+    for (const p of picksData.picks || []) {
+      if (p.result && p.result !== 'pending') continue;
+      const game = findGameForGrading(p, scoresBySport[p.sport] || []);
+      if (!game) continue;
+      const result = gradePick(p, game);
+      if (result === 'pending') continue;
+      p.result = result;
+      p.profit = calcProfit(result, p.units, p.odds || p.pickTimeOdds);
+      p.finalScore = `${game.awayScore}-${game.homeScore}`;
+      p.settledAt = new Date().toISOString();
+      settledCount++;
+    }
+  }
+  const parlayChanged = stampParlayLegs(picksData);
+  if (settledCount > 0 || parlayChanged) {
+    const ok = await write(dateISO, picksData);
     if (!ok) console.log(`[track-clv] WARNING: settled ${settledCount} picks for ${dateISO} but blob write failed`);
   }
   return settledCount;

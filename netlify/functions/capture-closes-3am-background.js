@@ -1,8 +1,11 @@
 'use strict';
 /**
- * Historical closes for the previous ET day. No schedule.
+ * Closes for the previous ET day. No schedule of its own.
  * capture-odds-3am fires this after the board pull when OMEGA_CLOSES_AT_3AM
  * is on (default). OMEGA_CLOSES_AT_3AM=off returns immediately.
+ * The scheduled run writes closing lines from the last saved Pinnacle board
+ * (10 AM, else 3 AM) and does not call the Odds API.
+ * OMEGA_CLOSES_HISTORICAL=on restores the paid historical-close path.
  * A manual backfill sends { date, onlyMissing|picksOnly, retryNoClose, missingGames }
  * with x-picks-secret. retryNoClose reopens saved no-close card and
  * candidate legs (primary snapshot, then the 15-minute fallback).
@@ -135,6 +138,7 @@ async function handle(event, deps) {
       blobs,
       fetch: fetchImpl,
       readBoard: options.readBoard,
+      readMaster: options.readMaster,
       card: options.card,
       candidates: options.candidates,
       slateEvents: options.slateEvents,

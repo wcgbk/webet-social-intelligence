@@ -2,8 +2,10 @@
 /** 3:00 AM ET daily Odds pull -> odds-master baseline-0300 (Ben 2026-10-18:
  *  only 3AM + 10AM pulls). Cron "0 7,8 * * *". DST-proof via etGuard.
  *  After the board save, fires capture-closes-3am-background when
- *  OMEGA_CLOSES_AT_3AM is on (default). That POST cannot fail the board.
- *  OMEGA_CLOSES_AT_3AM=off does not fire it. */
+ *  OMEGA_CLOSES_AT_3AM is on (default). That step writes closes from the
+ *  last saved board and does not buy historical odds.
+ *  OMEGA_CLOSES_HISTORICAL=on restores the paid historical path.
+ *  The POST cannot fail the board. OMEGA_CLOSES_AT_3AM=off does not fire it. */
 const { runOddsMasterPull } = require('./lib/odds-master/pull');
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 const { closesAt3amEnabled } = require('./lib/default_on_flag');

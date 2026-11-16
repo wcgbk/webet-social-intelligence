@@ -2,7 +2,9 @@
 /** The scheduled Odds API board pulls (Ben, 2026-10-18: 3am and 10am only).
  *  Closing lines are not a third schedule. When OMEGA_CLOSES_AT_3AM is on
  *  (default), capture-odds-3am fires capture-closes-3am-background, which
- *  reads yesterday's slate from this store and pulls historical closes.
+ *  writes closes from the last saved board in this store (10 AM, else 3 AM).
+ *  That step spends zero Odds API credits.
+ *  OMEGA_CLOSES_HISTORICAL=on restores a paid historical-close path.
  *  Slot 0300 = baseline/opening read; slot 1000 = board/decision read.
  *  One request per sport per pull: regions us,us2,eu, markets
  *  h2h,spreads,totals, American odds — the API returns every book in

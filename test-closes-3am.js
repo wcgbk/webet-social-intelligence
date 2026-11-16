@@ -88,6 +88,16 @@ function wrapped(events, timestamp) {
   assert.ok(C.BOOKS.includes('hardrockbet_fl'));
   assert.strictEqual(C.closesAt3amEnabled({}), true);
   assert.strictEqual(C.closesAt3amEnabled({ OMEGA_CLOSES_AT_3AM: 'off' }), false);
+  assert.strictEqual(C.closesHistoricalEnabled({}), false);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: '' }), false);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: 'off' }), false);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: '0' }), false);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: 'false' }), false);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: 'no' }), false);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: 'on' }), true);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: '1' }), true);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: 'true' }), true);
+  assert.strictEqual(C.closesHistoricalEnabled({ OMEGA_CLOSES_HISTORICAL: 'yes' }), true);
   assert.strictEqual(C.dateAllowed('2026-11-15', '2026-11-16'), true);
   assert.strictEqual(C.dateAllowed('2026-11-09', '2026-11-16'), true);
   assert.strictEqual(C.dateAllowed('2026-11-08', '2026-11-16'), false);
@@ -215,7 +225,7 @@ function wrapped(events, timestamp) {
   const blobs = memBlobs({
     'clv-close-capture:credits/2026-11-16': { date: '2026-11-16', used: 5, calls: [{ path: 'full-board', estCost: 3 }] },
   });
-  const env = { ODDS_API_KEY: 'test-key', OMEGA_CLOSES_3AM_CAP: '1000' };
+  const env = { ODDS_API_KEY: 'test-key', OMEGA_CLOSES_3AM_CAP: '1000', OMEGA_CLOSES_HISTORICAL: 'on' };
   const first = await C.runCloses({
     now: new Date('2026-11-16T08:00:00Z'),
     env,
@@ -315,7 +325,7 @@ function wrapped(events, timestamp) {
   const capCalls = [];
   const capped = await C.runCloses({
     now: new Date('2026-11-16T08:00:00Z'),
-    env: { ODDS_API_KEY: 'test-key', OMEGA_CLOSES_3AM_CAP: '60' },
+    env: { ODDS_API_KEY: 'test-key', OMEGA_CLOSES_3AM_CAP: '60', OMEGA_CLOSES_HISTORICAL: 'on' },
     date: '2026-11-15',
     slateEvents: [
       { sport: 'NBA', eventId: 'keep', homeTeam: 'Celtics', awayTeam: 'Knicks', commenceTime: '2026-11-15T18:00:00Z' },
@@ -519,7 +529,7 @@ function wrapped(events, timestamp) {
     headers: { 'x-picks-secret': 'secret' },
     body: JSON.stringify({ date: '2026-11-15', picksOnly: true }),
   }, {
-    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on', OMEGA_CLOSES_HISTORICAL: 'on' },
     now: new Date('2026-11-16T08:00:00Z'),
     blobs: memBlobs({}),
     slateEvents: slate.slice(2),
@@ -535,7 +545,7 @@ function wrapped(events, timestamp) {
   assert.ok(!JSON.stringify(JSON.parse(ran.body)).includes('test-key'));
 
   const mirrorOpts = {
-    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on', OMEGA_CLOSES_HISTORICAL: 'on' },
     now: new Date('2026-11-16T08:00:00Z'),
     blobs: memBlobs({}),
     slateEvents: [],
@@ -808,7 +818,7 @@ function wrapped(events, timestamp) {
   const capFallbackCalls = [];
   const cappedFallback = await C.runCloses({
     now: new Date('2026-11-16T08:00:00Z'),
-    env: { ODDS_API_KEY: 'test-key', OMEGA_CLOSES_3AM_CAP: '60' },
+    env: { ODDS_API_KEY: 'test-key', OMEGA_CLOSES_3AM_CAP: '60', OMEGA_CLOSES_HISTORICAL: 'on' },
     date: '2026-11-15',
     slateEvents: [vanGame],
     card: { picks: vanCard.picks.slice(0, 1) },
@@ -927,7 +937,7 @@ function wrapped(events, timestamp) {
     headers: { 'x-picks-secret': 'secret' },
     body: JSON.stringify({ date: '2026-11-15', onlyMissing: true, retryNoClose: true, scheduled: true }),
   }, {
-    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on', OMEGA_CLOSES_HISTORICAL: 'on' },
     now: new Date('2026-11-16T08:40:00Z'),
     blobs: noCloseSeed(),
     slateEvents: [vanGame],
@@ -945,7 +955,7 @@ function wrapped(events, timestamp) {
     headers: { 'x-picks-secret': 'secret' },
     body: JSON.stringify({ date: '2026-11-15', onlyMissing: true, retryNoClose: true }),
   }, {
-    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on', OMEGA_CLOSES_HISTORICAL: 'on' },
     now: new Date('2026-11-16T08:45:00Z'),
     blobs: noCloseSeed(),
     slateEvents: [vanGame],
@@ -1102,10 +1112,11 @@ function wrapped(events, timestamp) {
     '2026-11-16T02:09:00Z',
     '2026-11-15T14:32:33Z',
     '2026-11-15T18:59:00Z',
+    '2026-11-15T23:29:00Z',
     '2026-11-16T01:55:00Z',
   ], 'missingGames plans only buckets that still need a close');
   assert.ok(!gapDates.includes('2026-11-15T21:24:00Z'), 'done-ev game is not its own bucket');
-  assert.ok(!gapDates.includes('2026-11-15T23:29:00Z'), 'all three market markers count as a close');
+  assert.ok(gapDates.includes('2026-11-15T23:29:00Z'), 'sibling market markers do not close this event');
   assert.ok(!gapDates.includes('2026-11-16T00:59:00Z'), 'closed summary pick is not refetched');
   assert.ok(!gapDates.includes('2026-11-15T16:59:00Z'), 'closed summary game is not refetched');
   assert.ok(!gapDates.includes('2026-11-15T14:18:33Z'), 'slate no-close does not take the card fallback');
@@ -1130,6 +1141,8 @@ function wrapped(events, timestamp) {
   assert.strictEqual(gapGame('nhl-retry').closeLeadMin, 1);
   assert.strictEqual(gapGame('games-closed').status, 'closed');
   assert.strictEqual(gapGame('already'), undefined);
+  assert.strictEqual(gapGame('nba-done').status, 'no-close');
+  assert.strictEqual(gapGame('nba-done').reason, 'not-in-historical-snapshot');
   const gapSpread = gaps.picks.find((row) => row.pick === 'Vancouver Canucks +2.5');
   const gapMl = gaps.picks.find((row) => row.pick === 'Vancouver Canucks ML');
   assert.strictEqual(gapSpread.status, 'closed');
@@ -1143,7 +1156,7 @@ function wrapped(events, timestamp) {
     headers: { 'x-picks-secret': 'secret' },
     body: JSON.stringify({ date: '2026-11-15', missingGames: true, scheduled: true }),
   }, {
-    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on', OMEGA_CLOSES_HISTORICAL: 'on' },
     now: new Date('2026-11-16T09:10:00Z'),
     blobs: memBlobs({
       'clv-close-capture:done-bucket/NFL/2026-11-15T14:32:33Z': { at: '2026-11-16T08:00:00Z' },
@@ -1174,7 +1187,7 @@ function wrapped(events, timestamp) {
     headers: { 'x-picks-secret': 'secret' },
     body: JSON.stringify({ date: '2026-11-15', missingGames: true }),
   }, {
-    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on' },
+    env: { PICKS_SECRET_KEY: 'secret', ODDS_API_KEY: 'test-key', OMEGA_CLOSES_AT_3AM: 'on', OMEGA_CLOSES_HISTORICAL: 'on' },
     now: new Date('2026-11-16T09:20:00Z'),
     blobs: manualBlobs,
     slateEvents: [
@@ -1208,6 +1221,265 @@ function wrapped(events, timestamp) {
   assert.deepStrictEqual(manualBlobs.data.get('clv-close-capture:done-ev/NFL/keep-live'), liveEv);
   assert.deepStrictEqual(manualBlobs.data.get('clv-close-capture:done-ev/NFL/walkin-done'), liveEv);
   assert.ok(!JSON.stringify(gapManualBody).includes('test-key'));
+
+  function boardEvent(id, home, away, commence, bookKey, homePrice, awayPrice) {
+    return {
+      id,
+      commence_time: commence,
+      home_team: home,
+      away_team: away,
+      bookmakers: [{
+        key: bookKey,
+        last_update: commence,
+        markets: [{
+          key: 'spreads',
+          last_update: commence,
+          outcomes: [
+            { name: home, price: homePrice, point: -3.5 },
+            { name: away, price: awayPrice, point: 3.5 },
+          ],
+        }],
+      }],
+    };
+  }
+  function putBoard(master, sport, eventId, at03, raw03, at10, raw10) {
+    const index = { sport, eventId };
+    if (at03) index.baseline0300 = { at: at03 };
+    if (at10) index.checks = { '1000': { at: at10 } };
+    master[`index/${sport}/${eventId}`] = index;
+    if (at03 && raw03) master[`${sport}/${eventId}/raw/${at03}`] = raw03;
+    if (at10 && raw10) master[`${sport}/${eventId}/raw/${at10}`] = raw10;
+  }
+  const at03 = '2026-11-15T08:00:00Z';
+  const at10 = '2026-11-15T15:00:00Z';
+  const savedMaster = {};
+  putBoard(
+    savedMaster, 'NBA', 'both',
+    at03, boardEvent('both', 'Celtics', 'Knicks', '2026-11-15T18:00:00Z', 'pinnacle', -118, -112),
+    at10, boardEvent('both', 'Celtics', 'Knicks', '2026-11-15T18:00:00Z', 'pinnacle', -108, -102)
+  );
+  putBoard(
+    savedMaster, 'NBA', 'only03',
+    at03, boardEvent('only03', 'Magic', 'Heat', '2026-11-15T21:00:00Z', 'pinnacle', -118, -112),
+    at10, boardEvent('only03', 'Magic', 'Heat', '2026-11-15T21:00:00Z', 'draftkings', -105, -105)
+  );
+  putBoard(
+    savedMaster, 'NBA', 'nopin',
+    at03, boardEvent('nopin', 'Bruins', 'Rangers', '2026-11-15T23:00:00Z', 'draftkings', -110, -110),
+    at10, boardEvent('nopin', 'Bruins', 'Rangers', '2026-11-15T23:00:00Z', 'fanduel', -115, -105)
+  );
+  const savedWrites = [];
+  const savedStored = [];
+  let savedFetches = 0;
+  const savedBlobs = memBlobs({
+    'clv-close-capture:credits/2026-11-16': {
+      date: '2026-11-16', used: 5, remaining: 50000,
+      calls: [{ path: 'full-board', estCost: 3 }],
+    },
+  });
+  const creditBefore = JSON.parse(JSON.stringify(savedBlobs.data.get('clv-close-capture:credits/2026-11-16')));
+  const savedRun = await C.runCloses({
+    now: new Date('2026-11-16T08:00:00Z'),
+    env: { ODDS_API_KEY: 'test-key' },
+    date: '2026-11-15',
+    requestsRemaining: 40000,
+    slateEvents: [
+      { sport: 'NBA', eventId: 'both', homeTeam: 'Celtics', awayTeam: 'Knicks', commenceTime: '2026-11-15T18:00:00Z' },
+      { sport: 'NBA', eventId: 'only03', homeTeam: 'Magic', awayTeam: 'Heat', commenceTime: '2026-11-15T21:00:00Z' },
+      { sport: 'NBA', eventId: 'nopin', homeTeam: 'Bruins', awayTeam: 'Rangers', commenceTime: '2026-11-15T23:00:00Z' },
+      { sport: 'NBA', eventId: 'absent', homeTeam: 'Bears', awayTeam: 'Lions', commenceTime: '2026-11-16T01:00:00Z' },
+    ],
+    blobs: savedBlobs,
+    readMaster: async (key) => (Object.prototype.hasOwnProperty.call(savedMaster, key) ? savedMaster[key] : null),
+    writeRows: async (built) => {
+      savedWrites.push(built);
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    storeClose: async (ev, info) => {
+      savedStored.push({ id: ev.id, slot: info.slot, source: info.source });
+      return { wrote: true };
+    },
+    fetch: async (url) => {
+      savedFetches += 1;
+      throw new Error('odds api must not be called ' + url);
+    },
+  });
+  assert.strictEqual(savedFetches, 0);
+  assert.deepStrictEqual(savedRun.calls, []);
+  assert.strictEqual(savedRun.remaining, 40000);
+  assert.deepStrictEqual(savedBlobs.data.get('clv-close-capture:credits/2026-11-16'), creditBefore);
+  assert.strictEqual(savedRun.mode, 'saved-board');
+  const bothSnaps = savedWrites.filter((built) => built.games.some((row) => row.game_id === 'both')).flatMap((built) => built.snaps);
+  assert.ok(bothSnaps.some((row) => row.book === 'pinnacle' && row.price === -108 && row.point === -3.5));
+  assert.ok(bothSnaps.every((row) => row.price !== -118));
+  assert.ok(bothSnaps.every((row) => row.source === 'odds-master-board:capture-closes-3am'));
+  assert.ok(savedWrites.some((built) => built.games.some((row) => row.game_id === 'both' && row.slot === '1000')));
+  const onlySnaps = savedWrites.filter((built) => built.games.some((row) => row.game_id === 'only03')).flatMap((built) => built.snaps);
+  assert.ok(onlySnaps.some((row) => row.book === 'pinnacle' && row.price === -118));
+  assert.ok(onlySnaps.every((row) => row.price !== -105));
+  assert.ok(savedWrites.some((built) => built.games.some((row) => row.game_id === 'only03' && row.slot === '0300')));
+  assert.ok(!savedWrites.some((built) => built.games.some((row) => row.game_id === 'nopin' || row.game_id === 'absent')));
+  const savedGame = (id) => savedRun.games.find((row) => row.eventId === id);
+  assert.strictEqual(savedGame('both').status, 'closed');
+  assert.strictEqual(savedGame('both').slot, '1000');
+  assert.strictEqual(savedGame('only03').status, 'closed');
+  assert.strictEqual(savedGame('only03').slot, '0300');
+  assert.strictEqual(savedGame('nopin').status, 'no-close');
+  assert.strictEqual(savedGame('nopin').reason, 'pinnacle-not-priced');
+  assert.strictEqual(savedGame('absent').status, 'no-close');
+  assert.strictEqual(savedGame('absent').reason, 'not-in-saved-board');
+  assert.ok(savedBlobs.data.has('clv-close-capture:done-ev/NBA/both'));
+  assert.ok(savedBlobs.data.has('clv-close-capture:done-ev/NBA/only03'));
+  assert.ok(!savedBlobs.data.has('clv-close-capture:done-ev/NBA/nopin'));
+  assert.ok(!savedBlobs.data.has('clv-close-capture:done-ev/NBA/absent'));
+  assert.ok(![...savedBlobs.data.keys()].some((key) => /:done\/NBA\/[^/]+\/(h2h|spreads|totals)$/.test(key)));
+  assert.deepStrictEqual(savedStored.map((row) => row.id).sort(), ['both', 'only03']);
+  assert.ok(savedStored.every((row) => row.source === 'odds-master-board:capture-closes-3am'));
+
+  const liveClose = { at: 'keep-me', via: 'live' };
+  const tip18 = '2026-11-15T18:00:00Z';
+  const siblingMaster = {};
+  putBoard(
+    siblingMaster, 'NFL', 'chiefs',
+    at03, boardEvent('chiefs', 'Atlanta Falcons', 'Kansas City Chiefs', tip18, 'pinnacle', -110, -110),
+    at10, boardEvent('chiefs', 'Atlanta Falcons', 'Kansas City Chiefs', tip18, 'pinnacle', -107, -103)
+  );
+  putBoard(
+    siblingMaster, 'NFL', 'texans',
+    at03, boardEvent('texans', 'Houston Texans', 'Tennessee Titans', tip18, 'pinnacle', -120, 100),
+    at10, boardEvent('texans', 'Houston Texans', 'Tennessee Titans', tip18, 'pinnacle', -130, 110)
+  );
+  const siblingBlobs = memBlobs({
+    'clv-close-capture:done-ev/NFL/texans': liveClose,
+    [`clv-close-capture:${FB.doneMarketKey('NFL', tip18, 'h2h')}`]: { at: 'sibling' },
+    [`clv-close-capture:${FB.doneMarketKey('NFL', tip18, 'spreads')}`]: { at: 'sibling' },
+    [`clv-close-capture:${FB.doneMarketKey('NFL', tip18, 'totals')}`]: { at: 'sibling' },
+  });
+  const chiefsGame = {
+    sport: 'NFL', eventId: 'chiefs', homeTeam: 'Atlanta Falcons', awayTeam: 'Kansas City Chiefs',
+    commenceTime: tip18, roles: new Set(['board']), picks: [],
+  };
+  const texansGame = {
+    sport: 'NFL', eventId: 'texans', homeTeam: 'Houston Texans', awayTeam: 'Tennessee Titans',
+    commenceTime: tip18, roles: new Set(['board']), picks: [],
+  };
+  assert.strictEqual(await C.gameHasClose(chiefsGame, siblingBlobs, null), false);
+  assert.strictEqual(await C.gameHasClose(texansGame, siblingBlobs, null), true);
+  const stillOpen = await C.missingGameTargets([chiefsGame, texansGame], siblingBlobs, null, new Map());
+  assert.deepStrictEqual(stillOpen.map((game) => game.eventId), ['chiefs']);
+  const siblingWrites = [];
+  let siblingFetches = 0;
+  const siblingRun = await C.runCloses({
+    now: new Date('2026-11-16T08:00:00Z'),
+    env: {},
+    date: '2026-11-15',
+    slateEvents: [
+      { sport: 'NFL', eventId: 'chiefs', homeTeam: 'Atlanta Falcons', awayTeam: 'Kansas City Chiefs', commenceTime: tip18 },
+      { sport: 'NFL', eventId: 'texans', homeTeam: 'Houston Texans', awayTeam: 'Tennessee Titans', commenceTime: tip18 },
+    ],
+    blobs: siblingBlobs,
+    readMaster: async (key) => (Object.prototype.hasOwnProperty.call(siblingMaster, key) ? siblingMaster[key] : null),
+    writeRows: async (built) => {
+      siblingWrites.push(...built.games.map((row) => row.game_id));
+      return { games: built.games.length, odds_snapshots: built.snaps.length, requests: 0 };
+    },
+    storeClose: async () => ({ wrote: true }),
+    fetch: async () => { siblingFetches += 1; throw new Error('odds api must not be called'); },
+  });
+  assert.strictEqual(siblingFetches, 0);
+  assert.deepStrictEqual(siblingRun.calls, []);
+  assert.deepStrictEqual(siblingWrites, ['chiefs']);
+  assert.strictEqual(siblingRun.games.find((row) => row.eventId === 'chiefs').slot, '1000');
+  assert.strictEqual(siblingRun.games.find((row) => row.eventId === 'texans').status, 'closed');
+  assert.deepStrictEqual(siblingBlobs.data.get('clv-close-capture:done-ev/NFL/texans'), liveClose);
+  assert.ok(siblingBlobs.data.has('clv-close-capture:done-ev/NFL/chiefs'));
+
+  const billsGame = {
+    awayTeam: 'New York Jets', awayAbbr: 'NYJ', awayScore: 12,
+    homeTeam: 'Buffalo Bills', homeAbbr: 'BUF', homeScore: 31,
+    state: 'post', completed: true, statusName: 'STATUS_FINAL',
+    startISO: '2026-11-15T18:00:00Z',
+  };
+  const jetsPick = {
+    pick: 'New York Jets +8.5',
+    matchup: 'New York Jets @ Buffalo Bills',
+    sport: 'NFL',
+    betType: 'Spread',
+    odds: '-115',
+    units: '0.25u',
+    commenceTime: '2026-11-15T18:00:00Z',
+    result: null,
+  };
+  assert.strictEqual(track._test.gradePick(jetsPick, billsGame), 'loss');
+  const ccsStraight = {
+    pick: 'Central Connecticut +185',
+    matchup: 'Quinnipiac @ Central Connecticut',
+    sport: 'NCAAM',
+    betType: 'Moneyline',
+    odds: '+185',
+    units: '0.25u',
+    result: 'win',
+    profit: 69,
+    finalScore: '70-75',
+    settledAt: '2026-11-16T05:00:00Z',
+  };
+  const canucksStraight = {
+    pick: 'Vancouver Canucks +2.5',
+    matchup: 'Vancouver Canucks @ Vegas Golden Knights',
+    sport: 'NHL',
+    betType: 'Spread',
+    odds: '-123',
+    units: '0.25u',
+    result: 'win',
+    profit: 30,
+    finalScore: '2-3',
+    settledAt: '2026-11-16T06:00:00Z',
+  };
+  const settleCard = {
+    picks: [ccsStraight, canucksStraight, jetsPick],
+    parlayLegs: [{
+      units: '0.25u',
+      combinedOdds: '+600',
+      legs: [
+        { pick: ccsStraight.pick, matchup: ccsStraight.matchup, sport: 'NCAAM', odds: '+185', result: null },
+        {
+          pick: canucksStraight.pick, matchup: canucksStraight.matchup, sport: 'NHL',
+          odds: '-123', result: 'win', profit: 30, finalScore: '2-3', settledAt: canucksStraight.settledAt,
+        },
+        {
+          pick: jetsPick.pick, matchup: jetsPick.matchup, sport: 'NFL', betType: 'Spread',
+          odds: '-115', units: '0.25u', result: null,
+        },
+      ],
+    }],
+  };
+  const settleWrites = [];
+  await track._test.settleResultsForDate('2026-11-15', settleCard, {
+    fetchESPNScores: async (date, sport) => (sport === 'NFL' ? [billsGame] : []),
+    writePicksData: async (date, data) => {
+      settleWrites.push({ date, picks: data.picks.length });
+      return true;
+    },
+  });
+  assert.strictEqual(settleCard.picks[2].result, 'loss');
+  assert.strictEqual(settleCard.picks[2].finalScore, '12-31');
+  assert.strictEqual(settleCard.picks[2].profit, -37.5);
+  assert.strictEqual(settleCard.picks[2].pick, 'New York Jets +8.5');
+  assert.strictEqual(settleCard.picks[2].odds, '-115');
+  assert.strictEqual(settleCard.picks[2].units, '0.25u');
+  assert.strictEqual(settleCard.picks[0].result, 'win');
+  assert.strictEqual(settleCard.picks[1].result, 'win');
+  assert.strictEqual(settleCard.parlayLegs[0].legs[0].result, 'win');
+  assert.strictEqual(settleCard.parlayLegs[0].legs[0].profit, 69);
+  assert.strictEqual(settleCard.parlayLegs[0].legs[0].finalScore, '70-75');
+  assert.strictEqual(settleCard.parlayLegs[0].legs[1].result, 'win');
+  assert.strictEqual(settleCard.parlayLegs[0].legs[1].profit, 30);
+  assert.strictEqual(settleCard.parlayLegs[0].legs[2].result, 'loss');
+  assert.strictEqual(settleCard.parlayLegs[0].legs[2].profit, settleCard.picks[2].profit);
+  assert.strictEqual(settleCard.parlayLegs[0].legs[2].finalScore, '12-31');
+  assert.strictEqual(settleCard.parlayLegs[0].result, 'loss');
+  assert.strictEqual(settleWrites.length, 1);
+  assert.strictEqual(settleWrites[0].date, '2026-11-15');
 
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
   const pickBlock = toml.split('[functions."capture-pick-closes"]')[1].split('[functions.')[0];

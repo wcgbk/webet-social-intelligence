@@ -1030,7 +1030,7 @@ function clearResolvedGradeWarnings(pickReports, picks, opts) {
 }
 
 // ── Write updated picks back to blob ──
-async function updatePicksBlob(dateKey, picksData) {
+async function updatePicksBlob(dateKey, picksData, deps) {
   try { enforceOmegaDailyUnitCap(picksData); } catch (e) { console.error('[verify] unit cap', e.message); }
   picksData.verifiedAt = new Date().toISOString();
   // verified is set by the caller (final pass) based on whether the FINAL card is genuinely clean.
@@ -1049,6 +1049,19 @@ async function updatePicksBlob(dateKey, picksData) {
     });
     if (resp.ok) {
       console.log(`[verify] Updated picks blob for ${dateKey}`);
+      try {
+        if (deps && typeof deps.syncMainCardToV1 === 'function') {
+          await deps.syncMainCardToV1(dateKey, picksData, deps);
+        } else {
+          const { syncMainCardToV1 } = require('./lib/omega-v1ab/sync-main');
+          await syncMainCardToV1(dateKey, picksData, {
+            env: deps && deps.env,
+            store: deps && deps.store,
+          });
+        }
+      } catch (syncErr) {
+        console.error(`[verify] v1 sync soft-fail: ${syncErr.message}`);
+      }
       return true;
     }
   } catch (e) {

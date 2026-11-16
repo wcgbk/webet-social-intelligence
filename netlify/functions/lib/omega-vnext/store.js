@@ -96,6 +96,45 @@ function shadowPayload(dateISO, picksData, key) {
   };
 }
 
+function liveMainCardWrite(target, dateISO) {
+  return !!(target
+    && target.key === `picks-${dateISO}`
+    && target.shadow !== true
+    && target.touchLatestDate === true);
+}
+
+async function writeMainIndex(store, dateISO, target) {
+  if (target.touchLatestDate) {
+    await store.set('latest-date', dateISO);
+  }
+  if (target.touchPicksDates) {
+    try {
+      let dates = await store.get('picks-dates', { type: 'json' });
+      if (!Array.isArray(dates)) dates = [];
+      if (!dates.includes(dateISO)) {
+        dates.push(dateISO);
+        dates.sort();
+        await store.setJSON('picks-dates', dates);
+      }
+    } catch (e) {
+      console.error(`[omega-vnext/store] picks-dates: ${e.message}`);
+    }
+  }
+}
+
+/** Soft-fail. Runs only after the main card write has already succeeded. */
+async function finishLiveV1Sync(dateISO, payload, opts) {
+  try {
+    const { syncMainCardToV1 } = require('../omega-v1ab/sync-main');
+    await syncMainCardToV1(dateISO, payload, {
+      env: opts && opts.env,
+      store: opts && opts.stores && opts.stores.v1,
+    });
+  } catch (e) {
+    console.error(`[v1-sync] ${e && e.message ? e.message : e}`);
+  }
+}
+
 async function storePicks(dateISO, picksData, opts = {}) {
   const force = !!opts.force;
   // A shadow-marked payload must not fall through onto live keys.
@@ -107,6 +146,7 @@ async function storePicks(dateISO, picksData, opts = {}) {
     throw new Error(`shadow store refused non-shadow key: ${pickKey}`);
   }
   const payload = target.shadow ? shadowPayload(dateISO, picksData, pickKey) : picksData;
+  const syncLive = liveMainCardWrite(target, dateISO);
 
   if (target.overwriteGuard && !force) {
     const existing = await readPicks(dateISO);
@@ -117,31 +157,31 @@ async function storePicks(dateISO, picksData, opts = {}) {
     }
   }
 
-  // Prefer SDK. Shadow returns before any latest-date / picks-dates write.
+  if (opts.stores && opts.stores.main) {
+    const store = opts.stores.main;
+    await store.setJSON(pickKey, payload);
+    await writeMainIndex(store, dateISO, target);
+    console.log(`[omega-vnext/store] wrote ${pickKey} (${(payload.picks || []).length} picks)${target.shadow ? ' shadow' : ''}`);
+    if (syncLive) await finishLiveV1Sync(dateISO, payload, opts);
+    return true;
+  }
+
+  // Prefer SDK. A v1 mirror error must not fall through into the REST retry.
+  let wroteSdk = false;
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
     await store.setJSON(pickKey, payload);
-    if (target.touchLatestDate) {
-      await store.set('latest-date', dateISO);
-    }
-    if (target.touchPicksDates) {
-      try {
-        let dates = await store.get('picks-dates', { type: 'json' });
-        if (!Array.isArray(dates)) dates = [];
-        if (!dates.includes(dateISO)) {
-          dates.push(dateISO);
-          dates.sort();
-          await store.setJSON('picks-dates', dates);
-        }
-      } catch (e) {
-        console.error(`[omega-vnext/store] picks-dates: ${e.message}`);
-      }
-    }
+    await writeMainIndex(store, dateISO, target);
     console.log(`[omega-vnext/store] wrote ${pickKey} (${(payload.picks || []).length} picks)${target.shadow ? ' shadow' : ''}`);
-    return true;
+    wroteSdk = true;
   } catch (sdkErr) {
     console.error(`[omega-vnext/store] SDK failed: ${sdkErr.message} — trying REST`);
+  }
+
+  if (wroteSdk) {
+    if (syncLive) await finishLiveV1Sync(dateISO, payload, opts);
+    return true;
   }
 
   const resp = await blobFetch(pickKey, { method: 'PUT', body: payload });
@@ -164,6 +204,7 @@ async function storePicks(dateISO, picksData, opts = {}) {
     }
   }
   console.log(`[omega-vnext/store] REST wrote ${pickKey}${target.shadow ? ' shadow' : ''}`);
+  if (syncLive) await finishLiveV1Sync(dateISO, payload, opts);
   return true;
 }
 

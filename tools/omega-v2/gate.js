@@ -627,6 +627,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (mirrorPrune.status !== 0) throw new Error('mirror prune card picks gate failed');
+
+  const v1Sync = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v1-sync-main.js')],
+    { stdio: 'inherit' }
+  );
+  if (v1Sync.status !== 0) throw new Error('v1 sync main gate failed');
 }
 
 function pickSlim(card) {

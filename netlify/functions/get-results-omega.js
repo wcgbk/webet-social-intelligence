@@ -8,7 +8,7 @@ const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 const { canonicalSchool, schoolsEqual } = require('./lib/ncaaf-names');
-const { ncaamTeamsMatch, collegeHoopsMatchEnabled } = require('./lib/ncaam-names');
+const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -95,6 +95,10 @@ function findGame(pick, games) {
   const sport = pick.sport || '';
   const ncaaf = sport === 'NCAAF';
   const ncaam = collegeHoopsMatchEnabled(sport);
+  if (ncaam) {
+    const hits = ncaamMatchingGames(pick.matchup, games);
+    return hits.length ? disambiguateDoubleheader(hits, pick) : null;
+  }
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const looseKey = (team) => {
@@ -184,8 +188,13 @@ function gradePick(pick, game) {
     homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
   }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
-  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  let pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+  let pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  if (collegeHoopsMatchEnabled(pick.sport)) {
+    const side = ncaamPickedSide(pickTeamRaw, pick.matchup, game);
+    pickedAway = side === 'away';
+    pickedHome = side === 'home';
+  }
 
   if (betType === 'total' || /over|under/i.test(pickStr)) {
     const totalPoints = awayScore + homeScore;

@@ -114,6 +114,31 @@ assert.strictEqual(ncaamTeamsMatch('Duke Blue Devils', 'Central Connecticut Blue
 assert.strictEqual(ncaamTeamsMatch('Quinnipiac Bobcats', 'Texas State Bobcats', 'TXST'), false);
 assert.strictEqual(ncaamTeamsMatch('Quinnipiac Bobcats', 'Montana State Bobcats', 'MTST'), false);
 
+assert.strictEqual(canonicalSchool('IUPUI Jaguars'), canonicalSchool('IU Indianapolis Jaguars'));
+assert.strictEqual(canonicalSchool('IU Indy Jaguars'), canonicalSchool('IUPUI Jaguars'));
+assert.strictEqual(canonicalSchool('Fort Wayne Mastodons'), canonicalSchool('Purdue Fort Wayne Mastodons'));
+assert.strictEqual(canonicalSchool('GW Revolutionaries'), canonicalSchool('George Washington Revolutionaries'));
+assert.strictEqual(canonicalSchool('Long Beach St 49ers'), canonicalSchool('Long Beach State Beach'));
+assert.strictEqual(canonicalSchool('Appalachian St Mountaineers'), canonicalSchool('App State Mountaineers'));
+assert.strictEqual(canonicalSchool('Loyola (Chi) Ramblers'), canonicalSchool('Loyola Chicago Ramblers'));
+assert.strictEqual(canonicalSchool('Loyola (MD) Greyhounds'), canonicalSchool('Loyola Maryland Greyhounds'));
+assert.strictEqual(canonicalSchool('UMKC Kangaroos'), canonicalSchool('Kansas City Roos'));
+assert.strictEqual(canonicalSchool('N Colorado Bears'), canonicalSchool('Northern Colorado Bears'));
+assert.strictEqual(canonicalSchool('Cal Baptist Lancers'), canonicalSchool('California Baptist Lancers'));
+assert.strictEqual(canonicalSchool('Florida Int\'l Golden Panthers'), canonicalSchool('Florida International Panthers'));
+assert.strictEqual(canonicalSchool('SE Missouri St Redhawks'), canonicalSchool('Southeast Missouri State Redhawks'));
+assert.strictEqual(canonicalSchool('Albany Great Danes'), canonicalSchool('UAlbany Great Danes'));
+assert.strictEqual(canonicalSchool('CSU Bakersfield Roadrunners'), canonicalSchool('Cal State Bakersfield Roadrunners'));
+assert.strictEqual(canonicalSchool('Arkansas-Little Rock Trojans'), canonicalSchool('Little Rock Trojans'));
+assert.strictEqual(canonicalSchool('American Eagles'), canonicalSchool('American University Eagles'));
+assert.strictEqual(canonicalSchool('St. Thomas (MN) Tommies'), canonicalSchool('St. Thomas Tommies'));
+assert.strictEqual(canonicalSchool('East Tennessee St Buccaneers'), canonicalSchool('East Tennessee State Buccaneers'));
+assert.strictEqual(canonicalSchool('Army Knights'), canonicalSchool('Army Black Knights'));
+assert.notStrictEqual(canonicalSchool('Sam Houston St Bearkats'), canonicalSchool('Sam Houston Bearkats'));
+assert.strictEqual(ncaamTeamsMatch('Sam Houston St Bearkats', 'Sam Houston Bearkats', 'SHSU'), false);
+assert.strictEqual(ncaamTeamsMatch('Nicholls St Colonels', 'Nicholls Colonels', 'NICH'), false);
+assert.notStrictEqual(canonicalSchool('Michigan St Spartans'), canonicalSchool('Michigan Wolverines'));
+
 function assertGrader(label, api) {
   const ml = pick({ pick: 'Central Connecticut St Blue Devils ML', betType: 'moneyline' });
   const spread = pick({ pick: 'Central Connecticut St Blue Devils -3.5', betType: 'spread', odds: '-110' });
@@ -173,6 +198,178 @@ function assertGrader(label, api) {
 assertGrader('omega', omega._test);
 assertGrader('v1', v1._test);
 assertGrader('alpha', alpha._test);
+
+function gradeApi(api) {
+  return {
+    findGame: api.findGame || api.findGameForGrading,
+    gradePick: api.gradePick,
+  };
+}
+
+function assertPair(label, api) {
+  const g = gradeApi(api);
+  const sh = g.findGame({
+    sport: 'NCAAM',
+    matchup: 'Pepperdine Waves @ Sam Houston St Bearkats',
+    pick: 'Sam Houston St Bearkats ML',
+    betType: 'moneyline',
+  }, [finalGame({
+    awayTeam: 'Pepperdine Waves',
+    awayAbbr: 'PEPP',
+    awayScore: 77,
+    homeTeam: 'Sam Houston Bearkats',
+    homeAbbr: 'SHSU',
+    homeScore: 85,
+  })]);
+  assert.ok(sh, label + ' pairs Sam Houston St with ESPN Sam Houston');
+  assert.strictEqual(g.gradePick({
+    sport: 'NCAAM',
+    matchup: 'Pepperdine Waves @ Sam Houston St Bearkats',
+    pick: 'Sam Houston St Bearkats ML',
+    betType: 'moneyline',
+  }, sh), 'win', label);
+
+  const nich = g.findGame({
+    sport: 'NCAAM',
+    matchup: 'Louisiana Tech Bulldogs @ Nicholls St Colonels',
+    pick: 'Nicholls St Colonels ML',
+    betType: 'moneyline',
+  }, [finalGame({
+    awayTeam: 'Louisiana Tech Bulldogs',
+    awayAbbr: 'LT',
+    awayScore: 68,
+    homeTeam: 'Nicholls Colonels',
+    homeAbbr: 'NICH',
+    homeScore: 71,
+  })]);
+  assert.ok(nich, label + ' pairs Nicholls St with ESPN Nicholls');
+  assert.strictEqual(g.gradePick({
+    sport: 'NCAAM',
+    matchup: 'Louisiana Tech Bulldogs @ Nicholls St Colonels',
+    pick: 'Nicholls St Colonels ML',
+    betType: 'moneyline',
+  }, nich), 'win', label);
+
+  assert.strictEqual(g.findGame({
+    sport: 'NCAAM',
+    matchup: 'Duke Blue Devils @ Quinnipiac Bobcats',
+    pick: 'Duke Blue Devils ML',
+    betType: 'moneyline',
+  }, [finalGame({
+    awayTeam: 'Quinnipiac Bobcats',
+    awayAbbr: 'QUIN',
+    awayScore: 67,
+    homeTeam: 'Central Connecticut Blue Devils',
+    homeAbbr: 'CCSU',
+    homeScore: 72,
+  })]), null, label + ' does not grade Duke as Central Connecticut');
+
+  assert.strictEqual(g.findGame({
+    sport: 'NCAAM',
+    matchup: 'Quinnipiac Bobcats @ Monmouth Hawks',
+    pick: 'Quinnipiac Bobcats ML',
+    betType: 'moneyline',
+  }, [finalGame({
+    awayTeam: 'Monmouth Hawks',
+    awayAbbr: 'MONM',
+    awayScore: 60,
+    homeTeam: 'Texas State Bobcats',
+    homeAbbr: 'TXST',
+    homeScore: 70,
+  })]), null, label + ' does not grade Quinnipiac as Texas State');
+
+  assert.strictEqual(g.findGame({
+    sport: 'NCAAM',
+    matchup: 'Michigan St Spartans @ Purdue Boilermakers',
+    pick: 'Michigan St Spartans ML',
+    betType: 'moneyline',
+  }, [finalGame({
+    awayTeam: 'Michigan Wolverines',
+    awayAbbr: 'MICH',
+    awayScore: 80,
+    homeTeam: 'Purdue Boilermakers',
+    homeAbbr: 'PUR',
+    homeScore: 70,
+  })]), null, label + ' does not drop State off Michigan State');
+}
+
+assertPair('omega', omega._test);
+assertPair('v1', v1._test);
+assertPair('alpha', alpha._test);
+assertPair('clv', clv._test);
+
+function shiftIso(iso, days) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function loadDatedBoard(iso) {
+  const file = path.join(__dirname, 'test/fixtures', 'espn-ncaam-' + iso + '.json');
+  return gamesFromScoreboard(JSON.parse(fs.readFileSync(file, 'utf8')))
+    .map((g) => ({ ...g, _sport: 'NCAAM' }));
+}
+
+const probeBoards = {};
+for (const iso of ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15']) {
+  probeBoards[iso] = loadDatedBoard(iso);
+}
+
+function probeWindow(iso) {
+  const out = [];
+  const seen = new Set();
+  for (const day of [shiftIso(iso, -1), iso, shiftIso(iso, 1)]) {
+    for (const g of probeBoards[day] || []) {
+      const key = (g.awayAbbr || '') + '|' + (g.homeAbbr || '') + '|' + (g.startISO || '');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(g);
+    }
+  }
+  return out;
+}
+
+const probeRows = JSON.parse(fs.readFileSync(path.join(__dirname, 'test/fixtures/ncaam-probe.json'), 'utf8'));
+const probeGrades = JSON.parse(fs.readFileSync(path.join(__dirname, 'test/fixtures/ncaam-probe-grades.json'), 'utf8'));
+assert.strictEqual(probeRows.length, 132);
+assert.strictEqual(probeGrades.length, 132);
+
+function assertProbe(label, api) {
+  const g = gradeApi(api);
+  let pending = 0;
+  for (let i = 0; i < probeRows.length; i++) {
+    const row = probeRows[i];
+    const exp = probeGrades[i];
+    assert.strictEqual(row.date, exp.date);
+    assert.strictEqual(row.pick, exp.pick);
+    const pick = {
+      sport: 'NCAAM',
+      matchup: row.matchup,
+      pick: row.pick + ' ML',
+      betType: 'moneyline',
+      odds: '-110',
+    };
+    const game = g.findGame(pick, probeWindow(row.date));
+    const result = g.gradePick(pick, game);
+    assert.strictEqual(result, exp.result, label + ' ' + row.date + ' ' + row.pick);
+    if (result === 'pending') {
+      pending += 1;
+      assert.strictEqual(row.matchup, 'Washington Huskies @ Utah Utes', label);
+      assert.strictEqual(game, null, label);
+      continue;
+    }
+    assert.strictEqual(game.awayTeam, exp.away, label + ' ' + row.pick);
+    assert.strictEqual(game.homeTeam, exp.home, label + ' ' + row.pick);
+    assert.strictEqual(game.awayScore, exp.awayScore, label + ' ' + row.pick);
+    assert.strictEqual(game.homeScore, exp.homeScore, label + ' ' + row.pick);
+  }
+  assert.strictEqual(pending, 1, label + ' residual');
+}
+
+assertProbe('omega', omega._test);
+assertProbe('v1', v1._test);
+assertProbe('alpha', alpha._test);
+assertProbe('clv', clv._test);
 
 const clvMl = pick({ pick: 'Central Connecticut St Blue Devils ML', betType: 'moneyline' });
 const clvGame = clv._test.findGameForGrading(clvMl, board);

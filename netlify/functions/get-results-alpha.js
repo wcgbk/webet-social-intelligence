@@ -5,7 +5,7 @@
 //   - 0-0 placeholder rows for dates with no picks in either pipeline
 
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
-const { ncaamTeamsMatch, collegeHoopsMatchEnabled } = require('./lib/ncaam-names');
+const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 
 const CORS = {
@@ -69,6 +69,10 @@ function findGame(pick, games) {
   const sport = pick.sport || '';
   const ncaaf = sport === 'NCAAF';
   const ncaam = collegeHoopsMatchEnabled(sport);
+  if (ncaam) {
+    const hits = ncaamMatchingGames(pick.matchup, games);
+    return hits.length ? resolveDoubleheader(hits, pick) : null;
+  }
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const primary = [];
@@ -141,8 +145,13 @@ function gradePick(pick, game) {
   }
 
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/\bF5\b/gi, '').replace(/first 5( innings)?/gi, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
-  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  let pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+  let pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  if (collegeHoopsMatchEnabled(pick.sport)) {
+    const side = ncaamPickedSide(pickTeamRaw, pick.matchup, game);
+    pickedAway = side === 'away';
+    pickedHome = side === 'home';
+  }
 
   if (betType === 'total' || /over|under/i.test(pickStr)) {
     const totalPoints = awayScore + homeScore;

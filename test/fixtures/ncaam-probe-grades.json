@@ -1,0 +1,1322 @@
+[
+  {
+    "date": "2026-11-11",
+    "pick": "East Texas A&M Lions",
+    "matchup": "Fairleigh Dickinson Knights @ East Texas A&M Lions",
+    "result": "loss",
+    "away": "Fairleigh Dickinson Knights",
+    "home": "East Texas A&M Lions",
+    "awayScore": 80,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Florida A&M Rattlers",
+    "matchup": "UMKC Kangaroos @ Florida A&M Rattlers",
+    "result": "loss",
+    "away": "Kansas City Roos",
+    "home": "Florida A&M Rattlers",
+    "awayScore": 87,
+    "homeScore": 65
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "UC Davis Aggies",
+    "matchup": "Incarnate Word Cardinals @ UC Davis Aggies",
+    "result": "win",
+    "away": "Incarnate Word Cardinals",
+    "home": "UC Davis Aggies",
+    "awayScore": 69,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Albany Great Danes",
+    "matchup": "Dartmouth Big Green @ Albany Great Danes",
+    "result": "loss",
+    "away": "Dartmouth Big Green",
+    "home": "UAlbany Great Danes",
+    "awayScore": 85,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Air Force Falcons",
+    "matchup": "Loyola (Chi) Ramblers @ Air Force Falcons",
+    "result": "win",
+    "away": "Loyola Chicago Ramblers",
+    "home": "Air Force Falcons",
+    "awayScore": 93,
+    "homeScore": 107
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Saint Joseph's Hawks",
+    "matchup": "South Florida Bulls @ Saint Joseph's Hawks",
+    "result": "win",
+    "away": "South Florida Bulls",
+    "home": "Saint Joseph's Hawks",
+    "awayScore": 80,
+    "homeScore": 83
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Navy Midshipmen",
+    "matchup": "Pennsylvania Quakers @ Navy Midshipmen",
+    "result": "win",
+    "away": "Pennsylvania Quakers",
+    "home": "Navy Midshipmen",
+    "awayScore": 76,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "VMI Keydets",
+    "matchup": "North Carolina Central Eagles @ VMI Keydets",
+    "result": "win",
+    "away": "North Carolina Central Eagles",
+    "home": "VMI Keydets",
+    "awayScore": 51,
+    "homeScore": 65
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "East Carolina Pirates",
+    "matchup": "North Carolina A&T Aggies @ East Carolina Pirates",
+    "result": "win",
+    "away": "North Carolina A&T Aggies",
+    "home": "East Carolina Pirates",
+    "awayScore": 67,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "IUPUI Jaguars",
+    "matchup": "Southern Indiana Screaming Eagles @ IUPUI Jaguars",
+    "result": "win",
+    "away": "Southern Indiana Screaming Eagles",
+    "home": "IU Indianapolis Jaguars",
+    "awayScore": 70,
+    "homeScore": 74
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Drexel Dragons",
+    "matchup": "American Eagles @ Drexel Dragons",
+    "result": "loss",
+    "away": "American University Eagles",
+    "home": "Drexel Dragons",
+    "awayScore": 66,
+    "homeScore": 64
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Temple Owls",
+    "matchup": "Charleston Cougars @ Temple Owls",
+    "result": "loss",
+    "away": "Charleston Cougars",
+    "home": "Temple Owls",
+    "awayScore": 91,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "East Tennessee St Buccaneers",
+    "matchup": "Campbell Fighting Camels @ East Tennessee St Buccaneers",
+    "result": "win",
+    "away": "Campbell Fighting Camels",
+    "home": "East Tennessee State Buccaneers",
+    "awayScore": 53,
+    "homeScore": 68
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "St. Bonaventure Bonnies",
+    "matchup": "Cornell Big Red @ St. Bonaventure Bonnies",
+    "result": "win",
+    "away": "Cornell Big Red",
+    "home": "St. Bonaventure Bonnies",
+    "awayScore": 64,
+    "homeScore": 88
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Delaware Blue Hens",
+    "matchup": "James Madison Dukes @ Delaware Blue Hens",
+    "result": "loss",
+    "away": "James Madison Dukes",
+    "home": "Delaware Blue Hens",
+    "awayScore": 71,
+    "homeScore": 61
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Florida Atlantic Owls",
+    "matchup": "William & Mary Tribe @ Florida Atlantic Owls",
+    "result": "win",
+    "away": "William & Mary Tribe",
+    "home": "Florida Atlantic Owls",
+    "awayScore": 90,
+    "homeScore": 95
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "UNC Wilmington Seahawks",
+    "matchup": "Kent State Golden Flashes @ UNC Wilmington Seahawks",
+    "result": "win",
+    "away": "Kent State Golden Flashes",
+    "home": "UNC Wilmington Seahawks",
+    "awayScore": 73,
+    "homeScore": 91
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Indiana St Sycamores",
+    "matchup": "Milwaukee Panthers @ Indiana St Sycamores",
+    "result": "loss",
+    "away": "Milwaukee Panthers",
+    "home": "Indiana State Sycamores",
+    "awayScore": 82,
+    "homeScore": 73
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Michigan Wolverines",
+    "matchup": "Marquette Golden Eagles @ Michigan Wolverines",
+    "result": "win",
+    "away": "Marquette Golden Eagles",
+    "home": "Michigan Wolverines",
+    "awayScore": 70,
+    "homeScore": 84
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Massachusetts Minutemen",
+    "matchup": "UMass Lowell River Hawks @ Massachusetts Minutemen",
+    "result": "win",
+    "away": "UMass Lowell River Hawks",
+    "home": "Massachusetts Minutemen",
+    "awayScore": 62,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Holy Cross Crusaders",
+    "matchup": "Furman Paladins @ Holy Cross Crusaders",
+    "result": "loss",
+    "away": "Furman Paladins",
+    "home": "Holy Cross Crusaders",
+    "awayScore": 80,
+    "homeScore": 67
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Norfolk St Spartans",
+    "matchup": "Old Dominion Monarchs @ Norfolk St Spartans",
+    "result": "loss",
+    "away": "Old Dominion Monarchs",
+    "home": "Norfolk State Spartans",
+    "awayScore": 71,
+    "homeScore": 60
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Princeton Tigers",
+    "matchup": "Stony Brook Seawolves @ Princeton Tigers",
+    "result": "win",
+    "away": "Stony Brook Seawolves",
+    "home": "Princeton Tigers",
+    "awayScore": 59,
+    "homeScore": 69
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Sam Houston St Bearkats",
+    "matchup": "Pepperdine Waves @ Sam Houston St Bearkats",
+    "result": "win",
+    "away": "Pepperdine Waves",
+    "home": "Sam Houston Bearkats",
+    "awayScore": 77,
+    "homeScore": 85
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "West Georgia Wolves",
+    "matchup": "UNC Asheville Bulldogs @ West Georgia Wolves",
+    "result": "loss",
+    "away": "UNC Asheville Bulldogs",
+    "home": "West Georgia Wolves",
+    "awayScore": 73,
+    "homeScore": 70
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Abilene Christian Wildcats",
+    "matchup": "Stephen F. Austin Lumberjacks @ Abilene Christian Wildcats",
+    "result": "loss",
+    "away": "Stephen F. Austin Lumberjacks",
+    "home": "Abilene Christian Wildcats",
+    "awayScore": 76,
+    "homeScore": 71
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Southern Miss Golden Eagles",
+    "matchup": "Jackson St Tigers @ Southern Miss Golden Eagles",
+    "result": "win",
+    "away": "Jackson State Tigers",
+    "home": "Southern Miss Golden Eagles",
+    "awayScore": 80,
+    "homeScore": 84
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "North Texas Mean Green",
+    "matchup": "Santa Clara Broncos @ North Texas Mean Green",
+    "result": "loss",
+    "away": "Santa Clara Broncos",
+    "home": "North Texas Mean Green",
+    "awayScore": 76,
+    "homeScore": 71
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Boise State Broncos",
+    "matchup": "Oakland Golden Grizzlies @ Boise State Broncos",
+    "result": "win",
+    "away": "Oakland Golden Grizzlies",
+    "home": "Boise State Broncos",
+    "awayScore": 79,
+    "homeScore": 111
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "South Dakota St Jackrabbits",
+    "matchup": "Valparaiso Beacons @ South Dakota St Jackrabbits",
+    "result": "win",
+    "away": "Valparaiso Beacons",
+    "home": "South Dakota State Jackrabbits",
+    "awayScore": 69,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "UC Santa Barbara Gauchos",
+    "matchup": "Nevada Wolf Pack @ UC Santa Barbara Gauchos",
+    "result": "win",
+    "away": "Nevada Wolf Pack",
+    "home": "UC Santa Barbara Gauchos",
+    "awayScore": 63,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Cal Baptist Lancers",
+    "matchup": "Chicago St Cougars @ Cal Baptist Lancers",
+    "result": "loss",
+    "away": "Chicago State Cougars",
+    "home": "California Baptist Lancers",
+    "awayScore": 81,
+    "homeScore": 62
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "Long Beach St 49ers",
+    "matchup": "Pacific Tigers @ Long Beach St 49ers",
+    "result": "win",
+    "away": "Pacific Tigers",
+    "home": "Long Beach State Beach",
+    "awayScore": 59,
+    "homeScore": 62
+  },
+  {
+    "date": "2026-11-11",
+    "pick": "California Golden Bears",
+    "matchup": "USC Trojans @ California Golden Bears",
+    "result": "loss",
+    "away": "USC Trojans",
+    "home": "California Golden Bears",
+    "awayScore": 77,
+    "homeScore": 65
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "George Mason Patriots",
+    "matchup": "UMKC Kangaroos @ George Mason Patriots",
+    "result": "win",
+    "away": "Kansas City Roos",
+    "home": "George Mason Patriots",
+    "awayScore": 68,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Bradley Braves",
+    "matchup": "Coppin St Eagles @ Bradley Braves",
+    "result": "win",
+    "away": "Bradley Braves",
+    "home": "Coppin State Eagles",
+    "awayScore": 56,
+    "homeScore": 54
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "UMBC Retrievers",
+    "matchup": "Morgan St Bears @ UMBC Retrievers",
+    "result": "win",
+    "away": "Morgan State Bears",
+    "home": "UMBC Retrievers",
+    "awayScore": 70,
+    "homeScore": 85
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Bowling Green Falcons",
+    "matchup": "Niagara Purple Eagles @ Bowling Green Falcons",
+    "result": "win",
+    "away": "Niagara Purple Eagles",
+    "home": "Bowling Green Falcons",
+    "awayScore": 76,
+    "homeScore": 88
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Brown Bears",
+    "matchup": "Canisius Golden Griffins @ Brown Bears",
+    "result": "loss",
+    "away": "Canisius Golden Griffins",
+    "home": "Brown Bears",
+    "awayScore": 86,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Fort Wayne Mastodons",
+    "matchup": "Western Michigan Broncos @ Fort Wayne Mastodons",
+    "result": "loss",
+    "away": "Western Michigan Broncos",
+    "home": "Purdue Fort Wayne Mastodons",
+    "awayScore": 81,
+    "homeScore": 59
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Western Illinois Leathernecks",
+    "matchup": "CSU Bakersfield Roadrunners @ Western Illinois Leathernecks",
+    "result": "loss",
+    "away": "Cal State Bakersfield Roadrunners",
+    "home": "Western Illinois Leathernecks",
+    "awayScore": 91,
+    "homeScore": 83
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Sacred Heart Pioneers",
+    "matchup": "Central Connecticut St Blue Devils @ Sacred Heart Pioneers",
+    "result": "loss",
+    "away": "Central Connecticut Blue Devils",
+    "home": "Sacred Heart Pioneers",
+    "awayScore": 79,
+    "homeScore": 75
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Howard Bison",
+    "matchup": "Stetson Hatters @ Howard Bison",
+    "result": "win",
+    "away": "Stetson Hatters",
+    "home": "Howard Bison",
+    "awayScore": 62,
+    "homeScore": 75
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Towson Tigers",
+    "matchup": "Loyola (MD) Greyhounds @ Towson Tigers",
+    "result": "win",
+    "away": "Loyola Maryland Greyhounds",
+    "home": "Towson Tigers",
+    "awayScore": 60,
+    "homeScore": 90
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "South Alabama Jaguars",
+    "matchup": "Loyola Marymount Lions @ South Alabama Jaguars",
+    "result": "win",
+    "away": "Loyola Marymount Lions",
+    "home": "South Alabama Jaguars",
+    "awayScore": 72,
+    "homeScore": 79
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Quinnipiac Bobcats",
+    "matchup": "Monmouth Hawks @ Quinnipiac Bobcats",
+    "result": "loss",
+    "away": "Monmouth Hawks",
+    "home": "Quinnipiac Bobcats",
+    "awayScore": 74,
+    "homeScore": 70
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Alabama A&M Bulldogs",
+    "matchup": "West Florida Argonauts @ Alabama A&M Bulldogs",
+    "result": "win",
+    "away": "West Florida Argonauts",
+    "home": "Alabama A&M Bulldogs",
+    "awayScore": 83,
+    "homeScore": 85
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Texas A&M Aggies",
+    "matchup": "Oklahoma St Cowboys @ Texas A&M Aggies",
+    "result": "win",
+    "away": "Oklahoma State Cowboys",
+    "home": "Texas A&M Aggies",
+    "awayScore": 69,
+    "homeScore": 88
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "Southern Illinois Salukis",
+    "matchup": "Richmond Spiders @ Southern Illinois Salukis",
+    "result": "win",
+    "away": "Richmond Spiders",
+    "home": "Southern Illinois Salukis",
+    "awayScore": 70,
+    "homeScore": 80
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "San José St Spartans",
+    "matchup": "UC Riverside Highlanders @ San José St Spartans",
+    "result": "loss",
+    "away": "UC Riverside Highlanders",
+    "home": "San José State Spartans",
+    "awayScore": 80,
+    "homeScore": 75
+  },
+  {
+    "date": "2026-11-12",
+    "pick": "UTEP Miners",
+    "matchup": "New Mexico St Aggies @ UTEP Miners",
+    "result": "win",
+    "away": "New Mexico State Aggies",
+    "home": "UTEP Miners",
+    "awayScore": 58,
+    "homeScore": 60
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Cleveland St Vikings",
+    "matchup": "West Florida Argonauts @ Cleveland St Vikings",
+    "result": "win",
+    "away": "West Florida Argonauts",
+    "home": "Cleveland State Vikings",
+    "awayScore": 67,
+    "homeScore": 69
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Clemson Tigers",
+    "matchup": "Georgetown Hoyas @ Clemson Tigers",
+    "result": "loss",
+    "away": "Georgetown Hoyas",
+    "home": "Clemson Tigers",
+    "awayScore": 85,
+    "homeScore": 78
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Bucknell Bison",
+    "matchup": "Columbia Lions @ Bucknell Bison",
+    "result": "loss",
+    "away": "Columbia Lions",
+    "home": "Bucknell Bison",
+    "awayScore": 77,
+    "homeScore": 59
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Butler Bulldogs",
+    "matchup": "Pittsburgh Panthers @ Butler Bulldogs",
+    "result": "loss",
+    "away": "Pittsburgh Panthers",
+    "home": "Butler Bulldogs",
+    "awayScore": 76,
+    "homeScore": 64
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Elon Phoenix",
+    "matchup": "Chattanooga Mocs @ Elon Phoenix",
+    "result": "loss",
+    "away": "Chattanooga Mocs",
+    "home": "Elon Phoenix",
+    "awayScore": 77,
+    "homeScore": 70
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Charlotte 49ers",
+    "matchup": "Appalachian St Mountaineers @ Charlotte 49ers",
+    "result": "loss",
+    "away": "App State Mountaineers",
+    "home": "Charlotte 49ers",
+    "awayScore": 66,
+    "homeScore": 60
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Fordham Rams",
+    "matchup": "LIU Sharks @ Fordham Rams",
+    "result": "win",
+    "away": "Long Island University Sharks",
+    "home": "Fordham Rams",
+    "awayScore": 58,
+    "homeScore": 80
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Florida Gulf Coast Eagles",
+    "matchup": "Florida Int'l Golden Panthers @ Florida Gulf Coast Eagles",
+    "result": "loss",
+    "away": "Florida International Panthers",
+    "home": "Florida Gulf Coast Eagles",
+    "awayScore": 89,
+    "homeScore": 80
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "GW Revolutionaries",
+    "matchup": "Harvard Crimson @ GW Revolutionaries",
+    "result": "win",
+    "away": "Harvard Crimson",
+    "home": "George Washington Revolutionaries",
+    "awayScore": 57,
+    "homeScore": 85
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "North Carolina Tar Heels",
+    "matchup": "Georgia Bulldogs @ North Carolina Tar Heels",
+    "result": "loss",
+    "away": "Georgia Bulldogs",
+    "home": "North Carolina Tar Heels",
+    "awayScore": 78,
+    "homeScore": 70
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Lehigh Mountain Hawks",
+    "matchup": "Marist Red Foxes @ Lehigh Mountain Hawks",
+    "result": "win",
+    "away": "Marist Red Foxes",
+    "home": "Lehigh Mountain Hawks",
+    "awayScore": 60,
+    "homeScore": 65
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Hofstra Pride",
+    "matchup": "Iona Gaels @ Hofstra Pride",
+    "result": "win",
+    "away": "Iona Gaels",
+    "home": "Hofstra Pride",
+    "awayScore": 59,
+    "homeScore": 62
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Northeastern Huskies",
+    "matchup": "Yale Bulldogs @ Northeastern Huskies",
+    "result": "win",
+    "away": "Yale Bulldogs",
+    "home": "Northeastern Huskies",
+    "awayScore": 73,
+    "homeScore": 84
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Drake Bulldogs",
+    "matchup": "South Dakota Coyotes @ Drake Bulldogs",
+    "result": "win",
+    "away": "South Dakota Coyotes",
+    "home": "Drake Bulldogs",
+    "awayScore": 72,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Middle Tennessee Blue Raiders",
+    "matchup": "SE Missouri St Redhawks @ Middle Tennessee Blue Raiders",
+    "result": "win",
+    "away": "Southeast Missouri State Redhawks",
+    "home": "Middle Tennessee Blue Raiders",
+    "awayScore": 75,
+    "homeScore": 88
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "UConn Huskies",
+    "matchup": "Ohio State Buckeyes @ UConn Huskies",
+    "result": "win",
+    "away": "Ohio State Buckeyes",
+    "home": "UConn Huskies",
+    "awayScore": 68,
+    "homeScore": 84
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Tarleton State Texans",
+    "matchup": "Alcorn St Braves @ Tarleton State Texans",
+    "result": "win",
+    "away": "Alcorn State Braves",
+    "home": "Tarleton State Texans",
+    "awayScore": 69,
+    "homeScore": 73
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "North Dakota St Bison",
+    "matchup": "Illinois St Redbirds @ North Dakota St Bison",
+    "result": "win",
+    "away": "Illinois State Redbirds",
+    "home": "North Dakota State Bison",
+    "awayScore": 81,
+    "homeScore": 82
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Maryland Terrapins",
+    "matchup": "Virginia Cavaliers @ Maryland Terrapins",
+    "result": "loss",
+    "away": "Virginia Cavaliers",
+    "home": "Maryland Terrapins",
+    "awayScore": 87,
+    "homeScore": 83
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Samford Bulldogs",
+    "matchup": "Wright St Raiders @ Samford Bulldogs",
+    "result": "loss",
+    "away": "Wright State Raiders",
+    "home": "Samford Bulldogs",
+    "awayScore": 90,
+    "homeScore": 66
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Texas State Bobcats",
+    "matchup": "Southern Miss Golden Eagles @ Texas State Bobcats",
+    "result": "win",
+    "away": "Southern Miss Golden Eagles",
+    "home": "Texas State Bobcats",
+    "awayScore": 65,
+    "homeScore": 85
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Auburn Tigers",
+    "matchup": "Arizona Wildcats @ Auburn Tigers",
+    "result": "loss",
+    "away": "Arizona Wildcats",
+    "home": "Auburn Tigers",
+    "awayScore": 80,
+    "homeScore": 69
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Omaha Mavericks",
+    "matchup": "Lindenwood Lions @ Omaha Mavericks",
+    "result": "win",
+    "away": "Lindenwood Lions",
+    "home": "Omaha Mavericks",
+    "awayScore": 56,
+    "homeScore": 67
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Idaho Vandals",
+    "matchup": "Cal Poly Mustangs @ Idaho Vandals",
+    "result": "loss",
+    "away": "Cal Poly Mustangs",
+    "home": "Idaho Vandals",
+    "awayScore": 83,
+    "homeScore": 74
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Northwestern Wildcats",
+    "matchup": "DePaul Blue Demons @ Northwestern Wildcats",
+    "result": "loss",
+    "away": "DePaul Blue Demons",
+    "home": "Northwestern Wildcats",
+    "awayScore": 67,
+    "homeScore": 47
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Mississippi St Bulldogs",
+    "matchup": "Xavier Musketeers @ Mississippi St Bulldogs",
+    "result": "loss",
+    "away": "Xavier Musketeers",
+    "home": "Mississippi State Bulldogs",
+    "awayScore": 81,
+    "homeScore": 63
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "San Diego Toreros",
+    "matchup": "Chicago St Cougars @ San Diego Toreros",
+    "result": "win",
+    "away": "Chicago State Cougars",
+    "home": "San Diego Toreros",
+    "awayScore": 67,
+    "homeScore": 87
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "UNLV Rebels",
+    "matchup": "Stanford Cardinal @ UNLV Rebels",
+    "result": "win",
+    "away": "Stanford Cardinal",
+    "home": "UNLV Rebels",
+    "awayScore": 68,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Portland Pilots",
+    "matchup": "East Texas A&M Lions @ Portland Pilots",
+    "result": "loss",
+    "away": "East Texas A&M Lions",
+    "home": "Portland Pilots",
+    "awayScore": 94,
+    "homeScore": 88
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Utah State Aggies",
+    "matchup": "UC San Diego Tritons @ Utah State Aggies",
+    "result": "win",
+    "away": "UC San Diego Tritons",
+    "home": "Utah State Aggies",
+    "awayScore": 82,
+    "homeScore": 120
+  },
+  {
+    "date": "2026-11-13",
+    "pick": "Saint Mary's Gaels",
+    "matchup": "UIC Flames @ Saint Mary's Gaels",
+    "result": "win",
+    "away": "UIC Flames",
+    "home": "Saint Mary's Gaels",
+    "awayScore": 61,
+    "homeScore": 84
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Army Knights",
+    "matchup": "St. Thomas (MN) Tommies @ Army Knights",
+    "result": "win",
+    "away": "St. Thomas Tommies",
+    "home": "Army Black Knights",
+    "awayScore": 77,
+    "homeScore": 79
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "North Dakota Fighting Hawks",
+    "matchup": "Montana Grizzlies @ North Dakota Fighting Hawks",
+    "result": "loss",
+    "away": "Montana Grizzlies",
+    "home": "North Dakota Fighting Hawks",
+    "awayScore": 80,
+    "homeScore": 71
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Akron Zips",
+    "matchup": "Tulane Green Wave @ Akron Zips",
+    "result": "win",
+    "away": "Tulane Green Wave",
+    "home": "Akron Zips",
+    "awayScore": 63,
+    "homeScore": 65
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Maine Black Bears",
+    "matchup": "Drexel Dragons @ Maine Black Bears",
+    "result": "loss",
+    "away": "Drexel Dragons",
+    "home": "Maine Black Bears",
+    "awayScore": 66,
+    "homeScore": 64
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Evansville Purple Aces",
+    "matchup": "Miami (OH) RedHawks @ Evansville Purple Aces",
+    "result": "loss",
+    "away": "Miami (OH) RedHawks",
+    "home": "Evansville Purple Aces",
+    "awayScore": 86,
+    "homeScore": 78
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Stephen F. Austin Lumberjacks",
+    "matchup": "Rice Owls @ Stephen F. Austin Lumberjacks",
+    "result": "loss",
+    "away": "Rice Owls",
+    "home": "Stephen F. Austin Lumberjacks",
+    "awayScore": 81,
+    "homeScore": 78
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Queens University Royals",
+    "matchup": "Wofford Terriers @ Queens University Royals",
+    "result": "win",
+    "away": "Wofford Terriers",
+    "home": "Queens University Royals",
+    "awayScore": 92,
+    "homeScore": 97
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Winthrop Eagles",
+    "matchup": "Jackson St Tigers @ Winthrop Eagles",
+    "result": "loss",
+    "away": "Jackson State Tigers",
+    "home": "Winthrop Eagles",
+    "awayScore": 76,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Navy Midshipmen",
+    "matchup": "Hampton Pirates @ Navy Midshipmen",
+    "result": "win",
+    "away": "Hampton Pirates",
+    "home": "Navy Midshipmen",
+    "awayScore": 56,
+    "homeScore": 58
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "East Carolina Pirates",
+    "matchup": "Delaware St Hornets @ East Carolina Pirates",
+    "result": "win",
+    "away": "Delaware State Hornets",
+    "home": "East Carolina Pirates",
+    "awayScore": 48,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Detroit Mercy Titans",
+    "matchup": "Toledo Rockets @ Detroit Mercy Titans",
+    "result": "loss",
+    "away": "Toledo Rockets",
+    "home": "Detroit Mercy Titans",
+    "awayScore": 85,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Gonzaga Bulldogs",
+    "matchup": "LSU Tigers @ Gonzaga Bulldogs",
+    "result": "loss",
+    "away": "LSU Tigers",
+    "home": "Gonzaga Bulldogs",
+    "awayScore": 81,
+    "homeScore": 80
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Oakland Golden Grizzlies",
+    "matchup": "Northern Iowa Panthers @ Oakland Golden Grizzlies",
+    "result": "win",
+    "away": "Northern Iowa Panthers",
+    "home": "Oakland Golden Grizzlies",
+    "awayScore": 76,
+    "homeScore": 80
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Campbell Fighting Camels",
+    "matchup": "South Carolina Upstate Spartans @ Campbell Fighting Camels",
+    "result": "win",
+    "away": "South Carolina Upstate Spartans",
+    "home": "Campbell Fighting Camels",
+    "awayScore": 77,
+    "homeScore": 93
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "California Golden Bears",
+    "matchup": "Utah Tech Trailblazers @ California Golden Bears",
+    "result": "win",
+    "away": "Utah Tech Trailblazers",
+    "home": "California Golden Bears",
+    "awayScore": 73,
+    "homeScore": 79
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Loyola (MD) Greyhounds",
+    "matchup": "Morgan St Bears @ Loyola (MD) Greyhounds",
+    "result": "loss",
+    "away": "Morgan State Bears",
+    "home": "Loyola Maryland Greyhounds",
+    "awayScore": 63,
+    "homeScore": 61
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "North Texas Mean Green",
+    "matchup": "South Alabama Jaguars @ North Texas Mean Green",
+    "result": "win",
+    "away": "South Alabama Jaguars",
+    "home": "North Texas Mean Green",
+    "awayScore": 65,
+    "homeScore": 66
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Wichita St Shockers",
+    "matchup": "Austin Peay Governors @ Wichita St Shockers",
+    "result": "win",
+    "away": "Austin Peay Governors",
+    "home": "Wichita State Shockers",
+    "awayScore": 60,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Le Moyne Dolphins",
+    "matchup": "Manhattan Jaspers @ Le Moyne Dolphins",
+    "result": "win",
+    "away": "Manhattan Jaspers",
+    "home": "Le Moyne Dolphins",
+    "awayScore": 62,
+    "homeScore": 76
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Saint Joseph's Hawks",
+    "matchup": "Pennsylvania Quakers @ Saint Joseph's Hawks",
+    "result": "win",
+    "away": "Pennsylvania Quakers",
+    "home": "Saint Joseph's Hawks",
+    "awayScore": 77,
+    "homeScore": 83
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Charleston Southern Buccaneers",
+    "matchup": "West Georgia Wolves @ Charleston Southern Buccaneers",
+    "result": "win",
+    "away": "West Georgia Wolves",
+    "home": "Charleston Southern Buccaneers",
+    "awayScore": 68,
+    "homeScore": 92
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Fresno St Bulldogs",
+    "matchup": "UC Riverside Highlanders @ Fresno St Bulldogs",
+    "result": "win",
+    "away": "UC Riverside Highlanders",
+    "home": "Fresno State Bulldogs",
+    "awayScore": 80,
+    "homeScore": 89
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Siena Saints",
+    "matchup": "Brown Bears @ Siena Saints",
+    "result": "win",
+    "away": "Brown Bears",
+    "home": "Siena Saints",
+    "awayScore": 74,
+    "homeScore": 79
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "San Francisco Dons",
+    "matchup": "Portland St Vikings @ San Francisco Dons",
+    "result": "loss",
+    "away": "Portland State Vikings",
+    "home": "San Francisco Dons",
+    "awayScore": 84,
+    "homeScore": 68
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Davidson Wildcats",
+    "matchup": "Howard Bison @ Davidson Wildcats",
+    "result": "loss",
+    "away": "Howard Bison",
+    "home": "Davidson Wildcats",
+    "awayScore": 64,
+    "homeScore": 58
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Western Carolina Catamounts",
+    "matchup": "Lipscomb Bisons @ Western Carolina Catamounts",
+    "result": "loss",
+    "away": "Lipscomb Bisons",
+    "home": "Western Carolina Catamounts",
+    "awayScore": 75,
+    "homeScore": 68
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "UT-Arlington Mavericks",
+    "matchup": "UT Rio Grande Valley Vaqueros @ UT-Arlington Mavericks",
+    "result": "win",
+    "away": "UT Rio Grande Valley Vaqueros",
+    "home": "UT Arlington Mavericks",
+    "awayScore": 77,
+    "homeScore": 85
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Towson Tigers",
+    "matchup": "UMBC Retrievers @ Towson Tigers",
+    "result": "win",
+    "away": "UMBC Retrievers",
+    "home": "Towson Tigers",
+    "awayScore": 42,
+    "homeScore": 68
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Belmont Bruins",
+    "matchup": "Furman Paladins @ Belmont Bruins",
+    "result": "win",
+    "away": "Furman Paladins",
+    "home": "Belmont Bruins",
+    "awayScore": 62,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Arkansas-Little Rock Trojans",
+    "matchup": "Northwestern St Demons @ Arkansas-Little Rock Trojans",
+    "result": "win",
+    "away": "Northwestern State Demons",
+    "home": "Little Rock Trojans",
+    "awayScore": 83,
+    "homeScore": 84
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Nicholls St Colonels",
+    "matchup": "Louisiana Tech Bulldogs @ Nicholls St Colonels",
+    "result": "win",
+    "away": "Louisiana Tech Bulldogs",
+    "home": "Nicholls Colonels",
+    "awayScore": 68,
+    "homeScore": 71
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Sacramento St Hornets",
+    "matchup": "UC Davis Aggies @ Sacramento St Hornets",
+    "result": "loss",
+    "away": "UC Davis Aggies",
+    "home": "Sacramento State Hornets",
+    "awayScore": 75,
+    "homeScore": 56
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Youngstown St Penguins",
+    "matchup": "Marshall Thundering Herd @ Youngstown St Penguins",
+    "result": "win",
+    "away": "Marshall Thundering Herd",
+    "home": "Youngstown State Penguins",
+    "awayScore": 71,
+    "homeScore": 74
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Bellarmine Knights",
+    "matchup": "Northern Illinois Huskies @ Bellarmine Knights",
+    "result": "loss",
+    "away": "Northern Illinois Huskies",
+    "home": "Bellarmine Knights",
+    "awayScore": 72,
+    "homeScore": 64
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "North Florida Ospreys",
+    "matchup": "The Citadel Bulldogs @ North Florida Ospreys",
+    "result": "loss",
+    "away": "The Citadel Bulldogs",
+    "home": "North Florida Ospreys",
+    "awayScore": 77,
+    "homeScore": 74
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "George Mason Patriots",
+    "matchup": "Bradley Braves @ George Mason Patriots",
+    "result": "loss",
+    "away": "George Mason Patriots",
+    "home": "Bradley Braves",
+    "awayScore": 61,
+    "homeScore": 62
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Colorado St Rams",
+    "matchup": "Loyola (Chi) Ramblers @ Colorado St Rams",
+    "result": "loss",
+    "away": "Loyola Chicago Ramblers",
+    "home": "Colorado State Rams",
+    "awayScore": 73,
+    "homeScore": 58
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Denver Pioneers",
+    "matchup": "Wyoming Cowboys @ Denver Pioneers",
+    "result": "loss",
+    "away": "Wyoming Cowboys",
+    "home": "Denver Pioneers",
+    "awayScore": 76,
+    "homeScore": 53
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Northern Kentucky Norse",
+    "matchup": "Central Michigan Chippewas @ Northern Kentucky Norse",
+    "result": "loss",
+    "away": "Central Michigan Chippewas",
+    "home": "Northern Kentucky Norse",
+    "awayScore": 68,
+    "homeScore": 57
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "St. Bonaventure Bonnies",
+    "matchup": "Lafayette Leopards @ St. Bonaventure Bonnies",
+    "result": "win",
+    "away": "Lafayette Leopards",
+    "home": "St. Bonaventure Bonnies",
+    "awayScore": 58,
+    "homeScore": 81
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "N Colorado Bears",
+    "matchup": "South Dakota St Jackrabbits @ N Colorado Bears",
+    "result": "loss",
+    "away": "South Dakota State Jackrabbits",
+    "home": "Northern Colorado Bears",
+    "awayScore": 71,
+    "homeScore": 46
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Old Dominion Monarchs",
+    "matchup": "Longwood Lancers @ Old Dominion Monarchs",
+    "result": "win",
+    "away": "Longwood Lancers",
+    "home": "Old Dominion Monarchs",
+    "awayScore": 74,
+    "homeScore": 80
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Providence Friars",
+    "matchup": "Colorado Buffaloes @ Providence Friars",
+    "result": "win",
+    "away": "Colorado Buffaloes",
+    "home": "Providence Friars",
+    "awayScore": 53,
+    "homeScore": 67
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Fairfield Stags",
+    "matchup": "NJIT Highlanders @ Fairfield Stags",
+    "result": "win",
+    "away": "NJIT Highlanders",
+    "home": "Fairfield Stags",
+    "awayScore": 60,
+    "homeScore": 63
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Jacksonville St Gamecocks",
+    "matchup": "UAB Blazers @ Jacksonville St Gamecocks",
+    "result": "win",
+    "away": "UAB Blazers",
+    "home": "Jacksonville State Gamecocks",
+    "awayScore": 68,
+    "homeScore": 71
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Dayton Flyers",
+    "matchup": "Cincinnati Bearcats @ Dayton Flyers",
+    "result": "loss",
+    "away": "Cincinnati Bearcats",
+    "home": "Dayton Flyers",
+    "awayScore": 95,
+    "homeScore": 72
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Morehead St Eagles",
+    "matchup": "IUPUI Jaguars @ Morehead St Eagles",
+    "result": "win",
+    "away": "IU Indianapolis Jaguars",
+    "home": "Morehead State Eagles",
+    "awayScore": 75,
+    "homeScore": 79
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Nevada Wolf Pack",
+    "matchup": "Utah Valley Wolverines @ Nevada Wolf Pack",
+    "result": "loss",
+    "away": "Utah Valley Wolverines",
+    "home": "Nevada Wolf Pack",
+    "awayScore": 73,
+    "homeScore": 71
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Santa Clara Broncos",
+    "matchup": "New Mexico Lobos @ Santa Clara Broncos",
+    "result": "win",
+    "away": "New Mexico Lobos",
+    "home": "Santa Clara Broncos",
+    "awayScore": 85,
+    "homeScore": 90
+  },
+  {
+    "date": "2026-11-14",
+    "pick": "Utah Utes",
+    "matchup": "Washington Huskies @ Utah Utes",
+    "result": "pending",
+    "away": "",
+    "home": "",
+    "awayScore": null,
+    "homeScore": null
+  }
+]

@@ -9,7 +9,7 @@ const {
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { defaultOnFlag } = require('./lib/default_on_flag');
-const { ncaamTeamsMatch, collegeHoopsMatchEnabled } = require('./lib/ncaam-names');
+const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
 const { applyToRecord } = require('./lib/clv-line-adj');
 
@@ -625,14 +625,18 @@ function findGameForGrading(pick, games) {
   const matchup = (pick.matchup || '').toLowerCase();
   const parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const matches = [];
-  for (const g of games) {
-    const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
-    const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
-    const awayMatch = parts.some(p => gradeSideMatch(p, g.awayTeam, g.awayAbbr, sport))
-      || (!college && awayLast.length > 3 && matchup.includes(awayLast));
-    const homeMatch = parts.some(p => gradeSideMatch(p, g.homeTeam, g.homeAbbr, sport))
-      || (!college && homeLast.length > 3 && matchup.includes(homeLast));
-    if (awayMatch && homeMatch) matches.push(g);
+  if (college) {
+    matches.push(...ncaamMatchingGames(pick.matchup, games));
+  } else {
+    for (const g of games) {
+      const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
+      const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
+      const awayMatch = parts.some(p => gradeSideMatch(p, g.awayTeam, g.awayAbbr, sport))
+        || (awayLast.length > 3 && matchup.includes(awayLast));
+      const homeMatch = parts.some(p => gradeSideMatch(p, g.homeTeam, g.homeAbbr, sport))
+        || (homeLast.length > 3 && matchup.includes(homeLast));
+      if (awayMatch && homeMatch) matches.push(g);
+    }
   }
   if (matches.length <= 1) return matches[0] || null;
   // Day-night doubleheader: both games match by team name. Settle against the game whose
@@ -668,8 +672,13 @@ function gradePick(pick, game) {
   const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
   const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = gradeSideMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
-  const pickedHome = gradeSideMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  let pickedAway = gradeSideMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+  let pickedHome = gradeSideMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  if (collegeHoopsMatchEnabled(pick.sport)) {
+    const side = ncaamPickedSide(pickTeamRaw, pick.matchup, game);
+    pickedAway = side === 'away';
+    pickedHome = side === 'home';
+  }
 
   if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);

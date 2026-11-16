@@ -64,3 +64,7 @@ This is not optional. A feature is not done until it is tested and confirmed wor
 - Sort picks by letter grade (A+ first, B last)
 - v10.0 architecture is locked — see memory for immutable core components
 - Keep /percentile scorecard in sync with model/pipeline changes
+
+
+## Standing orders
+Read docs/STANDING-ORDERS.md before any change. It overrides older docs and specs.

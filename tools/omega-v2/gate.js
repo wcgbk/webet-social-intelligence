@@ -655,6 +655,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (ncaamGrade.status !== 0) throw new Error('ncaam grade gate failed');
+
+  const dailyCheck = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-daily-check.js')],
+    { stdio: 'inherit' }
+  );
+  if (dailyCheck.status !== 0) throw new Error('daily check gate failed');
 }
 
 function pickSlim(card) {

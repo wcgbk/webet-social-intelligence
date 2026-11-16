@@ -4,6 +4,10 @@
  * 3 AM ET historical closes for the previous ET day.
  * One Odds API historical call per (sport, 10-minute commence bucket).
  * Snapshot time is the earliest tip in the bucket minus 60 seconds.
+ * The commence filter is 30 minutes before the earliest tip through 30
+ * minutes after the latest. Close rows are written only for events that
+ * belong to the bucket. Card and candidate legs still missing Pinnacle
+ * are retried once at the earliest tip minus 15 minutes.
  * OMEGA_CLOSES_AT_3AM defaults on. OMEGA_CLOSES_3AM_CAP defaults to the
  * Saturday 2026-11-14 estimate plus about 25% headroom (see DEFAULT_CAP).
  * No schedule of its own. capture-odds-3am fires the background worker.
@@ -42,6 +46,12 @@ const PICKS_STORE = 'edge-picks-omega';
 const SOURCE = 'oddsapi-historical:capture-closes-3am';
 const BUCKET_MS = 10 * 60 * 1000;
 const SNAPSHOT_LEAD_MS = 60 * 1000;
+/** Odds API commenceTimeFrom / commenceTimeTo around the bucket tips. */
+const QUERY_PAD_MS = 30 * 60 * 1000;
+/** Unlisted events are this bucket's only when the tip is inside this pad. */
+const BELONG_PAD_MS = 2 * 60 * 1000;
+/** One earlier historical snapshot for card and candidate legs still no-close. */
+const FALLBACK_LEAD_MS = 15 * 60 * 1000;
 const HISTORICAL_MULTIPLIER = 10;
 const BOOKS_PER_REGION = 10;
 const REGION_EQUIVALENTS = Math.ceil(BOOKS.length / BOOKS_PER_REGION);
@@ -143,20 +153,40 @@ function summaryKey(date) {
   return `closes-3am/${date}`;
 }
 
+/** Card labels (Spread, Moneyline, Total, betType) and Odds API keys both map here. */
+function pickMarket(pick) {
+  if (!pick) return null;
+  return S.marketFromBetType(pick.betType || pick.market, pick.pick || pick.side);
+}
+
+function leadMinutes(commenceTime, snapshotAt) {
+  const tip = Date.parse(commenceTime);
+  const snap = Date.parse(snapshotAt);
+  if (!Number.isFinite(tip) || !Number.isFinite(snap)) return null;
+  return Math.round((tip - snap) / 60000);
+}
+
 function pickKey(pick) {
   return [
     pick.kind || '',
     pick.sport || '',
     pick.matchup || '',
     pick.pick || '',
-    pick.market || '',
+    pickMarket(pick) || '',
     pick.commenceTime || '',
   ].join('|');
+}
+
+function mergePickRow(existing, incoming) {
+  if (!incoming) return existing || null;
+  if (existing && existing.status === 'closed') return existing;
+  return incoming;
 }
 
 /**
  * Games whose commence times fall within 10 minutes of the bucket start,
  * one bucket per sport. Snapshot is the earliest tip minus 60s.
+ * `from` / `to` are the wider Odds API commence window, not the 1-second tip.
  */
 function planBuckets(games) {
   const bySport = new Map();
@@ -185,7 +215,6 @@ function planBuckets(games) {
     const min = Math.min(...times);
     const max = Math.max(...times);
     const snapshotMs = min - SNAPSHOT_LEAD_MS;
-    const toMs = max === min ? min + 1000 : max;
     const priority = bucket.games.some((game) => game.roles && game.roles.has('card'))
       ? 0
       : (bucket.games.some((game) => game.roles && game.roles.has('candidate')) ? 1 : 2);
@@ -193,9 +222,11 @@ function planBuckets(games) {
       sport: bucket.sport,
       sportKey: sportKeyOf(bucket.sport),
       snapshotAt: isoSecond(snapshotMs),
-      from: isoSecond(min),
-      to: isoSecond(toMs),
+      fallbackAt: isoSecond(min - FALLBACK_LEAD_MS),
+      from: isoSecond(min - QUERY_PAD_MS),
+      to: isoSecond(max + QUERY_PAD_MS),
       startMs: min,
+      endMs: max,
       priority,
       games: bucket.games,
     };
@@ -261,15 +292,61 @@ function eventInResponse(wanted, events) {
   }) || null;
 }
 
+function slateIdSet(slateEvents) {
+  const ids = new Set();
+  for (const ev of slateEvents || []) {
+    const id = ev && (ev.eventId || ev.id);
+    if (id) ids.add(String(id));
+  }
+  return ids;
+}
+
+/**
+ * A response event belongs to this bucket when its id is one of the bucket
+ * games, or it is not on the slate and its commence falls inside
+ * [earliest tip − 2 min, latest tip + 2 min]. Other events stay in the
+ * archived body and are not written as closes.
+ */
+function eventBelongsToBucket(event, bucket, slateIds) {
+  if (!event || !bucket) return false;
+  const id = event.id == null ? '' : String(event.id);
+  const bucketIds = new Set();
+  for (const game of bucket.games || []) {
+    if (game && game.eventId) bucketIds.add(String(game.eventId));
+  }
+  if (id && bucketIds.has(id)) return true;
+  if (id && slateIds && slateIds.has(id)) return false;
+  const ct = Date.parse(event.commence_time || '');
+  if (!Number.isFinite(ct)) return false;
+  const min = bucket.startMs;
+  const max = bucket.endMs != null ? bucket.endMs : bucket.startMs;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return false;
+  return ct >= min - BELONG_PAD_MS && ct <= max + BELONG_PAD_MS;
+}
+
+function eventWithMarkets(event, markets) {
+  if (!event || !markets) return event;
+  const allow = new Set(markets);
+  const bookmakers = [];
+  for (const book of event.bookmakers || []) {
+    if (!book) continue;
+    const kept = (book.markets || []).filter((market) => market && allow.has(market.key));
+    if (!kept.length) continue;
+    bookmakers.push(Object.assign({}, book, { markets: kept }));
+  }
+  return Object.assign({}, event, { bookmakers });
+}
+
 /**
  * A pick is satisfied only by its own event and its own market at Pinnacle.
  * A sibling game in the same bucket does not count.
  */
 function assessPick(pick, events) {
   const event = eventInResponse(pick, events);
-  if (!event) return { status: 'no-close', reason: 'not-in-historical-snapshot', event: null };
-  if (!pinnacleMarket(event, pick.market)) return { status: 'no-close', reason: 'pinnacle-not-priced', event };
-  return { status: 'closed', reason: null, event };
+  const market = pickMarket(pick);
+  if (!event) return { status: 'no-close', reason: 'not-in-historical-snapshot', event: null, market };
+  if (!pinnacleMarket(event, market)) return { status: 'no-close', reason: 'pinnacle-not-priced', event, market };
+  return { status: 'closed', reason: null, event, market };
 }
 
 function reserveBlocks(remaining, cost) {
@@ -300,7 +377,8 @@ function pushPick(game, kind, pick) {
     sport: game.sport,
     matchup: pick.matchup || null,
     pick: pick.pick || pick.side || null,
-    market: pick.market,
+    betType: pick.betType || null,
+    market: pickMarket(pick),
     eventId: game.eventId || null,
     homeTeam: game.homeTeam,
     awayTeam: game.awayTeam,
@@ -380,7 +458,7 @@ function collectGames(slateEvents, card, candidates, date) {
   for (const row of rows) {
     if (!row) continue;
     const names = teamsFromMatchup(row.matchup);
-    const market = S.marketFromBetType(row.market || row.betType, row.side || row.pick);
+    const market = S.marketFromBetType(row.betType || row.market, row.pick || row.side);
     addTarget(games, {
       sport: row.sport,
       eventId: row.eventId || row.event_id,
@@ -456,41 +534,64 @@ function safeLog(message) {
   console.error(scrub(message));
 }
 
+function marketsForEvent(event, picks) {
+  if (!picks) return MARKETS.slice();
+  const wanted = [];
+  for (const pick of picks) {
+    if (!eventInResponse(pick, [event])) continue;
+    const market = pickMarket(pick);
+    if (market && !wanted.includes(market)) wanted.push(market);
+  }
+  return wanted;
+}
+
 /**
  * Apply one historical body to the stores the old close job writes.
  * `events` must already be unwrapped. Does not call the Odds API.
+ * Events outside this bucket are ignored here. The caller archives the raw body.
+ * `ctx.onlyPicks` limits assessment and writes to those legs (fallback).
  */
 async function applyBucketResponse(bucket, unpacked, ctx) {
   const when = ctx.now instanceof Date ? ctx.now : new Date();
-  const events = unpacked.events || [];
+  const snapshotAt = ctx.snapshotAt || bucket.snapshotAt;
+  const allEvents = unpacked.events || [];
+  const slateIds = ctx.slateIds || slateIdSet(null);
+  const belonging = allEvents.filter((event) => eventBelongsToBucket(event, bucket, slateIds));
+  const onlyPicks = Array.isArray(ctx.onlyPicks) ? ctx.onlyPicks : null;
+  const events = onlyPicks
+    ? belonging.filter((event) => marketsForEvent(event, onlyPicks).length > 0)
+    : belonging;
+  const picks = onlyPicks || (bucket.games || []).reduce((list, game) => list.concat(game.picks || []), []);
   const rows = { games: [], snaps: [] };
   const pickResults = [];
   const satisfiedEventMarkets = new Set();
   const blockedCommence = new Set();
-  for (const game of bucket.games) {
-    for (const pick of game.picks || []) {
-      const assessed = assessPick(pick, events);
-      const row = Object.assign({}, pick, {
-        status: assessed.status,
-        reason: assessed.reason,
-        eventId: (assessed.event && assessed.event.id) || pick.eventId || null,
-      });
-      pickResults.push(row);
-      if (assessed.status !== 'closed') blockedCommence.add(`${pick.commenceTime}|${pick.market}`);
-    }
-    const event = eventInResponse(game, events);
-    if (!event) continue;
-    for (const market of MARKETS) {
-      if (pinnacleMarket(event, market)) satisfiedEventMarkets.add(`${event.id}|${market}`);
-    }
+  for (const pick of picks) {
+    const assessed = assessPick(pick, belonging);
+    const market = assessed.market || pickMarket(pick);
+    const row = Object.assign({}, pick, {
+      market,
+      status: assessed.status,
+      reason: assessed.reason,
+      eventId: (assessed.event && assessed.event.id) || pick.eventId || null,
+      closeLeadMin: leadMinutes(pick.commenceTime, snapshotAt),
+    });
+    pickResults.push(row);
+    const ctPick = FB.normalizeCommence(pick.commenceTime) || pick.commenceTime;
+    if (assessed.status !== 'closed') blockedCommence.add(`${ctPick}|${market}`);
   }
   for (const event of events) {
     if (!event) continue;
-    const built = S.rowsFromOddsEvent(bucket.sport, event, {
+    const markets = marketsForEvent(event, onlyPicks);
+    for (const market of markets) {
+      if (pinnacleMarket(event, market)) satisfiedEventMarkets.add(`${event.id}|${market}`);
+    }
+    const priced = eventWithMarkets(event, markets);
+    const built = S.rowsFromOddsEvent(bucket.sport, priced, {
       lineType: 'closing',
       source: SOURCE,
       books: BOOKS,
-      markets: MARKETS,
+      markets,
     });
     if (built.game) rows.games.push(built.game);
     rows.snaps.push(...built.snaps);
@@ -507,8 +608,9 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
     for (const event of events) {
       if (!event || event.id == null) continue;
       const ct = FB.normalizeCommence(event.commence_time);
+      const markets = marketsForEvent(event, onlyPicks);
       let any = false;
-      for (const market of MARKETS) {
+      for (const market of markets) {
         if (!pinnacleMarket(event, market)) continue;
         any = true;
         if (ct && blockedCommence.has(`${ct}|${market}`)) continue;
@@ -536,11 +638,14 @@ async function applyBucketResponse(bucket, unpacked, ctx) {
     if (ctx.storeClose) {
       for (const event of events) {
         if (!event || !pinnacleBook(event)) continue;
+        const markets = marketsForEvent(event, onlyPicks);
+        const priced = eventWithMarkets(event, markets);
+        if (!pinnacleBook(priced)) continue;
         try {
-          await ctx.storeClose(event, {
+          await ctx.storeClose(priced, {
             sport: bucket.sport,
-            snapshotAt: unpacked.timestamp || bucket.snapshotAt,
-            requestedAt: bucket.snapshotAt,
+            snapshotAt: unpacked.timestamp || snapshotAt,
+            requestedAt: snapshotAt,
             commenceTime: event.commence_time,
             source: SOURCE,
           });
@@ -586,15 +691,40 @@ function priorStatus(summary) {
   return map;
 }
 
-function pickMissing(row, prior) {
-  if (!row || row.kind !== 'card') return false;
+function pickMissing(row, prior, retryNoClose) {
+  if (!row) return false;
+  const retry = !!retryNoClose;
+  if (row.kind !== 'card' && !(retry && row.kind === 'candidate')) return false;
   const prev = prior.get(pickKey(row));
   if (!prev) return true;
   if (prev.status === 'closed') return false;
   // A completed look that found no Pinnacle price is terminal. onlyMissing
-  // must not pay for that bucket again. fetch-failed, cap, and reserve-guard stay retryable.
-  if (prev.status === 'no-close' && ALLOWED_NO_CLOSE.has(prev.reason)) return false;
+  // must not pay for that bucket again. retryNoClose reopens card and candidate
+  // no-closes. fetch-failed, cap, and reserve-guard stay retryable.
+  if (prev.status === 'no-close' && ALLOWED_NO_CLOSE.has(prev.reason)) return retry;
   return true;
+}
+
+function bucketRetryNoClose(bucket, prior, retryNoClose) {
+  if (!retryNoClose) return false;
+  for (const game of bucket.games || []) {
+    for (const pick of game.picks || []) {
+      if (pick.kind !== 'card' && pick.kind !== 'candidate') continue;
+      const prev = prior.get(pickKey(pick));
+      if (prev && prev.status === 'no-close') return true;
+    }
+  }
+  return false;
+}
+
+function trackedLegs(bucket) {
+  const out = [];
+  for (const game of bucket.games || []) {
+    for (const pick of game.picks || []) {
+      if (pick.kind === 'card' || pick.kind === 'candidate') out.push(pick);
+    }
+  }
+  return out;
 }
 
 async function runCloses(ctx) {
@@ -603,6 +733,7 @@ async function runCloses(ctx) {
   const date = ctx.date;
   const cap = capFor(env);
   const onlyMissing = !!(ctx.onlyMissing || ctx.picksOnly);
+  const retryNoClose = !!ctx.retryNoClose;
   const dryRun = !!ctx.dryRun;
   const result = {
     ok: true,
@@ -611,6 +742,7 @@ async function runCloses(ctx) {
     estCost: EST_COST,
     creditFormula: `${HISTORICAL_MULTIPLIER} x ${MARKETS.length} markets x ${REGION_EQUIVALENTS} region-equivalents (${BOOKS.length} books) = ${EST_COST}`,
     onlyMissing,
+    retryNoClose,
     dryRun,
     reserveGuard: false,
     calls: [],
@@ -625,7 +757,9 @@ async function runCloses(ctx) {
     result.errors.push('bad-date');
     return result;
   }
-  const { games } = await loadInputs(date, ctx);
+  const loaded = await loadInputs(date, ctx);
+  const games = loaded.games;
+  const slateIds = slateIdSet(loaded.slate);
   let buckets = planBuckets(games);
   const blobs = ctx.blobs;
   let summary = null;
@@ -634,7 +768,7 @@ async function runCloses(ctx) {
   }
   const prior = priorStatus(summary);
   if (onlyMissing) {
-    buckets = buckets.filter((bucket) => bucket.games.some((game) => (game.picks || []).some((pick) => pickMissing(pick, prior))));
+    buckets = buckets.filter((bucket) => bucket.games.some((game) => (game.picks || []).some((pick) => pickMissing(pick, prior, retryNoClose))));
   }
   const runDate = S.etYmd(now);
   const creditKey = `credits/${runDate}`;
@@ -659,62 +793,80 @@ async function runCloses(ctx) {
   const seenPicks = new Set();
   function remember(rows) {
     for (const row of rows || []) {
+      if (!row) continue;
       const key = pickKey(row);
       seenPicks.add(key);
       const at = pickRows.findIndex((item) => pickKey(item) === key);
-      if (at >= 0) pickRows[at] = row;
-      else pickRows.push(row);
+      const existing = at >= 0 ? pickRows[at] : prior.get(key);
+      const merged = mergePickRow(existing, row);
+      if (at >= 0) pickRows[at] = merged;
+      else pickRows.push(merged);
     }
   }
 
-  for (const bucket of buckets) {
-    const doneKey = bucketDoneKey(bucket.sport, bucket.snapshotAt);
-    let already = false;
-    if (blobs) {
-      try { already = !!(await blobs.get(STORE, doneKey)); } catch (_) { already = false; }
-    }
-    if (already) {
+  function rowFor(pick) {
+    const key = pickKey(pick);
+    return pickRows.find((item) => pickKey(item) === key) || prior.get(key) || null;
+  }
+
+  async function blobHas(key) {
+    if (!blobs) return false;
+    try { return !!(await blobs.get(STORE, key)); } catch (_) { return false; }
+  }
+
+  const calledPrimary = new Set();
+
+  async function attempt(bucket, snapshotAt, options) {
+    const fallback = !!(options && options.fallback);
+    const ignoreDone = !!(options && options.ignoreDone);
+    const onlyPicks = options && options.onlyPicks;
+    const doneKey = bucketDoneKey(bucket.sport, snapshotAt);
+    const mark = (status) => {
+      const entry = {
+        sport: bucket.sport,
+        snapshotAt,
+        from: bucket.from,
+        to: bucket.to,
+        status,
+      };
+      if (fallback) entry.fallback = true;
+      result.buckets.push(entry);
+      return status;
+    };
+    if (!ignoreDone && await blobHas(doneKey)) {
       result.skippedDone += 1;
-      result.buckets.push({ sport: bucket.sport, snapshotAt: bucket.snapshotAt, from: bucket.from, to: bucket.to, status: 'done' });
-      for (const game of bucket.games) {
-        for (const pick of game.picks || []) {
-          const prev = prior.get(pickKey(pick));
-          if (prev) remember([prev]);
+      if (!fallback) {
+        for (const game of bucket.games) {
+          for (const pick of game.picks || []) {
+            const prev = prior.get(pickKey(pick));
+            if (prev) remember([prev]);
+          }
         }
       }
-      continue;
+      return mark('done');
     }
     if (spent + EST_COST > cap) {
       result.skippedCap += 1;
-      result.buckets.push({ sport: bucket.sport, snapshotAt: bucket.snapshotAt, status: 'cap' });
-      for (const game of bucket.games) {
-        for (const pick of game.picks || []) {
-          remember([Object.assign({}, pick, { status: 'no-close', reason: 'cap' })]);
+      if (!fallback) {
+        for (const game of bucket.games) {
+          for (const pick of game.picks || []) {
+            remember([Object.assign({}, pick, { status: 'no-close', reason: 'cap', market: pickMarket(pick) })]);
+          }
         }
       }
-      continue;
+      return mark('cap');
     }
     if (reserveBlocks(remaining, EST_COST)) {
       result.reserveGuard = true;
       result.ok = false;
       safeLog('[closes-3am] reserve-guard');
-      result.buckets.push({ sport: bucket.sport, snapshotAt: bucket.snapshotAt, status: 'reserve-guard' });
-      for (const later of buckets.slice(buckets.indexOf(bucket))) {
-        for (const game of later.games) {
-          for (const pick of game.picks || []) {
-            if (!seenPicks.has(pickKey(pick))) {
-              remember([Object.assign({}, pick, { status: 'no-close', reason: 'reserve-guard' })]);
-            }
-          }
-        }
-      }
-      break;
+      return mark('reserve-guard');
     }
     if (!bucket.sportKey) {
       result.errors.push(`sport-key ${bucket.sport}`);
-      continue;
+      return 'error';
     }
-    const url = buildHistoricalUrl(env.ODDS_API_KEY || '', bucket.sportKey, bucket.snapshotAt, bucket.from, bucket.to);
+    const url = buildHistoricalUrl(env.ODDS_API_KEY || '', bucket.sportKey, snapshotAt, bucket.from, bucket.to);
     try {
       const resp = await ctx.fetch(url);
       const actual = FB.actualFromHeader(FB.headerValue(resp, 'x-requests-last'));
@@ -727,19 +879,21 @@ async function runCloses(ctx) {
         at: now.toISOString(),
         path: CREDIT_PATH,
         sport: bucket.sport,
-        snapshot: bucket.snapshotAt,
+        snapshot: snapshotAt,
         bucket: `${bucket.from}..${bucket.to}`,
         nEvents: unpacked.events.length,
         estCost: EST_COST,
         ...(actual == null ? {} : { actualCost: actual }),
         remaining,
       };
+      if (fallback) call.fallback = true;
       credits.calls.push(call);
       credits.remaining = remaining;
       spent += EST_COST;
       result.calls.push(call);
       if (resp && resp.ok === false) throw new Error(`Odds API HTTP ${resp.status}`);
-      const fetchedAt = unpacked.timestamp || now.toISOString();
+      const stamp = unpacked.timestamp || snapshotAt;
+      const fetchedAt = `${stamp}--${snapshotAt}`;
       if (blobs && !dryRun) {
         try {
           await blobs.set(STORE, FB.archiveKey(date, bucket.sport, fetchedAt), {
@@ -747,9 +901,10 @@ async function runCloses(ctx) {
               sport: bucket.sport,
               url: FB.publicUrl(url),
               fetchedAt,
-              snapshot: bucket.snapshotAt,
+              snapshot: snapshotAt,
               timestamp: unpacked.timestamp,
               previous_timestamp: unpacked.previous_timestamp,
+              fallback: fallback || undefined,
               headers: {
                 'x-requests-used': FB.headerValue(resp, 'x-requests-used'),
                 'x-requests-remaining': headerRemaining,
@@ -771,38 +926,110 @@ async function runCloses(ctx) {
         dryRun,
         writeRows: ctx.writeRows,
         storeClose: ctx.storeClose,
+        slateIds,
+        snapshotAt,
+        onlyPicks: onlyPicks || null,
       });
       remember(applied.pickResults);
       if (blobs && !dryRun) {
         await blobs.set(STORE, doneKey, {
           at: now.toISOString(),
           sport: bucket.sport,
-          snapshotAt: bucket.snapshotAt,
+          snapshotAt,
           from: bucket.from,
           to: bucket.to,
           nEvents: unpacked.events.length,
+          ...(fallback ? { fallback: true } : {}),
         });
         await blobs.set(STORE, creditKey, credits);
       }
-      result.buckets.push({
+      const entry = {
         sport: bucket.sport,
-        snapshotAt: bucket.snapshotAt,
+        snapshotAt,
         from: bucket.from,
         to: bucket.to,
         nGames: bucket.games.length,
         nEvents: unpacked.events.length,
+        nKept: applied.events.length,
         status: 'called',
         posted: applied.posted,
-      });
+      };
+      if (fallback) entry.fallback = true;
+      result.buckets.push(entry);
+      return 'called';
     } catch (err) {
       result.ok = false;
       result.errors.push(scrub(err && err.message));
-      safeLog(`[closes-3am] ${bucket.sport} ${bucket.snapshotAt}: ${err && err.message}`);
-      result.buckets.push({ sport: bucket.sport, snapshotAt: bucket.snapshotAt, status: 'error' });
-      for (const game of bucket.games) {
-        for (const pick of game.picks || []) {
-          remember([Object.assign({}, pick, { status: 'no-close', reason: 'fetch-failed' })]);
+      safeLog(`[closes-3am] ${bucket.sport} ${snapshotAt}: ${err && err.message}`);
+      const failed = onlyPicks || (bucket.games || []).reduce((list, game) => list.concat(game.picks || []), []);
+      for (const pick of failed) {
+        remember([Object.assign({}, pick, { status: 'no-close', reason: 'fetch-failed', market: pickMarket(pick) })]);
+      }
+      return mark('error');
+    }
+  }
+
+  let halt = false;
+  for (const bucket of buckets) {
+    const ignoreDone = bucketRetryNoClose(bucket, prior, retryNoClose);
+    const status = await attempt(bucket, bucket.snapshotAt, { ignoreDone, fallback: false });
+    if (status === 'called') calledPrimary.add(bucket);
+    if (status === 'reserve-guard') {
+      for (const later of buckets.slice(buckets.indexOf(bucket))) {
+        for (const game of later.games) {
+          for (const pick of game.picks || []) {
+            if (!seenPicks.has(pickKey(pick))) {
+              remember([Object.assign({}, pick, { status: 'no-close', reason: 'reserve-guard', market: pickMarket(pick) })]);
+            }
+          }
         }
+      }
+      halt = true;
+      break;
+    }
+  }
+
+  if (!halt) {
+    for (const bucket of buckets) {
+      const legs = trackedLegs(bucket);
+      const fromThisCall = calledPrimary.has(bucket);
+      let unresolved = [];
+      if (fromThisCall) {
+        unresolved = legs.filter((pick) => {
+          const row = rowFor(pick);
+          return row && row.status === 'no-close' && ALLOWED_NO_CLOSE.has(row.reason);
+        });
+      } else {
+        const primaryDone = await blobHas(bucketDoneKey(bucket.sport, bucket.snapshotAt));
+        const fallbackDone = await blobHas(bucketDoneKey(bucket.sport, bucket.fallbackAt));
+        const reopen = bucketRetryNoClose(bucket, prior, retryNoClose);
+        if (primaryDone && (!fallbackDone || reopen)) {
+          unresolved = legs.filter((pick) => {
+            const row = rowFor(pick);
+            if (!row || row.status === 'closed') return false;
+            if (reopen && row.status === 'no-close') return true;
+            return row.reason === 'cap' || row.reason === 'fetch-failed' || row.reason === 'reserve-guard';
+          });
+        }
+      }
+      if (!unresolved.length) continue;
+      const ignoreDone = bucketRetryNoClose(bucket, prior, retryNoClose);
+      const status = await attempt(bucket, bucket.fallbackAt, {
+        ignoreDone,
+        fallback: true,
+        onlyPicks: unresolved,
+      });
+      if (status === 'cap') {
+        for (const pick of unresolved) {
+          remember([Object.assign({}, pick, { status: 'no-close', reason: 'cap', market: pickMarket(pick) })]);
+        }
+      }
+      if (status === 'reserve-guard') {
+        for (const pick of unresolved) {
+          if (rowFor(pick) && rowFor(pick).status === 'closed') continue;
+          remember([Object.assign({}, pick, { status: 'no-close', reason: 'reserve-guard', market: pickMarket(pick) })]);
+        }
+        break;
       }
     }
   }
@@ -825,6 +1052,7 @@ async function runCloses(ctx) {
     creditFormula: result.creditFormula,
     books: BOOKS,
     onlyMissing,
+    retryNoClose,
     reserveGuard: result.reserveGuard,
     remaining: remaining,
     calls: result.calls,
@@ -861,19 +1089,62 @@ async function loadStoredEventsForSport(sportKey, opts) {
   if (!blobs || typeof blobs.list !== 'function' || typeof blobs.get !== 'function') return [];
   let keys = [];
   try { keys = await blobs.list(STORE, `raw/${date}/${label}/`); } catch (_) { keys = []; }
-  const events = [];
-  const seen = new Set();
+  const best = new Map();
   for (const key of keys || []) {
     let doc = null;
     try { doc = await blobs.get(STORE, decodeBlobKey(key)); } catch (_) { doc = null; }
     const unpacked = unwrapHistorical(doc && doc.body);
+    const snapMs = archiveSnapshotMs(doc);
     for (const event of unpacked.events) {
-      if (!event || event.id == null || seen.has(String(event.id))) continue;
-      seen.add(String(event.id));
-      events.push(event);
+      if (!event || event.id == null) continue;
+      const id = String(event.id);
+      const prev = best.get(id);
+      if (!prev) {
+        best.set(id, { event, snapMs });
+        continue;
+      }
+      if (snapMs >= prev.snapMs) best.set(id, { event: mergeStoredEvent(prev.event, event), snapMs });
+      else best.set(id, { event: mergeStoredEvent(event, prev.event), snapMs: prev.snapMs });
     }
   }
-  return events;
+  return [...best.values()].map((row) => row.event);
+}
+
+function marketPriced(market) {
+  return !!(market && Array.isArray(market.outcomes) && market.outcomes.some((outcome) => outcome && outcome.price != null && outcome.price !== ''));
+}
+
+/** Later snapshot wins a market. An earlier snapshot fills markets the later one did not price. */
+function mergeStoredEvent(older, newer) {
+  if (!older) return newer;
+  if (!newer) return older;
+  const books = new Map();
+  function take(event, overwrite) {
+    for (const book of event.bookmakers || []) {
+      if (!book || !book.key) continue;
+      const key = String(book.key).toLowerCase();
+      if (!books.has(key)) books.set(key, Object.assign({}, book, { markets: new Map() }));
+      const slot = books.get(key);
+      for (const market of book.markets || []) {
+        if (!marketPriced(market)) continue;
+        if (overwrite || !slot.markets.has(market.key)) slot.markets.set(market.key, market);
+      }
+    }
+  }
+  take(older, false);
+  take(newer, true);
+  const bookmakers = [];
+  for (const book of books.values()) {
+    bookmakers.push(Object.assign({}, book, { markets: [...book.markets.values()] }));
+  }
+  return Object.assign({}, newer, { bookmakers });
+}
+
+function archiveSnapshotMs(doc) {
+  const meta = doc && doc.meta;
+  const raw = (meta && (meta.timestamp || meta.snapshot)) || '';
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 function dateAllowed(date, today) {
@@ -892,6 +1163,9 @@ module.exports = {
   SOURCE,
   BUCKET_MS,
   SNAPSHOT_LEAD_MS,
+  QUERY_PAD_MS,
+  BELONG_PAD_MS,
+  FALLBACK_LEAD_MS,
   EST_COST,
   DEFAULT_CAP,
   RESERVE_FLOOR,
@@ -909,6 +1183,9 @@ module.exports = {
   unwrapHistorical,
   assessPick,
   eventInResponse,
+  eventBelongsToBucket,
+  pickMarket,
+  leadMinutes,
   pinnacleMarket,
   reserveBlocks,
   collectGames,

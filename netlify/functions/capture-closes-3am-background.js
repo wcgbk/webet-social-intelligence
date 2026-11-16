@@ -3,7 +3,10 @@
  * Historical closes for the previous ET day. No schedule.
  * capture-odds-3am fires this after the board pull when OMEGA_CLOSES_AT_3AM
  * is on (default). OMEGA_CLOSES_AT_3AM=off returns immediately.
- * A manual backfill sends { date, onlyMissing|picksOnly } with x-picks-secret.
+ * A manual backfill sends { date, onlyMissing|picksOnly, retryNoClose }
+ * with x-picks-secret. retryNoClose reopens saved no-close card and
+ * candidate legs (primary snapshot, then the 15-minute fallback).
+ * Scheduled runs send { scheduled: true } and never set retryNoClose.
  * Dates must be within the last 7 ET days, and not today.
  * After the closes are saved, invokes track-clv-omega in stored-closes mode
  * (sweep on) so yesterday's CLV and settlement run with zero Odds API credits.
@@ -86,6 +89,8 @@ async function handle(event, deps) {
   }
   const picksOnly = truthy(body.picksOnly) || truthy(qs.picksOnly);
   const onlyMissing = picksOnly || truthy(body.onlyMissing) || truthy(qs.onlyMissing);
+  const scheduled = truthy(body.scheduled) || truthy(qs.scheduled);
+  const retryNoClose = !scheduled && (truthy(body.retryNoClose) || truthy(qs.retryNoClose));
   const fetchImpl = options.fetch || fetch;
   const blobs = options.blobs || S.blobClient(env, fetchImpl);
   let storeClose = null;
@@ -101,6 +106,7 @@ async function handle(event, deps) {
       date,
       onlyMissing,
       picksOnly,
+      retryNoClose,
       dryRun: !!options.dryRun,
       blobs,
       fetch: fetchImpl,

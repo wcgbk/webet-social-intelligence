@@ -1,6 +1,8 @@
 'use strict';
-/** The ONLY paid Odds API pulls in the daily system (Ben, 2026-10-18:
- *  "Only pulls needed are 3am and 10am and use all data pulled.").
+/** The scheduled Odds API board pulls (Ben, 2026-10-18: 3am and 10am only).
+ *  Closing lines are not a third schedule. When OMEGA_CLOSES_AT_3AM is on
+ *  (default), capture-odds-3am fires capture-closes-3am-background, which
+ *  reads yesterday's slate from this store and pulls historical closes.
  *  Slot 0300 = baseline/opening read; slot 1000 = board/decision read.
  *  One request per sport per pull: regions us,us2,eu, markets
  *  h2h,spreads,totals, American odds — the API returns every book in

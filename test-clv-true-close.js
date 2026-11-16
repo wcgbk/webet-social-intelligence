@@ -358,7 +358,7 @@ function aggOf(clv) {
     queryStringParameters: {},
   }, {
     now: '2026-11-14T15:00:00Z',
-    env: { OMEGA_CLV_TRUE_CLOSE: 'off', URL: 'https://example.test' },
+    env: { OMEGA_CLV_TRUE_CLOSE: 'off', OMEGA_CLOSES_AT_3AM: 'off', URL: 'https://example.test' },
     fetch: async (url) => {
       offUrls.push(String(url));
       return { ok: true, status: 200, json: async () => ({}) };

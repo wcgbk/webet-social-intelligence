@@ -8,7 +8,8 @@ const {
   gradePowerClv,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
-const { defaultOnFlag } = require('./lib/default_on_flag');
+const { defaultOnFlag, closesAt3amEnabled } = require('./lib/default_on_flag');
+const { loadStoredEventsForSport } = require('./lib/closes-3am');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
 const { applyToRecord } = require('./lib/clv-line-adj');
@@ -150,6 +151,7 @@ const ODDS_SPORTS_MAP = {
   'NBA': 'basketball_nba',
   'NHL': 'icehockey_nhl',
   'NCAAB': 'basketball_ncaab',
+  'NCAAM': 'basketball_ncaab',
   'EPL': 'soccer_epl',
   'La Liga': 'soccer_spain_la_liga',
   'Serie A': 'soccer_italy_serie_a',
@@ -539,7 +541,9 @@ async function fetchEventF5(sportKey, eventId, atISO) {
 }
 
 // ESPN finals for settlement. Men's college basketball uses the shared D1
-// board when OMEGA_NCAAM_GRADE is on. Other sports keep this local fetch.
+// board when OMEGA_NCAAM_GRADE is on (NCAAM and NCAAB). That path is
+// basketball/mens-college-basketball. NCAAM is not a local key here: the
+// generic matcher would run while the grade flag is off.
 const ESPN_ENDPOINTS = {
   'NBA': 'basketball/nba', 'NHL': 'hockey/nhl', 'NCAAB': 'basketball/mens-college-basketball',
   'MLB': 'baseball/mlb', 'EPL': 'soccer/eng.1', 'La Liga': 'soccer/esp.1',
@@ -915,18 +919,29 @@ async function handle(event, deps) {
   try {
     // Determine date — default to today ET
     const params = (event && event.queryStringParameters) || {};
+    let body = {};
+    if (event && event.body != null && event.body !== '') {
+      try { body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body; } catch (_) { body = {}; }
+    }
+    if (!body || typeof body !== 'object') body = {};
     const now = (deps && deps.now) ? new Date(deps.now) : new Date();
     const estOffset = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const dateISO = params.date || estOffset.toISOString().split('T')[0];
+    const explicitDate = body.date || params.date || null;
+    const dateISO = explicitDate || estOffset.toISOString().split('T')[0];
     const nowMs = Date.now();
+    const storedRequested = body.storedCloses === true || params.storedCloses === '1' || params.storedCloses === 'true';
+    const storedMode = storedRequested || closesAt3amEnabled(env);
+    const wantSweep = body.sweep === true || params.sweep === '1' || params.sweep === 'true';
 
     console.log(`[track-clv] Tracking CLV for date: ${dateISO}`);
 
     // Morning runs also settle YESTERDAY's picks — evening games finish after the last
     // same-day run (7pm ET). This next-morning pass also captures yesterday's TRUE closes
-    // via the historical path (all of yesterday's games are now in the past).
+    // from closes already stored. OMEGA_CLOSES_AT_3AM (default on) reads those closes
+    // and does not call the Odds API, and does not POST to legacy track-clv.
     const etHour = estOffset.getHours();
-    if (!params.date && etHour < 12) {
+    const morningWindow = !explicitDate && etHour < 12;
+    if (wantSweep || morningWindow) {
       // Settle recent days INLINE and AWAITED. The old fire-and-forget self-POST usually died
       // with the lambda before the request left the process — any date whose games all ended
       // after the 7pm run stayed unsettled forever (55% of picks at one point). ESPN grading
@@ -947,29 +962,32 @@ async function handle(event, deps) {
       // Yesterday and the day before: awaited Supabase true closes (no Odds API).
       // upgradeDatesFromStore also scores clv.candidates (trueClose + candidateTrueCloseBySport).
       // The old fire-and-forget POST to legacy track-clv died with the lambda, so the
-      // 23:00 snapshot was never upgraded. OMEGA_CLV_TRUE_CLOSE=off keeps that POST.
+      // 23:00 snapshot was never upgraded. OMEGA_CLV_TRUE_CLOSE=off keeps that POST
+      // only when OMEGA_CLOSES_AT_3AM is also off. Stored mode never calls legacy track-clv.
       const yestISO = sweepDates[0];
       const priorISO = sweepDates[1];
-      if (!trueCloseOn(env)) {
+      if (storedMode || trueCloseOn(env)) {
+        if (trueCloseOn(env)) {
+          try {
+            const { upgradeDatesFromStore } = require('./lib/clv-true-close');
+            await upgradeDatesFromStore([yestISO, priorISO], {
+              env,
+              fetchImpl,
+              readClv: (d) => loadClvData(d, storeImpl),
+              readPicks: (d) => loadPicksData(d, storeImpl),
+              writeClv: (d, data) => writeClvData(d, data, storeImpl),
+            });
+          } catch (e) {
+            console.log(`[track-clv] Supabase true-close upgrade failed: ${e.message}`);
+          }
+        }
+      } else {
         const siteURL = env.URL || 'https://webetsocial.com';
         fetchImpl(`${siteURL}/.netlify/functions/track-clv?date=${yestISO}`, { method: 'POST' })
           .then(() => console.log(`[track-clv] Triggered overnight CLV capture for ${yestISO}`))
           .catch((e) => console.log(`[track-clv] Yesterday CLV trigger failed: ${e.message}`));
-      } else {
-        try {
-          const { upgradeDatesFromStore } = require('./lib/clv-true-close');
-          await upgradeDatesFromStore([yestISO, priorISO], {
-            env,
-            fetchImpl,
-            readClv: (d) => loadClvData(d, storeImpl),
-            readPicks: (d) => loadPicksData(d, storeImpl),
-            writeClv: (d, data) => writeClvData(d, data, storeImpl),
-          });
-        } catch (e) {
-          console.log(`[track-clv] Supabase true-close upgrade failed: ${e.message}`);
-        }
       }
-    } else if (!params.date && trueCloseOn(env) && pickClvFillEnabled(env)) {
+    } else if (!explicitDate && trueCloseOn(env) && pickClvFillEnabled(env)) {
       // Cron is 07:00, 17:00, 23:00 UTC. After DST only 07:00 UTC is before noon
       // ET, so the block above is the only scheduled yesterday upgrade. Noon and
       // evening still fill yesterday from closes already in Supabase.
@@ -1017,20 +1035,24 @@ async function handle(event, deps) {
 
     // ── Step 2: Load existing CLV data (merge mode — keep the capture closest to first pitch) ──
     let existingClv = null;
-    try {
-      const { getStore } = await import('@netlify/blobs');
-      const store = getStore('edge-picks-omega');
-      existingClv = await store.get(`clv-${dateISO}`, { type: 'json' });
-    } catch (e) {
+    if (storeImpl && typeof storeImpl.get === 'function') {
+      try { existingClv = await storeImpl.get(`clv-${dateISO}`, { type: 'json' }); } catch (e) { existingClv = null; }
+    } else {
       try {
-        const token = process.env.NETLIFY_AUTH_TOKEN;
-        const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
-        if (token) {
-          const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-omega/clv-${dateISO}`;
-          const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-          if (resp.ok) existingClv = await resp.json();
-        }
-      } catch (e2) { /* ignore */ }
+        const { getStore } = await import('@netlify/blobs');
+        const store = getStore('edge-picks-omega');
+        existingClv = await store.get(`clv-${dateISO}`, { type: 'json' });
+      } catch (e) {
+        try {
+          const token = process.env.NETLIFY_AUTH_TOKEN;
+          const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+          if (token) {
+            const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-omega/clv-${dateISO}`;
+            const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) existingClv = await resp.json();
+          }
+        } catch (e2) { /* ignore */ }
+      }
     }
     const findExisting = (pick) => (existingClv && Array.isArray(existingClv.picks))
       ? existingClv.picks.find(p => p.pick === pick.pick && p.matchup === pick.matchup)
@@ -1041,11 +1063,22 @@ async function handle(event, deps) {
     const bulkCache = new Map();   // `${sportKey}|${atISO||'live'}` -> games[]
     const eventCache = new Map();  // `${eventId}|${atISO||'live'}`  -> eventObj
     const getBulk = async (sportKey, atISO) => {
-      const k = `${sportKey}|${atISO || 'live'}`;
-      if (!bulkCache.has(k)) bulkCache.set(k, await fetchBulk(sportKey, atISO));
+      const k = storedMode ? `${sportKey}|stored` : `${sportKey}|${atISO || 'live'}`;
+      if (!bulkCache.has(k)) {
+        if (storedMode) {
+          bulkCache.set(k, await loadStoredEventsForSport(sportKey, {
+            date: dateISO,
+            blobs: deps && deps.closeBlobs,
+            storedEventsBySport: deps && deps.storedEventsBySport,
+          }));
+        } else {
+          bulkCache.set(k, await fetchBulk(sportKey, atISO));
+        }
+      }
       return bulkCache.get(k);
     };
     const getEventF5 = async (sportKey, eventId, atISO) => {
+      if (storedMode) return null;
       const k = `${eventId}|${atISO || 'live'}`;
       if (!eventCache.has(k)) eventCache.set(k, await fetchEventF5(sportKey, eventId, atISO));
       return eventCache.get(k);
@@ -1249,8 +1282,11 @@ async function handle(event, deps) {
 
     // ── Step 6: Store CLV data in Blobs ──
     try {
-      const { getStore } = await import('@netlify/blobs');
-      const store = getStore('edge-picks-omega');
+      let store = storeImpl;
+      if (!store || typeof store.setJSON !== 'function') {
+        const { getStore } = await import('@netlify/blobs');
+        store = getStore('edge-picks-omega');
+      }
       // Merge bet-time model fields from picks blob onto CLV rows
       try {
         const srcPicks = (picksData && picksData.picks) || [];
@@ -1475,5 +1511,5 @@ module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
-  summarizeTrackedPicks, chooseCapture,
+  summarizeTrackedPicks, chooseCapture, ODDS_SPORTS_MAP, ESPN_ENDPOINTS,
 };

@@ -25,6 +25,7 @@ const REPORT_STORE = BLOB_STORE;
 const NEWS_SNAPSHOT_STORE = 'omega-news-snapshots';
 const V1_STORE = 'edge-picks-omega-v1ab';
 const CLOSE_CAPTURE_STORE = 'clv-close-capture';
+const CLOSE_WARN_REASONS = new Set(['pinnacle-not-priced', 'not-in-historical-snapshot']);
 const RESULTS_CACHE_KEY = 'results-omega-cache-v9-kpi1030';
 const SUPABASE_URL = 'https://qvfgebrkolfyggfizgkx.supabase.co';
 const DAILY_FLAG = 'OMEGA_DAILY_CHECK';
@@ -610,8 +611,8 @@ function assessCloses(card, clvDoc, candidateDoc, extraRows) {
   for (const pick of straightsOf(card)) {
     const pickClose = findClose(clvRows, pick, rowHasPickClose);
     const candidateClose = findClose(candidates, pick, rowHasCandidateClose);
-    if (!pickClose) missing.push({ pick: pick.pick || null, code: 'pick-close-missing' });
-    if (!candidateClose) missing.push({ pick: pick.pick || null, code: 'candidate-close-missing' });
+    if (!pickClose) missing.push({ pick: pick.pick || null, matchup: pick.matchup || null, code: 'pick-close-missing' });
+    if (!candidateClose) missing.push({ pick: pick.pick || null, matchup: pick.matchup || null, code: 'candidate-close-missing' });
   }
   if (!missing.length) return { status: 'ok', code: 'ok', picks: straightsOf(card).length };
   return { status: 'fail', code: missing[0].code, missing: missing.slice(0, 8) };
@@ -1298,6 +1299,34 @@ async function defaultReadStoredCandidateCloses(dateISO, ctx) {
   return rows;
 }
 
+function closes3amSummaryOk(summary, dateISO) {
+  if (!summary || typeof summary !== 'object' || !Array.isArray(summary.picks)) return false;
+  if (summary.date != null && String(summary.date) !== String(dateISO)) return false;
+  return true;
+}
+
+function excusedCloseReason(miss, summary) {
+  const picks = (summary && summary.picks) || [];
+  const want = normText(miss && miss.pick);
+  const matchup = normText(miss && miss.matchup);
+  let hits = picks.filter((row) => row && normText(row.pick) === want);
+  if (matchup) {
+    const narrowed = hits.filter((row) => normText(row.matchup) === matchup);
+    if (narrowed.length) hits = narrowed;
+  }
+  const hit = hits.find((row) => row && row.status === 'no-close' && CLOSE_WARN_REASONS.has(row.reason));
+  return hit ? hit.reason : null;
+}
+
+async function defaultReadCloses3am(dateISO) {
+  try {
+    const { readJson } = require('../odds-master/store');
+    return await readJson(`closes-3am/${dateISO}`, CLOSE_CAPTURE_STORE);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function checkCloses(ctx) {
   if (!ctx.prevCard) {
     const readCard = ctx.readCard || defaultReadCard;
@@ -1315,7 +1344,28 @@ async function checkCloses(ctx) {
   try { candidates = await readCandidates(ctx.prev); } catch (_) { candidates = null; }
   try { extra = await readStored(ctx.prev, ctx); } catch (_) { extra = []; }
   if (!Array.isArray(extra)) extra = [];
-  return assessCloses(ctx.prevCard, clv, candidates, extra);
+  const assessed = assessCloses(ctx.prevCard, clv, candidates, extra);
+  const readSummary = ctx.readCloses3am || defaultReadCloses3am;
+  let summary = null;
+  try { summary = await readSummary(ctx.prev, ctx); } catch (_) { summary = null; }
+  if (!closes3amSummaryOk(summary, ctx.prev)) {
+    return { status: 'fail', code: 'closes-3am-missing', missing: assessed.missing || [] };
+  }
+  if (assessed.status === 'ok') return assessed;
+  const hard = [];
+  const warned = [];
+  for (const miss of assessed.missing || []) {
+    const reason = excusedCloseReason(miss, summary);
+    if (reason) warned.push(Object.assign({}, miss, { reason }));
+    else hard.push(miss);
+  }
+  if (hard.length) {
+    return { status: 'fail', code: hard[0].code, missing: hard.slice(0, 8), warned: warned.slice(0, 8) };
+  }
+  if (warned.length) {
+    return { status: 'warn', code: warned[0].reason, missing: warned.slice(0, 8) };
+  }
+  return assessed;
 }
 
 async function checkNews(ctx) {

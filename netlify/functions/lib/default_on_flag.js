@@ -29,10 +29,16 @@ function ncaamGradeEnabled(env) {
   return defaultOnFlag('OMEGA_NCAAM_GRADE', env);
 }
 
+/** Closing lines move into the 3 AM historical step. off / 0 / false restores the 5-minute close job. */
+function closesAt3amEnabled(env) {
+  return defaultOnFlag('OMEGA_CLOSES_AT_3AM', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
   copyVenueCheckEnabled,
   v1BoardMapEnabled,
   ncaamGradeEnabled,
+  closesAt3amEnabled,
 };

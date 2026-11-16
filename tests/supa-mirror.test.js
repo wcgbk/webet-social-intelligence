@@ -443,7 +443,7 @@ test('capture-pick-closes calls the mirror on an empty due list and does not thr
     generatedAt: '2026-10-20T15:00:00Z',
     picks: [{ sport: 'NHL', matchup: 'A @ B', pick: 'B ML', betType: 'Moneyline', commenceTime: '2026-10-21T23:00:00Z', result: 'pending' }],
   };
-  const envOn = { ODDS_API_KEY: 'o', SUPABASE_SERVICE_ROLE_KEY: 'super-secret-value', NETLIFY_AUTH_TOKEN: 't', SUPABASE_MIRROR_V2: 'on' };
+  const envOn = { ODDS_API_KEY: 'o', SUPABASE_SERVICE_ROLE_KEY: 'super-secret-value', NETLIFY_AUTH_TOKEN: 't', SUPABASE_MIRROR_V2: 'on', OMEGA_CLOSES_AT_3AM: 'off' };
   const blobs = memBlobs({ 'edge-picks-omega:picks-2026-10-20': card });
   const r = await cap.handle({}, now, {
     env: envOn,

@@ -395,6 +395,16 @@ async function main() {
         })),
       },
       news: { present: true, key: `${DATE}/1100-ET` },
+      closes3am: {
+        date: PREV,
+        picks: prevCard.picks.map((row) => ({
+          pick: row.pick,
+          matchup: row.matchup,
+          status: 'closed',
+          reason: null,
+          kind: 'card',
+        })),
+      },
       credits: { remaining: 15000, source: 'line-move', at: '2026-11-15T15:00:00.000Z' },
       external: externalFixture(),
     };
@@ -480,6 +490,7 @@ async function main() {
       async regrade() { calls.regrade += 1; return { ok: true }; },
       readClv() { return data.clv; },
       readCandidateCloses() { return data.candidates; },
+      readCloses3am() { return data.closes3am; },
       readNews() { return data.news; },
       readCredits() { return data.credits; },
       async postWebhook(url, report) {
@@ -1358,6 +1369,70 @@ async function main() {
   });
   assertCheck(storedEmpty.report, 'closes', 'fail', 'candidate-close-missing', 'stored closes empty');
   assert.ok(!JSON.stringify(storedEmpty.report).includes(TEST_SERVICE_KEY));
+
+  const missingSummary = await runCase((data) => {
+    data.closes3am = null;
+  });
+  assertCheck(missingSummary.report, 'closes', 'fail', 'closes-3am-missing', 'missing 3am summary');
+  assert.strictEqual(missingSummary.report.ok, false);
+
+  const pinnacleWarn = await runCase((data) => {
+    data.clv = { picks: [] };
+    data.candidates = { candidates: [] };
+    data.closes3am = {
+      date: PREV,
+      picks: data.prevCard.picks.map((row) => ({
+        pick: row.pick,
+        matchup: row.matchup,
+        status: 'no-close',
+        reason: 'pinnacle-not-priced',
+        kind: 'card',
+      })),
+    };
+  });
+  assertCheck(pinnacleWarn.report, 'closes', 'warn', 'pinnacle-not-priced', 'pinnacle not priced is a warn');
+  assert.strictEqual(pinnacleWarn.report.ok, false);
+
+  const snapshotWarn = await runCase((data) => {
+    data.clv = { picks: [] };
+    data.candidates = { candidates: [] };
+    data.closes3am = {
+      date: PREV,
+      picks: data.prevCard.picks.map((row) => ({
+        pick: row.pick,
+        matchup: row.matchup,
+        status: 'no-close',
+        reason: 'not-in-historical-snapshot',
+        kind: 'card',
+      })),
+    };
+  });
+  assertCheck(snapshotWarn.report, 'closes', 'warn', 'not-in-historical-snapshot', 'missing snapshot is a warn');
+
+  const mixedHard = await runCase((data) => {
+    data.clv = { picks: data.clv.picks.slice(2) };
+    data.closes3am.picks[0] = Object.assign({}, data.closes3am.picks[0], {
+      status: 'no-close',
+      reason: 'not-in-historical-snapshot',
+    });
+  });
+  assertCheck(mixedHard.report, 'closes', 'fail', 'pick-close-missing', 'a hard miss still fails');
+
+  const reserveFail = await runCase((data) => {
+    data.clv = { picks: [] };
+    data.candidates = { candidates: [] };
+    data.closes3am = {
+      date: PREV,
+      picks: data.prevCard.picks.map((row) => ({
+        pick: row.pick,
+        matchup: row.matchup,
+        status: 'no-close',
+        reason: 'reserve-guard',
+        kind: 'card',
+      })),
+    };
+  });
+  assertCheck(reserveFail.report, 'closes', 'fail', 'pick-close-missing', 'reserve-guard is not a warn');
 
   const deploySrc = fs.readFileSync(path.join(__dirname, 'deploy.sh'), 'utf8');
   const deployAt = deploySrc.indexOf('npx netlify deploy --prod');

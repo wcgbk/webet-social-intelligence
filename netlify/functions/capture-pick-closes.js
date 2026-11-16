@@ -1,7 +1,10 @@
 'use strict';
 /**
  * capture-pick-closes — closing lines (approved card path 2026-10-30; full board 2026-11-14).
- * Schedule "*\/5 * * * *". Card legs on today's / yesterday's card whose kickoff is
+ * The "*\/5 * * * *" cron is commented while OMEGA_CLOSES_AT_3AM is on (default).
+ * That flag returns here before any Odds API call. Rollback: set the env off
+ * and restore the schedule. The rest of this file is unchanged when the flag is off.
+ * Card legs on today's / yesterday's card whose kickoff is
  * 2–8 minutes away are pulled once per (sport, kickoff, market): that market only,
  * Pinnacle + DraftKings, region us (1 credit). OMEGA_FULL_BOARD_CLOSES defaults on
  * and also saves Pinnacle + DraftKings + Hard Rock h2h/spreads/totals for every
@@ -16,6 +19,7 @@
 const S = require('./lib/clv-supabase');
 const mirror = require('./lib/supa-mirror');
 const FB = require('./lib/full-board-closes');
+const { closesAt3amEnabled } = require('./lib/default_on_flag');
 
 const MIRROR_BUDGET_MS = 8000;
 
@@ -148,6 +152,9 @@ function pushCreditCall(credits, row) {
 async function handle(event, now, deps = {}) {
   const when = now instanceof Date ? now : new Date();
   const env = deps.env || process.env;
+  if (closesAt3amEnabled(env)) {
+    return S.json(200, { ok: true, skipped: 'closes-at-3am' });
+  }
   try { S.requireEnv(env, REQUIRED_ENV); } catch (e) {
     console.error(`[capture-pick-closes] FATAL ${e.message}`);
     return S.json(500, { ok: false, error: e.message, missingEnv: e.missing });

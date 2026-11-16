@@ -215,10 +215,12 @@
   # Background function — 15min timeout for BettorEdge-enhanced pick generation
 
 [functions."trigger-clv"]
-  schedule = "0 7,17,23 * * *"
-  # 07:00 UTC = 3am EDT (overnight settle — track-clv re-invokes itself for YESTERDAY so night
-  # games get results written before the 8am/9am pick runs read bankroll/drawdown state).
-  # 17:00 UTC = 1pm EDT (afternoon games). 23:00 UTC = 7pm EDT (evening games). Merges results.
+  # schedule = "0 7,17,23 * * *"
+  # PAUSED 2026-11-16. Yesterday's closes and the overnight Omega settle run inside
+  # capture-closes-3am-background, fired by capture-odds-3am. Legacy track-clv,
+  # track-clv-nfl, and track-clv-cfb are not called from that step.
+  # Rollback: set OMEGA_CLOSES_AT_3AM=off AND restore schedule = "0 7,17,23 * * *".
+  # 07:00 UTC = 3am EDT (overnight settle). 17:00 UTC = 1pm EDT. 23:00 UTC = 7pm EDT.
 
 
 [functions."capture-omega-lines"]
@@ -1061,8 +1063,15 @@
   schedule = "25 13,14 * * *"
 
 # Pick-only true-close capture (WeBet approved 2026-10-30). Every 5 min; pulls only when a pick kicks off in 2-8 min. Cap 100 credits/day.
+# PAUSED 2026-11-16. Closes moved into the 3 AM historical step.
+# Rollback: set OMEGA_CLOSES_AT_3AM=off AND restore the schedule line below.
 [functions."capture-pick-closes"]
-  schedule = "*/5 * * * *"
+  # schedule = "*/5 * * * *"
+
+[functions."capture-closes-3am-background"]
+  # Background worker fired by capture-odds-3am after the board save. 15 min. No schedule of its own.
+  # OMEGA_CLOSES_AT_3AM=off returns immediately, and capture-odds-3am does not call it.
+  included_files = ["netlify/functions/lib/odds-master/**", "netlify/functions/lib/omega-vnext/**"]
 
 [functions."grade-boards-omega"]
   schedule = "30 15,16 * * *"

@@ -489,6 +489,13 @@ async function main() {
   );
   if (fullBoardCloses.status !== 0) throw new Error('full board closes gate failed');
 
+  const closes3am = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-closes-3am.js')],
+    { stdio: 'inherit' }
+  );
+  if (closes3am.status !== 0) throw new Error('closes 3am gate failed');
+
   const sharpPrices = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-sharp-prices.js')],

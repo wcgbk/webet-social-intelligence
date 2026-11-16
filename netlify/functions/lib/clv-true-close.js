@@ -215,8 +215,9 @@ function inFilter(ids) {
 }
 
 async function loadSnapshots(gameIds, env, fetchImpl) {
-  // Pinnacle + closing only. Not filtered by source, so capture-pick-closes
-  // and capture-all-closes rows both count.
+  // Pinnacle + closing only. Not filtered by source, so capture-pick-closes,
+  // capture-all-closes, and capture-closes-3am rows all count. Extra books
+  // stored next to Pinnacle are ignored here.
   const ids = [...new Set((gameIds || []).filter(Boolean).map((id) => String(id)))];
   const rows = [];
   const chunkSize = 40;
@@ -352,6 +353,7 @@ function closeSourceLabel(rowSource) {
   const s = String(rowSource || '');
   if (s.includes('ledger:true-close') || s.includes('ledger-true-close')) return 'ledger:true-close';
   if (s.includes('capture-all-closes')) return 'supabase:capture-all-closes';
+  if (s.includes('capture-closes-3am')) return 'supabase:capture-closes-3am';
   if (s.includes('capture-pick-closes')) return 'supabase:capture-pick-closes';
   if (s.startsWith('oddsapi-live:')) return `supabase:${s.slice('oddsapi-live:'.length)}`;
   return 'supabase:capture-pick-closes';

@@ -88,7 +88,7 @@ test('background dry run builds rows and posts nothing', async () => {
 });
 
 test('capture-pick-closes fails loudly on missing env', async () => {
-  const r = await cap.handle({}, new Date(), { env: { SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't' } });
+  const r = await cap.handle({}, new Date(), { env: { SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't', OMEGA_CLOSES_AT_3AM: 'off' } });
   assert.strictEqual(r.statusCode, 500);
   assert.match(JSON.parse(r.body).error, /ODDS_API_KEY/);
 });
@@ -107,7 +107,7 @@ test('capture groups straights + parlay legs by kickoff/market and only in the 2
 
 test('capture pulls once per group, writes closing rows, respects done marker and daily cap', async () => {
   const now = new Date('2026-10-20T22:55:00Z');
-  const env = { ODDS_API_KEY: 'o', SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't' };
+  const env = { ODDS_API_KEY: 'o', SUPABASE_SERVICE_ROLE_KEY: 's', NETLIFY_AUTH_TOKEN: 't', OMEGA_CLOSES_AT_3AM: 'off' };
   const card = { picks: [{ sport: 'NHL', matchup: 'Toronto Maple Leafs @ Boston Bruins', pick: 'Boston Bruins -1.5', betType: 'Spread', commenceTime: '2026-10-20T23:00:00Z' }] };
   const odds = [{ id: 'e1', commence_time: '2026-10-20T23:00:00Z', home_team: 'Boston Bruins', away_team: 'Toronto Maple Leafs', bookmakers: [
     { key: 'pinnacle', last_update: '2026-10-20T22:54:00Z', markets: [{ key: 'spreads', outcomes: [{ name: 'Boston Bruins', price: 150, point: -1.5 }, { name: 'Toronto Maple Leafs', price: -170, point: 1.5 }] }] },

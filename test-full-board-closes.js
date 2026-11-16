@@ -159,6 +159,7 @@ function env(extra) {
     ODDS_API_KEY: API_KEY,
     SUPABASE_SERVICE_ROLE_KEY: 'service-role',
     NETLIFY_AUTH_TOKEN: 'netlify-token',
+    OMEGA_CLOSES_AT_3AM: 'off',
   }, extra || {});
 }
 

@@ -53,11 +53,43 @@ if ! npm run -s omega-v2:gate; then
 fi
 
 # 2) Sync GitHub BEFORE going live, so origin/main always == what users get.
+#    prevMain is origin/main before this push. The ledger range is prevMain..HEAD.
+PREV_MAIN="$(git rev-parse origin/main)"
 echo "→ pushing to origin/main…"
 git push origin HEAD:main
 
 # 3) Ship the working tree to the live site.
 echo "→ deploying to webetsocial.com…"
 npx netlify deploy --prod --dir . --skip-functions-cache
+
+# 4) Record the deploy on the omega-ops ledger. Soft-fail: the site is already
+#    live, so a ledger miss must not fail this script. Do not echo the payload
+#    (actor comes from DEPLOY_ACTOR).
+(
+  head_sha="$(git rev-parse HEAD)" || exit 0
+  ledger_json="$(PREV_MAIN="$PREV_MAIN" HEAD_SHA="$head_sha" node <<'JS'
+const { execFileSync } = require('child_process');
+const prev = process.env.PREV_MAIN || '';
+const sha = process.env.HEAD_SHA || '';
+const hex = /^[0-9a-f]{7,64}$/i;
+let commits = [];
+if (hex.test(prev) && hex.test(sha)) {
+  const range = execFileSync('git', ['rev-list', `${prev}..${sha}`], { encoding: 'utf8' });
+  commits = range.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+const actor = process.env.DEPLOY_ACTOR || 'unknown';
+process.stdout.write(JSON.stringify({
+  sha,
+  prevMain: prev,
+  commits,
+  actor,
+  at: new Date().toISOString(),
+}));
+JS
+)" || exit 0
+  if [ -n "$head_sha" ] && [ -n "$ledger_json" ]; then
+    npx netlify blobs:set omega-ops "deploy-ledger/${head_sha}" "$ledger_json" >/dev/null || true
+  fi
+) || true
 
 echo "✅ committed + pushed + deployed — live == origin/main"

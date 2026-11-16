@@ -33,6 +33,96 @@ const { handler: gradeBoards } = require('./netlify/functions/grade-boards-omega
 const DATE = '2026-11-15';
 const PREV = '2026-11-14';
 const DEC = americanToDecimal(-110);
+const TEST_BLOB_TOKEN = 'test-token';
+
+function jsonResp(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get() { return ''; } },
+    json: async () => body,
+  };
+}
+
+function externalFixture() {
+  const sha = 'a'.repeat(40);
+  const prevMain = 'b'.repeat(40);
+  const oldSha = 'c'.repeat(40);
+  return {
+    sha,
+    prevMain,
+    oldSha,
+    failFetch: false,
+    ledger: [{
+      sha,
+      prevMain,
+      commits: [sha],
+      actor: 'edge-executor',
+      at: '2026-11-14T16:00:00.000Z',
+    }],
+    commits: [
+      {
+        sha,
+        commit: {
+          message: 'ops: blessed deploy\n\nbody',
+          committer: { date: '2026-11-15T15:00:00.000Z' },
+          author: { date: '2026-11-15T15:00:00.000Z' },
+        },
+      },
+      {
+        sha: oldSha,
+        commit: {
+          message: 'history before the ledger',
+          committer: { date: '2026-11-14T15:00:00.000Z' },
+        },
+      },
+      {
+        sha: 'd'.repeat(40),
+        commit: {
+          message: 'outside the 48h window',
+          committer: { date: '2026-11-10T12:00:00.000Z' },
+        },
+      },
+    ],
+    deploys: [
+      {
+        id: 'dep-old',
+        state: 'ready',
+        context: 'production',
+        title: 'history before the ledger',
+        commit_ref: oldSha,
+        created_at: '2026-11-14T15:00:00.000Z',
+        deploy_source: 'api',
+      },
+      {
+        id: 'dep-titled',
+        state: 'ready',
+        context: 'production',
+        title: 'ops: blessed deploy',
+        commit_ref: sha,
+        created_at: '2026-11-15T15:00:02.000Z',
+        deploy_source: 'api',
+      },
+      {
+        id: 'dep-live',
+        state: 'ready',
+        context: 'production',
+        title: null,
+        commit_ref: null,
+        created_at: '2026-11-15T15:00:04.000Z',
+        deploy_source: 'api',
+      },
+      {
+        id: 'dep-preview',
+        state: 'ready',
+        context: 'deploy-preview',
+        title: null,
+        commit_ref: null,
+        created_at: '2026-11-15T12:00:00.000Z',
+      },
+    ],
+  };
+}
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -270,6 +360,7 @@ async function main() {
       },
       news: { present: true, key: `${DATE}/1100-ET` },
       credits: { remaining: 15000, source: 'line-move', at: '2026-11-15T15:00:00.000Z' },
+      external: externalFixture(),
     };
   }
 
@@ -277,9 +368,40 @@ async function main() {
     const calls = { mirror: [], v1: [], regrade: 0, write: [], webhook: [] };
     const data = defaultData();
     const deps = {
-      env: {},
+      env: { NETLIFY_AUTH_TOKEN: TEST_BLOB_TOKEN },
       now: new Date('2026-11-15T16:30:00.000Z'),
       date: DATE,
+      async fetch(url, init) {
+        const href = String(url);
+        const ext = data.external;
+        if (ext.failFetch) throw new Error('network down');
+        const headers = (init && init.headers) || {};
+        const auth = headers.Authorization || headers.authorization || '';
+        if (href.includes('api.github.com')) {
+          if (auth) throw new Error('github must stay unauthenticated');
+          if (!href.includes('/commits?') || !href.includes('sha=main') || !href.includes('since=')) {
+            throw new Error('github url');
+          }
+          return jsonResp(ext.commits);
+        }
+        if (auth !== `Bearer ${deps.env.NETLIFY_AUTH_TOKEN || ''}`) throw new Error('netlify auth mismatch');
+        if (href.includes('/deploys')) {
+          if (!href.includes('/deploys?per_page=50')) throw new Error('deploys url');
+          return jsonResp(ext.deploys);
+        }
+        if (href.includes('/blobs/') && href.includes('/deploy-ledger/')) {
+          const sha = decodeURIComponent(href.split('/deploy-ledger/').pop().split('?')[0]);
+          const row = ext.ledger.find((item) => item.sha === sha);
+          if (!row) return jsonResp({}, 404);
+          return jsonResp(row);
+        }
+        if (href.includes('/blobs/') && href.includes('/omega-ops')) {
+          return jsonResp({
+            blobs: ext.ledger.map((row) => ({ key: `deploy-ledger/${row.sha}` })),
+          });
+        }
+        throw new Error(`unexpected url ${href.split('?')[0]}`);
+      },
       writeReport(key, report) { calls.write.push({ key, report }); },
       readCaptureDone(_date, slot) { return data.markers[slot] || null; },
       readCaptureStart(_date, slot) { return data.starts[slot] || null; },
@@ -338,7 +460,7 @@ async function main() {
   assert.strictEqual(okRun.report.dryRun, false);
   assert.strictEqual(okRun.report.ok, true);
   assert.deepStrictEqual(okRun.report.checks.map((row) => row.id), [
-    'pulls', 'card', 'mirror', 'bounds', 'grading', 'kpis', 'closes', 'news', 'credits',
+    'pulls', 'card', 'mirror', 'bounds', 'grading', 'kpis', 'closes', 'news', 'credits', 'external-changes',
   ]);
   for (const row of okRun.report.checks) assert.strictEqual(row.status, 'ok', row.id);
   assert.strictEqual(okRun.world.calls.write.length, 1);
@@ -348,6 +470,8 @@ async function main() {
   assert.strictEqual(okRun.world.calls.regrade, 0);
   assert.strictEqual(okRun.world.calls.webhook.length, 0);
   assert.ok(!okRun.lines.some((line) => line.includes('daily-check-')));
+  assert.ok(!JSON.stringify(okRun.report).includes(TEST_BLOB_TOKEN));
+  assert.ok(!JSON.stringify(okRun.report).includes('NETLIFY_AUTH_TOKEN'));
 
   const failCases = [
     ['missed 0300', (data) => { data.markers['0300'] = null; data.pulls['0300'] = null; }, 'pulls', 'fail', 'missed-0300-pull'],
@@ -681,7 +805,7 @@ async function main() {
   assert.ok(newsEvidence.includes('Bearer [redacted]'));
 
   const hooked = await runCase((_data, deps) => {
-    deps.env = { OMEGA_OPS_WEBHOOK_URL: 'https://ops.example/hook' };
+    deps.env = Object.assign({}, deps.env, { OMEGA_OPS_WEBHOOK_URL: 'https://ops.example/hook' });
   });
   assert.strictEqual(hooked.world.calls.webhook.length, 1);
   assert.strictEqual(hooked.world.calls.webhook[0].url, 'https://ops.example/hook');
@@ -907,6 +1031,143 @@ async function main() {
   } finally {
     global.fetch = origFetch;
   }
+
+  const foreignCommit = await runCase((data) => {
+    data.external.commits.push({
+      sha: 'f'.repeat(40),
+      commit: {
+        message: 'foreign: not from deploy.sh',
+        committer: { date: '2026-11-15T15:30:00.000Z' },
+      },
+    });
+  });
+  assertCheck(foreignCommit.report, 'external-changes', 'fail', 'foreign-commit', 'foreign commit');
+  const foreignEv = checkOf(foreignCommit.report, 'external-changes').evidence;
+  const foreignHit = foreignEv.flagged.find((row) => row.sha === 'f'.repeat(40));
+  assert.ok(foreignHit, 'foreign commit evidence');
+  assert.strictEqual(foreignHit.timeEt, '2026-11-15 10:30:00 ET');
+  assert.strictEqual(foreignHit.title, 'foreign: not from deploy.sh');
+  assert.strictEqual(foreignHit.deployId, null);
+  assert.strictEqual(foreignCommit.world.calls.mirror.length, 0);
+  assert.strictEqual(foreignCommit.world.calls.v1.length, 0);
+  assert.strictEqual(foreignCommit.world.calls.regrade, 0);
+  assert.strictEqual(foreignCommit.report.ok, false);
+  assertCheck(foreignCommit.report, 'pulls', 'ok', 'ok', 'foreign commit leaves pulls');
+
+  const rawDeploy = await runCase((data) => {
+    data.external.deploys.push({
+      id: 'dep-raw',
+      state: 'ready',
+      context: 'production',
+      title: null,
+      commit_ref: null,
+      created_at: '2026-11-15T12:00:00.000Z',
+      deploy_source: 'api',
+    });
+  });
+  assertCheck(rawDeploy.report, 'external-changes', 'fail', 'untitled-deploy', 'raw netlify deploy');
+  const rawHit = checkOf(rawDeploy.report, 'external-changes').evidence.flagged.find((row) => row.deployId === 'dep-raw');
+  assert.ok(rawHit, 'raw deploy evidence');
+  assert.strictEqual(rawHit.timeEt, '2026-11-15 07:00:00 ET');
+  assert.strictEqual(rawHit.title, null);
+  assert.strictEqual(rawHit.sha, null);
+  assert.ok(!checkOf(rawDeploy.report, 'external-changes').evidence.flagged.some((row) => row.deployId === 'dep-live'));
+  assert.strictEqual(rawDeploy.world.calls.regrade, 0);
+  assertCheck(rawDeploy.report, 'card', 'ok', 'ok', 'raw deploy leaves card');
+
+  const foreignDeploy = await runCase((data) => {
+    data.external.deploys.push({
+      id: 'dep-foreign',
+      state: 'ready',
+      context: 'production',
+      title: 'manual ship',
+      commit_ref: 'e'.repeat(40),
+      created_at: '2026-11-15T13:00:00.000Z',
+      deploy_source: 'api',
+    });
+  });
+  assertCheck(foreignDeploy.report, 'external-changes', 'fail', 'foreign-deploy', 'titled deploy outside the ledger');
+  const titledHit = checkOf(foreignDeploy.report, 'external-changes').evidence.flagged.find((row) => row.deployId === 'dep-foreign');
+  assert.strictEqual(titledHit.sha, 'e'.repeat(40));
+  assert.strictEqual(titledHit.title, 'manual ship');
+  assert.strictEqual(titledHit.timeEt, '2026-11-15 08:00:00 ET');
+
+  const unknownActor = await runCase((data) => {
+    data.external.ledger[0].actor = 'stranger';
+  });
+  assertCheck(unknownActor.report, 'external-changes', 'fail', 'unknown-actor', 'unknown actor');
+  const actorHit = checkOf(unknownActor.report, 'external-changes').evidence.flagged.find((row) => row.code === 'unknown-actor');
+  assert.strictEqual(actorHit.sha, 'a'.repeat(40));
+  assert.strictEqual(actorHit.actor, 'stranger');
+  assert.strictEqual(actorHit.timeEt, '2026-11-14 11:00:00 ET');
+  assert.strictEqual(actorHit.title, null);
+  assert.strictEqual(unknownActor.world.calls.mirror.length, 0);
+  assert.strictEqual(unknownActor.world.calls.regrade, 0);
+
+  const allowedActor = await runCase((data, deps) => {
+    data.external.ledger[0].actor = 'nightly';
+    deps.env = Object.assign({}, deps.env, { OMEGA_DEPLOY_ACTORS: 'edge-executor, nightly' });
+  });
+  assertCheck(allowedActor.report, 'external-changes', 'ok', 'ok', 'comma allow list');
+
+  const emptyLedger = await runCase((data) => {
+    data.external.ledger = [];
+    data.external.commits.push({
+      sha: 'f'.repeat(40),
+      commit: {
+        message: 'foreign: not from deploy.sh',
+        committer: { date: '2026-11-15T15:30:00.000Z' },
+      },
+    });
+    data.external.deploys.push({
+      id: 'dep-raw',
+      state: 'ready',
+      context: 'production',
+      title: null,
+      commit_ref: null,
+      created_at: '2026-11-15T12:00:00.000Z',
+    });
+  });
+  assertCheck(emptyLedger.report, 'external-changes', 'warn', 'baseline-pending', 'empty ledger');
+  assert.ok(!checkOf(emptyLedger.report, 'external-changes').evidence.flagged);
+  assert.strictEqual(emptyLedger.report.ok, false);
+  assertCheck(emptyLedger.report, 'pulls', 'ok', 'ok', 'baseline leaves pulls');
+  assertCheck(emptyLedger.report, 'credits', 'ok', 'ok', 'baseline leaves credits');
+
+  const networkDown = await runCase((data) => {
+    data.external.failFetch = true;
+  });
+  assertCheck(networkDown.report, 'external-changes', 'warn', 'github-unreachable', 'network failure');
+  assert.strictEqual(networkDown.report.ok, false);
+  for (const id of ['pulls', 'card', 'mirror', 'bounds', 'grading', 'kpis', 'closes', 'news', 'credits']) {
+    assertCheck(networkDown.report, id, 'ok', 'ok', `network still runs ${id}`);
+  }
+  assert.strictEqual(networkDown.world.calls.mirror.length, 0);
+  assert.strictEqual(networkDown.world.calls.regrade, 0);
+  assert.ok(!JSON.stringify(networkDown.report).includes(TEST_BLOB_TOKEN));
+
+  const missingToken = await runCase((_data, deps) => {
+    deps.env = { NETLIFY_AUTH_TOKEN: '' };
+  });
+  assertCheck(missingToken.report, 'external-changes', 'warn', 'netlify-unreadable', 'missing netlify token');
+  assertCheck(missingToken.report, 'pulls', 'ok', 'ok', 'missing token leaves pulls');
+
+  const deploySrc = fs.readFileSync(path.join(__dirname, 'deploy.sh'), 'utf8');
+  const deployAt = deploySrc.indexOf('npx netlify deploy --prod');
+  const ledgerAt = deploySrc.indexOf('npx netlify blobs:set omega-ops');
+  const pushAt = deploySrc.indexOf('git push origin HEAD:main');
+  const prevAt = deploySrc.indexOf('PREV_MAIN=');
+  assert.ok(deployAt > 0, 'deploy line');
+  assert.ok(ledgerAt > deployAt, 'ledger write follows the deploy');
+  assert.ok(prevAt > 0 && prevAt < pushAt, 'prevMain is captured before the push');
+  const ledgerLine = deploySrc.slice(ledgerAt).split('\n')[0];
+  assert.ok(ledgerLine.includes('deploy-ledger/'), ledgerLine);
+  assert.ok(ledgerLine.includes('|| true'), ledgerLine);
+  const dailySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/daily_check.js'), 'utf8');
+  assert.ok(dailySrc.includes('const GITHUB_TIMEOUT_MS = 10 * 1000'));
+  assert.ok(dailySrc.includes('https://api.github.com/repos/wcgbk/webet-social-intelligence/commits'));
+  assert.ok(dailySrc.includes('/deploys?per_page=50'));
+  assert.ok(dailySrc.includes("DEFAULT_DEPLOY_ACTORS = 'edge-executor'"));
 
   const readBack = await readDailyReport(DATE, {
     store: { async get(key) { return { key, ok: true }; } },

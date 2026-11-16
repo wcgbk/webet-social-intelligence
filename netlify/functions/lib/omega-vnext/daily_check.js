@@ -3,8 +3,10 @@
 /**
  * Daily ops health check for the card date D (ET) and D-1.
  * Reads stored boards, the card, the mirror, the v1 copy, grades, KPIs,
- * closes, the news log, and the last stored Odds API credit header.
- * It does not call The Odds API and it does not write the main card.
+ * closes, the news log, the last stored Odds API credit header, and whether
+ * main commits and production deploys came through deploy.sh.
+ * It does not call The Odds API, does not write the main card, and does not
+ * revert a commit or a deploy.
  * dryRun=1 and OMEGA_REPLAY_NO_WRITE skip the report write and every correction.
  * OMEGA_DAILY_CHECK defaults on. =off skips the run.
  */
@@ -38,6 +40,13 @@ const B_UNIT_MAX = 0.5;
 const TOL = 1e-3;
 const CREDIT_FAIL = 10000;
 const CREDIT_WARN = 12000;
+const GITHUB_TIMEOUT_MS = 10 * 1000;
+const EXTERNAL_WINDOW_MS = 48 * 60 * 60 * 1000;
+const DEPLOY_PAIR_MS = 120 * 1000;
+const LEDGER_STORE = 'omega-ops';
+const LEDGER_PREFIX = 'deploy-ledger/';
+const GITHUB_COMMITS_URL = 'https://api.github.com/repos/wcgbk/webet-social-intelligence/commits';
+const DEFAULT_DEPLOY_ACTORS = 'edge-executor';
 
 function dailyCheckEnabled(env) {
   const source = env == null ? process.env : env;
@@ -1134,6 +1143,409 @@ async function checkCredits(ctx) {
   return creditStatus(sample, null);
 }
 
+function externalFetch(ctx) {
+  if (ctx && typeof ctx.fetch === 'function') return ctx.fetch;
+  return resolveFetch(fetch);
+}
+
+function netlifyToken(ctx) {
+  const source = ctx && ctx.env != null ? ctx.env : process.env;
+  if (!source || source.NETLIFY_AUTH_TOKEN == null) return '';
+  return String(source.NETLIFY_AUTH_TOKEN).trim();
+}
+
+function approvedActors(env) {
+  const source = env && typeof env === 'object' ? env : {};
+  const raw = source.OMEGA_DEPLOY_ACTORS;
+  const text = raw == null || String(raw).trim() === '' ? DEFAULT_DEPLOY_ACTORS : String(raw);
+  const set = new Set();
+  for (const part of text.split(',')) {
+    const actor = part.trim();
+    if (actor) set.add(actor);
+  }
+  return set;
+}
+
+function formatEt(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(t));
+  const g = (type) => {
+    const piece = parts.find((item) => item.type === type);
+    return piece ? piece.value : '00';
+  };
+  let hour = g('hour');
+  if (hour === '24') hour = '00';
+  return `${g('year')}-${g('month')}-${g('day')} ${hour}:${g('minute')}:${g('second')} ET`;
+}
+
+function responseOk(resp) {
+  if (!resp) return false;
+  if (resp.ok === true) return true;
+  if (resp.ok === false) return false;
+  const status = Number(resp.status);
+  return status >= 200 && status < 300;
+}
+
+function nextPageUrl(resp) {
+  const headers = resp && resp.headers;
+  let link = '';
+  if (headers && typeof headers.get === 'function') link = headers.get('link') || headers.get('Link') || '';
+  else if (headers) link = headers.link || headers.Link || '';
+  if (!link) return '';
+  const parts = String(link).split(',');
+  for (const part of parts) {
+    const match = part.match(/<([^>]+)>\s*;\s*rel="?next"?/i);
+    if (match) return match[1];
+  }
+  return '';
+}
+
+async function fetchJson(doFetch, url, options) {
+  const resp = await raceTimeout(() => doFetch(url, options), GITHUB_TIMEOUT_MS);
+  if (!responseOk(resp)) {
+    const status = resp && resp.status != null ? resp.status : 'no-response';
+    throw new Error(`http ${status}`);
+  }
+  const data = typeof resp.json === 'function' ? await resp.json() : null;
+  return { data, resp };
+}
+
+function commitRecord(row) {
+  if (!row || !row.sha) return null;
+  const commit = row.commit || {};
+  const author = commit.author || {};
+  const committer = commit.committer || {};
+  const at = committer.date || author.date || null;
+  const title = String(commit.message || '').split('\n')[0] || null;
+  return { sha: String(row.sha).trim(), at, title };
+}
+
+function githubCommitsUrl(sinceIso) {
+  return `${GITHUB_COMMITS_URL}?sha=main&since=${encodeURIComponent(sinceIso)}&per_page=100`;
+}
+
+async function loadGithubCommits(ctx, sinceIso) {
+  const doFetch = externalFetch(ctx);
+  const commits = [];
+  let url = githubCommitsUrl(sinceIso);
+  try {
+    for (let page = 0; page < 5 && url; page += 1) {
+      const { data, resp } = await fetchJson(doFetch, url, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'omega-daily-check',
+        },
+      });
+      if (!Array.isArray(data)) return { ok: false, commits: [] };
+      for (const row of data) {
+        const rec = commitRecord(row);
+        if (rec) commits.push(rec);
+      }
+      const next = nextPageUrl(resp);
+      if (!next || next === url) break;
+      url = next;
+    }
+    return { ok: true, commits };
+  } catch (_) {
+    return { ok: false, commits: [] };
+  }
+}
+
+function isProductionDeploy(deploy) {
+  return !!(deploy && String(deploy.context || '').toLowerCase() === 'production');
+}
+
+function deployUntitled(deploy) {
+  if (!deploy) return true;
+  const title = deploy.title;
+  return title == null || String(title).trim() === '';
+}
+
+function deployReady(deploy) {
+  return String(deploy && deploy.state || '').toLowerCase() === 'ready';
+}
+
+function deployCreatedMs(deploy) {
+  return Date.parse(deploy && (deploy.created_at || deploy.createdAt));
+}
+
+async function loadProductionDeploys(ctx) {
+  const token = netlifyToken(ctx);
+  if (!token) return { ok: false, deploys: [] };
+  const doFetch = externalFetch(ctx);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+  };
+  const deploys = [];
+  let url = `https://api.netlify.com/api/v1/sites/${SITE_ID}/deploys?per_page=50`;
+  try {
+    for (let page = 0; page < 3 && url; page += 1) {
+      const { data, resp } = await fetchJson(doFetch, url, { method: 'GET', headers });
+      if (!Array.isArray(data)) return { ok: false, deploys: [] };
+      for (const row of data) if (isProductionDeploy(row)) deploys.push(row);
+      const next = nextPageUrl(resp);
+      if (!next || next === url) break;
+      url = next;
+    }
+    return { ok: true, deploys };
+  } catch (_) {
+    return { ok: false, deploys: [] };
+  }
+}
+
+function normalizeLedger(doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null;
+  const commits = Array.isArray(doc.commits)
+    ? doc.commits.map((sha) => String(sha || '').trim()).filter(Boolean)
+    : [];
+  return {
+    sha: doc.sha ? String(doc.sha).trim() : '',
+    prevMain: doc.prevMain ? String(doc.prevMain).trim() : '',
+    commits,
+    actor: doc.actor == null ? '' : String(doc.actor).trim(),
+    at: doc.at || null,
+  };
+}
+
+async function readLedgerSdk() {
+  const store = await openStore(LEDGER_STORE);
+  const keys = [];
+  const listed = await store.list({ prefix: LEDGER_PREFIX, paginate: true });
+  if (listed && typeof listed[Symbol.asyncIterator] === 'function') {
+    for await (const page of listed) {
+      for (const blob of (page && page.blobs) || []) {
+        if (blob && blob.key) keys.push(blob.key);
+      }
+      if (keys.length >= 5000) break;
+    }
+  } else {
+    for (const blob of (listed && listed.blobs) || []) {
+      if (blob && blob.key) keys.push(blob.key);
+    }
+  }
+  const entries = [];
+  for (const key of keys) {
+    let doc = null;
+    try { doc = await store.get(key, { type: 'json' }); } catch (_) { doc = null; }
+    const entry = normalizeLedger(doc);
+    if (entry) entries.push(entry);
+  }
+  if (keys.length && !entries.length) throw new Error('ledger-unreadable');
+  return entries;
+}
+
+async function readLedgerRest(ctx) {
+  const token = netlifyToken(ctx);
+  if (!token) throw new Error('netlify-unreadable');
+  const doFetch = externalFetch(ctx);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+  };
+  const keys = [];
+  let cursor = '';
+  for (let page = 0; page < 20; page += 1) {
+    const qs = new URLSearchParams();
+    qs.set('prefix', LEDGER_PREFIX);
+    if (cursor) qs.set('cursor', cursor);
+    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${LEDGER_STORE}?${qs.toString()}`;
+    const { data } = await fetchJson(doFetch, url, { method: 'GET', headers });
+    const blobs = data && Array.isArray(data.blobs) ? data.blobs : (Array.isArray(data) ? data : null);
+    if (!blobs) throw new Error('ledger-unreadable');
+    for (const blob of blobs) if (blob && blob.key) keys.push(String(blob.key));
+    cursor = data && data.next_cursor ? String(data.next_cursor) : '';
+    if (!cursor) break;
+    if (keys.length >= 5000) break;
+  }
+  const entries = [];
+  let matched = 0;
+  for (const key of keys) {
+    if (!key.startsWith(LEDGER_PREFIX)) continue;
+    matched += 1;
+    try {
+      const url = blobRestUrl(SITE_ID, LEDGER_STORE, key, 'canonical');
+      const { data } = await fetchJson(doFetch, url, { method: 'GET', headers });
+      const entry = normalizeLedger(data);
+      if (entry) entries.push(entry);
+    } catch (_) { /* one bad blob must not look like an empty ledger */ }
+  }
+  if (matched && !entries.length) throw new Error('ledger-unreadable');
+  return entries;
+}
+
+async function loadLedger(ctx) {
+  if (!(ctx && typeof ctx.fetch === 'function')) {
+    try {
+      return { ok: true, entries: await readLedgerSdk() };
+    } catch (_) { /* REST below */ }
+  }
+  try {
+    return { ok: true, entries: await readLedgerRest(ctx) };
+  } catch (_) {
+    return { ok: false, entries: [] };
+  }
+}
+
+function earliestLedgerMs(entries) {
+  let min = null;
+  for (const entry of entries || []) {
+    const t = Date.parse(entry && entry.at);
+    if (!Number.isFinite(t)) continue;
+    if (min == null || t < min) min = t;
+  }
+  return min;
+}
+
+function inExternalWindow(ms, nowMs, baselineMs) {
+  if (!Number.isFinite(ms) || !Number.isFinite(nowMs)) return false;
+  if (ms < nowMs - EXTERNAL_WINDOW_MS) return false;
+  if (baselineMs != null && ms < baselineMs) return false;
+  return true;
+}
+
+function coveredCommitSet(entries) {
+  const set = new Set();
+  for (const entry of entries || []) {
+    for (const sha of (entry && entry.commits) || []) set.add(String(sha).toLowerCase());
+  }
+  return set;
+}
+
+function ledgerHeadSet(entries) {
+  const set = new Set();
+  for (const entry of entries || []) {
+    if (entry && entry.sha) set.add(String(entry.sha).toLowerCase());
+  }
+  return set;
+}
+
+function hasTitledPair(deploy, deploys) {
+  const at = deployCreatedMs(deploy);
+  if (!Number.isFinite(at)) return false;
+  for (const other of deploys || []) {
+    if (!other || other === deploy || deployUntitled(other)) continue;
+    const otherAt = deployCreatedMs(other);
+    if (!Number.isFinite(otherAt)) continue;
+    const delta = at - otherAt;
+    if (delta > 0 && delta <= DEPLOY_PAIR_MS) return true;
+  }
+  return false;
+}
+
+function flagCommit(commit) {
+  return {
+    kind: 'commit',
+    code: 'foreign-commit',
+    sha: commit.sha,
+    deployId: null,
+    timeEt: formatEt(commit.at),
+    title: commit.title || null,
+  };
+}
+
+function flagDeploy(deploy, code) {
+  const title = deployUntitled(deploy) ? null : String(deploy.title);
+  return {
+    kind: 'deploy',
+    code,
+    sha: deploy.commit_ref ? String(deploy.commit_ref).trim() : null,
+    deployId: deploy.id || null,
+    timeEt: formatEt(deploy.created_at || deploy.createdAt),
+    title,
+  };
+}
+
+function flagActor(entry) {
+  return {
+    kind: 'actor',
+    code: 'unknown-actor',
+    sha: entry.sha || null,
+    deployId: null,
+    timeEt: formatEt(entry.at),
+    title: null,
+    actor: entry.actor || null,
+  };
+}
+
+/**
+ * Check j. Flags main commits and production deploys that did not come from
+ * deploy.sh's ledger. Never auto-corrects and never reverts.
+ * An empty ledger is baseline-pending: history from before the ledger existed
+ * is not a failure.
+ */
+async function checkExternalChanges(ctx) {
+  const nowMs = ctx && ctx.now instanceof Date ? ctx.now.getTime() : Date.now();
+  const sinceIso = new Date(nowMs - EXTERNAL_WINDOW_MS - 1000).toISOString();
+  const [github, netlify, ledger] = await Promise.all([
+    loadGithubCommits(ctx, sinceIso),
+    loadProductionDeploys(ctx),
+    loadLedger(ctx),
+  ]);
+  const flagged = [];
+  if (ledger.ok && ledger.entries.length) {
+    const baselineMs = earliestLedgerMs(ledger.entries);
+    const approved = approvedActors(ctx && ctx.env);
+    const covered = coveredCommitSet(ledger.entries);
+    const heads = ledgerHeadSet(ledger.entries);
+    const seenActors = new Set();
+    for (const entry of ledger.entries) {
+      const actor = String(entry.actor || '').trim();
+      const key = `${entry.sha}|${actor}`;
+      if (seenActors.has(key)) continue;
+      seenActors.add(key);
+      if (!approved.has(actor)) flagged.push(flagActor(entry));
+    }
+    if (github.ok) {
+      const seen = new Set();
+      for (const commit of github.commits) {
+        const ms = Date.parse(commit.at);
+        if (!inExternalWindow(ms, nowMs, baselineMs)) continue;
+        const sha = String(commit.sha || '').toLowerCase();
+        if (!sha || seen.has(sha)) continue;
+        seen.add(sha);
+        if (!covered.has(sha)) flagged.push(flagCommit(commit));
+      }
+    }
+    if (netlify.ok) {
+      for (const deploy of netlify.deploys) {
+        if (!inExternalWindow(deployCreatedMs(deploy), nowMs, baselineMs)) continue;
+        if (!deployUntitled(deploy)) {
+          const ref = String(deploy.commit_ref || '').trim().toLowerCase();
+          if (!ref || !heads.has(ref)) flagged.push(flagDeploy(deploy, 'foreign-deploy'));
+        } else if (deployReady(deploy) && !hasTitledPair(deploy, netlify.deploys)) {
+          flagged.push(flagDeploy(deploy, 'untitled-deploy'));
+        }
+      }
+    }
+  }
+  if (flagged.length) {
+    return {
+      status: 'fail',
+      code: flagged[0].code,
+      flagged,
+      github: github.ok ? 'ok' : 'github-unreachable',
+      netlify: netlify.ok ? 'ok' : 'netlify-unreadable',
+    };
+  }
+  if (!github.ok) return { status: 'warn', code: 'github-unreachable' };
+  if (!netlify.ok) return { status: 'warn', code: 'netlify-unreadable' };
+  if (!ledger.ok) return { status: 'warn', code: 'ledger-unreadable' };
+  if (!ledger.entries.length) return { status: 'warn', code: 'baseline-pending', ledger: 0 };
+  return { status: 'ok', code: 'ok', ledger: ledger.entries.length };
+}
+
 const CHECKS = [
   ['pulls', (ctx) => ctx.date, checkPulls],
   ['card', (ctx) => ctx.date, checkCard],
@@ -1144,6 +1556,7 @@ const CHECKS = [
   ['closes', (ctx) => ctx.prev, checkCloses],
   ['news', (ctx) => ctx.date, checkNews],
   ['credits', (ctx) => ctx.date, checkCredits],
+  ['external-changes', (ctx) => ctx.date, checkExternalChanges],
 ];
 
 async function runDailyCheck(opts) {

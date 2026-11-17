@@ -30,7 +30,14 @@ async function run(date, { env, fetchImpl, dryRun, blobs }) {
   if (!summary.ok) console.error(`[sync-supabase] ${date} errors: ${JSON.stringify(built.stats.errors).slice(0, 500)}`);
   if (!dryRun && mirror.enabled(env)) {
     try {
-      summary.mirror = await mirror.mirrorAfterSync(date, { env, fetch: fetchImpl, blobs: client });
+      summary.mirror = await mirror.mirrorAfterSync(date, {
+        env,
+        fetch: fetchImpl,
+        blobs: client,
+        // Injected test fetch must not grade live (that fetch is not ESPN).
+        // Production omits fetchImpl, so this uses the global fetch and ESPN only.
+        allowLiveGrade: !fetchImpl || fetchImpl === global.fetch,
+      });
       if (!summary.mirror.ok) {
         console.error(`[sync-supabase] mirror ${date}: ${JSON.stringify(summary.mirror.errors).slice(0, 500)}`);
       }

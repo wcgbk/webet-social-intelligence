@@ -718,6 +718,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (closesWhitelist.status !== 0) throw new Error('closes supabase whitelist gate failed');
+
+  const dailyResync = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-daily-results-resync.js')],
+    { stdio: 'inherit' }
+  );
+  if (dailyResync.status !== 0) throw new Error('daily results resync gate failed');
 }
 
 function pickSlim(card) {

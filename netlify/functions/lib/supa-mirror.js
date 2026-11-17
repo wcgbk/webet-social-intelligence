@@ -12,6 +12,7 @@
 const crypto = require('crypto');
 const S = require('./clv-supabase');
 const { buildDay, lineTypeFor } = require('./clv-sync');
+const { dailyResultsResyncEnabled } = require('./default_on_flag');
 
 const PICKS_STORE = 'edge-picks-omega';
 const ODDS_STORE = 'odds-master';
@@ -870,6 +871,121 @@ function markerHash(card, verification) {
   return sha1(body);
 }
 
+function settlementRank(day) {
+  if (!day) return -Infinity;
+  const wins = Number(day.wins) || 0;
+  const losses = Number(day.losses) || 0;
+  const pushes = Number(day.pushes) || 0;
+  const pending = Number(day.pending) || 0;
+  const parlayPending = String(day.parlayResult || '') === 'pending' ? 1 : 0;
+  return (wins + losses + pushes) * 100 - pending * 10 - parlayPending;
+}
+
+function daySignature(day) {
+  if (!day) return '';
+  return JSON.stringify([
+    day.record == null ? null : String(day.record),
+    day.wins == null ? null : Number(day.wins),
+    day.losses == null ? null : Number(day.losses),
+    day.pushes == null ? null : Number(day.pushes),
+    day.pending == null ? null : Number(day.pending),
+    day.parlayResult == null ? null : String(day.parlayResult),
+    day.profit == null ? null : Number(day.profit),
+  ]);
+}
+
+/** Prefer the day with more settled straights. Equal rank keeps the cache unless the published fields differ. */
+function chooseSettledDay(cacheDay, gradedDay) {
+  if (!gradedDay) return cacheDay || null;
+  if (!cacheDay) return gradedDay;
+  const cacheRank = settlementRank(cacheDay);
+  const gradedRank = settlementRank(gradedDay);
+  if (gradedRank > cacheRank) return gradedDay;
+  if (cacheRank > gradedRank) return cacheDay;
+  const differ = String(cacheDay.record == null ? '' : cacheDay.record) !== String(gradedDay.record == null ? '' : gradedDay.record)
+    || String(cacheDay.parlayResult == null ? '' : cacheDay.parlayResult) !== String(gradedDay.parlayResult == null ? '' : gradedDay.parlayResult)
+    || Number(cacheDay.profit) !== Number(gradedDay.profit);
+  return differ ? gradedDay : cacheDay;
+}
+
+function liveGradeAllowed(deps) {
+  if (!deps) return false;
+  if (typeof deps.gradeDay === 'function' || deps.games) return true;
+  if (deps.allowLiveGrade !== true) return false;
+  const fetchImpl = deps.fetch;
+  return !fetchImpl || fetchImpl === global.fetch;
+}
+
+async function gradeLiveDay(date, deps, blobs) {
+  if (!liveGradeAllowed(deps)) return null;
+  let picks = deps.picks || null;
+  if (!picks && blobs && typeof blobs.get === 'function') {
+    try { picks = await blobs.get(PICKS_STORE, `picks-${date}`); } catch (_) { picks = null; }
+  }
+  if (!picks || !Array.isArray(picks.picks) || !picks.picks.length) return null;
+  const grade = typeof deps.gradeDay === 'function'
+    ? deps.gradeDay
+    : require('../get-results-omega')._test.gradeDay;
+  const opts = deps.games ? { games: deps.games } : undefined;
+  return grade(date, picks, opts);
+}
+
+function cacheDayFor(cache, date) {
+  return ((cache && cache.days) || []).find((day) => day && day.date === date) || null;
+}
+
+async function resyncDailyResults(date, deps = {}) {
+  const env = deps.env || process.env;
+  if (!dailyResultsResyncEnabled(env)) return { ok: true, skipped: 'flag-off', date };
+  const fetchImpl = deps.fetch || fetch;
+  const blobs = deps.blobs || null;
+  let cache = Object.prototype.hasOwnProperty.call(deps, 'resultsCache') ? deps.resultsCache : undefined;
+  if (cache === undefined && blobs && typeof blobs.get === 'function') {
+    try { cache = await blobs.get(PICKS_STORE, RESULTS_KEY); } catch (_) { cache = null; }
+  }
+  const cacheDay = cacheDayFor(cache, date);
+  let graded = null;
+  try {
+    graded = await gradeLiveDay(date, deps, blobs);
+  } catch (err) {
+    console.error(`[daily-results] grade ${date}: ${err && err.message ? err.message : err}`);
+  }
+  const chosen = chooseSettledDay(cacheDay, graded);
+  if (!chosen) return { ok: true, skipped: 'no-day', date };
+  const rows = buildResultRows({ days: [chosen] }, date);
+  if (deps.dry || deps.dryRun) return { ok: true, dry: true, date, rows };
+  try {
+    const upserted = await upsert('daily_results', rows, env, fetchImpl);
+    return { ok: true, date, upserted, record: chosen.record, pending: chosen.pending };
+  } catch (err) {
+    console.error(`[daily-results] upsert ${date}: ${err && err.message ? err.message : err}`);
+    return { ok: false, date, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+async function upsertChangedDailyResults(previous, next, deps = {}) {
+  const env = deps.env || process.env;
+  if (!dailyResultsResyncEnabled(env)) return { ok: true, skipped: 'flag-off' };
+  const nextDays = ((next && next.days) || []).filter((day) => day && day.date);
+  const prevList = previous && Array.isArray(previous.days) ? previous.days : null;
+  let chosen = nextDays;
+  if (prevList) {
+    const prevBy = new Map(prevList.filter((day) => day && day.date).map((day) => [day.date, day]));
+    chosen = nextDays.filter((day) => daySignature(prevBy.get(day.date)) !== daySignature(day));
+  }
+  if (!chosen.length) return { ok: true, upserted: 0 };
+  const rows = [];
+  for (const day of chosen) rows.push(...buildResultRows({ days: [day] }, day.date));
+  if (deps.dry || deps.dryRun) return { ok: true, dry: true, rows };
+  try {
+    const upserted = await upsert('daily_results', rows, env, deps.fetch || fetch);
+    return { ok: true, upserted };
+  } catch (err) {
+    console.error(`[daily-results] upsert: ${err && err.message ? err.message : err}`);
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
 async function mirrorDay(date, deps = {}) {
   const env = deps.env || process.env;
   const fetchImpl = deps.fetch || fetch;
@@ -954,9 +1070,22 @@ async function mirrorDay(date, deps = {}) {
   if (parts.has('results') || (parts.has('kpi') && deps.includeCumulative)) {
     resultsCache = await safeGet(blobs, PICKS_STORE, RESULTS_KEY, errors, RESULTS_KEY);
   }
+  if (Object.prototype.hasOwnProperty.call(deps, 'resultsCache')) resultsCache = deps.resultsCache;
   if (parts.has('results')) {
     try {
-      await writeTable('daily_results', buildResultRows(resultsCache, date), env, fetchImpl, dry, counts, errors);
+      let rows = buildResultRows(resultsCache, date);
+      if (dailyResultsResyncEnabled(env) && liveGradeAllowed(deps)) {
+        const cacheDay = cacheDayFor(resultsCache, date);
+        let graded = null;
+        try {
+          graded = await gradeLiveDay(date, deps, blobs);
+        } catch (err) {
+          errors.push(redact(`results grade: ${err && err.message ? err.message : err}`, env));
+        }
+        const chosen = chooseSettledDay(cacheDay, graded);
+        if (chosen) rows = buildResultRows({ days: [chosen] }, date);
+      }
+      await writeTable('daily_results', rows, env, fetchImpl, dry, counts, errors);
     } catch (e) {
       errors.push(redact(`results: ${e.message}`, env));
     }
@@ -1089,6 +1218,11 @@ module.exports = {
   buildBoardRows,
   buildCardRows,
   buildResultRows,
+  settlementRank,
+  daySignature,
+  chooseSettledDay,
+  resyncDailyResults,
+  upsertChangedDailyResults,
   buildPickClvRows,
   buildKpiRows,
   buildBookPriceRows,

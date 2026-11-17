@@ -853,12 +853,13 @@ exports.handler = async (event) => {
 
     // Adaptive cache: 30s while any pick is pending (settle promptly after final),
     // 5 min once the ET day is fully decided. v3 busts the pre-NFL/NCAAF endpoint cache.
+    let previousResultsCache = null;
     try {
       const cacheResp = await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, { headers: authHeaders });
       if (cacheResp.ok) {
-        const cached = await cacheResp.json();
-        if (cacheIsFresh(cached, event)) {
-          return respond(cached, event);
+        previousResultsCache = await cacheResp.json();
+        if (cacheIsFresh(previousResultsCache, event)) {
+          return respond(previousResultsCache, event);
         }
       }
     } catch (e) {}
@@ -964,11 +965,22 @@ exports.handler = async (event) => {
     }
 
     try {
-      await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, {
+      const put = await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),
       });
+      if (put && put.ok) {
+        try {
+          const { dailyResultsResyncEnabled } = require('./lib/default_on_flag');
+          if (dailyResultsResyncEnabled(process.env)) {
+            const mirror = require('./lib/supa-mirror');
+            await mirror.upsertChangedDailyResults(previousResultsCache, result, { env: process.env });
+          }
+        } catch (err) {
+          console.error(`[get-results-omega] daily_results: ${err && err.message ? err.message : err}`);
+        }
+      }
     } catch (e) {}
 
     return respond(result, event);

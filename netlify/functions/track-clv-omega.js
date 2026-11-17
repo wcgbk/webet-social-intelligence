@@ -8,7 +8,7 @@ const {
   gradePowerClv,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
-const { defaultOnFlag, closesAt3amEnabled, pullSlotLockEnabled } = require('./lib/default_on_flag');
+const { defaultOnFlag, closesAt3amEnabled, pullSlotLockEnabled, dailyResultsResyncEnabled } = require('./lib/default_on_flag');
 const { forceOverride, trackLockKey, guardDateLock } = require('./lib/slot-lock');
 const { loadStoredEventsForSport } = require('./lib/closes-3am');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
@@ -988,6 +988,26 @@ async function settleResultsForDate(dateISO, picksData, deps) {
   return settledCount;
 }
 
+async function resyncSettledDay(dateISO, settledCount, env, deps, picks) {
+  if (!(settledCount > 0) || !dailyResultsResyncEnabled(env)) return;
+  try {
+    const mirror = require('./lib/supa-mirror');
+    await mirror.resyncDailyResults(dateISO, {
+      env,
+      picks,
+      fetch: (deps && deps.fetch) || fetch,
+      blobs: deps && deps.blobs,
+      gradeDay: deps && deps.gradeDay,
+      games: deps && deps.games,
+      resultsCache: deps && deps.resultsCache,
+      // Tests pass deps and do not opt in. The scheduled handler has no deps.
+      allowLiveGrade: !deps || deps.allowLiveGrade === true,
+    });
+  } catch (err) {
+    console.error(`[track-clv] daily_results ${dateISO}: ${err && err.message ? err.message : err}`);
+  }
+}
+
 async function handle(event, deps) {
   if (event && event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -1060,6 +1080,7 @@ async function handle(event, deps) {
           if (!swPicks || !Array.isArray(swPicks.picks) || !swPicks.picks.length) continue;
           const n = await settleResultsForDate(swISO, swPicks, deps);
           if (n > 0) console.log(`[track-clv] Sweep settled ${n} picks for ${swISO}`);
+          await resyncSettledDay(swISO, n, env, deps, swPicks);
         } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
       }
       // Yesterday and the day before: awaited Supabase true closes (no Odds API).
@@ -1134,6 +1155,7 @@ async function handle(event, deps) {
     try {
       const early = await settleResultsForDate(dateISO, picksData, deps);
       if (early > 0) console.log(`[track-clv] Early-settled ${early} picks for ${dateISO}`);
+      await resyncSettledDay(dateISO, early, env, deps, picksData);
     } catch (e) { console.log(`[track-clv] Early settle failed (non-fatal): ${e.message}`); }
 
     // ── Step 2: Load existing CLV data (merge mode — keep the capture closest to first pitch) ──

@@ -1076,6 +1076,7 @@ async function runSavedBoardCloses(ctx) {
       result.skippedDone += 1;
       const row = gameResultRow(game, 'closed', null, saved.at, game.eventId);
       row.slot = saved.slot;
+      row.boardAt = saved.at;
       rememberGame(row);
       rememberClosedPicks(game);
       if (!dryRun && blobs && game.eventId && !(await hasBlob(blobs, FB.doneEvKey(game.sport, game.eventId)))) {
@@ -1084,6 +1085,8 @@ async function runSavedBoardCloses(ctx) {
           commenceTime: FB.normalizeCommence(game.commenceTime),
           via: 'closes-3am',
           source: BOARD_SOURCE,
+          slot: saved.slot,
+          boardAt: saved.at,
         });
       }
       continue;
@@ -1146,6 +1149,7 @@ async function runSavedBoardCloses(ctx) {
             commenceTime: FB.normalizeCommence(event.commence_time || game.commenceTime),
             via: 'closes-3am',
             slot: saved.slot,
+            boardAt: saved.at,
             source: BOARD_SOURCE,
           });
         }
@@ -1153,6 +1157,7 @@ async function runSavedBoardCloses(ctx) {
     }
     const row = gameResultRow(game, 'closed', null, saved.at, event.id);
     row.slot = saved.slot;
+    row.boardAt = saved.at;
     rememberGame(row);
     for (const pick of game.picks || []) {
       const assessed = assessPick(pick, [event]);

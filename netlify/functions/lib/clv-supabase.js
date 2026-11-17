@@ -4,6 +4,7 @@
  * No omega-vnext imports. No pick, grading or card code. Insert-or-ignore only.
  */
 const crypto = require('crypto');
+const { closesSupaWhitelistEnabled } = require('./default_on_flag');
 
 const SUPABASE_URL = 'https://qvfgebrkolfyggfizgkx.supabase.co';
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
@@ -16,6 +17,18 @@ const CONFLICT = {
   games: 'game_id',
   odds_snapshots: 'game_id,book,market,side,point,line_type,snapshot_ts',
 };
+// Columns clv.games / clv.odds_snapshots actually store. boardAt and slot stay on the blob.
+const GAMES_COLUMNS = ['game_id', 'sport', 'season', 'commence_time', 'home_team', 'away_team', 'source'];
+const SNAP_COLUMNS = ['game_id', 'sport', 'book', 'market', 'side', 'point', 'price', 'line_type', 'snapshot_ts', 'source'];
+
+function projectRow(row, cols) {
+  const out = {};
+  if (!row || typeof row !== 'object') return out;
+  for (const col of cols) {
+    if (Object.prototype.hasOwnProperty.call(row, col)) out[col] = row[col];
+  }
+  return out;
+}
 
 class MissingEnvError extends Error {}
 
@@ -136,9 +149,13 @@ function dedupe(rows, cols) {
   });
 }
 
-async function writeRows({ games, snaps }, env, fetchImpl) {
-  const g = await postRows('games', dedupe(games, ['game_id']), env, fetchImpl);
-  const s = await postRows('odds_snapshots', dedupe(snaps, CONFLICT.odds_snapshots.split(',')), env, fetchImpl);
+async function writeRows({ games, snaps } = {}, env, fetchImpl) {
+  const gameList = games || [];
+  const snapList = snaps || [];
+  const useGames = closesSupaWhitelistEnabled(env) ? gameList.map((row) => projectRow(row, GAMES_COLUMNS)) : gameList;
+  const useSnaps = closesSupaWhitelistEnabled(env) ? snapList.map((row) => projectRow(row, SNAP_COLUMNS)) : snapList;
+  const g = await postRows('games', dedupe(useGames, ['game_id']), env, fetchImpl);
+  const s = await postRows('odds_snapshots', dedupe(useSnaps, CONFLICT.odds_snapshots.split(',')), env, fetchImpl);
   return { games: g.posted, odds_snapshots: s.posted, requests: g.requests + s.requests };
 }
 
@@ -200,4 +217,5 @@ module.exports = {
   SUPABASE_URL, SITE_ID, ODDS_SPORT_KEYS, CONFLICT, MissingEnvError,
   requireEnv, json, etYmd, addDays, isAuthorized, seasonFor, marketFromBetType, num,
   rowsFromOddsEvent, postRows, writeRows, dedupe, blobClient, mapLimit,
+  GAMES_COLUMNS, SNAP_COLUMNS, projectRow,
 };

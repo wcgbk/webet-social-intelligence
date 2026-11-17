@@ -711,6 +711,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (pullSlotLock.status !== 0) throw new Error('pull slot lock gate failed');
+
+  const closesWhitelist = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-closes-supa-whitelist.js')],
+    { stdio: 'inherit' }
+  );
+  if (closesWhitelist.status !== 0) throw new Error('closes supabase whitelist gate failed');
 }
 
 function pickSlim(card) {

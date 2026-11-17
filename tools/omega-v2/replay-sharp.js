@@ -32,6 +32,8 @@ const FLAG_KEYS = [
   // Default-on blend. A bare replay stays the pre-blend card. Set =on to replay it.
   // Weight and trim env vars are not here: an unset value would become the string off.
   'OMEGA_V2_BLEND_P',
+  // Default-on win-probability floor. A bare replay stays the 0.001 clamp.
+  'OMEGA_V2_P_FLOOR',
 ];
 for (const key of FLAG_KEYS) {
   if (process.env[key] == null || String(process.env[key]).trim() === '') {

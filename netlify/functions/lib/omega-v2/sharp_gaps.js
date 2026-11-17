@@ -9,7 +9,7 @@
  */
 
 const { noVigTwoWay, americanToImplied } = require('../omega-vnext/odds_math');
-const { MAX_EDGE } = require('./constants');
+const { MAX_EDGE, clampWinProb } = require('./constants');
 const {
   lineMoveEnabled, moveShrinkEnabled, pinnacleFairEnabled, keyConvertEnabled,
   lineMoveVetoPp, lineMoveStalePp,
@@ -368,11 +368,8 @@ function shrinkLambda(sport) {
   return SHRINK[s] || 0;
 }
 
-function clampBet(p) {
-  if (!Number.isFinite(p)) return null;
-  if (p < 0.001) return 0.001;
-  if (p > 0.999) return 0.999;
-  return p;
+function clampBet(p, env) {
+  return clampWinProb(p, env);
 }
 
 function computeMove(index, cand, spec) {
@@ -520,7 +517,7 @@ function applySharpFinish(row, candidate, opts) {
   if (shrinkOn && next.pBet != null && next.qualified) {
     const lam = shrinkLambda(next.sport);
     if (lam) {
-      const p = clampBet(next.pBet - lam * (meta.shrink.p10 - meta.shrink.p3));
+      const p = clampBet(next.pBet - lam * (meta.shrink.p10 - meta.shrink.p3), env);
       if (p != null) {
         next.pBet = p;
         if (next.implied != null) next.edge = p - next.implied;

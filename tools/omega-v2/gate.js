@@ -538,6 +538,13 @@ async function main() {
   );
   if (blendP.status !== 0) throw new Error('blend probability gate failed');
 
+  const pFloor = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-p-floor.js')],
+    { stdio: 'inherit' }
+  );
+  if (pFloor.status !== 0) throw new Error('win-probability floor gate failed');
+
   const boardOrder = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-odds-master-board-order.js')],

@@ -1,7 +1,5 @@
 'use strict';
 
-const { canonSport } = require('./blend');
-
 /** Live Omega card. OMEGA_PIPELINE_V2=0 (or opts.pipelineV2 false) falls back to v1. */
 const MODEL_VERSION = 'omega-v2-sharp-2026-11-01-dkhr';
 const UNIT_DOLLARS = 150;
@@ -611,6 +609,8 @@ function blendPEnabled(env) {
  * OMEGA_V2_BLEND_W_<SPORT> overrides the fitted constant for every other sport.
  */
 function blendWeightFor(sport, env) {
+  // Lazy: blend.js requires this module. A top-level require would cycle.
+  const { canonSport } = require('./blend');
   const name = canonSport(sport);
   if (name === 'NCAAM') return 0;
   const source = env == null ? process.env : env;
@@ -644,6 +644,43 @@ function blendTrimEnabled(env) {
   if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
   if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
   return BLEND_APPLY_LONGSHOT_TRIM;
+}
+
+/**
+ * Win-probability floor after the longshot trim.
+ * Default on. A bet probability is clamped to [P_FLOOR_LO, P_FLOOR_HI].
+ * OMEGA_V2_P_FLOOR=off / 0 / false / no is the previous clamp
+ * [0.001, 0.999] (=off rollback, byte-identical cards).
+ * A blank value stays on, same as OMEGA_V2_BLEND_P.
+ * Non-finite inputs stay null. The clamp is not applied before the trim.
+ */
+const P_FLOOR_ENV = 'OMEGA_V2_P_FLOOR';
+const P_FLOOR_LO = 0.01;
+const P_FLOOR_HI = 0.99;
+const P_CLAMP_LEGACY_LO = 0.001;
+const P_CLAMP_LEGACY_HI = 0.999;
+
+function pFloorEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[P_FLOOR_ENV];
+  if (raw == null) return true;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
+  return true;
+}
+
+function betProbBounds(env) {
+  if (pFloorEnabled(env)) return { lo: P_FLOOR_LO, hi: P_FLOOR_HI };
+  return { lo: P_CLAMP_LEGACY_LO, hi: P_CLAMP_LEGACY_HI };
+}
+
+/** Closed clamp for a bet probability. Non-finite stays null. */
+function clampWinProb(p, env) {
+  if (!Number.isFinite(p)) return null;
+  const { lo, hi } = betProbBounds(env);
+  if (p < lo) return lo;
+  if (p > hi) return hi;
+  return p;
 }
 
 module.exports = {
@@ -746,4 +783,10 @@ module.exports = {
   BLEND_TRIM_ENV,
   BLEND_APPLY_LONGSHOT_TRIM,
   blendTrimEnabled,
+  P_FLOOR_ENV,
+  P_FLOOR_LO,
+  P_FLOOR_HI,
+  pFloorEnabled,
+  betProbBounds,
+  clampWinProb,
 };

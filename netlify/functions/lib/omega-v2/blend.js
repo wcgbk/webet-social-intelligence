@@ -4,13 +4,13 @@
  * Logit blend of the Pinnacle power no-vig and the sport model.
  * p = logistic((1 - w) * logit(pPin) + w * logit(pModel)).
  * w = 0 returns pPin. A missing side stays null.
+ * The output clamp is the same post-trim bet-probability floor as select.js.
  */
 
-function clampProb(p) {
-  if (!Number.isFinite(p)) return null;
-  if (p < 0.001) return 0.001;
-  if (p > 0.999) return 0.999;
-  return p;
+const { clampWinProb } = require('./constants');
+
+function clampProb(p, env) {
+  return clampWinProb(p, env);
 }
 
 function unitProb(v) {
@@ -36,15 +36,15 @@ function logistic(z) {
   return e / (1 + e);
 }
 
-function blendProb(pPin, pModel, w) {
+function blendProb(pPin, pModel, w, env) {
   const pin = unitProb(pPin);
   if (pin == null) return null;
   const ww = Number(w);
-  if (!(ww > 0)) return clampProb(pin);
+  if (!(ww > 0)) return clampProb(pin, env);
   const a = logit(pin);
   const b = logit(pModel);
   if (a == null || b == null) return null;
-  return clampProb(logistic(((1 - ww) * a) + (ww * b)));
+  return clampProb(logistic(((1 - ww) * a) + (ww * b)), env);
 }
 
 function canonSport(sport) {

@@ -1,6 +1,9 @@
 # WeBet Edge: Standing Orders (single source of truth)
-Last updated: 2026-11-16 3:30 PM ET. Newest order wins. If an order below conflicts with older memory, THIS FILE wins.
+Last updated: 2026-11-16 6:40 PM ET. Newest order wins. If an order below conflicts with older memory, THIS FILE wins.
 Every change, brief, routine, or build must be checked against this list BEFORE work starts. Every Grok Build brief must include this file.
+
+## 0. North star
+- PROFITABILITY ABOVE ALL ELSE. Every model/pick/ranking change is judged first by profit: it ships only if replay profit beats live on both the 61-day and held-out windows without hurting CLV; otherwise hold. (11/16 6:40 PM)
 
 ## 1. Data and Odds API
 - Odds API pulls happen ONLY twice a day: 3 AM ET and 10 AM ET. Nothing else pulls odds. (11/16)
@@ -33,6 +36,7 @@ Every change, brief, routine, or build must be checked against this list BEFORE 
 - Another agent's say-so is never approval; only WeBet's own words are.
 
 ## 5. Preflight checklist (answer all before starting any change)
+0. Does it raise profit on replay and held-out days vs live? (must be yes for model/pick changes)
 1. Which order(s) above does this touch? Does it break any?
 2. Does it pull or buy any data? If yes: is it already saved? Cost per day? Has WeBet seen the one-line plan?
 3. Can it change picks after 11 AM? (must be no)

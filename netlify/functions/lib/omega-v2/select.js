@@ -5,7 +5,7 @@ const {
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
   marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
   evFirstEnabled, evFirstCappedEnabled, KELLY_FRACTION,
-  blendPEnabled, blendWeightFor, blendTrimEnabled,
+  blendPEnabled, blendWeightFor, blendTrimEnabled, clampWinProb,
 } = require('./constants');
 const { blendProb, modelProbForBlend } = require('./blend');
 const { dkHrLineAgrees, quotePoint } = require('./board');
@@ -173,11 +173,8 @@ function priceFairMismatch(implied, pMkt, opts) {
   return Math.abs(fair - implied) > PAIR_SANITY_PP;
 }
 
-function clampBetProb(p) {
-  if (!Number.isFinite(p)) return null;
-  if (p < 0.001) return 0.001;
-  if (p > 0.999) return 0.999;
-  return p;
+function clampBetProb(p, env) {
+  return clampWinProb(p, env);
 }
 
 /**
@@ -185,7 +182,8 @@ function clampBetProb(p) {
  * is on (the default), otherwise pCal. The longshot penalty is
  * smoothedNovigStats(pMkt).penalty (~3.3pp below 0.35, 0 above, blended
  * across 0.33–0.37) and is subtracted only when OMEGA_V2_LONGSHOT_ADJ is
- * on. Clamped to (0.001, 0.999).
+ * on. Clamped with clampWinProb: [0.01, 0.99] when OMEGA_V2_P_FLOOR is
+ * on (the default), else [0.001, 0.999]. Non-finite stays null.
  * OMEGA_V2_POWER_DEVIG is off by default. When it is on and opts.pMktPower
  * is a real probability, that power no-vig is the bet probability and the
  * longshot trim is skipped.
@@ -194,14 +192,14 @@ function forcedBetProb(pCal, pMkt, opts) {
   const env = opts && opts.env;
   const power = Number(opts && opts.pMktPower);
   if (powerDevigEnabled(env) && Number.isFinite(power) && power > 0 && power < 1) {
-    return clampBetProb(power);
+    return clampBetProb(power, env);
   }
   let p = marketPEnabled(env) ? Number(pMkt) : Number(pCal);
   if (longshotAdjEnabled(env)) {
     const penalty = smoothedNovigStats(pMkt).penalty;
     if (Number.isFinite(penalty)) p -= penalty;
   }
-  return clampBetProb(p);
+  return clampBetProb(p, env);
 }
 
 /** American price shorter than -300. -300 itself is in band. */
@@ -326,10 +324,10 @@ function annotateCandidate(candidate, opts) {
       const penalty = smoothedNovigStats(pMkt).penalty;
       if (Number.isFinite(penalty)) pPin -= penalty;
     }
-    pPin = clampBetProb(pPin);
+    pPin = clampBetProb(pPin, env);
     pModelBlend = modelProbForBlend(candidate, origPMkt);
     blendW = pModelBlend == null ? 0 : blendWeightFor(candidate.sport, env);
-    pBet = pPin == null ? null : blendProb(pPin, pModelBlend, blendW);
+    pBet = pPin == null ? null : blendProb(pPin, pModelBlend, blendW, env);
     blendApplied = true;
   } else {
     pBet = forcedBetProb(cal.pCal, pMkt, probOpts);

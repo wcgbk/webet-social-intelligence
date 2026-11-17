@@ -28,6 +28,7 @@ const saved = {
   market: process.env.OMEGA_V2_MARKET_P,
   fav: process.env.OMEGA_V2_FAV_CAP,
   evFirst: process.env.OMEGA_V2_EV_FIRST,
+  floor: process.env.OMEGA_V2_P_FLOOR,
 };
 
 function restore() {
@@ -40,6 +41,7 @@ function restore() {
   put('OMEGA_V2_MARKET_P', saved.market);
   put('OMEGA_V2_FAV_CAP', saved.fav);
   put('OMEGA_V2_EV_FIRST', saved.evFirst);
+  put('OMEGA_V2_P_FLOOR', saved.floor);
 }
 
 function raw(over) {
@@ -76,6 +78,8 @@ async function main() {
   process.env.OMEGA_V2_FAV_CAP = '1';
   process.env.OMEGA_V2_EV_FIRST = 'off';
   delete process.env.OMEGA_V2_LONGSHOT_ADJ;
+  // Production default. The dedicated floor test covers =off.
+  delete process.env.OMEGA_V2_P_FLOOR;
   assert.strictEqual(forceTop3Enabled(), true);
   assert.strictEqual(marketPEnabled(), true);
   assert.strictEqual(favCapEnabled(), true);
@@ -103,7 +107,8 @@ async function main() {
     calibration: { pCal: 0.04, pMkt: 0.02, pModel: 0.04 },
   });
   assert.strictEqual(tiny.rejectReason, null, tiny.rejectReason);
-  assert.strictEqual(tiny.pBet, 0.001);
+  // Default floor is 0.01. Flag off, which stays 0.001, is test-omega-v2-p-floor.js.
+  assert.strictEqual(tiny.pBet, 0.01);
   assert.strictEqual(tiny.pModelCal, 0.04);
 
   process.env.OMEGA_V2_MARKET_P = 'off';

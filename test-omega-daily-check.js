@@ -167,6 +167,7 @@ function straightRow(pick, matchup) {
     pick,
     odds: '-110',
     book: 'draftkings',
+    commenceTime: '2026-11-15T23:30:00.000Z',
     units,
     unitsNum: units,
     pBet,
@@ -203,6 +204,7 @@ function buildBase() {
     odds: pick.odds,
     book: pick.book,
     pBet: pick.pBet,
+    commenceTime: pick.commenceTime,
   }));
   const card = {
     generatedAt: '2026-11-15T15:30:00.000Z',
@@ -524,7 +526,7 @@ async function main() {
   assert.strictEqual(okRun.report.dryRun, false);
   assert.strictEqual(okRun.report.ok, true);
   assert.deepStrictEqual(okRun.report.checks.map((row) => row.id), [
-    'pulls', 'card', 'mirror', 'bounds', 'grading', 'kpis', 'closes', 'news', 'credits', 'external-changes',
+    'pulls', 'card', 'same-day', 'mirror', 'bounds', 'grading', 'kpis', 'closes', 'news', 'credits', 'external-changes',
   ]);
   for (const row of okRun.report.checks) assert.strictEqual(row.status, 'ok', row.id);
   assert.strictEqual(okRun.world.calls.write.length, 1);

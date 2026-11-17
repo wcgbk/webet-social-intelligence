@@ -39,6 +39,9 @@ const ENV = {
   OMEGA_V2_FORCE_TOP3: 'on',
   OMEGA_V2_EV_FIRST: 'on',
   OMEGA_V2_EV_FIRST_CAPPED: 'off',
+  // Fixture commence times are not the card's ET date. This test is the
+  // refill path. Same-day stays off here so those rows still refill.
+  OMEGA_SAME_DAY_ONLY: 'off',
 };
 const ANNOTATE = { forceTop3: true, pregameAsOfMs: NOW.getTime(), env: ENV };
 const FLAG = 'OMEGA_FIX_MISSING_IMPORTS_C';

@@ -14,7 +14,7 @@
 const { etParts } = require('../et-schedule');
 const { replayNoWrite } = require('./no_write');
 const { opsAlert } = require('./ops_alert');
-const { americanToDecimal, americanToImplied } = require('./odds_math');
+const { americanToDecimal, americanToImplied, etCalendarDate } = require('./odds_math');
 const { stakeUsd } = require('../omega-v2/size');
 const { SITE_ID, BLOB_STORE } = require('./config');
 const { blobRestUrl } = require('./blob_key');
@@ -29,6 +29,7 @@ const CLOSE_WARN_REASONS = new Set(['pinnacle-not-priced', 'not-in-historical-sn
 const RESULTS_CACHE_KEY = 'results-omega-cache-v9-kpi1030';
 const SUPABASE_URL = 'https://qvfgebrkolfyggfizgkx.supabase.co';
 const DAILY_FLAG = 'OMEGA_DAILY_CHECK';
+const SAME_DAY_CHECK_ENV = 'OMEGA_DAILY_CHECK_SAME_DAY';
 const WRITE_TIMEOUT_MS = 8000;
 const DK_HR = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 const P_LO = 0.02;
@@ -992,6 +993,68 @@ async function checkCard(ctx) {
   return assessCardShape(card, ctx.date);
 }
 
+function sameDayCheckEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[SAME_DAY_CHECK_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
+  return true;
+}
+
+function commenceOfPick(row) {
+  if (!row || typeof row !== 'object') return null;
+  return row.commenceTime || row.commence_time || null;
+}
+
+function parlayLegRows(card) {
+  const out = [];
+  const tickets = card && Array.isArray(card.parlayLegs) ? card.parlayLegs : [];
+  for (const ticket of tickets) {
+    if (!ticket) continue;
+    if (Array.isArray(ticket.legs)) {
+      for (const leg of ticket.legs) if (leg) out.push(leg);
+    } else if (ticket.pick || ticket.side || ticket.commenceTime || ticket.commence_time) {
+      out.push(ticket);
+    }
+  }
+  return out;
+}
+
+/**
+ * Report-only. Fails when a published straight or parlay leg has no
+ * parseable commence time, or that time is not the card's ET date.
+ * An empty card passes. This never writes or regenerates picks.
+ */
+function assessSameDay(card, cardDate) {
+  if (!card) return { status: 'fail', code: 'card-missing' };
+  const date = String(cardDate || card.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { status: 'fail', code: 'card-missing' };
+  const bad = [];
+  const straights = Array.isArray(card.picks) ? card.picks : [];
+  const legs = parlayLegRows(card);
+  const look = (row, kind) => {
+    const et = etCalendarDate(commenceOfPick(row));
+    if (!et) bad.push({ kind, reason: 'missing' });
+    else if (et !== date) bad.push({ kind, reason: 'off-day', et });
+  };
+  for (const row of straights) look(row, 'straight');
+  for (const row of legs) look(row, 'leg');
+  if (bad.length) {
+    return { status: 'fail', code: 'off-day', count: bad.length };
+  }
+  return { status: 'ok', code: 'ok', straights: straights.length, legs: legs.length };
+}
+
+async function checkSameDay(ctx) {
+  if (!ctx.card) {
+    const readCard = ctx.readCard || defaultReadCard;
+    try { ctx.card = await readCard(ctx.date); } catch (_) { ctx.card = null; }
+  }
+  if (!ctx.card) return { status: 'fail', code: 'card-missing' };
+  return assessSameDay(ctx.card, ctx.date);
+}
+
 async function checkBounds(ctx) {
   if (!ctx.card) {
     const readCard = ctx.readCard || defaultReadCard;
@@ -1813,18 +1876,26 @@ async function checkExternalChanges(ctx) {
   return { status: 'ok', code: 'ok', ledger: ledger.entries.length };
 }
 
-const CHECKS = [
-  ['pulls', (ctx) => ctx.date, checkPulls],
-  ['card', (ctx) => ctx.date, checkCard],
-  ['mirror', (ctx) => ctx.date, checkMirror],
-  ['bounds', (ctx) => ctx.date, checkBounds],
-  ['grading', (ctx) => ctx.prev, checkGrading],
-  ['kpis', (ctx) => ctx.date, checkKpis],
-  ['closes', (ctx) => ctx.prev, checkCloses],
-  ['news', (ctx) => ctx.date, checkNews],
-  ['credits', (ctx) => ctx.date, checkCredits],
-  ['external-changes', (ctx) => ctx.date, checkExternalChanges],
-];
+function dailyChecks(env) {
+  const checks = [
+    ['pulls', (ctx) => ctx.date, checkPulls],
+    ['card', (ctx) => ctx.date, checkCard],
+  ];
+  if (sameDayCheckEnabled(env)) {
+    checks.push(['same-day', (ctx) => ctx.date, checkSameDay]);
+  }
+  checks.push(
+    ['mirror', (ctx) => ctx.date, checkMirror],
+    ['bounds', (ctx) => ctx.date, checkBounds],
+    ['grading', (ctx) => ctx.prev, checkGrading],
+    ['kpis', (ctx) => ctx.date, checkKpis],
+    ['closes', (ctx) => ctx.prev, checkCloses],
+    ['news', (ctx) => ctx.date, checkNews],
+    ['credits', (ctx) => ctx.date, checkCredits],
+    ['external-changes', (ctx) => ctx.date, checkExternalChanges],
+  );
+  return checks;
+}
 
 async function runDailyCheck(opts) {
   const options = opts || {};
@@ -1851,7 +1922,7 @@ async function runDailyCheck(opts) {
   }
   const ctx = Object.assign({}, options, { env, now, date, prev, dry });
   const checks = [];
-  for (const [id, dateOf, fn] of CHECKS) {
+  for (const [id, dateOf, fn] of dailyChecks(env)) {
     try {
       const assessed = await fn(ctx);
       checks.push(row(id, dateOf(ctx), assessed));
@@ -1917,6 +1988,9 @@ module.exports = {
   generatedBeforeDeadline,
   assessPullSlot,
   assessCardShape,
+  assessSameDay,
+  sameDayCheckEnabled,
+  dailyChecks,
   assessBounds,
   assessGrades,
   assessCloses,

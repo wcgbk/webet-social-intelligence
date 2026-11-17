@@ -34,6 +34,8 @@ const FLAG_KEYS = [
   'OMEGA_V2_BLEND_P',
   // Default-on win-probability floor. A bare replay stays the 0.001 clamp.
   'OMEGA_V2_P_FLOOR',
+  // Default-on same ET day. A bare replay stays the old selector.
+  'OMEGA_SAME_DAY_ONLY',
 ];
 for (const key of FLAG_KEYS) {
   if (process.env[key] == null || String(process.env[key]).trim() === '') {
@@ -48,6 +50,7 @@ const WT = (require.main === module && process.argv[3])
   : path.resolve(__dirname, '../..');
 const L = path.join(WT, 'netlify/functions/lib/omega-v2') + path.sep;
 const sel = require(L + 'select');
+const { filterSameEtDay, logSameDayDrops, sameDayMeta } = require(L + 'same_day');
 const size = require(L + 'size');
 const par = require(L + 'parlay');
 const g = require(L + 'guards');
@@ -143,12 +146,17 @@ function buildDay(date, B, pollDoc) {
       if (extra.length) rows = rows.concat(extra);
     }
   }
+  const dayFilter = filterSameEtDay(rows, date);
+  if (dayFilter.applied) {
+    logSameDayDrops(dayFilter);
+    rows = dayFilter.rows;
+  }
   const asOf = Date.parse(`${date}T10:05:00-05:00`);
   const cands = rows.filter((c) => PL.has(String(c.book || '').toLowerCase()) && c.lineAgrees !== false).map(toCand);
-  const opts = { pregameAsOfMs: asOf, linePolls: pollDoc };
+  const opts = { pregameAsOfMs: asOf, linePolls: pollDoc, cardDate: date };
   const ann = cands.map((c) => sel.annotateCandidate(c, opts));
   const st = size.sizeStraights(sel.selectStraights(ann.filter((c) => c.qualified), opts), opts);
-  const pl = par.buildForcedParlay ? par.buildForcedParlay(st) : null;
+  const pl = par.buildForcedParlay ? par.buildForcedParlay(st, opts) : null;
   let card = {
     date,
     modelVersion: require(L + 'constants').MODEL_VERSION,
@@ -159,7 +167,7 @@ function buildDay(date, B, pollDoc) {
     parlayPool: [],
   };
   card = g.autoCorrectCard(card, opts);
-  return {
+  const day = {
     picks: card.picks.map((p) => ({
       sport: p.sport,
       matchup: p.matchup,
@@ -199,6 +207,8 @@ function buildDay(date, B, pollDoc) {
     errors: g.validateCard(card),
     notes: card.qaNotes,
   };
+  if (dayFilter.applied) day.sameDay = sameDayMeta(dayFilter, date);
+  return day;
 }
 
 function main() {

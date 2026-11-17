@@ -107,6 +107,14 @@ async function main() {
   process.env.OMEGA_V2_FORCE_TOP3 = 'off';
   assert.strictEqual(v2.forceTop3Enabled(), false, 'legacy gate runs with force-top3 off');
 
+  // Same-day defaults on. Legacy buildCard fixtures use a future commence
+  // that is not the card date, so this process keeps the flag off. The
+  // same-day test turns it back on itself.
+  delete process.env.OMEGA_SAME_DAY_ONLY;
+  assert.strictEqual(v2.sameDayOnlyEnabled(), true, 'same-day defaults on');
+  process.env.OMEGA_SAME_DAY_ONLY = 'off';
+  assert.strictEqual(v2.sameDayOnlyEnabled(), false, 'same-day off is the legacy selector');
+
   const positions = [
     prodCandidate({}),
     prodCandidate({
@@ -544,6 +552,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (pFloor.status !== 0) throw new Error('win-probability floor gate failed');
+
+  const sameDay = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-same-day.js')],
+    { stdio: 'inherit' }
+  );
+  if (sameDay.status !== 0) throw new Error('same-day gate failed');
 
   const boardOrder = require('child_process').spawnSync(
     process.execPath,

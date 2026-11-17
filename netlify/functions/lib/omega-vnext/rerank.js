@@ -205,6 +205,7 @@ function topUpFromReserve(working, news, pool) {
     reserve,
     blocked: allBlocked,
     parlayPool: (pool || []).concat(working.picks, reserve),
+    cardDate: working.date || null,
   });
   if (!finished.added.length) return finished;
   working.picks = finished.picks;
@@ -399,10 +400,15 @@ function rowOutOfBand(row) {
 }
 
 /** Stored forced order, then in-band rows ahead of out-of-band when asked. */
+function refillCardDate(card, opts) {
+  return (opts && (opts.cardDate || opts.date)) || (card && card.date) || null;
+}
+
 function orderRefillPool(pool, opts) {
   const ordered = orderForcedPool(pool || [], {
     pregameAsOfMs: opts && opts.pregameAsOfMs,
     env: opts && opts.env,
+    cardDate: opts && (opts.cardDate || opts.date) || null,
   });
   if (!opts || opts.inBandFirst !== true) return ordered;
   const inBand = [];
@@ -474,7 +480,7 @@ function publishShortV2(original, drops) {
   let parlayLegs = [];
   if (sources.length >= 2) {
     try {
-      const ticket = buildForcedParlay(sources);
+      const ticket = buildForcedParlay(sources, { cardDate: original && original.date });
       if (ticket && ticket.publish && (ticket.legs || []).length === sources.length) {
         parlayLegs = toParlay(ticket, sources.length);
       }
@@ -528,9 +534,13 @@ function refillV2Dropped(original, opts = {}) {
     if (drops.has(i)) blocked.add(g);
     else used.add(g);
   }
+  const refillOpts = {
+    ...opts,
+    cardDate: refillCardDate(original, opts),
+  };
   let ordered;
   try {
-    ordered = orderRefillPool(pool, opts);
+    ordered = orderRefillPool(pool, refillOpts);
   } catch (e) {
     console.warn(`[omega-v2] v2 refill kept card: pool order failed (${e && e.message ? e.message : 'error'})`);
     return {
@@ -574,7 +584,7 @@ function refillV2Dropped(original, opts = {}) {
   }
   let ticket;
   try {
-    ticket = buildForcedParlay(sources);
+    ticket = buildForcedParlay(sources, refillOpts);
   } catch (e) {
     console.warn(`[omega-v2] v2 refill kept card: parlay builder failed (${e && e.message ? e.message : 'error'})`);
     return {
@@ -625,7 +635,10 @@ function parlayLegsForCard(card, picks, opts) {
   if (isV2Card(card) && missingImportsC()) {
     const legs = (picks || []).map((pick) => publishedPickToLeg(pick));
     try {
-      const ticket = buildForcedParlay(legs);
+      const ticket = buildForcedParlay(legs, {
+        cardDate: (opts && opts.cardDate) || (card && card.date) || null,
+        env: opts && opts.env,
+      });
       if (!ticket || !ticket.publish || (ticket.legs || []).length !== legs.length) {
         console.warn('[omega-v2] v2 parlay kept: same-3 builder did not publish');
         return Array.isArray(card && card.parlayLegs) ? card.parlayLegs : [];

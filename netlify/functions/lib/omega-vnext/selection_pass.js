@@ -10,6 +10,7 @@
  * This module must not require gates, parlay, ingest, or hr_autocorrect.
  */
 
+const { calendarOffReason } = require('../omega-v2/same_day');
 const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
@@ -50,6 +51,7 @@ function commenceMs(c) {
 }
 
 function inSlate(commence, cardDate) {
+  if (calendarOffReason(commence, cardDate)) return false;
   if (!cardDate) return true;
   const bounds = slateBounds(cardDate);
   if (!bounds) return true;
@@ -66,6 +68,8 @@ function inSlate(commence, cardDate) {
  * missing-commenceTime: no parseable start. Verify does not drop on this.
  */
 function slateReason(c, cardDate, opts) {
+  const off = calendarOffReason(c, cardDate);
+  if (off) return off;
   if (!cardDate) return null;
   const ms = commenceMs(c);
   if (ms == null) return 'missing-commenceTime';

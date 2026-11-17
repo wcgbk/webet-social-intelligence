@@ -11,6 +11,13 @@ const { blendProb, modelProbForBlend } = require('./blend');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
 const { applyStatusVeto } = require('./status_veto');
+const { filterSameEtDay } = require('./same_day');
+
+/** Same-day filter. Flag off returns the same array. Does not log. */
+function rankPool(list, opts) {
+  const cardDate = opts && (opts.cardDate || opts.date);
+  return filterSameEtDay(list, cardDate, opts).rows;
+}
 
 /** Same placeable books as a published straight. A missing book is not a reject. */
 const PLACEABLE_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
@@ -607,7 +614,7 @@ function growthForRank(row, pBet, decimal) {
 function selectForcedTop3(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
   const cap = favCapEnabled(opts && opts.env);
-  const ranked = (annotated || [])
+  const ranked = rankPool(annotated, opts)
     .filter((c) => c && c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
     .map((c) => ({ ...c, kellyGrowth: growthForRank(c, c.pBet, c.decimal) }));
   const inBand = [];
@@ -639,7 +646,7 @@ function selectForcedTop3(annotated, opts) {
 function orderForcedPool(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
   const cap = favCapEnabled(opts && opts.env);
-  const ranked = (annotated || [])
+  const ranked = rankPool(annotated, opts)
     .filter((c) => c && c.qualified !== false && !pastPregameCutoff(c.commenceTime, asOfMs))
     .map((c) => {
       const decimal = c.decimal || americanToDecimal(c.odds);
@@ -666,7 +673,7 @@ function orderForcedPool(annotated, opts) {
 function selectStraights(annotated, opts) {
   if (forceTop3From(opts)) return selectForcedTop3(annotated, opts);
   const asOfMs = pregameClockMs(opts);
-  const ranked = (annotated || [])
+  const ranked = rankPool(annotated, opts)
     .filter((c) => c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
     .sort((a, b) => (rankEv(b) - rankEv(a)) || (b.edge - a.edge) || String(a.pick).localeCompare(String(b.pick)));
   const out = [];

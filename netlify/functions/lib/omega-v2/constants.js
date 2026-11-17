@@ -674,6 +674,23 @@ function betProbBounds(env) {
   return { lo: P_CLAMP_LEGACY_LO, hi: P_CLAMP_LEGACY_HI };
 }
 
+/**
+ * Same ET calendar day as the card. Default on.
+ * OMEGA_SAME_DAY_ONLY=off / 0 / false / no keeps every commence time
+ * the selector already kept (=off rollback, byte-identical cards).
+ * A blank value stays on, same as OMEGA_V2_BLEND_P.
+ */
+const SAME_DAY_ENV = 'OMEGA_SAME_DAY_ONLY';
+
+function sameDayOnlyEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[SAME_DAY_ENV];
+  if (raw == null || String(raw).trim() === '') return true;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
+  return true;
+}
+
 /** Closed clamp for a bet probability. Non-finite stays null. */
 function clampWinProb(p, env) {
   if (!Number.isFinite(p)) return null;
@@ -789,4 +806,6 @@ module.exports = {
   pFloorEnabled,
   betProbBounds,
   clampWinProb,
+  SAME_DAY_ENV,
+  sameDayOnlyEnabled,
 };

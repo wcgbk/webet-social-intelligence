@@ -14,6 +14,7 @@
  * (sameGameFill: true). An exhausted reserve still returns the card.
  */
 
+const { filterSameEtDay } = require('../omega-v2/same_day');
 const config = require('./config');
 const {
   MAX_STRAIGHTS,
@@ -67,6 +68,12 @@ function numericOdds(row) {
   if (typeof row.odds === 'number' && Number.isFinite(row.odds)) return row.odds;
   const n = parseInt(String(row.odds).replace(/[^0-9\-+]/g, ''), 10);
   return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+/** Flag off, or no card date, returns the same array. */
+function rowsOnCardDate(rows, opts) {
+  const cardDate = opts && (opts.cardDate || (opts.card && opts.card.date));
+  return filterSameEtDay(rows, cardDate, opts).rows;
 }
 
 function sideLabel(row) {
@@ -288,7 +295,7 @@ function topUpStraights(opts = {}) {
   const index = blockedIndex(opts.blocked);
   const usedGames = new Set(card.map((pick) => matchupKey(pick)).filter(Boolean));
   const added = [];
-  const buckets = bucketReserve(opts.reserve);
+  const buckets = bucketReserve(rowsOnCardDate(opts.reserve, opts));
   const order = ['floor', 'posLean', 'anyLean', 'paired'];
 
   const take = (entry, sameGame) => {
@@ -368,16 +375,16 @@ function buildReserve(opts = {}) {
     seen.push(row);
     ranked.push({ row, kind });
   };
-  const floors = [...(opts.yesPool || [])].filter((row) => passesPublishFloor(row)).sort(compareByEv);
+  const floors = [...rowsOnCardDate(opts.yesPool, opts)].filter((row) => passesPublishFloor(row)).sort(compareByEv);
   for (const row of floors) push(row, 'floor');
-  const leans = [...(opts.leanPool || [])].sort(compareByEv);
+  const leans = [...rowsOnCardDate(opts.leanPool, opts)].sort(compareByEv);
   for (const row of leans) {
     if (passesLeanFill(row)) push(row, 'posLean');
   }
   for (const row of leans) {
     if (eligibleForLeanPool(row)) push(row, 'anyLean');
   }
-  const paired = [...(opts.pairedPool || [])].sort(compareByEv);
+  const paired = [...rowsOnCardDate(opts.pairedPool, opts)].sort(compareByEv);
   for (const row of paired) {
     if (row && (row.pairedFill === true || eligiblePairedFill(row))) push(row, 'paired');
   }
@@ -425,7 +432,7 @@ function topUpWithPlaceability(opts = {}) {
   const maxRounds = Number.isFinite(Number(opts.maxRounds)) ? Number(opts.maxRounds) : MAX_PLACEABILITY_ROUNDS;
   const decide = typeof opts.decide === 'function' ? opts.decide : reservePlaceabilityDecision;
   let card = (opts.picks || []).slice();
-  let pool = (opts.reserve || []).slice();
+  let pool = rowsOnCardDate(opts.reserve, opts).slice();
   const blockedRows = (opts.blocked || []).slice();
   const added = [];
   const topUps = [];
@@ -438,6 +445,8 @@ function topUpWithPlaceability(opts = {}) {
       blocked: blockedRows,
       target,
       allowSameGame: opts.allowSameGame,
+      cardDate: opts.cardDate,
+      env: opts.env,
     });
     const fresh = up.added || [];
     if (!fresh.length) {
@@ -517,6 +526,7 @@ function finishV2FromPool(opts) {
     pregameAsOfMs: opts.pregameAsOfMs != null ? opts.pregameAsOfMs : Date.now(),
     allowShort: opts.postponed === true && !(ranked && ranked.length),
     inBandFirst: true,
+    cardDate: opts.cardDate || (card && card.date) || null,
   });
   if (!filled.changed) {
     return {
@@ -545,17 +555,22 @@ function finishV2FromPool(opts) {
 }
 
 function finishShortCard(opts = {}) {
-  if (opts && opts.card && v2FinishRequested(opts.card)) return finishV2FromPool(opts);
-  const target = Number.isFinite(Number(opts.target)) ? Number(opts.target) : MAX_STRAIGHTS;
-  const checking = typeof opts.decide === 'function' || opts.checkPlaceability === true;
+  const scoped = {
+    ...opts,
+    reserve: rowsOnCardDate(opts.reserve, opts),
+    parlayPool: rowsOnCardDate(opts.parlayPool, opts),
+  };
+  if (scoped && scoped.card && v2FinishRequested(scoped.card)) return finishV2FromPool(scoped);
+  const target = Number.isFinite(Number(scoped.target)) ? Number(scoped.target) : MAX_STRAIGHTS;
+  const checking = typeof scoped.decide === 'function' || scoped.checkPlaceability === true;
   const up = checking
-    ? topUpWithPlaceability(opts)
-    : topUpStraights(opts);
-  const blocked = up.blocked || opts.blocked;
-  const pool = filterBlocked(opts.parlayPool || [], blocked);
+    ? topUpWithPlaceability(scoped)
+    : topUpStraights(scoped);
+  const blocked = up.blocked || scoped.blocked;
+  const pool = filterBlocked(scoped.parlayPool || [], blocked);
   const parlayLegs = parlayFromStraights(up.picks, {
     pool,
-    hrPlaceabilityNote: opts.hrNote,
+    hrPlaceabilityNote: scoped.hrNote,
   });
   const capped = applyDailyUnitCap(up.picks, parlayLegs);
   const added = (up.added || []).map((row) => {
@@ -568,7 +583,7 @@ function finishShortCard(opts = {}) {
     parlayLegs: capped.parlayLegs,
     added,
     exhausted: capped.picks.length < target,
-    reserve: reserveLeft(opts.reserve, capped.picks, blocked),
+    reserve: reserveLeft(scoped.reserve, capped.picks, blocked),
     topUps,
     rebuilt: true,
   };
@@ -588,6 +603,8 @@ function applyGenerateReserve(opts = {}) {
     blocked: opts.blocked,
     modelVersion: opts.modelVersion,
     limit: opts.limit,
+    cardDate: opts.cardDate,
+    env: opts.env,
   });
   if (picks.length >= MAX_STRAIGHTS) {
     return {
@@ -608,6 +625,8 @@ function applyGenerateReserve(opts = {}) {
     hrNote: opts.hrNote,
     allowSameGame: opts.allowSameGame,
     target: opts.target,
+    cardDate: opts.cardDate,
+    env: opts.env,
   });
   return finished;
 }

@@ -15,6 +15,7 @@ const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
 const { narrateTextOnly } = require('./narrate_text');
 const { nbaInjuryEnabled, nhlGoalieMode, newsSnapshotEnabled } = require('../omega-v2/constants');
+const { filterSameEtDay, logSameDayDrops, sameDayMeta } = require('../omega-v2/same_day');
 const { fetchNbaInjuryReport, fetchNhlGoalieReport, bindNewsShare, clearNewsShare } = require('./status_pull');
 const { captureNewsSnapshot } = require('./news_snapshot');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -37,6 +38,14 @@ const cfb = require('./sports/cfb');
 const nba = require('./sports/nba');
 const nhl = require('./sports/nhl');
 const ncaam = require('./sports/ncaam');
+
+/** Drop off-ET-day candidates before calibration and EV. Flag off is a no-op. */
+function applySameEtDayCandidates(candidates, dateISO) {
+  const report = filterSameEtDay(candidates, dateISO);
+  if (!report.applied) return { candidates, report: null };
+  logSameDayDrops(report);
+  return { candidates: report.rows, report };
+}
 
 function countBySport(rows) {
   const out = {};
@@ -262,10 +271,14 @@ async function generateOmegaVnext(opts = {}) {
   let boardCounts = {};
   let rawCounts = {};
   let afterMiscalCounts = {};
+  let sameDayReport = null;
   if (fixtureCandidates) {
     snap = { dateISO, oddsBySport: {}, espnBySport: {} };
     candidates = fixtureCandidates.map(c => ({ ...c }));
     console.log(`[omega-vnext] fixture candidates=${candidates.length} (no ingest)`);
+    const filtered = applySameEtDayCandidates(candidates, dateISO);
+    candidates = filtered.candidates;
+    sameDayReport = filtered.report;
   } else {
     snap = await ingest(dateISO, {
       historicalSnapshot: opts.historicalSnapshot,
@@ -282,6 +295,9 @@ async function generateOmegaVnext(opts = {}) {
     candidates = projectAll(snap);
     rawCounts = countBySport(candidates);
     console.log(`[omega-vnext] raw candidates=${candidates.length}`);
+    const filtered = applySameEtDayCandidates(candidates, dateISO);
+    candidates = filtered.candidates;
+    sameDayReport = filtered.report;
 
     // Raw modelRawP vs fair above 10pp is miscalibration before shrink can hide it.
     const rawSplit = splitRawMiscalibrated(candidates);
@@ -480,6 +496,9 @@ async function generateOmegaVnext(opts = {}) {
   const edgeDiagnostics = {
     miscalibrated: preMiscalibrated.concat((prepared.diagnostics && prepared.diagnostics.miscalibrated) || []),
   };
+  if (sameDayReport && sameDayReport.applied) {
+    edgeDiagnostics.sameDay = sameDayMeta(sameDayReport, dateISO);
+  }
   console.log(`[omega-vnext] positions=${candidates.length} miscalibrated=${edgeDiagnostics.miscalibrated.length} pre=${preMiscalibrated.length}`);
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
@@ -664,6 +683,7 @@ async function generateOmegaVnext(opts = {}) {
       skipInputFetch: !!replayLike,
       nbaInjury,
       nhlGoalies,
+      sameDayLogged: !!(sameDayReport && sameDayReport.applied),
       linePolls: masterBoard ? {
         date: dateISO,
         games0300: masterBoard.games0300 || null,
@@ -886,6 +906,7 @@ async function generateOmegaVnext(opts = {}) {
       storeKey: shadow ? `omega-shadow/picks-${dateISO}` : null,
     },
   };
+  if (edgeDiagnostics.sameDay) picksData.meta.sameDay = edgeDiagnostics.sameDay;
   if (usePipelineV2) {
     picksData.model = publishedVersion;
     picksData.engine = 'omega-v2';

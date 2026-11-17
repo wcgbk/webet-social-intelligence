@@ -1,5 +1,5 @@
 # WeBet Edge: Standing Orders (single source of truth)
-Last updated: 2026-11-16 6:40 PM ET. Newest order wins. If an order below conflicts with older memory, THIS FILE wins.
+Last updated: 2026-11-17 5:43 PM ET. Newest order wins. If an order below conflicts with older memory, THIS FILE wins.
 Every change, brief, routine, or build must be checked against this list BEFORE work starts. Every Grok Build brief must include this file.
 
 ## 0. North star
@@ -19,6 +19,7 @@ Every change, brief, routine, or build must be checked against this list BEFORE 
 - Once set by 11 AM ET the picks are FINAL. No job may change, swap, or drop picks after 11 AM. Only WeBet can order a re-run. (11/16)
 - Math: p = win probability; EV = p x decimal - 1; edge = p - 1/decimal. Grades A >=3% EV, B 1–3%, C <1%. +2% EV = real edge. Quarter-Kelly stakes within caps. (11/16)
 - 1 unit = $150. KPIs in whole units and dollars, rounded up. (10/14)
+- Same-day only: candidate selection and the Odds API data it uses may only offer games played on the current ET day of the card. No next-day or earlier-day games, ever. (11/17 5:43 PM)
 
 ## 3. Shipping
 - Picks / model / grading / KPI code goes through Grok Build CLI, grok-4.7 at xhigh. (10/06)

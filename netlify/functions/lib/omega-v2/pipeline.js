@@ -23,6 +23,7 @@ const { dkHrLineAgrees, quotePoint } = require('./board');
 const { inputsLoggingEnabled, recordCandidateInputs } = require('./candidate_inputs');
 const { buildStoredRankedPool } = require('./ranked_pool');
 const { statusDiagnostics } = require('./status_veto');
+const { filterSameEtDay, filterBoardByEtDay, logSameDayDrops } = require('./same_day');
 
 const DK_HR_BOOKS = new Set(['draftkings', 'hardrockbet', 'hardrock', 'hardrockbet_oh']);
 
@@ -301,16 +302,25 @@ async function buildCard(input) {
     linePolls: linePollsPresent ? linePolls : null,
     nbaInjury: input && input.nbaInjury ? input.nbaInjury : null,
     nhlGoalies: input && input.nhlGoalies ? input.nhlGoalies : null,
+    cardDate: date || null,
   };
-  const normalized = dedupe((input.candidates || []).map(normalizeCandidate));
+  let sourceCandidates = input.candidates || [];
+  let boardBySport = input.boardBySport || null;
+  const firstPass = filterSameEtDay(sourceCandidates, date);
+  if (firstPass.applied) {
+    sourceCandidates = firstPass.rows;
+    boardBySport = filterBoardByEtDay(boardBySport, date);
+    if (!input.sameDayLogged) logSameDayDrops(firstPass);
+  }
+  const normalized = dedupe(sourceCandidates.map(normalizeCandidate));
   const prepared = [];
   const rejections = [];
   for (const cand of normalized) stageCandidate(cand, fit, asOfMs, prepared, rejections, stageOpts);
   let sportCoverage;
   try {
     sportCoverage = applySportCoverage(prepared, input.stageCounts, {
-      boardBySport: input.boardBySport || null,
-      candidates: input.candidates || [],
+      boardBySport: boardBySport || null,
+      candidates: sourceCandidates,
     });
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
@@ -369,6 +379,12 @@ async function buildCard(input) {
   const checked = await recheckPrices(bettable, input.recheck);
   for (const drop of checked.dropped) rejections.push(drop);
   const kept = checked.kept;
+  let rankedKept = kept;
+  const again = filterSameEtDay(kept, date);
+  if (again.applied) {
+    if (again.rows.length !== kept.length) logSameDayDrops(again, { skipShort: true });
+    rankedKept = again.rows;
+  }
   const priceCheck = priceCheckMeta(input, checked);
   if (priceCheck.type === 'stored-1000-consistency') {
     const at = priceCheck.boardFetchedAt == null ? '' : priceCheck.boardFetchedAt;
@@ -383,12 +399,12 @@ async function buildCard(input) {
     // with the same bet probability. Selecting here applies the favorite
     // cap, so a price that crossed below -300 does not stay on the card
     // while an in-band replacement is still in the kept pool.
-    straights = sizeForcedStraights(selectForcedTop3(kept, pregameOpts));
-    sizedParlay = buildForcedParlay(straights);
-    parlayPoolLegs = kept.filter((cand) => cand.parlayQualified && quotedLeg(cand));
+    straights = sizeForcedStraights(selectForcedTop3(rankedKept, pregameOpts));
+    sizedParlay = buildForcedParlay(straights, pregameOpts);
+    parlayPoolLegs = rankedKept.filter((cand) => cand.parlayQualified && quotedLeg(cand));
   } else {
-    straights = sizeStraights(selectStraights(kept.filter((cand) => cand.qualified), pregameOpts));
-    const parlayKept = kept.filter((cand) => cand.parlayQualified);
+    straights = sizeStraights(selectStraights(rankedKept.filter((cand) => cand.qualified), pregameOpts));
+    const parlayKept = rankedKept.filter((cand) => cand.parlayQualified);
     for (const skip of legEvSkips(parlayKept)) rejections.push(skip);
     for (const skip of legBookSkips(parlayKept)) rejections.push(skip);
     parlayPoolLegs = parlayKept.filter((cand) => !legFailsPriceEv(cand) && quotedLeg(cand));
@@ -483,7 +499,7 @@ async function buildCard(input) {
   };
   // Additive only. Flag off leaves the key off the card.
   if (forceTop3) {
-    const rankedPool = buildStoredRankedPool(kept, straights, pregameOpts);
+    const rankedPool = buildStoredRankedPool(rankedKept, straights, pregameOpts);
     if (Array.isArray(rankedPool)) card.rankedPool = rankedPool;
   }
   const statusDiag = statusDiagnostics(annotated, pregameOpts);

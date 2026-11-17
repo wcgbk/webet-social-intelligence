@@ -4,6 +4,13 @@ const {
   PARLAY_STAKE_CAP, CARD_BUDGET,
 } = require('./constants');
 const { marketFamily, gameKey, normTeam, pastPregameCutoff, pregameClockMs } = require('./select');
+const { filterSameEtDay } = require('./same_day');
+
+/** Flag off returns the same array. A bad card date does not drop. */
+function sameDayLegs(pool, opts) {
+  const cardDate = opts && (opts.cardDate || opts.date);
+  return filterSameEtDay(pool, cardDate, opts).rows;
+}
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { roundQuarter, stakeUsd, sumUnits, quarterKellyFromDecimal } = require('./size');
 
@@ -331,7 +338,7 @@ function legBookSkips(pool) {
 function usableLegs(pool, opts) {
   const asOfMs = pregameClockMs(opts);
   const out = [];
-  for (const raw of pool || []) {
+  for (const raw of sameDayLegs(pool, opts)) {
     const leg = quotedLeg(raw);
     if (!leg) continue;
     if (pastPregameCutoff(leg.commenceTime, asOfMs)) continue;
@@ -388,7 +395,7 @@ function chooseTicket(pool, opts) {
  */
 function sizeParlay(pool, straights, opts) {
   const asOfMs = pregameClockMs(opts);
-  const pregame = (pool || []).filter((leg) => !pastPregameCutoff(leg.commenceTime, asOfMs));
+  const pregame = sameDayLegs(pool, opts).filter((leg) => !pastPregameCutoff(leg.commenceTime, asOfMs));
   const filtered = pregame.filter((leg) => !conflictsWithAnyStraight(leg, straights));
   const placeable = filtered.filter((leg) => quotedLeg(leg));
   const ranked = rankedTickets(placeable, opts);
@@ -439,8 +446,8 @@ function sizeParlay(pool, straights, opts) {
  * product of leg pBet. Stake is quarter-Kelly on that joint, floored at
  * 0.25u even when full Kelly is not positive, capped at 1u.
  */
-function buildForcedParlay(straights) {
-  const legs = (straights || []).filter((leg) => leg && leg.skipped !== true).slice(0, 3);
+function buildForcedParlay(straights, opts) {
+  const legs = sameDayLegs(straights, opts).filter((leg) => leg && leg.skipped !== true).slice(0, 3);
   if (legs.length < 2) {
     return {
       publish: false,

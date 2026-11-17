@@ -78,6 +78,7 @@ function enforceHardFailGate(card) {
     reserve,
     blocked,
     parlayPool: pool,
+    cardDate: card && card.date,
     ...(dropIndexes.size ? { card, dropIndexes, postponed } : {}),
   });
   if (finished.keptOriginal) return { card, changed: false, report };

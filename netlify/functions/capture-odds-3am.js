@@ -9,6 +9,7 @@
 const { runOddsMasterPull } = require('./lib/odds-master/pull');
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 const { closesAt3amEnabled } = require('./lib/default_on_flag');
+const { forceOverride, readBody } = require('./lib/slot-lock');
 
 const CLOSE_TIMEOUT_MS = 2500;
 
@@ -42,6 +43,26 @@ async function fireCloses(env, fetchImpl) {
   }
 }
 
+function pullArgs(event, deps, slot) {
+  const env = (deps && deps.env) || process.env;
+  const qs = (event && event.queryStringParameters) || {};
+  const body = readBody(event);
+  const args = {
+    slot,
+    env,
+    force: !!(deps && deps.force) || forceOverride(event, env),
+  };
+  if (deps && deps.now) args.now = deps.now instanceof Date ? deps.now : new Date(deps.now);
+  if (deps && deps.read) args.read = deps.read;
+  if (deps && deps.write) args.write = deps.write;
+  if (deps && deps.oddsFetch) args.fetchImpl = deps.oddsFetch;
+  if (deps && deps.apiKey) args.apiKey = deps.apiKey;
+  if (deps && deps.lockStore) args.lockStore = deps.lockStore;
+  const dateISO = (deps && deps.dateISO) || qs.date || body.date;
+  if (dateISO) args.dateISO = String(dateISO);
+  return args;
+}
+
 async function runCapture(event, deps) {
   const env = (deps && deps.env) || process.env;
   const fetchImpl = (deps && deps.fetch) || fetch;
@@ -49,9 +70,16 @@ async function runCapture(event, deps) {
   let pullResult = null;
   let pullError = null;
   try {
-    pullResult = await pull({ slot: '0300' });
+    pullResult = await pull(pullArgs(event, deps, '0300'));
   } catch (err) {
     pullError = err;
+  }
+  if (!pullError && pullResult && pullResult.skipped) {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: true, skipped: pullResult.skipped, slot: '0300', date: pullResult.date || null }),
+    };
   }
   let closes = null;
   try {

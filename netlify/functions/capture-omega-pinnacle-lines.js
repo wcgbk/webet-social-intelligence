@@ -9,13 +9,24 @@
  *  refused, so this file can never become a third paid pull. */
 const { runOddsMasterPull } = require('./lib/odds-master/pull');
 const { hhmmET, etDateISO } = require('./lib/omega-vnext/line_path');
+const { forceOverride } = require('./lib/slot-lock');
 exports.handler = async (event) => {
   const qs = (event && event.queryStringParameters) || {};
   const slot = qs.slot === '0300' || qs.slot === '1000' ? qs.slot : (hhmmET() === '0300' ? '0300' : hhmmET() === '1000' ? '1000' : null);
   if (!slot) return { statusCode: 200, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ok: true, skipped: 'slot', message: 'odds-master pulls run at 0300/1000 ET via capture-odds-3am/capture-odds-10am' }) };
-  try { const r = await runOddsMasterPull({ slot, dateISO: qs.date || etDateISO() });
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, ...r }) }; }
+  try {
+    const r = await runOddsMasterPull({
+      slot,
+      dateISO: qs.date || etDateISO(),
+      env: process.env,
+      force: forceOverride(event, process.env),
+    });
+    if (r && r.skipped) {
+      return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, skipped: r.skipped, slot, date: r.date || null }) };
+    }
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, ...r }) };
+  }
   catch (e) { return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: false, error: e.message }) }; }
 };
 exports.handleCapture = exports.handler;

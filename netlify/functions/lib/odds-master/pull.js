@@ -17,6 +17,8 @@
  *  18 per day. Stated, not measured — no live pull was fired to
  *  write this code. Games stored are the pull date's ET slate. */
 const { readJson, writeJson } = require('./store');
+const { pullSlotLockEnabled } = require('../default_on_flag');
+const { guardPullSlot } = require('../slot-lock');
 const SPORTS = [
   ['NFL', 'americanfootball_nfl'], ['NCAAF', 'americanfootball_ncaaf'],
   ['NHL', 'icehockey_nhl'], ['NBA', 'basketball_nba'],
@@ -81,8 +83,26 @@ async function runOddsMasterPull(opts = {}) {
   if (!['0300', '1000'].includes(slot)) throw new Error(`odds-master pull: slot must be 0300 or 1000, got ${slot}`);
   const now = opts.now instanceof Date ? opts.now : new Date();
   const dateISO = opts.dateISO || etDateISO(now);
+  const env = opts.env || process.env;
+  const read = opts.read || readJson;
+  const write = opts.write || writeJson;
+  // Before any Odds API request. A scheduler retry (~15s, up to 3) that
+  // arrives while this slot is in progress or already written is a no-op.
+  if (pullSlotLockEnabled(env)) {
+    const skip = await guardPullSlot({
+      enabled: true,
+      force: !!opts.force,
+      read,
+      write,
+      dateISO,
+      slot,
+      now,
+      store: opts.lockStore,
+    });
+    if (skip) return skip;
+  }
   const at = now.toISOString();
-  const apiKey = opts.apiKey || process.env.ODDS_API_KEY;
+  const apiKey = opts.apiKey || (env && env.ODDS_API_KEY) || process.env.ODDS_API_KEY;
   if (!apiKey) throw new Error('ODDS_API_KEY missing');
   const fetchImpl = opts.fetchImpl || fetch;
   const eventsBySport = {};
@@ -96,7 +116,6 @@ async function runOddsMasterPull(opts = {}) {
     } catch (e) { errors.push(`${label}: ${e.message}`); eventsBySport[label] = []; }
   }
   const { writes, events, summary } = planWrites(eventsBySport, slot, at, dateISO);
-  const read = opts.read || readJson; const write = opts.write || writeJson;
   // Index merges first (read-modify-write), then price/raw blobs.
   await mapLimit(writes.filter(w => w.merge), 8, async (w) => {
     const prev = (await read(w.key)) || {};

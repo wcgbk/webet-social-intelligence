@@ -704,6 +704,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (cardLock.status !== 0) throw new Error('card lock gate failed');
+
+  const pullSlotLock = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-pull-slot-lock.js')],
+    { stdio: 'inherit' }
+  );
+  if (pullSlotLock.status !== 0) throw new Error('pull slot lock gate failed');
 }
 
 function pickSlim(card) {

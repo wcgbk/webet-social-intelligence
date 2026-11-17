@@ -8,7 +8,8 @@ const {
   gradePowerClv,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
-const { defaultOnFlag, closesAt3amEnabled } = require('./lib/default_on_flag');
+const { defaultOnFlag, closesAt3amEnabled, pullSlotLockEnabled } = require('./lib/default_on_flag');
+const { forceOverride, trackLockKey, guardDateLock } = require('./lib/slot-lock');
 const { loadStoredEventsForSport } = require('./lib/closes-3am');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
@@ -1006,6 +1007,7 @@ async function handle(event, deps) {
     if (!body || typeof body !== 'object') body = {};
     const now = (deps && deps.now) ? new Date(deps.now) : new Date();
     const estOffset = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const etHour = estOffset.getHours();
     const explicitDate = body.date || params.date || null;
     const dateISO = explicitDate || estOffset.toISOString().split('T')[0];
     const nowMs = Date.now();
@@ -1013,13 +1015,34 @@ async function handle(event, deps) {
     const storedMode = storedRequested || closesAt3amEnabled(env);
     const wantSweep = body.sweep === true || params.sweep === '1' || params.sweep === 'true';
 
+    // 3 AM path: fired by capture-closes-3am-background (stored closes + sweep)
+    // or a morning run with no explicit date. A scheduler retry is a no-op.
+    const morningSettle = storedRequested || wantSweep || (!explicitDate && etHour < 12);
+    if (morningSettle && pullSlotLockEnabled(env)) {
+      const lockSkip = await guardDateLock({
+        enabled: true,
+        force: !!(deps && deps.force) || forceOverride(event, env),
+        read: deps && deps.lockRead,
+        write: deps && deps.lockWrite,
+        key: trackLockKey(dateISO),
+        now,
+        label: 'track-clv',
+      });
+      if (lockSkip) {
+        return {
+          statusCode: 200,
+          headers: CORS,
+          body: JSON.stringify({ ok: true, skipped: lockSkip.skipped, date: dateISO }),
+        };
+      }
+    }
+
     console.log(`[track-clv] Tracking CLV for date: ${dateISO}`);
 
     // Morning runs also settle YESTERDAY's picks — evening games finish after the last
     // same-day run (7pm ET). This next-morning pass also captures yesterday's TRUE closes
     // from closes already stored. OMEGA_CLOSES_AT_3AM (default on) reads those closes
     // and does not call the Odds API, and does not POST to legacy track-clv.
-    const etHour = estOffset.getHours();
     const morningWindow = !explicitDate && etHour < 12;
     if (wantSweep || morningWindow) {
       // Settle recent days INLINE and AWAITED. The old fire-and-forget self-POST usually died
@@ -1035,7 +1058,7 @@ async function handle(event, deps) {
         try {
           const swPicks = await loadPicksData(swISO, storeImpl);
           if (!swPicks || !Array.isArray(swPicks.picks) || !swPicks.picks.length) continue;
-          const n = await settleResultsForDate(swISO, swPicks);
+          const n = await settleResultsForDate(swISO, swPicks, deps);
           if (n > 0) console.log(`[track-clv] Sweep settled ${n} picks for ${swISO}`);
         } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
       }
@@ -1109,7 +1132,7 @@ async function handle(event, deps) {
     // ── Step 1.5: Settle results FIRST. The per-pick historical close capture below is the
     // slow part of this sync function; if it times out, grading must already be on disk.
     try {
-      const early = await settleResultsForDate(dateISO, picksData);
+      const early = await settleResultsForDate(dateISO, picksData, deps);
       if (early > 0) console.log(`[track-clv] Early-settled ${early} picks for ${dateISO}`);
     } catch (e) { console.log(`[track-clv] Early settle failed (non-fatal): ${e.message}`); }
 

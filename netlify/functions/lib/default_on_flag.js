@@ -2,7 +2,7 @@
 
 /**
  * Default on. Unset or blank stays on.
- * off, 0, and false turn it off.
+ * off, 0, false, and no turn it off.
  * Pass env in tests. Omit it to read process.env.
  */
 function defaultOnFlag(name, env) {
@@ -10,7 +10,7 @@ function defaultOnFlag(name, env) {
   const raw = source[name];
   if (raw == null || String(raw).trim() === '') return true;
   const text = String(raw).trim().toLowerCase();
-  return text !== 'off' && text !== '0' && text !== 'false';
+  return text !== 'off' && text !== '0' && text !== 'false' && text !== 'no';
 }
 
 function verifyCleanStampEnabled(env) {
@@ -50,6 +50,24 @@ function closesHistoricalEnabled(env) {
   return text === 'on' || text === '1' || text === 'true' || text === 'yes';
 }
 
+/** One pull per ET date and slot. off / 0 / false / no restores the unlocked pull. */
+function pullSlotLockEnabled(env) {
+  return defaultOnFlag('OMEGA_PULL_SLOT_LOCK', env);
+}
+
+/**
+ * Drop columns clv.games / clv.odds_snapshots do not have before the Supabase post.
+ * off / 0 / false / no sends the payload unchanged.
+ */
+function closesSupaWhitelistEnabled(env) {
+  return defaultOnFlag('OMEGA_CLOSES_SUPA_WHITELIST', env);
+}
+
+/** Re-upsert clv.daily_results from the graded day. off / 0 / false / no keeps the cache-only mirror. */
+function dailyResultsResyncEnabled(env) {
+  return defaultOnFlag('OMEGA_DAILY_RESULTS_RESYNC', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -58,4 +76,7 @@ module.exports = {
   ncaamGradeEnabled,
   closesAt3amEnabled,
   closesHistoricalEnabled,
+  pullSlotLockEnabled,
+  closesSupaWhitelistEnabled,
+  dailyResultsResyncEnabled,
 };

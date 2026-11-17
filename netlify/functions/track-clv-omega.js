@@ -9,7 +9,7 @@ const {
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { defaultOnFlag, closesAt3amEnabled, pullSlotLockEnabled, dailyResultsResyncEnabled } = require('./lib/default_on_flag');
-const { forceOverride, trackLockKey, guardDateLock } = require('./lib/slot-lock');
+const { forceOverride, trackLockKey, guardDateLock, releaseHeldLock } = require('./lib/slot-lock');
 const { loadStoredEventsForSport } = require('./lib/closes-3am');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
@@ -1016,6 +1016,7 @@ async function handle(event, deps) {
   const env = (deps && deps.env) || process.env;
   const fetchImpl = (deps && deps.fetch) || fetch;
   const storeImpl = (deps && deps.store) || null;
+  let heldLock = null;
 
   try {
     // Determine date — default to today ET
@@ -1048,13 +1049,14 @@ async function handle(event, deps) {
         now,
         label: 'track-clv',
       });
-      if (lockSkip) {
+      if (lockSkip && lockSkip.skipped) {
         return {
           statusCode: 200,
           headers: CORS,
           body: JSON.stringify({ ok: true, skipped: lockSkip.skipped, date: dateISO }),
         };
       }
+      if (lockSkip && lockSkip.holder) heldLock = lockSkip;
     }
 
     console.log(`[track-clv] Tracking CLV for date: ${dateISO}`);
@@ -1616,6 +1618,14 @@ async function handle(event, deps) {
     };
 
   } catch (err) {
+    if (heldLock && heldLock.holder) {
+      await releaseHeldLock({
+        read: deps && deps.lockRead,
+        write: deps && deps.lockWrite,
+        key: heldLock.key,
+        holder: heldLock.holder,
+      });
+    }
     console.error('[track-clv] Error:', err.message, err.stack);
     return {
       statusCode: 500,

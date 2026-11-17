@@ -8,7 +8,7 @@ const cap10 = require('./netlify/functions/capture-odds-10am');
 const closes = require('./netlify/functions/capture-closes-3am-background');
 const track = require('./netlify/functions/track-clv-omega');
 const { SPORTS } = require('./netlify/functions/lib/odds-master/pull');
-const { pullLockKey, closesLockKey, trackLockKey, LOCK_TTL_MS } = require('./netlify/functions/lib/slot-lock');
+const { pullLockKey, closesLockKey, trackLockKey, LOCK_TTL_MS, fresh } = require('./netlify/functions/lib/slot-lock');
 
 const PER_PULL = SPORTS.length;
 const DATE = '2026-11-17';
@@ -70,7 +70,7 @@ function pullDeps(kv, extra) {
     dateISO: DATE,
     now: (extra && extra.now) || T0,
     read: extra && extra.read ? extra.read : (key) => kv.read(key),
-    write: (key, value) => kv.write(key, value),
+    write: extra && extra.write ? extra.write : (key, value) => kv.write(key, value),
     apiKey: 'test-key',
     oddsFetch: async (url) => {
       const href = String(url);
@@ -117,6 +117,7 @@ async function main() {
     assert.ok(a.closesHit[0].includes('/capture-closes-3am-background'));
     const done = await kv.read(`pulls/${DATE}/0300`);
     assert.strictEqual(typeof done.at, 'string');
+    assert.strictEqual(fresh(await kv.read(pullLockKey(DATE, '0300')), T0.getTime() + 30000, LOCK_TTL_MS), true);
   });
 
   await check('10 AM slot locks the same way and does not fire closes', async () => {
@@ -277,7 +278,7 @@ async function main() {
     }
     assert.strictEqual(tracks.length, 1);
     assert.strictEqual(odds.length, 0);
-    assert.ok(await kv.read(closesLockKey('2026-11-16')));
+    assert.strictEqual(fresh(await kv.read(closesLockKey('2026-11-16')), T0.getTime() + 30000, LOCK_TTL_MS), true);
 
     const trackHits = [];
     const store = { async get() { return null; } };
@@ -298,7 +299,212 @@ async function main() {
       else assert.strictEqual(body.skipped, 'slot-locked');
     }
     assert.ok(trackHits.every((url) => !url.includes('the-odds-api.com')));
-    assert.ok(await kv.read(trackLockKey('2026-11-16')));
+    assert.strictEqual(fresh(await kv.read(trackLockKey('2026-11-16')), T0.getTime() + 30000, LOCK_TTL_MS), true);
+  });
+
+  function dataWriteThrows(kv) {
+    return async (key, value) => {
+      if (String(key).startsWith('locks/')) return kv.write(key, value);
+      throw new Error('blob write error');
+    };
+  }
+
+  await check('a holder throw releases the pull lock and the next invocation runs', async () => {
+    const kv = memKv();
+    const failing = pullDeps(kv, { write: dataWriteThrows(kv) });
+    const first = json(await cap3.handle({ headers: {} }, failing.deps));
+    assert.strictEqual(first.ok, false);
+    assert.match(first.error, /blob write error/);
+    const released = await kv.read(pullLockKey(DATE, '0300'));
+    assert.strictEqual(fresh(released, T0.getTime() + 15000, LOCK_TTL_MS), false);
+    assert.strictEqual(released.released, true);
+    const next = pullDeps(kv, { now: new Date(T0.getTime() + 15000) });
+    const second = json(await cap3.handle({ headers: {} }, next.deps));
+    assert.strictEqual(second.ok, true);
+    assert.strictEqual(second.skipped, undefined);
+    assert.strictEqual(next.odds.length, PER_PULL);
+    assert.strictEqual(typeof (await kv.read(`pulls/${DATE}/0300`)).at, 'string');
+  });
+
+  await check('a failed release does not clobber another holder lock', async () => {
+    const kv = memKv();
+    const other = {
+      holder: 'other-holder',
+      acquiredAt: T0.toISOString(),
+      ttlMs: LOCK_TTL_MS,
+    };
+    const failing = pullDeps(kv, {
+      write: async (key, value) => {
+        if (String(key).startsWith('locks/')) return kv.write(key, value);
+        await kv.write(pullLockKey(DATE, '0300'), other);
+        throw new Error('blob write error');
+      },
+    });
+    const first = json(await cap3.handle({ headers: {} }, failing.deps));
+    assert.strictEqual(first.ok, false);
+    assert.match(first.error, /blob write error/);
+    const lock = await kv.read(pullLockKey(DATE, '0300'));
+    assert.deepStrictEqual(lock, other);
+    const next = pullDeps(kv, { now: new Date(T0.getTime() + 15000) });
+    const second = json(await cap3.handle({ headers: {} }, next.deps));
+    assert.strictEqual(second.skipped, 'slot-locked');
+    assert.strictEqual(next.odds.length, 0);
+    assert.deepStrictEqual(await kv.read(pullLockKey(DATE, '0300')), other);
+  });
+
+  await check('a release write failure is logged and the original error is returned', async () => {
+    const kv = memKv();
+    let lockWrites = 0;
+    const errors = [];
+    const orig = console.error;
+    console.error = (...args) => { errors.push(args.map(String).join(' ')); };
+    try {
+      const failing = pullDeps(kv, {
+        write: async (key, value) => {
+          if (String(key).startsWith('locks/')) {
+            lockWrites += 1;
+            if (lockWrites > 1) throw new Error('release write failed');
+            return kv.write(key, value);
+          }
+          throw new Error('blob write error');
+        },
+      });
+      const first = json(await cap3.handle({ headers: {} }, failing.deps));
+      assert.strictEqual(first.ok, false);
+      assert.match(first.error, /blob write error/);
+      assert.ok(errors.some((line) => /release failed/.test(line)));
+      assert.strictEqual(fresh(await kv.read(pullLockKey(DATE, '0300')), T0.getTime() + 15000, LOCK_TTL_MS), true);
+      const next = pullDeps(kv, { now: new Date(T0.getTime() + 15000) });
+      const second = json(await cap3.handle({ headers: {} }, next.deps));
+      assert.strictEqual(second.skipped, 'slot-locked');
+      assert.strictEqual(next.odds.length, 0);
+    } finally {
+      console.error = orig;
+    }
+  });
+
+  await check('closes and track-clv release their date lock when the holder throws', async () => {
+    const kv = memKv();
+    const event = {
+      headers: { 'x-picks-secret': 'secret' },
+      body: JSON.stringify({ scheduled: true }),
+    };
+    const env = {
+      PICKS_SECRET_KEY: 'secret',
+      OMEGA_PULL_SLOT_LOCK: 'on',
+      OMEGA_CLOSES_AT_3AM: 'on',
+      OMEGA_CLOSES_HISTORICAL: 'off',
+    };
+    const blobs = {
+      async get() { return null; },
+      async set() { return true; },
+      async list() { return []; },
+    };
+    const boomSlate = {
+      [Symbol.iterator]() { throw new Error('blob write error'); },
+    };
+    const errors = [];
+    const orig = console.error;
+    console.error = (...args) => { errors.push(args.map(String).join(' ')); };
+    try {
+      const first = json(await closes.handle(event, {
+        env,
+        now: T0,
+        lockRead: (key) => kv.read(key),
+        lockWrite: (key, value) => kv.write(key, value),
+        blobs,
+        slateEvents: boomSlate,
+        card: { picks: [] },
+        skipGrade: true,
+        skipMirror: true,
+        skipTrack: true,
+      }));
+      assert.strictEqual(first.ok, false);
+      assert.match(first.error, /blob write error/);
+      assert.strictEqual(fresh(await kv.read(closesLockKey('2026-11-16')), T0.getTime() + 15000, LOCK_TTL_MS), false);
+      const second = json(await closes.handle(event, {
+        env,
+        now: new Date(T0.getTime() + 15000),
+        lockRead: (key) => kv.read(key),
+        lockWrite: (key, value) => kv.write(key, value),
+        blobs,
+        slateEvents: [],
+        card: { picks: [] },
+        skipGrade: true,
+        skipMirror: true,
+        invokeTrack: async () => ({ ok: true, status: 200 }),
+        writeRows: async () => ({ games: 0, odds_snapshots: 0, requests: 0 }),
+        fetch: async (url) => { throw new Error('odds ' + url); },
+      }));
+      assert.strictEqual(second.skipped, undefined);
+      assert.strictEqual(second.calls, 0);
+      const third = json(await closes.handle(event, {
+        env,
+        now: new Date(T0.getTime() + 30000),
+        lockRead: (key) => kv.read(key),
+        lockWrite: (key, value) => kv.write(key, value),
+        blobs,
+        slateEvents: [],
+        card: { picks: [] },
+        skipGrade: true,
+        skipMirror: true,
+        skipTrack: true,
+      }));
+      assert.strictEqual(third.skipped, 'slot-locked');
+
+      let servePicks = true;
+      const store = {
+        async get(key) {
+          if (servePicks && key === 'picks-2026-11-16') {
+            return { picks: [{ pick: 'Home', matchup: 'A @ B', sport: 'NFL', odds: -110, betType: 'ML' }] };
+          }
+          return null;
+        },
+      };
+      const storedEventsBySport = {};
+      Object.defineProperty(storedEventsBySport, 'americanfootball_nfl', {
+        enumerable: true,
+        get() { throw new Error('blob write error'); },
+      });
+      const trackEvent = {
+        headers: {},
+        body: JSON.stringify({ date: '2026-11-16', storedCloses: true, sweep: true }),
+      };
+      const trackEnv = {
+        OMEGA_PULL_SLOT_LOCK: 'on',
+        OMEGA_CLOSES_AT_3AM: 'on',
+        OMEGA_CLV_TRUE_CLOSE: 'off',
+        OMEGA_DAILY_RESULTS_RESYNC: 'off',
+      };
+      const trackDeps = {
+        env: trackEnv,
+        now: T0,
+        store,
+        lockRead: (key) => kv.read(key),
+        lockWrite: (key, value) => kv.write(key, value),
+        storedEventsBySport,
+        fetchESPNScores: async () => [],
+        fetch: async (url) => { throw new Error('net ' + url); },
+      };
+      const trackFail = json(await track.handle(trackEvent, trackDeps));
+      assert.strictEqual(trackFail.error, true);
+      assert.match(trackFail.message, /blob write error/);
+      assert.strictEqual(fresh(await kv.read(trackLockKey('2026-11-16')), T0.getTime() + 15000, LOCK_TTL_MS), false);
+      servePicks = false;
+      const trackNext = json(await track.handle(trackEvent, Object.assign({}, trackDeps, {
+        now: new Date(T0.getTime() + 15000),
+        storedEventsBySport: { americanfootball_nfl: [] },
+      })));
+      assert.notStrictEqual(trackNext.skipped, 'slot-locked');
+      assert.match(trackNext.message, /No picks found/);
+      const trackThird = json(await track.handle(trackEvent, Object.assign({}, trackDeps, {
+        now: new Date(T0.getTime() + 30000),
+        storedEventsBySport: { americanfootball_nfl: [] },
+      })));
+      assert.strictEqual(trackThird.skipped, 'slot-locked');
+    } finally {
+      console.error = orig;
+    }
   });
 
   if (failed) {

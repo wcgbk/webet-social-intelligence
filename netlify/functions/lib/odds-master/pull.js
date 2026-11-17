@@ -18,7 +18,7 @@
  *  write this code. Games stored are the pull date's ET slate. */
 const { readJson, writeJson } = require('./store');
 const { pullSlotLockEnabled } = require('../default_on_flag');
-const { guardPullSlot } = require('../slot-lock');
+const { guardPullSlot, releaseHeldLock } = require('../slot-lock');
 const SPORTS = [
   ['NFL', 'americanfootball_nfl'], ['NCAAF', 'americanfootball_ncaaf'],
   ['NHL', 'icehockey_nhl'], ['NBA', 'basketball_nba'],
@@ -88,6 +88,8 @@ async function runOddsMasterPull(opts = {}) {
   const write = opts.write || writeJson;
   // Before any Odds API request. A scheduler retry (~15s, up to 3) that
   // arrives while this slot is in progress or already written is a no-op.
+  // A thrown run releases the lock so that retry is not skipped as slot-locked.
+  let held = null;
   if (pullSlotLockEnabled(env)) {
     const skip = await guardPullSlot({
       enabled: true,
@@ -99,39 +101,45 @@ async function runOddsMasterPull(opts = {}) {
       now,
       store: opts.lockStore,
     });
-    if (skip) return skip;
+    if (skip && skip.skipped) return skip;
+    if (skip && skip.holder) held = skip;
   }
-  const at = now.toISOString();
-  const apiKey = opts.apiKey || (env && env.ODDS_API_KEY) || process.env.ODDS_API_KEY;
-  if (!apiKey) throw new Error('ODDS_API_KEY missing');
-  const fetchImpl = opts.fetchImpl || fetch;
-  const eventsBySport = {};
-  const errors = [];
-  for (const [label, key] of SPORTS) {
-    try {
-      const url = `https://api.the-odds-api.com/v4/sports/${key}/odds?regions=${REGIONS}&markets=${MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
-      const resp = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
-      if (!resp.ok) throw new Error(`Odds ${key} HTTP ${resp.status}`);
-      eventsBySport[label] = await resp.json();
-    } catch (e) { errors.push(`${label}: ${e.message}`); eventsBySport[label] = []; }
+  try {
+    const at = now.toISOString();
+    const apiKey = opts.apiKey || (env && env.ODDS_API_KEY) || process.env.ODDS_API_KEY;
+    if (!apiKey) throw new Error('ODDS_API_KEY missing');
+    const fetchImpl = opts.fetchImpl || fetch;
+    const eventsBySport = {};
+    const errors = [];
+    for (const [label, key] of SPORTS) {
+      try {
+        const url = `https://api.the-odds-api.com/v4/sports/${key}/odds?regions=${REGIONS}&markets=${MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
+        const resp = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
+        if (!resp.ok) throw new Error(`Odds ${key} HTTP ${resp.status}`);
+        eventsBySport[label] = await resp.json();
+      } catch (e) { errors.push(`${label}: ${e.message}`); eventsBySport[label] = []; }
+    }
+    const { writes, events, summary } = planWrites(eventsBySport, slot, at, dateISO);
+    // Index merges first (read-modify-write), then price/raw blobs.
+    await mapLimit(writes.filter(w => w.merge), 8, async (w) => {
+      const prev = (await read(w.key)) || {};
+      const next = { ...prev, sport: w.merge.sport, eventId: w.merge.eventId, homeTeam: w.merge.homeTeam, awayTeam: w.merge.awayTeam, commenceTime: w.merge.commenceTime,
+        books: [...new Set([...(prev.books || []), ...w.merge.books])] };
+      if (slot === '0300') next.baseline0300 = { at };
+      else next.checks = { ...(prev.checks || {}), '1000': { at } };
+      await write(w.key, next);
+    });
+    await mapLimit(writes.filter(w => !w.merge), 8, async (w) => { await write(w.key, w.data); });
+    const prevDate = (await read(`by-date/${dateISO}`)) || { date: dateISO, events: [] };
+    const byId = new Map((prevDate.events || []).map(e => [String(e.eventId), e]));
+    for (const e of events) byId.set(String(e.eventId), e);
+    await write(`by-date/${dateISO}`, { date: dateISO, events: [...byId.values()], updatedAt: at });
+    const pullDoc = { date: dateISO, slot, at, games: summary.games, sports: summary.sports, books: summary.books, errors };
+    await write(`pulls/${dateISO}/${slot}`, pullDoc);
+    return pullDoc;
+  } catch (err) {
+    if (held) await releaseHeldLock({ read, write, key: held.key, holder: held.holder });
+    throw err;
   }
-  const { writes, events, summary } = planWrites(eventsBySport, slot, at, dateISO);
-  // Index merges first (read-modify-write), then price/raw blobs.
-  await mapLimit(writes.filter(w => w.merge), 8, async (w) => {
-    const prev = (await read(w.key)) || {};
-    const next = { ...prev, sport: w.merge.sport, eventId: w.merge.eventId, homeTeam: w.merge.homeTeam, awayTeam: w.merge.awayTeam, commenceTime: w.merge.commenceTime,
-      books: [...new Set([...(prev.books || []), ...w.merge.books])] };
-    if (slot === '0300') next.baseline0300 = { at };
-    else next.checks = { ...(prev.checks || {}), '1000': { at } };
-    await write(w.key, next);
-  });
-  await mapLimit(writes.filter(w => !w.merge), 8, async (w) => { await write(w.key, w.data); });
-  const prevDate = (await read(`by-date/${dateISO}`)) || { date: dateISO, events: [] };
-  const byId = new Map((prevDate.events || []).map(e => [String(e.eventId), e]));
-  for (const e of events) byId.set(String(e.eventId), e);
-  await write(`by-date/${dateISO}`, { date: dateISO, events: [...byId.values()], updatedAt: at });
-  const pullDoc = { date: dateISO, slot, at, games: summary.games, sports: summary.sports, books: summary.books, errors };
-  await write(`pulls/${dateISO}/${slot}`, pullDoc);
-  return pullDoc;
 }
 module.exports = { runOddsMasterPull, planWrites, sidesFor, SPORTS, REGIONS, MARKETS };

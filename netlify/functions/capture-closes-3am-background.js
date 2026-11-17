@@ -28,7 +28,7 @@
 const S = require('./lib/clv-supabase');
 const C = require('./lib/closes-3am');
 const { closesAt3amEnabled, pullSlotLockEnabled } = require('./lib/default_on_flag');
-const { forceOverride, closesLockKey, guardDateLock } = require('./lib/slot-lock');
+const { forceOverride, closesLockKey, guardDateLock, releaseHeldLock } = require('./lib/slot-lock');
 
 const TRACK_TIMEOUT_MS = 60000;
 const MIRROR_BUDGET_MS = 20000;
@@ -122,6 +122,7 @@ async function handle(event, deps) {
   const missingGames = !scheduled && (truthy(body.missingGames) || truthy(qs.missingGames));
   const replayArchives = !scheduled && (truthy(body.replayArchives) || truthy(qs.replayArchives));
   const forced = !!(options && options.force) || forceOverride(event, env);
+  let held = null;
   if (pullSlotLockEnabled(env)) {
     const lockSkip = await guardDateLock({
       enabled: true,
@@ -132,7 +133,8 @@ async function handle(event, deps) {
       now,
       label: 'closes-3am',
     });
-    if (lockSkip) return S.json(200, { ok: true, skipped: lockSkip.skipped, date: String(date) });
+    if (lockSkip && lockSkip.skipped) return S.json(200, { ok: true, skipped: lockSkip.skipped, date: String(date) });
+    if (lockSkip && lockSkip.holder) held = lockSkip;
   }
   const fetchImpl = options.fetch || fetch;
   const blobs = options.blobs || S.blobClient(env, fetchImpl);
@@ -166,6 +168,14 @@ async function handle(event, deps) {
       requestsRemaining: options.requestsRemaining,
     });
   } catch (err) {
+    if (held) {
+      await releaseHeldLock({
+        read: options.lockRead,
+        write: options.lockWrite,
+        key: held.key,
+        holder: held.holder,
+      });
+    }
     const message = C.scrub(err && err.message ? err.message : err);
     return S.json(500, { ok: false, error: message });
   }

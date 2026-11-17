@@ -7,6 +7,7 @@
  * or onlyIfMatch. A store whose setJSON source mentions onlyIfNew is used
  * when one is passed in. Otherwise this is read-then-write plus a re-read
  * of the holder id. A store error is thrown so the caller can fail open.
+ * A holder that throws releases its own lock so the scheduler retry can run.
  */
 const crypto = require('crypto');
 const S = require('./clv-supabase');
@@ -54,6 +55,7 @@ function trackLockKey(dateISO) {
 
 function fresh(doc, nowMs, ttlMs) {
   if (!doc || !doc.holder || !doc.acquiredAt) return false;
+  if (doc.released === true) return false;
   const at = Date.parse(doc.acquiredAt);
   if (!Number.isFinite(at)) return false;
   return (nowMs - at) < ttlMs;
@@ -112,6 +114,7 @@ async function acquireBlobLock({ read, write, key, now, ttlMs, store, holder }) 
  * Completed pulls/{date}/{slot} (has at) is slot-done.
  * A live lock is slot-locked. Store errors return null (caller pulls).
  * force or a disabled flag returns null.
+ * An acquired lock returns { holder, key, acquiredAt } so the caller can release it.
  */
 async function guardPullSlot({ enabled, force, read, write, dateISO, slot, now, ttlMs, store }) {
   if (!enabled || force) return null;
@@ -134,7 +137,7 @@ async function guardPullSlot({ enabled, force, read, write, dateISO, slot, now, 
       store,
     });
     if (!lock.ok) return { skipped: 'slot-locked', date: dateISO, slot };
-    return null;
+    return { holder: lock.holder, key: pullLockKey(dateISO, slot), acquiredAt: lock.acquiredAt };
   } catch (err) {
     console.error(`[odds-master] slot lock failed open: ${err && err.message ? err.message : err}`);
     return null;
@@ -156,7 +159,8 @@ async function defaultLockWrite(key, data) {
 }
 
 /**
- * One run per date. Returns a skip object, or null when this caller should run.
+ * One run per date. Returns a skip object, a held claim, or null.
+ * null means the caller should run and holds no lock (flag, force, or fail open).
  * Store errors return null (fail open).
  */
 async function guardDateLock({ enabled, force, read, write, key, now, ttlMs, label }) {
@@ -173,10 +177,37 @@ async function guardDateLock({ enabled, force, read, write, key, now, ttlMs, lab
       ttlMs,
     });
     if (!lock.ok) return { skipped: 'slot-locked' };
-    return null;
+    return { holder: lock.holder, key, acquiredAt: lock.acquiredAt };
   } catch (err) {
     console.error(`[${label || 'slot-lock'}] lock failed open: ${err && err.message ? err.message : err}`);
     return null;
+  }
+}
+
+/**
+ * Drop a lock this run holds so a scheduler retry can take the slot.
+ * Read, compare holder, then overwrite with an expired doc. A different
+ * holder is left untouched. Read or write failures are logged and swallowed.
+ */
+async function releaseHeldLock({ read, write, key, holder, now }) {
+  if (!key || !holder) return false;
+  const readFn = read || defaultLockRead;
+  const writeFn = write || defaultLockWrite;
+  try {
+    const doc = await readFn(key);
+    if (!doc || doc.holder !== holder) return false;
+    const releasedAt = (now instanceof Date ? now : new Date()).toISOString();
+    await writeFn(key, {
+      holder,
+      acquiredAt: '1970-01-01T00:00:00.000Z',
+      ttlMs: 0,
+      released: true,
+      releasedAt,
+    });
+    return true;
+  } catch (err) {
+    console.error(`[slot-lock] release failed: ${err && err.message ? err.message : err}`);
+    return false;
   }
 }
 
@@ -193,6 +224,7 @@ module.exports = {
   acquireBlobLock,
   guardPullSlot,
   guardDateLock,
+  releaseHeldLock,
   defaultLockRead,
   defaultLockWrite,
 };

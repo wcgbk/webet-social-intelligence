@@ -406,9 +406,9 @@ function gradeChanged(beforePicks, afterPicks, beforeKpis, afterKpis, beforeWeek
   return wsig(beforeWeeks) !== wsig(afterWeeks);
 }
 
-// Circa-local ESPN mapping (shared espn-scoreboard merge prefers "in" over
-// "post"; Circa needs final-wins, so we fetch + merge here without touching
-// the shared Omega grader module).
+// Circa-local ESPN mapping. The shared scoreboard merge prefers a final
+// when OMEGA_GRADE_FINAL_WINS is on. Circa keeps this copy so its week
+// grade does not follow that flag.
 function mapEspnEvent(ev) {
   const comp = ev && ev.competitions && ev.competitions[0];
   if (!comp) return null;

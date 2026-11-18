@@ -12,7 +12,7 @@
 //   date D-1 or D+1. We fetch the adjacent calendar days and merge.
 
 const { fetchScoreboardJson, ESPN_WEB_HOST } = require('../../../js/live-score');
-const { ncaamGradeEnabled } = require('./default_on_flag');
+const { ncaamGradeEnabled, gradeFinalWinsEnabled } = require('./default_on_flag');
 
 const ESPN_ENDPOINTS = {
   NBA: 'basketball/nba',
@@ -112,20 +112,32 @@ function mapEvent(ev) {
   };
 }
 
-function gameKey(g) {
-  const a = (g.awayAbbr || g.awayTeam || '').toLowerCase();
-  const h = (g.homeAbbr || g.homeTeam || '').toLowerCase();
-  return `${a}|${h}|${g.startISO || ''}`;
+function startToken(iso, env) {
+  if (!gradeFinalWinsEnabled(env)) return String(iso || '');
+  const t = Date.parse(iso || '');
+  return Number.isFinite(t) ? String(t) : String(iso || '');
 }
 
-function mergeGames(lists) {
+function gameKey(g, env) {
+  const a = (g.awayAbbr || g.awayTeam || '').toLowerCase();
+  const h = (g.homeAbbr || g.homeTeam || '').toLowerCase();
+  return `${a}|${h}|${startToken(g && g.startISO, env)}`;
+}
+
+function mergeRank(g, env) {
+  if (gradeFinalWinsEnabled(env)) {
+    return g.state === 'post' ? 3 : g.state === 'in' ? 2 : 1;
+  }
+  return g.state === 'in' ? 3 : g.state === 'post' ? 2 : 1;
+}
+
+function mergeGames(lists, env) {
   const map = new Map();
-  const rank = (g) => (g.state === 'in' ? 3 : g.state === 'post' ? 2 : 1);
   for (const list of lists) {
     for (const g of list || []) {
-      const k = gameKey(g);
+      const k = gameKey(g, env);
       const prev = map.get(k);
-      if (!prev || rank(g) > rank(prev)) map.set(k, g);
+      if (!prev || mergeRank(g, env) > mergeRank(prev, env)) map.set(k, g);
     }
   }
   return [...map.values()];
@@ -271,4 +283,6 @@ module.exports = {
   shiftIsoDate,
   gamesFromScoreboard,
   shootoutFromGame,
+  mergeGames,
+  gameKey,
 };

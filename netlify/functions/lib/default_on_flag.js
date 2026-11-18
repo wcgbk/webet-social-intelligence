@@ -68,6 +68,22 @@ function dailyResultsResyncEnabled(env) {
   return defaultOnFlag('OMEGA_DAILY_RESULTS_RESYNC', env);
 }
 
+/**
+ * Today's ET date with no card yet is not a pass day.
+ * off / 0 / false / no restores the no-picks placeholder and the old mirror rank.
+ */
+function kpiTodayPendingEnabled(env) {
+  return defaultOnFlag('OMEGA_KPI_TODAY_PENDING', env);
+}
+
+/**
+ * ESPN merge: a final score beats a stale in-progress copy of the same game.
+ * off / 0 / false / no restores in-progress over final and the raw start string.
+ */
+function gradeFinalWinsEnabled(env) {
+  return defaultOnFlag('OMEGA_GRADE_FINAL_WINS', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -79,4 +95,6 @@ module.exports = {
   pullSlotLockEnabled,
   closesSupaWhitelistEnabled,
   dailyResultsResyncEnabled,
+  kpiTodayPendingEnabled,
+  gradeFinalWinsEnabled,
 };

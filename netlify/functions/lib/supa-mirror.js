@@ -12,7 +12,7 @@
 const crypto = require('crypto');
 const S = require('./clv-supabase');
 const { buildDay, lineTypeFor } = require('./clv-sync');
-const { dailyResultsResyncEnabled } = require('./default_on_flag');
+const { dailyResultsResyncEnabled, kpiTodayPendingEnabled } = require('./default_on_flag');
 
 const PICKS_STORE = 'edge-picks-omega';
 const ODDS_STORE = 'odds-master';
@@ -466,9 +466,80 @@ function buildCardRows(card, verification, date) {
   };
 }
 
-function buildResultRows(cache, date) {
+function easternDateToday(now) {
+  const base = now instanceof Date ? now : new Date(now == null ? Date.now() : now);
+  const et = new Date(base.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const y = et.getFullYear();
+  const m = String(et.getMonth() + 1).padStart(2, '0');
+  const d = String(et.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function isNoPicksPlaceholder(day) {
+  return !!(day && day.source === 'no-picks' && day.noPlays);
+}
+
+function rowOpts(opts) {
+  if (!opts) return { env: process.env };
+  if (opts.env && typeof opts.env === 'object') return opts;
+  return { env: opts };
+}
+
+function isUnpublishedToday(day, opts) {
+  const o = rowOpts(opts);
+  if (!kpiTodayPendingEnabled(o.env)) return false;
+  if (!isNoPicksPlaceholder(day)) return false;
+  const today = o.todayET || easternDateToday(o.now);
+  return day.date === today;
+}
+
+async function deleteNoPlaysRow(date, env, fetchImpl) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return 0;
+  S.requireEnv(env, ['SUPABASE_SERVICE_ROLE_KEY']);
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = `${S.SUPABASE_URL}/rest/v1/daily_results?date=eq.${date}&no_plays=eq.true`;
+  const f = fetchImpl || fetch;
+  const resp = await f(url, {
+    method: 'DELETE',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'Content-Profile': 'clv',
+      Prefer: 'return=representation',
+    },
+  });
+  if (!resp || !resp.ok) {
+    const text = resp && resp.text ? await resp.text().catch(() => '') : '';
+    const status = resp && resp.status;
+    throw new Error(redact(`supabase daily_results delete HTTP ${status}: ${String(text).slice(0, 300)}`, env));
+  }
+  let body = null;
+  if (typeof resp.json === 'function') {
+    try { body = await resp.json(); } catch (_) { body = null; }
+  }
+  if (Array.isArray(body)) return body.length;
+  return 0;
+}
+
+async function deleteUnpublishedNoPlays(date, deps = {}) {
+  const env = deps.env || process.env;
+  if (!kpiTodayPendingEnabled(env)) return { ok: true, skipped: 'flag-off', date };
+  if (deps.dry || deps.dryRun) return { ok: true, dry: true, date };
+  try {
+    const removed = await deleteNoPlaysRow(date, env, deps.fetch || fetch);
+    return { ok: true, date, removed };
+  } catch (err) {
+    const message = redact(err && err.message ? err.message : String(err), env);
+    console.error(`[daily-results] delete no_plays ${date}: ${message}`);
+    return { ok: false, date, error: message };
+  }
+}
+
+function buildResultRows(cache, date, opts) {
   const day = ((cache && cache.days) || []).find((d) => d && d.date === date);
   if (!day) return [];
+  if (isUnpublishedToday(day, Object.assign({ todayET: opts && opts.todayET, now: opts && opts.now }, rowOpts(opts)))) return [];
   const raw = { ...day };
   delete raw.picks;
   return [{
@@ -894,10 +965,15 @@ function daySignature(day) {
   ]);
 }
 
-/** Prefer the day with more settled straights. Equal rank keeps the cache unless the published fields differ. */
-function chooseSettledDay(cacheDay, gradedDay) {
+/** Prefer the day with more settled straights. Equal rank keeps the cache unless the published fields differ.
+ *  A real card beats today's no-picks placeholder even while every game is still pending. */
+function chooseSettledDay(cacheDay, gradedDay, env) {
   if (!gradedDay) return cacheDay || null;
   if (!cacheDay) return gradedDay;
+  const source = env == null ? process.env : env;
+  if (kpiTodayPendingEnabled(source) && isNoPicksPlaceholder(cacheDay) && !isNoPicksPlaceholder(gradedDay)) {
+    return gradedDay;
+  }
   const cacheRank = settlementRank(cacheDay);
   const gradedRank = settlementRank(gradedDay);
   if (gradedRank > cacheRank) return gradedDay;
@@ -950,9 +1026,14 @@ async function resyncDailyResults(date, deps = {}) {
   } catch (err) {
     console.error(`[daily-results] grade ${date}: ${err && err.message ? err.message : err}`);
   }
-  const chosen = chooseSettledDay(cacheDay, graded);
+  const chosen = chooseSettledDay(cacheDay, graded, env);
   if (!chosen) return { ok: true, skipped: 'no-day', date };
-  const rows = buildResultRows({ days: [chosen] }, date);
+  const rowOptsFor = { env, todayET: deps.todayET, now: deps.now };
+  if (isUnpublishedToday(chosen, rowOptsFor)) {
+    if (deps.dry || deps.dryRun) return { ok: true, dry: true, date, rows: [], removed: true };
+    return deleteUnpublishedNoPlays(date, deps);
+  }
+  const rows = buildResultRows({ days: [chosen] }, date, rowOptsFor);
   if (deps.dry || deps.dryRun) return { ok: true, dry: true, date, rows };
   try {
     const upserted = await upsert('daily_results', rows, env, fetchImpl);
@@ -966,8 +1047,16 @@ async function resyncDailyResults(date, deps = {}) {
 async function upsertChangedDailyResults(previous, next, deps = {}) {
   const env = deps.env || process.env;
   if (!dailyResultsResyncEnabled(env)) return { ok: true, skipped: 'flag-off' };
-  const nextDays = ((next && next.days) || []).filter((day) => day && day.date);
+  const rowOptsFor = { env, todayET: deps.todayET, now: deps.now };
+  const nextDays = ((next && next.days) || []).filter((day) => day && day.date && !isUnpublishedToday(day, rowOptsFor));
   const prevList = previous && Array.isArray(previous.days) ? previous.days : null;
+  if (kpiTodayPendingEnabled(env) && prevList) {
+    for (const prev of prevList) {
+      if (!isUnpublishedToday(prev, rowOptsFor)) continue;
+      if (nextDays.some((day) => day.date === prev.date)) continue;
+      await deleteUnpublishedNoPlays(prev.date, deps);
+    }
+  }
   let chosen = nextDays;
   if (prevList) {
     const prevBy = new Map(prevList.filter((day) => day && day.date).map((day) => [day.date, day]));
@@ -975,7 +1064,7 @@ async function upsertChangedDailyResults(previous, next, deps = {}) {
   }
   if (!chosen.length) return { ok: true, upserted: 0 };
   const rows = [];
-  for (const day of chosen) rows.push(...buildResultRows({ days: [day] }, day.date));
+  for (const day of chosen) rows.push(...buildResultRows({ days: [day] }, day.date, rowOptsFor));
   if (deps.dry || deps.dryRun) return { ok: true, dry: true, rows };
   try {
     const upserted = await upsert('daily_results', rows, env, deps.fetch || fetch);
@@ -1073,19 +1162,29 @@ async function mirrorDay(date, deps = {}) {
   if (Object.prototype.hasOwnProperty.call(deps, 'resultsCache')) resultsCache = deps.resultsCache;
   if (parts.has('results')) {
     try {
-      let rows = buildResultRows(resultsCache, date);
+      const rowOptsFor = { env, todayET: deps.todayET, now: deps.now };
+      const cacheDay = cacheDayFor(resultsCache, date);
+      let chosen = cacheDay;
       if (dailyResultsResyncEnabled(env) && liveGradeAllowed(deps)) {
-        const cacheDay = cacheDayFor(resultsCache, date);
         let graded = null;
         try {
           graded = await gradeLiveDay(date, deps, blobs);
         } catch (err) {
           errors.push(redact(`results grade: ${err && err.message ? err.message : err}`, env));
         }
-        const chosen = chooseSettledDay(cacheDay, graded);
-        if (chosen) rows = buildResultRows({ days: [chosen] }, date);
+        chosen = chooseSettledDay(cacheDay, graded, env);
       }
-      await writeTable('daily_results', rows, env, fetchImpl, dry, counts, errors);
+      if (isUnpublishedToday(chosen, rowOptsFor)) {
+        if (dry) counts.daily_results_removed = (counts.daily_results_removed || 0) + 1;
+        else {
+          const removed = await deleteUnpublishedNoPlays(date, { env, fetch: fetchImpl });
+          if (removed && removed.removed) counts.daily_results_removed = (counts.daily_results_removed || 0) + removed.removed;
+          if (removed && removed.ok === false && removed.error) errors.push(removed.error);
+        }
+      } else {
+        const rows = chosen ? buildResultRows({ days: [chosen] }, date, rowOptsFor) : buildResultRows(resultsCache, date, rowOptsFor);
+        await writeTable('daily_results', rows, env, fetchImpl, dry, counts, errors);
+      }
     } catch (e) {
       errors.push(redact(`results: ${e.message}`, env));
     }
@@ -1218,6 +1317,10 @@ module.exports = {
   buildBoardRows,
   buildCardRows,
   buildResultRows,
+  easternDateToday,
+  isNoPicksPlaceholder,
+  isUnpublishedToday,
+  deleteUnpublishedNoPlays,
   settlementRank,
   daySignature,
   chooseSettledDay,

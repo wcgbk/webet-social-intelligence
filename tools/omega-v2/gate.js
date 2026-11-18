@@ -740,6 +740,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (dailyResync.status !== 0) throw new Error('daily results resync gate failed');
+
+  const kpiToday = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-kpi-today-pending.js')],
+    { stdio: 'inherit' }
+  );
+  if (kpiToday.status !== 0) throw new Error('kpi today pending gate failed');
 }
 
 function pickSlim(card) {

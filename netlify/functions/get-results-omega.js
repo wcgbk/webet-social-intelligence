@@ -9,6 +9,7 @@ const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 const { canonicalSchool, schoolsEqual } = require('./lib/ncaaf-names');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
+const { kpiTodayPendingEnabled } = require('./lib/default_on_flag');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,16 @@ function getEasternDateToday() {
   const m = String(et.getMonth() + 1).padStart(2, '0');
   const d = String(et.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function isNoPicksPlaceholder(day) {
+  return !!(day && day.source === 'no-picks' && day.noPlays);
+}
+
+/** Drop today's unpublished placeholder. A published pass (source is the store) stays. */
+function omitUnpublishedToday(days, todayET, env) {
+  if (!kpiTodayPendingEnabled(env)) return days || [];
+  return (days || []).filter((day) => !(day && todayET && day.date === todayET && isNoPicksPlaceholder(day)));
 }
 
 function getAllDatesInRange(startDate, endDate) {
@@ -859,7 +870,17 @@ exports.handler = async (event) => {
       if (cacheResp.ok) {
         previousResultsCache = await cacheResp.json();
         if (cacheIsFresh(previousResultsCache, event)) {
-          return respond(previousResultsCache, event);
+          const todayET = getEasternDateToday();
+          const days = omitUnpublishedToday(previousResultsCache.days, todayET, process.env);
+          if (days.length !== (previousResultsCache.days || []).length) {
+            try {
+              const mirror = require('./lib/supa-mirror');
+              await mirror.deleteUnpublishedNoPlays(todayET, { env: process.env });
+            } catch (err) {
+              console.error(`[get-results-omega] daily_results today: ${err && err.message ? err.message : err}`);
+            }
+          }
+          return respond(Object.assign({}, previousResultsCache, { days }), event);
         }
       }
     } catch (e) {}
@@ -884,6 +905,7 @@ exports.handler = async (event) => {
     const earliestDate = OMEGA_KPI_START;
     const todayET = getEasternDateToday();
     const fullDateRange = getAllDatesInRange(earliestDate, todayET);
+    let omittedUnpublishedToday = false;
 
 
     // PERF (2026-06-18): grade all dates in PARALLEL — was sequential await per date (~15s cold for
@@ -915,7 +937,10 @@ exports.handler = async (event) => {
     // algo — Beta + Alpha history frozen through the day before the Omega KPI epoch, then Omega.
     // Legacy rows come from lib/kpi-legacy-alpha.json (scripts/build-kpi-legacy.js), never regraded.
     const legacyDays = legacyDaysBefore(OMEGA_KPI_START).map(annotateStoredDay); // oldest first
-    const omegaPresented = omegaDays.map(annotateStoredDay);
+    const omegaRaw = omegaDays.map(annotateStoredDay);
+    omittedUnpublishedToday = omegaRaw.some((day) => day && day.date === todayET && isNoPicksPlaceholder(day))
+      && kpiTodayPendingEnabled(process.env);
+    const omegaPresented = omitUnpublishedToday(omegaRaw, todayET, process.env);
     const allDays = legacyDays.concat(omegaPresented);
     const all = aggregateDays(allDays);
     const omegaOnly = aggregateDays(omegaPresented);
@@ -976,6 +1001,7 @@ exports.handler = async (event) => {
           if (dailyResultsResyncEnabled(process.env)) {
             const mirror = require('./lib/supa-mirror');
             await mirror.upsertChangedDailyResults(previousResultsCache, result, { env: process.env });
+            if (omittedUnpublishedToday) await mirror.deleteUnpublishedNoPlays(todayET, { env: process.env });
           }
         } catch (err) {
           console.error(`[get-results-omega] daily_results: ${err && err.message ? err.message : err}`);
@@ -1007,4 +1033,6 @@ exports._test = {
   countDefaultedTo1u,
   annotateStoredDay,
   DOLLAR_PER_UNIT,
+  isNoPicksPlaceholder,
+  omitUnpublishedToday,
 };

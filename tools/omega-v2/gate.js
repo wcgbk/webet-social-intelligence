@@ -782,6 +782,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (savedPickClose.status !== 0) throw new Error('saved pick close gate failed');
+
+  const pullBookPrices = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-pull-book-prices.js')],
+    { stdio: 'inherit' }
+  );
+  if (pullBookPrices.status !== 0) throw new Error('pull book prices gate failed');
 }
 
 function pickSlim(card) {

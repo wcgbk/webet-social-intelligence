@@ -17,8 +17,9 @@
  *  18 per day. Stated, not measured — no live pull was fired to
  *  write this code. Games stored are the pull date's ET slate. */
 const { readJson, writeJson } = require('./store');
-const { pullSlotLockEnabled } = require('../default_on_flag');
+const { pullSlotLockEnabled, pullBookPricesEnabled } = require('../default_on_flag');
 const { guardPullSlot, releaseHeldLock } = require('../slot-lock');
+const { upsertPulledBookPrices } = require('./book-prices');
 const SPORTS = [
   ['NFL', 'americanfootball_nfl'], ['NCAAF', 'americanfootball_ncaaf'],
   ['NHL', 'icehockey_nhl'], ['NBA', 'basketball_nba'],
@@ -136,6 +137,19 @@ async function runOddsMasterPull(opts = {}) {
     await write(`by-date/${dateISO}`, { date: dateISO, events: [...byId.values()], updatedAt: at });
     const pullDoc = { date: dateISO, slot, at, games: summary.games, sports: summary.sports, books: summary.books, errors };
     await write(`pulls/${dateISO}/${slot}`, pullDoc);
+    // After the blob write. A book-price failure must not release the slot
+    // lock or cause the paid pull to run again.
+    if (pullBookPricesEnabled(env)) {
+      try {
+        pullDoc.bookPrices = await upsertPulledBookPrices({
+          dateISO, slot, at, eventsBySport, env, fetchImpl,
+        });
+      } catch (e) {
+        errors.push(`book-prices: ${String(e && e.message || e).slice(0, 200)}`);
+        pullDoc.errors = errors;
+      }
+      try { await write(`pulls/${dateISO}/${slot}`, pullDoc); } catch (_) { /* blob already has the board */ }
+    }
     return pullDoc;
   } catch (err) {
     if (held) await releaseHeldLock({ read, write, key: held.key, holder: held.holder });

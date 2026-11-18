@@ -571,7 +571,7 @@ async function fetchOdds(dateISO, snapshotTime = null) {
       let markets = "h2h,spreads,totals,alternate_spreads,alternate_totals";
       let url;
       if (snapshotTime) {
-        // Historical endpoint — lines exactly as-of snapshotTime, no live/final contamination
+        require('./lib/historical-odds-guard').assertHistoricalOddsAllowed(process.env, 'generate-picks-mvp');
         url = `https://api.the-odds-api.com/v4/historical/sports/${sport}/odds?regions=us,us2,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(snapshotTime)}`;
       } else {
         url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,us2,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
@@ -580,6 +580,7 @@ async function fetchOdds(dateISO, snapshotTime = null) {
       if (!resp.ok && resp.status === 422) {
         markets = "h2h,spreads,totals";
         if (snapshotTime) {
+          require('./lib/historical-odds-guard').assertHistoricalOddsAllowed(process.env, 'generate-picks-mvp');
           url = `https://api.the-odds-api.com/v4/historical/sports/${sport}/odds?regions=us,us2,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(snapshotTime)}`;
         } else {
           url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,us2,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;

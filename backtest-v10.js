@@ -128,6 +128,7 @@ async function fetchESPNScores(dateISO, sport) {
 async function fetchHistoricalOdds(dateISO, sport) {
   try {
     const isoDate = dateISO + 'T15:00:00Z'; // 10am ET = 15:00 UTC
+    require('./netlify/functions/lib/historical-odds-guard').assertHistoricalOddsAllowed(process.env, 'backtest-v10');
     const url = `https://api.the-odds-api.com/v4/historical/sports/${sport.oddsKey}/odds?date=${isoDate}&regions=us&markets=spreads,totals&oddsFormat=american&apiKey=${ODDS_API_KEY}`;
     const resp = await fetch(url);
     if (!resp.ok) { if (resp.status !== 422) console.log(`  Odds API ${resp.status} for ${sport.label} on ${dateISO}`); return []; }

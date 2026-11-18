@@ -149,10 +149,11 @@ function findMatchingGame(pick, oddsData) {
 async function fetchBulk(sportKey, atISO) {
   const apiKey = process.env.ODDS_API_KEY;
   if (!apiKey) return [];
-  const base = atISO ? 'https://api.the-odds-api.com/v4/historical' : 'https://api.the-odds-api.com/v4';
   const dateParam = atISO ? `&date=${encodeURIComponent(atISO)}` : '';
-  const url = `${base}/sports/${sportKey}/odds?regions=us,us2,eu&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
   try {
+    if (atISO) require('./lib/historical-odds-guard').assertHistoricalOddsAllowed(process.env, 'track-clv-cfb');
+    const base = atISO ? 'https://api.the-odds-api.com/v4/historical' : 'https://api.the-odds-api.com/v4';
+    const url = `${base}/sports/${sportKey}/odds?regions=us,us2,eu&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
     const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!resp.ok) return [];
     const json = await resp.json();

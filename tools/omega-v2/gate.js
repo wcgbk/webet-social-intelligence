@@ -747,6 +747,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (kpiToday.status !== 0) throw new Error('kpi today pending gate failed');
+
+  const historicalGuard = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-historical-odds-guard.js')],
+    { stdio: 'inherit' }
+  );
+  if (historicalGuard.status !== 0) throw new Error('historical odds guard gate failed');
 }
 
 function pickSlim(card) {

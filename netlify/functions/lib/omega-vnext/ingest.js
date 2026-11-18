@@ -46,6 +46,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
     try {
       let url;
       if (opts.historicalSnapshot) {
+        require('../historical-odds-guard').assertHistoricalOddsAllowed(process.env, 'omega-vnext-ingest');
         out.snapshotNote = `historical:${opts.historicalSnapshot}`;
         url = `https://api.the-odds-api.com/v4/historical/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(opts.historicalSnapshot)}`;
       } else {

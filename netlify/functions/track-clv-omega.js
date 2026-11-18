@@ -506,8 +506,10 @@ function findMatchingGame(pick, oddsData) {
 }
 
 // ── Odds API fetchers (live or historical-at-timestamp), with in-run caching ──
-function oddsBase(historical) {
-  return historical ? 'https://api.the-odds-api.com/v4/historical' : 'https://api.the-odds-api.com/v4';
+function oddsBase(historical, env) {
+  if (!historical) return 'https://api.the-odds-api.com/v4';
+  require('./lib/historical-odds-guard').assertHistoricalOddsAllowed(env, 'track-clv-omega');
+  return 'https://api.the-odds-api.com/v4/historical';
 }
 
 // Bulk full-game odds for a sport. atISO=null → current line; atISO set → historical snapshot.
@@ -515,8 +517,8 @@ async function fetchBulk(sportKey, atISO) {
   const apiKey = process.env.ODDS_API_KEY;
   if (!apiKey) { console.log('[track-clv] ODDS_API_KEY missing — skipping odds fetch'); return []; }
   const dateParam = atISO ? `&date=${encodeURIComponent(atISO)}` : '';
-  const url = `${oddsBase(!!atISO)}/sports/${sportKey}/odds?regions=${ODDS_REGIONS}&markets=${FULL_MARKETS}&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
   try {
+    const url = `${oddsBase(!!atISO)}/sports/${sportKey}/odds?regions=${ODDS_REGIONS}&markets=${FULL_MARKETS}&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
     const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!resp.ok) { console.log(`[track-clv] bulk ${sportKey} (${atISO || 'live'}): API ${resp.status}`); return []; }
     const json = await resp.json();
@@ -532,8 +534,8 @@ async function fetchEventF5(sportKey, eventId, atISO) {
   const apiKey = process.env.ODDS_API_KEY;
   if (!apiKey) return null;
   const dateParam = atISO ? `&date=${encodeURIComponent(atISO)}` : '';
-  const url = `${oddsBase(!!atISO)}/sports/${sportKey}/events/${eventId}/odds?regions=${ODDS_REGIONS}&markets=${F5_MARKETS}&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
   try {
+    const url = `${oddsBase(!!atISO)}/sports/${sportKey}/events/${eventId}/odds?regions=${ODDS_REGIONS}&markets=${F5_MARKETS}&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
     const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!resp.ok) return null;
     const json = await resp.json();

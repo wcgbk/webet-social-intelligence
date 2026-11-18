@@ -37,6 +37,7 @@
 const S = require('./clv-supabase');
 const FB = require('./full-board-closes');
 const { closesAt3amEnabled, closesHistoricalEnabled } = require('./default_on_flag');
+const { assertHistoricalOddsAllowed } = require('./historical-odds-guard');
 
 const SPORTS = ['NFL', 'NBA', 'NCAAF', 'NCAAM', 'NHL'];
 const MARKETS = ['h2h', 'spreads', 'totals'];
@@ -269,7 +270,8 @@ function planBuckets(games) {
   return planned;
 }
 
-function buildHistoricalUrl(apiKey, sportKey, snapshotAt, from, to) {
+function buildHistoricalUrl(apiKey, sportKey, snapshotAt, from, to, env) {
+  assertHistoricalOddsAllowed(env, 'closes-3am');
   const qs = new URLSearchParams({
     apiKey,
     date: snapshotAt,
@@ -1607,7 +1609,7 @@ async function runCloses(ctx) {
       stampGames(bucket.games, 'no-close', 'sport-key', null, null, fallback);
       return 'error';
     }
-    const url = buildHistoricalUrl(env.ODDS_API_KEY || '', bucket.sportKey, snapshotAt, bucket.from, bucket.to);
+    const url = buildHistoricalUrl(env.ODDS_API_KEY || '', bucket.sportKey, snapshotAt, bucket.from, bucket.to, env);
     try {
       const resp = await ctx.fetch(url);
       const actual = FB.actualFromHeader(FB.headerValue(resp, 'x-requests-last'));

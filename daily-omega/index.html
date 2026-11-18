@@ -887,6 +887,7 @@
     'NBA': 'basketball/nba',
     'NHL': 'hockey/nhl',
     'NCAAB': 'basketball/mens-college-basketball',
+    'NCAAM': 'basketball/mens-college-basketball',
     'MLB': 'baseball/mlb',
     'EPL': 'soccer/eng.1',
     'La Liga': 'soccer/esp.1',
@@ -926,6 +927,9 @@
     const endpoint = ESPN_ENDPOINTS[sport];
     if (!endpoint) return [];
     const isNcaaf = sport === 'NCAAF';
+    // NCAAM/NCAAB: the plain ESPN board only returns ~11 featured games; groups=50 is all of D-I.
+    // Rollback: add ?ncaamGroups=off to the page URL.
+    const isCbb = (sport === 'NCAAM' || sport === 'NCAAB') && !/[?&]ncaamGroups=off\b/.test(location.search || '');
     const urls = [];
     const push = (dateISO, groups) => {
       const q = [];
@@ -936,10 +940,12 @@
     const dateList = (dates && dates.length) ? dates : [null];
     for (const d of dateList) {
       if (isNcaaf) { push(d, '90'); push(d, '80'); }
+      else if (isCbb) { push(d, '50'); push(d, null); }
       else push(d, null);
     }
     // Undated current/week board so live games aren't dropped on UTC date edges
     if (isNcaaf) { push(null, '90'); push(null, '80'); }
+    else if (isCbb) { push(null, '50'); push(null, null); }
     else push(null, null);
     return [...new Set(urls)];
   }
@@ -1292,6 +1298,7 @@
       'NCAAF': { periods: 4, periodMins: 15 },
       'NBA':   { periods: 4, periodMins: 12 },
       'NCAAB': { periods: 2, periodMins: 20 },
+      'NCAAM': { periods: 2, periodMins: 20 },
       'NHL':   { periods: 3, periodMins: 20 },
     };
     const cfg = configs[sport];
@@ -1314,9 +1321,9 @@
     const away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
     const home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const t = gameElapsed(sport, game.period, game.clock, isF5);
-    const sigmaPerMin = { 'NFL': 1.75, 'NCAAF': 2.1, 'NBA': 1.8, 'NCAAB': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
+    const sigmaPerMin = { 'NFL': 1.75, 'NCAAF': 2.1, 'NBA': 1.8, 'NCAAB': 1.5, 'NCAAM': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
     const sigma = sigmaPerMin[sport] || 1.0;
-    const totalMinsMap = { 'NFL': 60, 'NCAAF': 60, 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
+    const totalMinsMap = { 'NFL': 60, 'NCAAF': 60, 'NBA': 48, 'NCAAB': 40, 'NCAAM': 40, 'NHL': 60, 'MLB': 54 };
     // F5 spans the first 5 of 9 innings → scale the MLB variance horizon to ~5 innings.
     const gameMins = (sport === 'MLB' && isF5) ? 30 : (totalMinsMap[sport] || 48);
 

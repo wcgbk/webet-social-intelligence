@@ -789,6 +789,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (pullBookPrices.status !== 0) throw new Error('pull book prices gate failed');
+
+  const pullCredits = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-pull-credits.js')],
+    { stdio: 'inherit' }
+  );
+  if (pullCredits.status !== 0) throw new Error('pull credits gate failed');
 }
 
 function pickSlim(card) {

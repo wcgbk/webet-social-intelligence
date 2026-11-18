@@ -17,9 +17,10 @@
  *  18 per day. Stated, not measured — no live pull was fired to
  *  write this code. Games stored are the pull date's ET slate. */
 const { readJson, writeJson } = require('./store');
-const { pullSlotLockEnabled, pullBookPricesEnabled } = require('../default_on_flag');
+const { pullSlotLockEnabled, pullBookPricesEnabled, pullCreditsPersistEnabled } = require('../default_on_flag');
 const { guardPullSlot, releaseHeldLock } = require('../slot-lock');
 const { upsertPulledBookPrices } = require('./book-prices');
+const { persistPullCredits } = require('./credits');
 const SPORTS = [
   ['NFL', 'americanfootball_nfl'], ['NCAAF', 'americanfootball_ncaaf'],
   ['NHL', 'icehockey_nhl'], ['NBA', 'basketball_nba'],
@@ -112,11 +113,13 @@ async function runOddsMasterPull(opts = {}) {
     const fetchImpl = opts.fetchImpl || fetch;
     const eventsBySport = {};
     const errors = [];
+    const creditResponses = [];
     for (const [label, key] of SPORTS) {
       try {
         const url = `https://api.the-odds-api.com/v4/sports/${key}/odds?regions=${REGIONS}&markets=${MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
         const resp = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
         if (!resp.ok) throw new Error(`Odds ${key} HTTP ${resp.status}`);
+        creditResponses.push({ sport: label, resp });
         eventsBySport[label] = await resp.json();
       } catch (e) { errors.push(`${label}: ${e.message}`); eventsBySport[label] = []; }
     }
@@ -149,6 +152,22 @@ async function runOddsMasterPull(opts = {}) {
         pullDoc.errors = errors;
       }
       try { await write(`pulls/${dateISO}/${slot}`, pullDoc); } catch (_) { /* blob already has the board */ }
+    }
+    // Headers already came back with the board request. No second Odds API call.
+    if (pullCreditsPersistEnabled(env)) {
+      try {
+        const credits = await persistPullCredits({
+          dateISO, slot, at, responses: creditResponses, env, read, write,
+        });
+        if (credits && credits.wrote) {
+          pullDoc.credits = { remaining: credits.remaining, calls: credits.calls };
+          try { await write(`pulls/${dateISO}/${slot}`, pullDoc); } catch (_) { /* board blob is already stored */ }
+        }
+      } catch (e) {
+        errors.push(`credits: ${String(e && e.message || e).slice(0, 200)}`);
+        pullDoc.errors = errors;
+        try { await write(`pulls/${dateISO}/${slot}`, pullDoc); } catch (_) { /* board blob is already stored */ }
+      }
     }
     return pullDoc;
   } catch (err) {

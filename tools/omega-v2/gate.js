@@ -775,6 +775,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (kpiSwr.status !== 0) throw new Error('kpi swr gate failed');
+
+  const savedPickClose = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-saved-pick-close.js')],
+    { stdio: 'inherit' }
+  );
+  if (savedPickClose.status !== 0) throw new Error('saved pick close gate failed');
 }
 
 function pickSlim(card) {

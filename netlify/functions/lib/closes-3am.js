@@ -136,6 +136,127 @@ function teamsMatch(a, b) {
   return la.length > 3 && la === lb;
 }
 
+function savedPickCloseOn(env) {
+  return require('./default_on_flag').savedPickCloseEnabled(env);
+}
+
+/** Substring match, plus NCAAM school names when OMEGA_SAVED_PICK_CLOSE is on. */
+function pairMatch(a, b, sport, env) {
+  if (teamsMatch(a, b)) return true;
+  if (!savedPickCloseOn(env)) return false;
+  const label = String(sport || '').toUpperCase();
+  if (label !== 'NCAAM' && label !== 'NCAAB') return false;
+  return require('./ncaam-names').ncaamTeamsMatch(a, b);
+}
+
+function betLineNumber(pick) {
+  const market = pickMarket(pick);
+  if (!pick || market === 'h2h') return null;
+  const text = String(pick.pick || pick.side || '');
+  if (market === 'totals') {
+    const total = text.match(/(?:over|under)\s*([+-]?\d+(?:\.\d+)?)/i);
+    if (total) return Number(total[1]);
+  }
+  const found = text.match(/([+-]\d+(?:\.\d+)?)/);
+  return found ? Number(found[1]) : null;
+}
+
+function outcomeSideKey(name, market, home, away, sport, env) {
+  const label = String(name || '');
+  if (market === 'totals') {
+    if (/^over$/i.test(label)) return 'over';
+    if (/^under$/i.test(label)) return 'under';
+    return null;
+  }
+  if (pairMatch(label, home, sport, env)) return 'home';
+  if (pairMatch(label, away, sport, env)) return 'away';
+  return null;
+}
+
+function wantedSideKey(pick, event, env) {
+  const market = pickMarket(pick);
+  const text = String((pick && (pick.pick || pick.side)) || '');
+  if (market === 'totals') return /^under\b/i.test(text) ? 'under' : 'over';
+  const team = text
+    .replace(/\bF5\b/gi, '')
+    .replace(/[+-]?\d+(?:\.\d+)?/g, '')
+    .replace(/\bML\b/gi, '')
+    .replace(/\b(moneyline|spread|total)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const sport = pick && pick.sport;
+  if (pairMatch(team, event && event.away_team, sport, env)) return 'away';
+  if (pairMatch(team, event && event.home_team, sport, env)) return 'home';
+  return null;
+}
+
+/**
+ * Last saved Pinnacle price for one card pick.
+ * Exact market, side, and line wins. A priced side at a different number
+ * is the documented posted-line fallback. No Pinnacle market stays no-close.
+ */
+function quoteFromEvent(event, pick, env) {
+  if (!event || !pick) return null;
+  const market = pickMarket(pick);
+  const priced = pinnacleMarket(event, market);
+  if (!priced) return { market, status: 'no-close', reason: 'pinnacle-not-priced' };
+  const sport = pick.sport;
+  const rows = [];
+  for (const outcome of priced.outcomes || []) {
+    if (!outcome || outcome.price == null || outcome.price === '') continue;
+    const price = Number(outcome.price);
+    if (!Number.isFinite(price)) continue;
+    const side = outcomeSideKey(outcome.name, market, event.home_team, event.away_team, sport, env);
+    if (!side) continue;
+    const line = outcome.point == null || outcome.point === '' ? null : Number(outcome.point);
+    rows.push({ side, price, line: Number.isFinite(line) ? line : null });
+  }
+  const side = wantedSideKey(pick, event, env);
+  const mine = rows.filter((row) => row.side === side);
+  if (!side || !mine.length) return { market, status: 'no-close', reason: 'pinnacle-not-priced' };
+  const want = betLineNumber(pick);
+  let chosen = mine[0];
+  let closeFallback = null;
+  if (market !== 'h2h' && want != null) {
+    const exact = mine.find((row) => row.line != null && Math.abs(row.line - want) <= 1e-6);
+    if (exact) chosen = exact;
+    else {
+      chosen = mine[0];
+      closeFallback = 'posted-line';
+    }
+  }
+  let opp = null;
+  if (market === 'spreads' && chosen.line != null) {
+    opp = rows.find((row) => row.side !== side && row.line != null && Math.abs(row.line + chosen.line) <= 1e-6) || null;
+  }
+  if (!opp) opp = rows.find((row) => row.side !== side) || null;
+  return {
+    market,
+    status: 'closed',
+    reason: null,
+    closingOdds: chosen.price,
+    closingLine: market === 'h2h' ? null : chosen.line,
+    oppOdds: opp ? opp.price : null,
+    anchor: 'pinnacle',
+    closeFallback,
+  };
+}
+
+function withQuote(pick, event, at, slot, env) {
+  if (!savedPickCloseOn(env) || !pick || !event) return pick;
+  const quote = quoteFromEvent(event, pick, env);
+  if (!quote || quote.closingOdds == null) return pick;
+  return Object.assign({}, pick, {
+    closingOdds: quote.closingOdds,
+    closingLine: quote.closingLine,
+    oppOdds: quote.oppOdds,
+    anchor: 'pinnacle',
+    closeSnapshotAt: at || null,
+    closeSlot: slot || null,
+    closeFallback: quote.closeFallback,
+  });
+}
+
 function teamsFromMatchup(matchup) {
   const parts = String(matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map((s) => s.trim()).filter(Boolean);
   if (parts.length >= 2) return { awayTeam: parts[0], homeTeam: parts[1] };
@@ -312,19 +433,20 @@ function pinnacleMarket(event, market) {
   return priced ? found : null;
 }
 
-function eventInResponse(wanted, events) {
+function eventInResponse(wanted, events, env) {
   const list = events || [];
   if (wanted && wanted.eventId) {
     const byId = list.find((event) => event && event.id != null && String(event.id) === String(wanted.eventId));
     if (byId) return byId;
   }
   if (!wanted || !wanted.homeTeam || !wanted.awayTeam) return null;
+  const sport = wanted.sport;
   return list.find((event) => {
     if (!event) return false;
     const home = event.home_team;
     const away = event.away_team;
-    return (teamsMatch(wanted.homeTeam, home) && teamsMatch(wanted.awayTeam, away))
-      || (teamsMatch(wanted.homeTeam, away) && teamsMatch(wanted.awayTeam, home));
+    return (pairMatch(wanted.homeTeam, home, sport, env) && pairMatch(wanted.awayTeam, away, sport, env))
+      || (pairMatch(wanted.homeTeam, away, sport, env) && pairMatch(wanted.awayTeam, home, sport, env));
   }) || null;
 }
 
@@ -379,8 +501,8 @@ function eventWithMarkets(event, markets) {
  * A pick is satisfied only by its own event and its own market at Pinnacle.
  * A sibling game in the same bucket does not count.
  */
-function assessPick(pick, events) {
-  const event = eventInResponse(pick, events);
+function assessPick(pick, events, env) {
+  const event = eventInResponse(pick, events, env);
   const market = pickMarket(pick);
   if (!event) return { status: 'no-close', reason: 'not-in-historical-snapshot', event: null, market };
   if (!pinnacleMarket(event, market)) return { status: 'no-close', reason: 'pinnacle-not-priced', event, market };
@@ -394,18 +516,19 @@ function reserveBlocks(remaining, cost) {
   return (n - cost) < RESERVE_FLOOR;
 }
 
-function sameGame(a, b) {
+function sameGame(a, b, env) {
   if (!a || !b) return false;
   if (a.sport !== b.sport) return false;
   if (a.eventId && b.eventId && String(a.eventId) === String(b.eventId)) return true;
   if (a.commenceTime && b.commenceTime && a.commenceTime !== b.commenceTime) return false;
   if (!a.homeTeam || !a.awayTeam || !b.homeTeam || !b.awayTeam) return false;
-  return (teamsMatch(a.homeTeam, b.homeTeam) && teamsMatch(a.awayTeam, b.awayTeam))
-    || (teamsMatch(a.homeTeam, b.awayTeam) && teamsMatch(a.awayTeam, b.homeTeam));
+  const sport = a.sport || b.sport;
+  return (pairMatch(a.homeTeam, b.homeTeam, sport, env) && pairMatch(a.awayTeam, b.awayTeam, sport, env))
+    || (pairMatch(a.homeTeam, b.awayTeam, sport, env) && pairMatch(a.awayTeam, b.homeTeam, sport, env));
 }
 
-function findListed(games, probe) {
-  return (games || []).find((game) => sameGame(game, probe)) || null;
+function findListed(games, probe, env) {
+  return (games || []).find((game) => sameGame(game, probe, env)) || null;
 }
 
 function pushPick(game, kind, pick) {
@@ -424,7 +547,7 @@ function pushPick(game, kind, pick) {
   });
 }
 
-function addTarget(games, probe, kind, pick) {
+function addTarget(games, probe, kind, pick, env) {
   const sport = String(probe.sport || '').toUpperCase();
   if (sport === 'CFB') probe = Object.assign({}, probe, { sport: 'NCAAF' });
   else if (sport === 'NCAAB') probe = Object.assign({}, probe, { sport: 'NCAAM' });
@@ -439,7 +562,7 @@ function addTarget(games, probe, kind, pick) {
     awayTeam: probe.awayTeam || null,
     commenceTime,
   };
-  let game = findListed(games, wanted);
+  let game = findListed(games, wanted, env);
   if (!game) {
     game = {
       sport: wanted.sport,
@@ -459,7 +582,7 @@ function addTarget(games, probe, kind, pick) {
   return game;
 }
 
-function collectGames(slateEvents, card, candidates, date) {
+function collectGames(slateEvents, card, candidates, date, env) {
   const games = [];
   for (const ev of slateEvents || []) {
     const sport = String(ev.sport || '').toUpperCase();
@@ -472,7 +595,7 @@ function collectGames(slateEvents, card, candidates, date) {
       homeTeam: ev.homeTeam || ev.home_team,
       awayTeam: ev.awayTeam || ev.away_team,
       commenceTime,
-    }, null, null);
+    }, null, null, env);
   }
   const legs = [];
   for (const pick of (card && card.picks) || []) legs.push(pick);
@@ -490,7 +613,7 @@ function collectGames(slateEvents, card, candidates, date) {
       awayTeam: leg.awayTeam || names.awayTeam,
       commenceTime: leg.commenceTime,
       market,
-    }, 'card', leg);
+    }, 'card', leg, env);
   }
   const rows = (candidates && (candidates.candidates || candidates.rows)) || (Array.isArray(candidates) ? candidates : []);
   for (const row of rows) {
@@ -504,7 +627,7 @@ function collectGames(slateEvents, card, candidates, date) {
       awayTeam: row.awayTeam || names.awayTeam,
       commenceTime: row.commenceTime,
       market,
-    }, 'candidate', row);
+    }, 'candidate', row, env);
   }
   return games;
 }
@@ -764,7 +887,7 @@ async function loadInputs(date, ctx) {
   if (ctx.card) card = ctx.card;
   if (ctx.candidates) candidates = ctx.candidates;
   if (ctx.slateEvents) slate = ctx.slateEvents;
-  return { slate, card, candidates, games: collectGames(slate, card, candidates, date) };
+  return { slate, card, candidates, games: collectGames(slate, card, candidates, date, ctx && ctx.env) };
 }
 
 function priorStatus(summary) {
@@ -965,6 +1088,25 @@ function assessGame(game, events, snapshotAt) {
   return gameResultRow(game, 'closed', null, snapshotAt, eventId);
 }
 
+function quotedPickRows(game, saved, env) {
+  if (!saved || !saved.event) return null;
+  const event = withEventId(saved.event, game.eventId);
+  const rows = [];
+  for (const pick of game.picks || []) {
+    const assessed = assessPick(pick, [event], env);
+    const row = Object.assign({}, pick, {
+      market: assessed.market || pickMarket(pick),
+      status: assessed.status,
+      reason: assessed.reason,
+      eventId: (assessed.event && assessed.event.id) || game.eventId || null,
+      closeLeadMin: leadMinutes(pick.commenceTime, saved.at),
+      slot: saved.slot,
+    });
+    rows.push(withQuote(row, event, saved.at, saved.slot, env));
+  }
+  return rows;
+}
+
 function trackedLegs(bucket) {
   const out = [];
   for (const game of bucket.games || []) {
@@ -1033,7 +1175,20 @@ async function runSavedBoardCloses(ctx) {
       seenPicks.add(key);
       const at = pickRows.findIndex((item) => pickKey(item) === key);
       const existing = at >= 0 ? pickRows[at] : prior.get(key);
-      const merged = mergePickRow(existing, row);
+      let merged = mergePickRow(existing, row);
+      // A prior closed row wins in mergePickRow and can lack a price.
+      // Copy the saved quote onto that row. Flag off leaves the merge as it was.
+      if (savedPickCloseOn(env) && row.closingOdds != null && (!merged || merged.closingOdds == null)) {
+        merged = Object.assign({}, merged || row, {
+          closingOdds: row.closingOdds,
+          closingLine: row.closingLine != null ? row.closingLine : null,
+          oppOdds: row.oppOdds != null ? row.oppOdds : null,
+          anchor: row.anchor || 'pinnacle',
+          closeSnapshotAt: row.closeSnapshotAt || null,
+          closeSlot: row.closeSlot || null,
+          closeFallback: row.closeFallback || null,
+        });
+      }
       if (at >= 0) pickRows[at] = merged;
       else pickRows.push(merged);
     }
@@ -1070,7 +1225,14 @@ async function runSavedBoardCloses(ctx) {
       result.skippedDone += 1;
       const prev = priorGames.get(gameRowKey(game));
       rememberGame(prev && prev.status === 'closed' ? prev : gameResultRow(game, 'closed', null, null, game.eventId));
-      rememberClosedPicks(game);
+      if (savedPickCloseOn(env) && (game.picks || []).length) {
+        const savedDone = await loadSavedPinnacle(game.sport, game.eventId, readMaster);
+        const quotedDone = quotedPickRows(game, savedDone, env);
+        if (quotedDone) remember(quotedDone);
+        else rememberClosedPicks(game);
+      } else {
+        rememberClosedPicks(game);
+      }
       continue;
     }
     const saved = await loadSavedPinnacle(game.sport, game.eventId, readMaster);
@@ -1080,7 +1242,8 @@ async function runSavedBoardCloses(ctx) {
       row.slot = saved.slot;
       row.boardAt = saved.at;
       rememberGame(row);
-      rememberClosedPicks(game);
+      if (savedPickCloseOn(env) && saved.event) remember(quotedPickRows(game, saved, env) || []);
+      else rememberClosedPicks(game);
       if (!dryRun && blobs && game.eventId && !(await hasBlob(blobs, FB.doneEvKey(game.sport, game.eventId)))) {
         await blobs.set(STORE, FB.doneEvKey(game.sport, game.eventId), {
           at: now.toISOString(),
@@ -1161,17 +1324,8 @@ async function runSavedBoardCloses(ctx) {
     row.slot = saved.slot;
     row.boardAt = saved.at;
     rememberGame(row);
-    for (const pick of game.picks || []) {
-      const assessed = assessPick(pick, [event]);
-      remember([Object.assign({}, pick, {
-        market: assessed.market || pickMarket(pick),
-        status: assessed.status,
-        reason: assessed.reason,
-        eventId: (assessed.event && assessed.event.id) || game.eventId || null,
-        closeLeadMin: leadMinutes(pick.commenceTime, saved.at),
-        slot: saved.slot,
-      })]);
-    }
+    const quoted = quotedPickRows(game, saved, env);
+    if (quoted) remember(quoted);
     result.buckets.push({
       sport: game.sport,
       eventId: String(event.id),
@@ -1832,6 +1986,18 @@ async function runCloses(ctx) {
  * Archived raw bodies for one Odds API sport key, unwrapped.
  * Used by track-clv-omega in stored-closes mode. Never calls the Odds API.
  */
+function keepStoredEvent(best, event, snapMs) {
+  if (!event || event.id == null) return;
+  const id = String(event.id);
+  const prev = best.get(id);
+  if (!prev) {
+    best.set(id, { event, snapMs });
+    return;
+  }
+  if (snapMs >= prev.snapMs) best.set(id, { event: mergeStoredEvent(prev.event, event), snapMs });
+  else best.set(id, { event: mergeStoredEvent(event, prev.event), snapMs: prev.snapMs });
+}
+
 async function loadStoredEventsForSport(sportKey, opts) {
   const label = sportLabelOf(sportKey);
   if (!label) return [];
@@ -1840,27 +2006,36 @@ async function loadStoredEventsForSport(sportKey, opts) {
     const injected = opts.storedEventsBySport[sportKey];
     return Array.isArray(injected) ? injected : [];
   }
-  const blobs = opts && opts.blobs;
-  if (!blobs || typeof blobs.list !== 'function' || typeof blobs.get !== 'function') return [];
-  let keys = [];
-  try { keys = await blobs.list(STORE, `raw/${date}/${label}/`); } catch (_) { keys = []; }
   const best = new Map();
-  for (const key of keys || []) {
-    let doc = null;
-    try { doc = await blobs.get(STORE, decodeBlobKey(key)); } catch (_) { doc = null; }
-    const unpacked = unwrapHistorical(doc && doc.body);
-    const snapMs = archiveSnapshotMs(doc);
-    for (const event of unpacked.events) {
-      if (!event || event.id == null) continue;
-      const id = String(event.id);
-      const prev = best.get(id);
-      if (!prev) {
-        best.set(id, { event, snapMs });
-        continue;
-      }
-      if (snapMs >= prev.snapMs) best.set(id, { event: mergeStoredEvent(prev.event, event), snapMs });
-      else best.set(id, { event: mergeStoredEvent(event, prev.event), snapMs: prev.snapMs });
+  const blobs = opts && opts.blobs;
+  const canArchive = !!(blobs && typeof blobs.list === 'function' && typeof blobs.get === 'function');
+  const wantSaved = savedPickCloseOn(opts && opts.env) && !(opts && opts.skipSavedBoard);
+  if (!canArchive && !wantSaved) return [];
+  if (canArchive) {
+    let keys = [];
+    try { keys = await blobs.list(STORE, `raw/${date}/${label}/`); } catch (_) { keys = []; }
+    for (const key of keys || []) {
+      let doc = null;
+      try { doc = await blobs.get(STORE, decodeBlobKey(key)); } catch (_) { doc = null; }
+      const unpacked = unwrapHistorical(doc && doc.body);
+      const snapMs = archiveSnapshotMs(doc);
+      for (const event of unpacked.events) keepStoredEvent(best, event, snapMs);
     }
+  }
+  // Saved-board closes do not write the historical archive keys. The 3 AM
+  // tracker still needs the last Pinnacle event (10 AM, else 3 AM).
+  if (wantSaved) {
+    try {
+      const readMaster = (opts && opts.readMaster) || ((key) => require('./odds-master/store').readJson(key));
+      const doc = await readMaster(`by-date/${date}`);
+      for (const ev of (doc && doc.events) || []) {
+        if (!ev || ev.eventId == null) continue;
+        if (canonSport(ev.sport) !== canonSport(label)) continue;
+        const saved = await loadSavedPinnacle(ev.sport || label, ev.eventId, readMaster);
+        if (!saved.event) continue;
+        keepStoredEvent(best, withEventId(saved.event, ev.eventId), Date.parse(saved.at) || 0);
+      }
+    } catch (_) { /* a missing board adds no events */ }
   }
   return [...best.values()].map((row) => row.event);
 }
@@ -1934,6 +2109,9 @@ module.exports = {
   isoSecond,
   etDateOf,
   teamsMatch,
+  pairMatch,
+  quoteFromEvent,
+  withQuote,
   teamsFromMatchup,
   planBuckets,
   buildHistoricalUrl,
@@ -1946,6 +2124,7 @@ module.exports = {
   pinnacleMarket,
   reserveBlocks,
   collectGames,
+  sameGame,
   trackedPicks,
   gameHasClose,
   missingGameTargets,

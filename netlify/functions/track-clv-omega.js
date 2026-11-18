@@ -386,12 +386,26 @@ function altQuoteOnBook(gameObj, bookKey, sideInfo, pick, mainLine) {
 // Returns { sideOdds, sideRaw, overround, closingLine, anchor, anchorBook, altQuote } or null.
 // altQuote is the anchor book's two-sided price at the bet's own number, when that
 // number is posted and the main line is somewhere else. Consensus anchors have none.
-function extractClose(gameObj, sideInfo, pick) {
+function extractClose(gameObj, sideInfo, pick, env) {
   if (!gameObj || !gameObj.bookmakers) return null;
   const teamText = stripLine(pick.pick || '');
   const isTeamMarket = sideInfo.marketBase !== 'totals' && !sideInfo.isDraw;
-  const pickedHome = isTeamMarket && teamsMatch(teamText, gameObj.home_team);
-  const pickedAway = isTeamMarket && teamsMatch(teamText, gameObj.away_team);
+  const savedClose = require('./lib/default_on_flag').savedPickCloseEnabled(env);
+  const sportLabel = String((pick && pick.sport) || '').toUpperCase();
+  let pickedHome = isTeamMarket && teamsMatch(teamText, gameObj.home_team);
+  let pickedAway = isTeamMarket && teamsMatch(teamText, gameObj.away_team);
+  if (savedClose && isTeamMarket && (sportLabel === 'NCAAM' || sportLabel === 'NCAAB')) {
+    const side = ncaamPickedSide(teamText, pick.matchup, {
+      awayTeam: gameObj.away_team,
+      homeTeam: gameObj.home_team,
+    });
+    if (side === 'home' || side === 'away') {
+      pickedHome = side === 'home';
+      pickedAway = side === 'away';
+    }
+  }
+  const betLine = savedClose ? parseBetLine(pick, sideInfo) : null;
+  const wantExact = savedClose && betLine != null && sideInfo.marketBase !== 'h2h';
 
   // Per-book view of the target market's outcomes
   const perBook = [];
@@ -410,14 +424,29 @@ function extractClose(gameObj, sideInfo, pick) {
       if (r != null) allRaw.push(r);
     }
     if (allRaw.length < 2) return null; // need both/all sides for a real overround
-    let sidePrice = null, line = null;
-    for (const o of outcomes) {
+    const hitOutcome = (o) => {
       const n = (o.name || '').toLowerCase();
-      let hit = false;
-      if (sideInfo.marketBase === 'totals') hit = (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
-      else if (sideInfo.isDraw) hit = (n === 'draw');
-      else hit = (pickedHome && teamsMatch(o.name, gameObj.home_team)) || (pickedAway && teamsMatch(o.name, gameObj.away_team));
-      if (hit) { sidePrice = o.price; line = (o.point !== undefined ? o.point : null); break; }
+      if (sideInfo.marketBase === 'totals') return (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
+      if (sideInfo.isDraw) return n === 'draw';
+      return (pickedHome && teamsMatch(o.name, gameObj.home_team)) || (pickedAway && teamsMatch(o.name, gameObj.away_team));
+    };
+    let sidePrice = null, line = null, closeFallback = null;
+    if (wantExact) {
+      const hits = [];
+      for (const o of outcomes) if (hitOutcome(o)) hits.push(o);
+      if (!hits.length) return null;
+      const exact = hits.find((o) => pointsClose(o.point, betLine));
+      const chosen = exact || hits[0];
+      if (!exact) closeFallback = 'posted-line';
+      sidePrice = chosen.price;
+      line = chosen.point !== undefined ? chosen.point : null;
+    } else {
+      for (const o of outcomes) {
+        if (!hitOutcome(o)) continue;
+        sidePrice = o.price;
+        line = (o.point !== undefined ? o.point : null);
+        break;
+      }
     }
     if (sidePrice == null) return null;
     const sideRaw = impliedProbability(sidePrice);
@@ -438,13 +467,15 @@ function extractClose(gameObj, sideInfo, pick) {
         return !hit;
       });
     }
-    return {
+    const selected = {
       sidePrice,
       sideRaw,
       line,
       overround: allRaw.reduce((a, c) => a + c, 0),
       oppPrice: oppRows.length === 1 ? oppRows[0].price : null,
     };
+    if (closeFallback) selected.closeFallback = closeFallback;
+    return selected;
   };
 
   // 1) Single sharp book by priority (Pinnacle first)
@@ -452,12 +483,16 @@ function extractClose(gameObj, sideInfo, pick) {
     const b = perBook.find(x => x.key === sb);
     if (!b) continue;
     const s = selectFrom(b.outcomes);
-    if (s) return {
-      sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
-      oppOdds: s.oppPrice != null ? s.oppPrice : null,
-      anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
-      altQuote: altQuoteOnBook(gameObj, b.key, sideInfo, pick, s.line),
-    };
+    if (s) {
+      const out = {
+        sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
+        oppOdds: s.oppPrice != null ? s.oppPrice : null,
+        anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
+        altQuote: altQuoteOnBook(gameObj, b.key, sideInfo, pick, s.line),
+      };
+      if (s.closeFallback) out.closeFallback = s.closeFallback;
+      return out;
+    }
   }
 
   // 2) Sharp consensus (median across 2+ present sharp books)
@@ -489,7 +524,21 @@ function extractClose(gameObj, sideInfo, pick) {
 }
 
 // ── Find matching game in an odds-feed array for a pick ──
-function findMatchingGame(pick, oddsData) {
+function findMatchingGame(pick, oddsData, env) {
+  const sport = String((pick && pick.sport) || '').toUpperCase();
+  if ((sport === 'NCAAM' || sport === 'NCAAB')
+      && require('./lib/default_on_flag').savedPickCloseEnabled(env)
+      && Array.isArray(oddsData) && oddsData.length) {
+    const wrapped = oddsData.map((game) => {
+      if (!game) return game;
+      return Object.assign({}, game, {
+        awayTeam: game.awayTeam || game.away_team,
+        homeTeam: game.homeTeam || game.home_team,
+      });
+    });
+    const hits = ncaamMatchingGames(pick && pick.matchup, wrapped);
+    if (hits.length) return hits[0];
+  }
   const matchup = (pick.matchup || '').toLowerCase();
   const pickText = (pick.pick || '').toLowerCase();
 
@@ -1199,6 +1248,8 @@ async function handle(event, deps) {
             date: dateISO,
             blobs: deps && deps.closeBlobs,
             storedEventsBySport: deps && deps.storedEventsBySport,
+            readMaster: deps && deps.readMaster,
+            env,
           }));
         } else {
           bulkCache.set(k, await fetchBulk(sportKey, atISO));
@@ -1251,13 +1302,13 @@ async function handle(event, deps) {
       // Upcoming (or commence unknown) → current line.
       if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
         const games = await getBulk(sportKey, null);
-        gameObj = findMatchingGame(pick, games);
+        gameObj = findMatchingGame(pick, games, env);
         if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
       }
       // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
       if (!gameObj && Number.isFinite(commenceMs)) {
         const games = await getBulk(sportKey, commenceISO);
-        gameObj = findMatchingGame(pick, games);
+        gameObj = findMatchingGame(pick, games, env);
         if (gameObj) snapAt = commenceISO;
       }
 
@@ -1268,7 +1319,7 @@ async function handle(event, deps) {
         if (ev) extractObj = ev;
       }
 
-      const close = gameObj ? extractClose(extractObj, sideInfo, pick) : null;
+      const close = gameObj ? extractClose(extractObj, sideInfo, pick, env) : null;
 
       // Capture provenance: how close to first pitch this snapshot was.
       let captureMinsToCommence = null;
@@ -1293,6 +1344,7 @@ async function handle(event, deps) {
           closeSnapshotAt: null, captureMinsToCommence, captureScore: 5e5,
           error: gameObj ? 'Could not extract sharp closing price for this market' : 'No matching game found in odds feed',
         };
+        if (close && close.closeFallback) rec.closeFallback = close.closeFallback;
       } else {
         const betRaw = impliedProbability(pick.odds);
         const powered = close.oppOdds != null ? gradePowerClv(pick.odds, close.sideOdds, close.oppOdds) : null;
@@ -1338,6 +1390,7 @@ async function handle(event, deps) {
         };
         rec = applyToRecord(rec, lineExtra, env);
         rec = enforceLineMatch(rec, lineExtra, env);
+        if (close.closeFallback) rec.closeFallback = close.closeFallback;
         console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
       }
 

@@ -163,7 +163,12 @@ for (const page of ['daily-omega/index.html', 'nfl/index.html', 'cfb/index.html'
     assert.ok(html.includes('pick-footer'));
     assert.ok(html.includes('@media (max-width: 400px)'));
     assert.ok(html.includes('refresh=1'));
-    assert.ok(!html.includes("cache: 'no-store'"));
+    if (page === 'daily-omega/index.html') {
+      assert.ok(html.includes("cache: 'no-store'"));
+      assert.ok(html.includes('Math.floor(Date.now() / 60000)'));
+    } else {
+      assert.ok(!html.includes("cache: 'no-store'"));
+    }
   });
 }
 check('get-results-omega KPI window + cache + NCAAF school match', () => {

@@ -114,6 +114,29 @@ function clvLatestSavedEnabled(env) {
   return text === 'on' || text === '1' || text === 'true' || text === 'yes';
 }
 
+/** KPI Cache-Control stale-while-revalidate. Default 60s. =off restores 86400. */
+function kpiSwrShortEnabled(env) {
+  return defaultOnFlag('OMEGA_KPI_SWR_SHORT', env);
+}
+
+/**
+ * 3 AM saved-board close copies the last Pinnacle price onto each card pick.
+ * off / 0 / false / no keeps the old name match and archive-only stored closes.
+ */
+function savedPickCloseEnabled(env) {
+  return defaultOnFlag('OMEGA_SAVED_PICK_CLOSE', env);
+}
+
+/** After a 3 AM or 10 AM pull, upsert clv.book_prices. =off leaves the blob-only pull. */
+function pullBookPricesEnabled(env) {
+  return defaultOnFlag('OMEGA_PULL_BOOK_PRICES', env);
+}
+
+/** Persist Odds API credit headers from the two board pulls. =off skips the write. */
+function pullCreditsPersistEnabled(env) {
+  return defaultOnFlag('OMEGA_PULL_CREDITS_PERSIST', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -130,4 +153,8 @@ module.exports = {
   clvLineMatchEnabled,
   deployActorPrefixEnabled,
   clvLatestSavedEnabled,
+  kpiSwrShortEnabled,
+  savedPickCloseEnabled,
+  pullBookPricesEnabled,
+  pullCreditsPersistEnabled,
 };

@@ -2036,9 +2036,9 @@
   async function loadResults(opts) {
     try {
       // Page load pulls the last 7 days only; the dropdown asks for 30 (monthly totals ride along).
-      const qs = ['range=' + (kpiExpanded ? '30' : '7')];
-      if (opts && opts.bust) qs.push('refresh=1', 't=' + Date.now());
-      const resp = await fetch('/api/get-results-omega?' + qs.join('&'));
+      const qs = ['range=' + (kpiExpanded ? '30' : '7'), 't=' + Math.floor(Date.now() / 60000)];
+      if (opts && opts.bust) qs.push('refresh=1');
+      const resp = await fetch('/api/get-results-omega?' + qs.join('&'), { cache: 'no-store' });
       if (!resp.ok) throw new Error('API ' + resp.status);
       const data = await resp.json();
       resultsSnapshot = data;

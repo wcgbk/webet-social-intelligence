@@ -16,14 +16,20 @@ function cacheTtlMs(cached) {
   return resultHasPending(cached) ? 30000 : 300000;
 }
 
-function cacheControlFor(cached) {
+function swrSeconds(env) {
+  const { kpiSwrShortEnabled } = require('./default_on_flag');
+  return kpiSwrShortEnabled(env) ? 60 : 86400;
+}
+
+function cacheControlFor(cached, env) {
   const sec = resultHasPending(cached) ? 30 : 300;
-  // Header-only: serve edge copy instantly while it refreshes in the background (values unchanged).
-  return `public, max-age=${sec}, s-maxage=${sec}, stale-while-revalidate=86400`;
+  // OMEGA_KPI_SWR_SHORT default on: 60s. =off restores a one-day stale window.
+  return `public, max-age=${sec}, s-maxage=${sec}, stale-while-revalidate=${swrSeconds(env)}`;
 }
 
 function wantFresh(event) {
   const p = event.queryStringParameters || {};
+  // `t` is a CDN cache-bust only. It must not bypass the blob cache.
   return p.refresh === '1' || p.bust === '1';
 }
 
@@ -38,6 +44,7 @@ module.exports = {
   resultHasPending,
   cacheTtlMs,
   cacheControlFor,
+  swrSeconds,
   wantFresh,
   cacheIsFresh,
 };

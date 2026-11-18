@@ -768,6 +768,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (clvLatest.status !== 0) throw new Error('clv latest saved gate failed');
+
+  const kpiSwr = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-kpi-swr.js')],
+    { stdio: 'inherit' }
+  );
+  if (kpiSwr.status !== 0) throw new Error('kpi swr gate failed');
 }
 
 function pickSlim(card) {

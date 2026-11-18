@@ -1198,6 +1198,23 @@ async function main() {
   });
   assertCheck(allowedActor.report, 'external-changes', 'ok', 'ok', 'comma allow list');
 
+  const executor = await runCase((data) => {
+    data.external.ledger[0].actor = 'webet-executor-closes-perevent-1116';
+  });
+  assertCheck(executor.report, 'external-changes', 'ok', 'ok', 'executor prefix');
+
+  const prefixOff = await runCase((data, deps) => {
+    data.external.ledger[0].actor = 'webet-executor-closes-perevent-1116';
+    deps.env = Object.assign({}, deps.env, { OMEGA_DEPLOY_ACTOR_PREFIX: 'off' });
+  });
+  assertCheck(prefixOff.report, 'external-changes', 'fail', 'unknown-actor', 'prefix flag off');
+
+  const overrideExact = await runCase((data, deps) => {
+    data.external.ledger[0].actor = 'webet-executor-closes-perevent-1116';
+    deps.env = Object.assign({}, deps.env, { OMEGA_DEPLOY_ACTORS: 'edge-executor' });
+  });
+  assertCheck(overrideExact.report, 'external-changes', 'fail', 'unknown-actor', 'override stays exact');
+
   const emptyLedger = await runCase((data) => {
     data.external.ledger = [];
     data.external.commits.push({
@@ -1460,6 +1477,7 @@ async function main() {
   assert.ok(dailySrc.includes('https://api.github.com/repos/wcgbk/webet-social-intelligence/commits'));
   assert.ok(dailySrc.includes('/deploys?per_page=50'));
   assert.ok(dailySrc.includes("DEFAULT_DEPLOY_ACTORS = 'edge-executor'"));
+  assert.ok(deploySrc.includes("process.env.DEPLOY_ACTOR || 'edge-executor'"));
 
   const readBack = await readDailyReport(DATE, {
     store: { async get(key) { return { key, ok: true }; } },

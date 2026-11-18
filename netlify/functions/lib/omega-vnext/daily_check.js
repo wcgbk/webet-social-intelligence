@@ -12,6 +12,7 @@
  */
 
 const { etParts } = require('../et-schedule');
+const { deployActorPrefixEnabled } = require('../default_on_flag');
 const { replayNoWrite } = require('./no_write');
 const { opsAlert } = require('./ops_alert');
 const { americanToDecimal, americanToImplied, etCalendarDate } = require('./odds_math');
@@ -1473,6 +1474,16 @@ function approvedActors(env) {
   return set;
 }
 
+function actorApproved(actor, env) {
+  const name = String(actor || '').trim();
+  if (approvedActors(env).has(name)) return true;
+  const source = env && typeof env === 'object' ? env : {};
+  const raw = source.OMEGA_DEPLOY_ACTORS;
+  const usingDefault = raw == null || String(raw).trim() === '';
+  if (!usingDefault || !deployActorPrefixEnabled(source)) return false;
+  return name.startsWith('webet-executor-');
+}
+
 function formatEt(iso) {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return null;
@@ -1826,7 +1837,6 @@ async function checkExternalChanges(ctx) {
   const flagged = [];
   if (ledger.ok && ledger.entries.length) {
     const baselineMs = earliestLedgerMs(ledger.entries);
-    const approved = approvedActors(ctx && ctx.env);
     const covered = coveredCommitSet(ledger.entries);
     const heads = ledgerHeadSet(ledger.entries);
     const seenActors = new Set();
@@ -1835,7 +1845,7 @@ async function checkExternalChanges(ctx) {
       const key = `${entry.sha}|${actor}`;
       if (seenActors.has(key)) continue;
       seenActors.add(key);
-      if (!approved.has(actor)) flagged.push(flagActor(entry));
+      if (!actorApproved(actor, ctx && ctx.env)) flagged.push(flagActor(entry));
     }
     if (github.ok) {
       const seen = new Set();

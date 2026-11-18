@@ -80,7 +80,7 @@ if (hex.test(prev) && hex.test(sha)) {
   const range = execFileSync('git', ['rev-list', `${prev}..${sha}`], { encoding: 'utf8' });
   commits = range.split('\n').map((line) => line.trim()).filter(Boolean);
 }
-const actor = process.env.DEPLOY_ACTOR || 'unknown';
+const actor = process.env.DEPLOY_ACTOR || 'edge-executor';
 process.stdout.write(JSON.stringify({
   sha,
   prevMain: prev,

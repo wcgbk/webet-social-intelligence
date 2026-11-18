@@ -92,6 +92,16 @@ function clvLineMatchEnabled(env) {
   return defaultOnFlag('OMEGA_CLV_LINE_MATCH', env);
 }
 
+/**
+ * Default deploy allowlist also accepts actors that start with webet-executor-.
+ * An explicit OMEGA_DEPLOY_ACTORS list stays exact-match only.
+ * off / 0 / false / no drops the prefix and keeps exact names only.
+ */
+function deployActorPrefixEnabled(env) {
+  return defaultOnFlag('OMEGA_DEPLOY_ACTOR_PREFIX', env);
+}
+
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -106,4 +116,5 @@ module.exports = {
   kpiTodayPendingEnabled,
   gradeFinalWinsEnabled,
   clvLineMatchEnabled,
+  deployActorPrefixEnabled,
 };

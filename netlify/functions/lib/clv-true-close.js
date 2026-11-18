@@ -8,7 +8,7 @@
  */
 
 const { SUPABASE_URL } = require('./clv-supabase');
-const { defaultOnFlag } = require('./default_on_flag');
+const { defaultOnFlag, clvLatestSavedEnabled } = require('./default_on_flag');
 const { summarizePickClv } = require('./clv-summary');
 const { pickClvEnabled, pickClvFillEnabled } = require('./omega-v2/constants');
 const { noVigTwoWay, americanToImplied } = require('./omega-vnext/odds_math');
@@ -293,14 +293,43 @@ function findPair(group, pick, game, sideInfo, betLine, api) {
   return { sideRow, oppRow, closingLine: null };
 }
 
-function chooseClose(rows, pick, game, sideInfo, betLine, api) {
+const LATEST_SAVED_AFTER_MIN = 20;
+
+function etYmdFromMs(ms) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(ms));
+}
+
+function wallTimeToUtc(ymd, hour, minute) {
+  const [y, m, d] = String(ymd).split('-').map(Number);
+  const utcGuess = Date.UTC(y, m - 1, d, hour, minute, 0);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(utcGuess));
+  const get = (type) => Number(parts.find((part) => part.type === type).value);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  return utcGuess + (utcGuess - asUtc);
+}
+
+function latestSavedCutoffMs(commenceMs) {
+  return wallTimeToUtc(etYmdFromMs(commenceMs), 10, LATEST_SAVED_AFTER_MIN);
+}
+
+function chooseFromGrouped(rows, pick, game, sideInfo, betLine, api) {
   const commenceMs = Date.parse(game.commence_time);
-  const windowRows = rows.filter((row) => inCloseWindow(row, commenceMs));
-  if (!windowRows.length) {
-    return { close: null, reason: 'no pinnacle closing snapshot in the close window' };
-  }
   const groups = new Map();
-  for (const row of windowRows) {
+  for (const row of rows) {
     const key = String(row.snapshot_ts);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
@@ -349,6 +378,35 @@ function chooseClose(rows, pick, game, sideInfo, betLine, api) {
   };
 }
 
+function chooseWindowClose(rows, pick, game, sideInfo, betLine, api) {
+  const commenceMs = Date.parse(game.commence_time);
+  const windowRows = rows.filter((row) => inCloseWindow(row, commenceMs));
+  if (!windowRows.length) {
+    return { close: null, reason: 'no pinnacle closing snapshot in the close window' };
+  }
+  return chooseFromGrouped(windowRows, pick, game, sideInfo, betLine, api);
+}
+
+function chooseLatestSaved(rows, pick, game, sideInfo, betLine, api) {
+  const commenceMs = Date.parse(game.commence_time);
+  if (!Number.isFinite(commenceMs)) return { close: null, reason: 'no commenceTime' };
+  const cutoff = latestSavedCutoffMs(commenceMs);
+  const lateRows = (rows || []).filter((row) => {
+    const ts = Date.parse(row && row.snapshot_ts);
+    return Number.isFinite(ts) && ts > cutoff && ts < commenceMs;
+  });
+  if (!lateRows.length) return { close: null, reason: 'no later saved pinnacle line' };
+  return chooseFromGrouped(lateRows, pick, game, sideInfo, betLine, api);
+}
+
+function chooseClose(rows, pick, game, sideInfo, betLine, api, env) {
+  if (!clvLatestSavedEnabled(env)) return chooseWindowClose(rows, pick, game, sideInfo, betLine, api);
+  const late = chooseLatestSaved(rows, pick, game, sideInfo, betLine, api);
+  if (late && late.close) return Object.assign({ latestSaved: late.close.snapshotTs }, late);
+  const windowed = chooseWindowClose(rows, pick, game, sideInfo, betLine, api);
+  return Object.assign({ latestSaved: 'none' }, windowed);
+}
+
 function closeSourceLabel(rowSource) {
   const s = String(rowSource || '');
   if (s.includes('ledger:true-close') || s.includes('ledger-true-close')) return 'ledger:true-close';
@@ -391,7 +449,7 @@ function matchGame(games, pick, api) {
   return { game: pool[0], reason: null };
 }
 
-function entryForPick(pick, games, snapshots, api) {
+function entryForPick(pick, games, snapshots, api, env) {
   if (!pick || typeof pick !== 'object') return { ok: false, close: null, reason: 'empty pick' };
   let sideInfo;
   try { sideInfo = api.pickSideInfo(pick); } catch (_) { sideInfo = null; }
@@ -403,8 +461,10 @@ function entryForPick(pick, games, snapshots, api) {
     return { ok: false, close: null, reason: 'no bet line' };
   }
   const rows = pinnacleClosingRows(snapshots, matched.game.game_id, sideInfo.marketBase);
-  const chosen = chooseClose(rows, pick, matched.game, sideInfo, betLine, api);
-  return { ok: !!chosen.close, close: chosen.close, reason: chosen.reason, gameId: matched.game.game_id };
+  const chosen = chooseClose(rows, pick, matched.game, sideInfo, betLine, api, env);
+  const out = { ok: !!chosen.close, close: chosen.close, reason: chosen.reason, gameId: matched.game.game_id };
+  if (chosen.latestSaved != null) out.latestSaved = chosen.latestSaved;
+  return out;
 }
 
 /**
@@ -437,7 +497,7 @@ async function loadTrueCloses(dateISO, picks, env, fetchImpl) {
       if (!matched[i] || !matched[i].game) {
         return { ok: false, close: null, reason: (matched[i] && matched[i].reason) || 'no game within 10 minutes of commence' };
       }
-      return entryForPick(pick, [matched[i].game], snapshots, api);
+      return entryForPick(pick, [matched[i].game], snapshots, api, env);
     });
     return { date: dateISO || null, reason: null, entries };
   } catch (err) {
@@ -967,4 +1027,6 @@ module.exports = {
   pickClvNumbers,
   upgradeCandidateTrueCloses,
   summarizeCandidateTrueClose,
+  chooseClose,
+  latestSavedCutoffMs,
 };

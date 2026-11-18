@@ -761,6 +761,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (clvLineMatch.status !== 0) throw new Error('clv line match gate failed');
+
+  const clvLatest = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-clv-latest-saved.js')],
+    { stdio: 'inherit' }
+  );
+  if (clvLatest.status !== 0) throw new Error('clv latest saved gate failed');
 }
 
 function pickSlim(card) {

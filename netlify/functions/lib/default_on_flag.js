@@ -101,6 +101,18 @@ function deployActorPrefixEnabled(env) {
   return defaultOnFlag('OMEGA_DEPLOY_ACTOR_PREFIX', env);
 }
 
+/**
+ * Use the latest saved Pinnacle price after the 10 AM ET pull and before
+ * commence. Default OFF. Only on / 1 / true / yes enable it.
+ * Unset leaves the close-window chooser unchanged.
+ */
+function clvLatestSavedEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source.OMEGA_CLV_LATEST_SAVED;
+  if (raw == null || String(raw).trim() === '') return false;
+  const text = String(raw).trim().toLowerCase();
+  return text === 'on' || text === '1' || text === 'true' || text === 'yes';
+}
 
 module.exports = {
   defaultOnFlag,
@@ -117,4 +129,5 @@ module.exports = {
   gradeFinalWinsEnabled,
   clvLineMatchEnabled,
   deployActorPrefixEnabled,
+  clvLatestSavedEnabled,
 };

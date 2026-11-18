@@ -13,7 +13,7 @@ const { forceOverride, trackLockKey, guardDateLock, releaseHeldLock } = require(
 const { loadStoredEventsForSport } = require('./lib/closes-3am');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
-const { applyToRecord } = require('./lib/clv-line-adj');
+const { applyToRecord, enforceLineMatch } = require('./lib/clv-line-adj');
 
 function trueCloseOn(env) {
   return defaultOnFlag('OMEGA_CLV_TRUE_CLOSE', env);
@@ -1327,7 +1327,7 @@ async function handle(event, deps) {
           captureScore,
         };
         // Moved spread/total: score the bet's own number. Flag off keeps rec.
-        rec = applyToRecord(rec, {
+        const lineExtra = {
           sport: pick.sport,
           market: pick.betType || pick.market,
           side: sideInfo,
@@ -1335,7 +1335,9 @@ async function handle(event, deps) {
           closeLine: close.closingLine,
           altQuote: close.altQuote || null,
           betOdds: pick.odds,
-        }, env);
+        };
+        rec = applyToRecord(rec, lineExtra, env);
+        rec = enforceLineMatch(rec, lineExtra, env);
         console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
       }
 

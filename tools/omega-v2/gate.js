@@ -754,6 +754,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (historicalGuard.status !== 0) throw new Error('historical odds guard gate failed');
+
+  const clvLineMatch = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-clv-line-match.js')],
+    { stdio: 'inherit' }
+  );
+  if (clvLineMatch.status !== 0) throw new Error('clv line match gate failed');
 }
 
 function pickSlim(card) {

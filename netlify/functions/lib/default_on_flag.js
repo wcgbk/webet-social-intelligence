@@ -84,6 +84,14 @@ function gradeFinalWinsEnabled(env) {
   return defaultOnFlag('OMEGA_GRADE_FINAL_WINS', env);
 }
 
+/**
+ * CLV only when market, side, and line match, or a documented point adjustment
+ * already produced clvMethod converted or alt-line. off restores the prior record.
+ */
+function clvLineMatchEnabled(env) {
+  return defaultOnFlag('OMEGA_CLV_LINE_MATCH', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -97,4 +105,5 @@ module.exports = {
   dailyResultsResyncEnabled,
   kpiTodayPendingEnabled,
   gradeFinalWinsEnabled,
+  clvLineMatchEnabled,
 };

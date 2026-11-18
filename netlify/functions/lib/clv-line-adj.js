@@ -17,7 +17,7 @@
  * untouched so the previous comparison comes back exactly.
  */
 
-const { defaultOnFlag } = require('./default_on_flag');
+const { defaultOnFlag, clvLineMatchEnabled } = require('./default_on_flag');
 const { sportOf, marketOf, convertCoverProb } = require('./omega-v2/key_convert');
 const { SPORT_SPREAD_STD, SPORT_TOTAL_STD } = require('./omega-vnext/config');
 const { normCdf } = require('./omega-vnext/odds_math');
@@ -240,10 +240,41 @@ function applyToRecord(rec, extra, env) {
   return next;
 }
 
+function mismatchRecord(rec) {
+  const next = { ...rec };
+  next.clv = null;
+  next.clvCents = null;
+  next.beatClosing = null;
+  next.clvReason = 'line-mismatch';
+  return next;
+}
+
+/**
+ * Keep CLV only for an exact line, or for a documented converted / alt-line
+ * adjustment that is not a spread side flip. Otherwise null it.
+ * Does not run inside applyToRecord: that function stays a no-op when its own flag is off.
+ */
+function enforceLineMatch(rec, extra, env) {
+  if (!clvLineMatchEnabled(env) || !rec) return rec;
+  const market = marketOf((extra && extra.market) || rec.market || rec.betType);
+  const betLine = num(extra && extra.betLine != null ? extra.betLine : rec.betLine);
+  const closeLine = num(extra && extra.closeLine != null ? extra.closeLine : rec.closingLine);
+  const priced = market === 'Spread' || market === 'Total' || (betLine != null && closeLine != null);
+  if (!priced) return rec;
+  if (betLine == null || closeLine == null) return mismatchRecord(rec);
+  const signFlip = market === 'Spread' && betLine * closeLine < 0;
+  if (!signFlip && Math.abs(betLine - closeLine) <= LINE_EPS) return rec;
+  const method = rec.clvMethod;
+  const adjusted = !signFlip && rec.clv != null && (method === 'converted' || method === 'alt-line');
+  if (adjusted) return rec;
+  return mismatchRecord(rec);
+}
+
 module.exports = {
   lineAdjEnabled,
   lineAwareClv,
   applyToRecord,
+  enforceLineMatch,
   sigmaFor,
   shiftClose,
   overCap,

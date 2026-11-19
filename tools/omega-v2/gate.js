@@ -685,6 +685,13 @@ async function main() {
   );
   if (newsSnapshot.status !== 0) throw new Error('news snapshot gate failed');
 
+  const newsSlate = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-news-slate.js')],
+    { stdio: 'inherit' }
+  );
+  if (newsSlate.status !== 0) throw new Error('news slate gate failed');
+
   const ncaamGrade = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-ncaam-grade.js')],

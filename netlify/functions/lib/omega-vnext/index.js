@@ -14,10 +14,11 @@ const { publishEdgeCard, summaryFrom, dedupeRejections } = require('./assemble')
 const { syncLegsToPublishedStraights } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly, alignEdgeSummary } = require('./narrate');
 const { narrateTextOnly } = require('./narrate_text');
-const { nbaInjuryEnabled, nhlGoalieMode, newsSnapshotEnabled } = require('../omega-v2/constants');
+const { nbaInjuryEnabled, nhlGoalieMode, newsSnapshotEnabled, newsSlateEnabled } = require('../omega-v2/constants');
 const { filterSameEtDay, logSameDayDrops, sameDayMeta } = require('../omega-v2/same_day');
 const { fetchNbaInjuryReport, fetchNhlGoalieReport, bindNewsShare, clearNewsShare } = require('./status_pull');
 const { captureNewsSnapshot } = require('./news_snapshot');
+const { captureNewsSlate } = require('./news_slate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, readJson } = require('./store');
@@ -1082,6 +1083,21 @@ async function generateOmegaVnext(opts = {}) {
     } catch (e) {
       const msg = String(e && e.message || 'error');
       console.warn(`[candidate-clv] seed skipped: ${/bearer|token|authorization/i.test(msg) ? 'unavailable' : msg}`);
+    }
+  }
+
+  // Per-game news log. After the card write. Not a pick input and not a card field.
+  // dryRun and replay do not fetch. OMEGA_NEWS_SLATE=off skips. A failure stays off the card.
+  if (!replayLike && !dryRun && newsSlateEnabled()) {
+    try {
+      await captureNewsSlate({
+        dateISO,
+        now,
+        timeoutMs: 5000,
+        budgetMs: 60000,
+      });
+    } catch (_) {
+      // captureNewsSlate does not throw. A late rejection stays off the card.
     }
   }
 

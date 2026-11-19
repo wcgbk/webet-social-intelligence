@@ -29,6 +29,7 @@ const FLAG_KEYS = [
   'OMEGA_V2_NHL_GOALIE',
   // News log is not read on this path. Unset stays off so a replay does not fetch.
   'OMEGA_NEWS_SNAPSHOT',
+  'OMEGA_NEWS_SLATE',
   // Default-on blend. A bare replay stays the pre-blend card. Set =on to replay it.
   // Weight and trim env vars are not here: an unset value would become the string off.
   'OMEGA_V2_BLEND_P',

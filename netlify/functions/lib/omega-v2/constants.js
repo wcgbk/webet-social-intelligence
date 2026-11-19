@@ -566,6 +566,26 @@ function newsSnapshotEnabled(env) {
 }
 
 /**
+ * Per-game ESPN slate log (injuries, lineups, goalies, QB). Default on.
+ * Shadow data only: not a pick input. Unset uses the default.
+ * on/1/true/yes stay on. off/0/false and a blank value turn it off
+ * (=off is the rollback). Any other string is off.
+ * OMEGA_NEWS_SNAPSHOT is a separate switch and is not read here.
+ */
+const NEWS_SLATE_ENV = 'OMEGA_NEWS_SLATE';
+const NEWS_SLATE_DEFAULT_ON = true;
+
+function newsSlateEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[NEWS_SLATE_ENV];
+  if (raw == null) return NEWS_SLATE_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
+  if (text === '' || text === 'off' || text === '0' || text === 'false') return false;
+  return false;
+}
+
+/**
  * Logit blend of the Pinnacle power no-vig and the calibrated model.
  * Default on. OMEGA_V2_BLEND_P=off / 0 / false / no is the current card
  * (=off rollback): same probability, same Kelly rank, same edge letter.
@@ -792,6 +812,9 @@ module.exports = {
   NEWS_SNAPSHOT_ENV,
   NEWS_SNAPSHOT_DEFAULT_ON,
   newsSnapshotEnabled,
+  NEWS_SLATE_ENV,
+  NEWS_SLATE_DEFAULT_ON,
+  newsSlateEnabled,
   BLEND_W_CAP,
   BLEND_W,
   BLEND_P_ENV,

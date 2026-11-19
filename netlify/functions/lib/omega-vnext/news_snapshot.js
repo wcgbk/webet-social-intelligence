@@ -4,6 +4,7 @@
  * Daily ESPN news log for a later backtest of OMEGA_V2_NBA_INJURY,
  * OMEGA_V2_NHL_GOALIE, and OMEGA_NFL_QB_ADJ. Not a pick input.
  * Live v2 generate calls this once. Replay does not.
+ * The per-game slate is news_slate.js (OMEGA_NEWS_SLATE), a separate blob key.
  * Each pull is 5s. A failure is recorded and does not throw.
  * NBA and NHL bodies already pulled for a veto are reused.
  */
@@ -432,5 +433,9 @@ module.exports = {
   NEWS_SNAPSHOT_STORE,
   NEWS_SNAPSHOT_TIMEOUT_MS,
   newsBlobKey,
+  hhmmET,
+  clip,
+  fetchedAtISO,
+  writeNewsBlob: writeSnapshot,
   captureNewsSnapshot,
 };

@@ -30,6 +30,9 @@ const WEEK3_SOURCE_URL =
 const WEEK10_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-10.pdf";
 
+const WEEK11_SOURCE_URL =
+  "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-11.pdf";
+
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
 class ContestLinesError extends Error {
@@ -468,6 +471,81 @@ const WEEK10_GAMES = [
   }),
 ];
 
+
+// Verified against the official Week 11 Contest Point Spreads PDF
+// (https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-11.pdf,
+// 504,659 bytes, sha256 1b3340100af389487edc06ba023e071e28ce5c66a2e541ba7b7105ea0d75b832).
+// Image render; spreads are ½ → .5. Top team on the sheet is visitor; bottom is home.
+// Every pair is an exact mirror. Mexico City: 49ers are the designated home team.
+const WEEK11_GAMES = [
+  gameRow({
+    away: "Indianapolis Colts", home: "Houston Texans",
+    commenceHint: "Thu Nov 19, 5:15 PM PT", commenceTime: "2026-11-20T01:15:00.000Z",
+    awaySpread: 12.5, homeSpread: -12.5, contestIds: { away: 2, home: 1 },
+  }),
+  gameRow({
+    away: "Baltimore Ravens", home: "Carolina Panthers",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 4, home: 3 },
+  }),
+  gameRow({
+    away: "Tampa Bay Buccaneers", home: "Detroit Lions",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 6.5, homeSpread: -6.5, contestIds: { away: 6, home: 5 },
+  }),
+  gameRow({
+    away: "Jacksonville Jaguars", home: "New York Giants",
+    commenceHint: "Sun Nov 22, 1:25 PM PT", commenceTime: "2026-11-22T21:25:00.000Z",
+    awaySpread: -5.5, homeSpread: 5.5, contestIds: { away: 7, home: 8 },
+  }),
+  gameRow({
+    away: "New Orleans Saints", home: "Chicago Bears",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 11.5, homeSpread: -11.5, contestIds: { away: 10, home: 9 },
+  }),
+  gameRow({
+    away: "Arizona Cardinals", home: "Kansas City Chiefs",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 16, homeSpread: -16, contestIds: { away: 12, home: 11 },
+  }),
+  gameRow({
+    away: "Tennessee Titans", home: "Dallas Cowboys",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 8, homeSpread: -8, contestIds: { away: 14, home: 13 },
+  }),
+  gameRow({
+    away: "Miami Dolphins", home: "Buffalo Bills",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 16.5, homeSpread: -16.5, contestIds: { away: 16, home: 15 },
+  }),
+  gameRow({
+    away: "New York Jets", home: "Los Angeles Chargers",
+    commenceHint: "Sun Nov 22, 1:05 PM PT", commenceTime: "2026-11-22T21:05:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 18, home: 17 },
+  }),
+  gameRow({
+    away: "Las Vegas Raiders", home: "Denver Broncos",
+    commenceHint: "Sun Nov 22, 1:25 PM PT", commenceTime: "2026-11-22T21:25:00.000Z",
+    awaySpread: 10, homeSpread: -10, contestIds: { away: 20, home: 19 },
+  }),
+  gameRow({
+    away: "Pittsburgh Steelers", home: "Philadelphia Eagles",
+    commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
+    awaySpread: 4.5, homeSpread: -4.5, contestIds: { away: 21, home: 22 },
+  }),
+  gameRow({
+    away: "Minnesota Vikings", home: "San Francisco 49ers",
+    commenceHint: "Sun Nov 22, 5:20 PM PT · Mexico City", commenceTime: "2026-11-23T01:20:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 24, home: 23 },
+    venueHint: "Estadio Banorte, Mexico City, Mexico",
+  }),
+  gameRow({
+    away: "Cincinnati Bengals", home: "Washington Commanders",
+    commenceHint: "Mon Nov 23, 5:15 PM PT", commenceTime: "2026-11-24T01:15:00.000Z",
+    awaySpread: -6.5, homeSpread: 6.5, contestIds: { away: 25, home: 26 },
+  }),
+];
+
 const WEEK_FIXTURES = {
   1: {
     weekNum: 1,
@@ -496,6 +574,13 @@ const WEEK_FIXTURES = {
     fromFixture: true,
     lineSource: LINE_SOURCE,
     games: WEEK10_GAMES,
+  },
+  11: {
+    weekNum: 11,
+    sourceUrl: WEEK11_SOURCE_URL,
+    fromFixture: true,
+    lineSource: LINE_SOURCE,
+    games: WEEK11_GAMES,
   },
 };
 
@@ -531,7 +616,7 @@ function candidateSpreadUrls(weekNum, now = new Date()) {
     13: [2026, 12], 14: [2026, 12], 15: [2026, 12], 16: [2026, 12],
     17: [2026, 12], 18: [2027, 1],
   };
-  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL, 10: WEEK10_SOURCE_URL };
+  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL, 10: WEEK10_SOURCE_URL, 11: WEEK11_SOURCE_URL };
   if (known[n]) urls.push(known[n]);
   const ym = weekMonth[n];
   if (ym) {
@@ -918,6 +1003,7 @@ module.exports = {
   WEEK2_SOURCE_URL,
   WEEK3_SOURCE_URL,
   WEEK10_SOURCE_URL,
+  WEEK11_SOURCE_URL,
   NICK_TO_FULL,
   ContestLinesError,
   fullTeam,
@@ -934,5 +1020,6 @@ module.exports = {
   WEEK2_GAMES,
   WEEK3_GAMES,
   WEEK10_GAMES,
+  WEEK11_GAMES,
   mirroredSpreads,
 };

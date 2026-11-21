@@ -7,6 +7,7 @@
  *  expects. Read-only; no Odds API calls. Missing slot/book/market blobs
  *  are skipped, never synthesized. */
 const { readJson } = require('./store');
+const { pullResumeEnabled } = require('../default_on_flag');
 const { extractGameBooks, gameKey } = require('../omega-vnext/line_path');
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length); let i = 0;
@@ -34,7 +35,19 @@ function outcomesFor(market, sides, home, away) {
   if (sides.under) o.push({ name: 'Under', price: sides.under.price, point: sides.under.line });
   return o.filter(x => Number.isFinite(x.price) && Number.isFinite(x.point));
 }
-async function loadMasterBoard(dateISO, read = readJson) {
+function pull1000Complete(doc) {
+  if (!doc || !doc.at) return false;
+  return doc.phase !== 'fetched' && doc.phase !== 'partial';
+}
+
+async function loadMasterBoard(dateISO, read = readJson, env) {
+  const resume = pullResumeEnabled(env);
+  // A 1000 index stamp is not a snapshot. The pull doc is written after the blobs.
+  let trust1000 = true;
+  if (resume) {
+    const pull1000 = await read(`pulls/${dateISO}/1000`);
+    trust1000 = pull1000Complete(pull1000);
+  }
   const dateDoc = await read(`by-date/${dateISO}`);
   const evs = (dateDoc && Array.isArray(dateDoc.events)) ? dateDoc.events : [];
   if (!evs.length) return null;
@@ -62,7 +75,7 @@ async function loadMasterBoard(dateISO, read = readJson) {
         commence_time: ev.commenceTime || null, bookmakers };
     };
     const a03 = index.baseline0300 && index.baseline0300.at;
-    const a10 = index.checks && index.checks['1000'] && index.checks['1000'].at;
+    const a10 = trust1000 && index.checks && index.checks['1000'] && index.checks['1000'].at;
     const [ev1000, ev0300] = await Promise.all([build(a10), build(a03)]);
     const have = new Set();
     for (const built of [ev1000, ev0300]) {
@@ -81,11 +94,14 @@ async function loadMasterBoard(dateISO, read = readJson) {
   for (const row of rows) {
     if (!row) continue;
     if (row.a03) at0300 = row.a03;
-    if (row.a10) at1000 = row.a10;
+    if (trust1000 && row.a10) at1000 = row.a10;
     for (const book of row.booksSeen) booksSeen.add(book);
-    if (row.ev1000) {
+    if (trust1000 && row.ev1000) {
       (eventsBySport[row.ev1000.sport] = eventsBySport[row.ev1000.sport] || []).push(row.ev1000);
       games1000[gameKey(row.ev1000.away_team, row.ev1000.home_team)] = { sport: row.ev1000.sport, ...extractGameBooks(row.ev1000) };
+    } else if (!trust1000 && row.ev0300) {
+      // Incomplete 1000: price the board from the finished 3 AM pull.
+      (eventsBySport[row.ev0300.sport] = eventsBySport[row.ev0300.sport] || []).push(row.ev0300);
     }
     if (row.ev0300) {
       games0300[gameKey(row.ev0300.away_team, row.ev0300.home_team)] = { sport: row.ev0300.sport, ...extractGameBooks(row.ev0300) };

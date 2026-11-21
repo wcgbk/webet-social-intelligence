@@ -24,6 +24,8 @@ const FLAG_KEYS = [
   'OMEGA_V2_KEY_CONVERT',
   'OMEGA_V2_EV_FIRST',
   'OMEGA_V2_EV_FIRST_CAPPED',
+  // Pre-penalty EV rank. Unset stays off so a bare replay matches the live card.
+  'OMEGA_V2_RAW_EV_RANK',
   'OMEGA_V2_NBA_INJURY',
   'OMEGA_NFL_QB_ADJ',
   'OMEGA_V2_NHL_GOALIE',

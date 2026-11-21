@@ -496,6 +496,28 @@ function evFirstEnabled(env) {
 const EV_FIRST_CAPPED_ENV = 'OMEGA_V2_EV_FIRST_CAPPED';
 const EV_FIRST_CAPPED_DEFAULT_ON = true;
 
+/**
+ * Rank and the +EV tier use the pre-penalty win probability.
+ * EV = p x decimal - 1. p is pPinnacle when the blend stored one, else pMkt.
+ * Stakes stay on the penalized pBet. The longshot haircut still sizes the bet.
+ * HOLD 2026-11-21. Saved-board replay, same grader: 09/15-11/14 was $2,047
+ * (98-59) vs live $1,939 (102-55), CLV -0.254 vs -0.246. Holdout 11/01-11/14
+ * was $1,898 (30-11) vs $2,017 (32-9). Default stays off.
+ * =on is the raw-EV card. =off and unset are the penalized price-EV card.
+ */
+const RAW_EV_RANK_ENV = 'OMEGA_V2_RAW_EV_RANK';
+const RAW_EV_RANK_DEFAULT_ON = false;
+
+function rawEvRankEnabled(env) {
+  const source = env == null ? process.env : env;
+  const raw = source[RAW_EV_RANK_ENV];
+  if (raw == null || String(raw).trim() === '') return RAW_EV_RANK_DEFAULT_ON;
+  const text = String(raw).trim().toLowerCase();
+  if (text === 'on' || text === '1' || text === 'true' || text === 'yes') return true;
+  if (text === 'off' || text === '0' || text === 'false' || text === 'no') return false;
+  return RAW_EV_RANK_DEFAULT_ON;
+}
+
 function evFirstCappedEnabled(env) {
   const source = env == null ? process.env : env;
   const raw = source[EV_FIRST_CAPPED_ENV];
@@ -805,6 +827,9 @@ module.exports = {
   EV_FIRST_CAPPED_ENV,
   EV_FIRST_CAPPED_DEFAULT_ON,
   evFirstCappedEnabled,
+  RAW_EV_RANK_ENV,
+  RAW_EV_RANK_DEFAULT_ON,
+  rawEvRankEnabled,
   NBA_INJURY_ENV,
   nbaInjuryEnabled,
   NHL_GOALIE_ENV,

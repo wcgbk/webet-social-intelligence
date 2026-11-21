@@ -630,6 +630,13 @@ async function main() {
   );
   if (evFirstCapped.status !== 0) throw new Error('ev-first capped fill gate failed');
 
+  const rawEvRank = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-raw-ev-rank.js')],
+    { stdio: 'inherit' }
+  );
+  if (rawEvRank.status !== 0) throw new Error('raw ev rank gate failed');
+
   const rankedPool = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-v2-ranked-pool.js')],
@@ -733,6 +740,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (pullSlotLock.status !== 0) throw new Error('pull slot lock gate failed');
+
+  const pullResume = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-pull-resume.js')],
+    { stdio: 'inherit' }
+  );
+  if (pullResume.status !== 0) throw new Error('pull resume gate failed');
 
   const closesWhitelist = require('child_process').spawnSync(
     process.execPath,

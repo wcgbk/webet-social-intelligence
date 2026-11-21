@@ -290,7 +290,10 @@ async function loadMaster(index, dates) {
   let boards = 0;
   if (!fs.existsSync(MASTER_ROOT)) return boards;
   for (const date of dates) {
-    const board = await loadMasterBoard(date, readMaster);
+    // The staged mirror stores price blobs and no pulls/ doc. The resume
+    // gate would drop every 1000 quote. Capture health on the live path
+    // still requires the pull doc. This reader keeps both saved slots.
+    const board = await loadMasterBoard(date, readMaster, { OMEGA_PULL_RESUME: 'off' });
     if (!board) continue;
     boards += 1;
     const slots = [

@@ -32,10 +32,14 @@ async function runCapture(event, deps) {
   try {
     const r = await pull(pullArgs(event, deps));
     if (r && r.skipped) {
+      // 503 asks the scheduler to retry a pull that already fetched and can be finished.
+      const resumable = !!r.resumable;
       return {
-        statusCode: 200,
+        statusCode: resumable ? 503 : 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ok: true, skipped: r.skipped, slot: '1000', date: r.date || null }),
+        body: JSON.stringify({
+          ok: !resumable, skipped: r.skipped, resumable, slot: '1000', date: r.date || null,
+        }),
       };
     }
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, ...r }) };

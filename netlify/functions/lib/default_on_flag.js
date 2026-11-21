@@ -137,6 +137,16 @@ function pullCreditsPersistEnabled(env) {
   return defaultOnFlag('OMEGA_PULL_CREDITS_PERSIST', env);
 }
 
+/**
+ * Finish a killed 3 AM / 10 AM pull from the post-fetch checkpoint.
+ * No second Odds API call. A 1000 stamp counts only when pulls/{date}/1000
+ * is complete, so a partial write is not a usable snap.
+ * =off restores the single-pass pull and the stamp-only board.
+ */
+function pullResumeEnabled(env) {
+  return defaultOnFlag('OMEGA_PULL_RESUME', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -157,4 +167,5 @@ module.exports = {
   savedPickCloseEnabled,
   pullBookPricesEnabled,
   pullCreditsPersistEnabled,
+  pullResumeEnabled,
 };

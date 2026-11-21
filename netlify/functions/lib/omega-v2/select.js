@@ -4,7 +4,7 @@ const {
   MAX_EDGE, MAX_STRAIGHTS, EDGE_FLOOR_K, NO_VIG_BUCKETS, forceTop3From,
   PAIR_SANITY_PP, PAIR_SANITY_LO, PAIR_SANITY_HI, pairFixEnabled, longshotAdjEnabled,
   marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
-  evFirstEnabled, evFirstCappedEnabled, KELLY_FRACTION,
+  evFirstEnabled, evFirstCappedEnabled, rawEvRankEnabled, KELLY_FRACTION,
   blendPEnabled, blendWeightFor, blendTrimEnabled, clampWinProb,
 } = require('./constants');
 const { blendProb, modelProbForBlend } = require('./blend');
@@ -437,12 +437,29 @@ function compareForcedGrowth(a, b) {
  * A stored-fair fallback still sorts after every sharp-fair row.
  * Used inside each band when OMEGA_V2_BLEND_P is on.
  */
-function compareForcedEv(a, b) {
+/**
+ * Probability the rank and the +EV tier use.
+ * Flag off is pBet, which already includes the longshot haircut.
+ * Flag on is the pre-penalty win probability: pPinnacle, else pMkt, else pCal.
+ */
+function rankProb(row, env) {
+  if (!rawEvRankEnabled(env)) return row && row.pBet;
+  const pin = Number(row && row.pPinnacle);
+  if (Number.isFinite(pin)) return pin;
+  const cal = row && row.calibration;
+  const pMkt = Number(cal && cal.pMkt);
+  if (Number.isFinite(pMkt)) return pMkt;
+  const pCal = Number(cal && cal.pCal);
+  if (Number.isFinite(pCal)) return pCal;
+  return row && row.pBet;
+}
+
+function compareForcedEv(a, b, env) {
   const aFall = storedFairFallback(a);
   const bFall = storedFairFallback(b);
   if (aFall !== bFall) return aFall ? 1 : -1;
-  const aEv = betPriceEv(a && a.pBet, a && a.decimal);
-  const bEv = betPriceEv(b && b.pBet, b && b.decimal);
+  const aEv = betPriceEv(rankProb(a, env), a && a.decimal);
+  const bEv = betPriceEv(rankProb(b, env), b && b.decimal);
   const ev = finiteRank(bEv != null ? bEv : b.ev) - finiteRank(aEv != null ? aEv : a.ev);
   if (ev) return ev;
   const aStale = a.staleSoft === true;
@@ -494,11 +511,11 @@ function betPriceEv(pBet, decimal) {
   return p * d - 1;
 }
 
-function splitBetEv(list) {
+function splitBetEv(list, env) {
   const pos = [];
   const rest = [];
   for (const row of list || []) {
-    const ev = betPriceEv(row && row.pBet, row && row.decimal);
+    const ev = betPriceEv(rankProb(row, env), row && row.decimal);
     if (ev != null && ev > 0) pos.push(row);
     else rest.push(row);
   }
@@ -520,7 +537,7 @@ function splitBetEv(list) {
  * order and are reached only after the in-band rows. CAPPED ignores
  * EV_FIRST. Cap off leaves the unsplit rank, so both flags are a no-op.
  */
-function forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped) {
+function forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped, env) {
   const base = [
     [inFair.sharp, false],
     [outFair.sharp, true],
@@ -533,8 +550,8 @@ function forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped) {
     packs.push({ rows: rows || [], fill: !!(fill && cap) });
   };
   if (evFirstCapped && cap) {
-    const inSharp = splitBetEv(inFair.sharp);
-    const inFall = splitBetEv(inFair.fallback);
+    const inSharp = splitBetEv(inFair.sharp, env);
+    const inFall = splitBetEv(inFair.fallback, env);
     push(inSharp.pos, false);
     push(inFall.pos, false);
     push(inSharp.rest, false);
@@ -547,7 +564,7 @@ function forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped) {
     for (const [rows, fill] of base) push(rows, fill);
     return packs;
   }
-  const halves = base.map(([rows, fill]) => ({ split: splitBetEv(rows), fill }));
+  const halves = base.map(([rows, fill]) => ({ split: splitBetEv(rows, env), fill }));
   for (const half of halves) push(half.split.pos, half.fill);
   for (const half of halves) push(half.split.rest, half.fill);
   return packs;
@@ -613,7 +630,8 @@ function growthForRank(row, pBet, decimal) {
 
 function selectForcedTop3(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
-  const cap = favCapEnabled(opts && opts.env);
+  const env = opts && opts.env;
+  const cap = favCapEnabled(env);
   const ranked = rankPool(annotated, opts)
     .filter((c) => c && c.qualified && !pastPregameCutoff(c.commenceTime, asOfMs))
     .map((c) => ({ ...c, kellyGrowth: growthForRank(c, c.pBet, c.decimal) }));
@@ -623,15 +641,15 @@ function selectForcedTop3(annotated, opts) {
     if (cap && favoriteOutOfBand(c)) outBand.push(c);
     else inBand.push(c);
   }
-  const byEv = blendPEnabled(opts && opts.env);
-  inBand.sort(byEv ? compareForcedEv : compareForcedGrowth);
-  if (cap) outBand.sort(byEv ? compareForcedEv : compareFavFill);
+  const byEv = blendPEnabled(env);
+  const byPrice = (a, b) => compareForcedEv(a, b, env);
+  inBand.sort(byEv ? byPrice : compareForcedGrowth);
+  if (cap) outBand.sort(byEv ? byPrice : compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
-  const env = opts && opts.env;
   const evFirst = evFirstEnabled(env);
   const evFirstCapped = evFirstCappedEnabled(env);
-  return takePacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped), MAX_STRAIGHTS);
+  return takePacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped, env), MAX_STRAIGHTS);
 }
 
 /**
@@ -645,7 +663,8 @@ function selectForcedTop3(annotated, opts) {
  */
 function orderForcedPool(annotated, opts) {
   const asOfMs = pregameClockMs(opts);
-  const cap = favCapEnabled(opts && opts.env);
+  const env = opts && opts.env;
+  const cap = favCapEnabled(env);
   const ranked = rankPool(annotated, opts)
     .filter((c) => c && c.qualified !== false && !pastPregameCutoff(c.commenceTime, asOfMs))
     .map((c) => {
@@ -659,15 +678,15 @@ function orderForcedPool(annotated, opts) {
     if (cap && favoriteOutOfBand(c)) outBand.push(c);
     else inBand.push(c);
   }
-  const byEv = blendPEnabled(opts && opts.env);
-  inBand.sort(byEv ? compareForcedEv : compareForcedGrowth);
-  if (cap) outBand.sort(byEv ? compareForcedEv : compareFavFill);
+  const byEv = blendPEnabled(env);
+  const byPrice = (a, b) => compareForcedEv(a, b, env);
+  inBand.sort(byEv ? byPrice : compareForcedGrowth);
+  if (cap) outBand.sort(byEv ? byPrice : compareFavFill);
   const inFair = bySharpFair(inBand);
   const outFair = bySharpFair(outBand);
-  const env = opts && opts.env;
   const evFirst = evFirstEnabled(env);
   const evFirstCapped = evFirstCappedEnabled(env);
-  return concatPacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped));
+  return concatPacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped, env));
 }
 
 function selectStraights(annotated, opts) {

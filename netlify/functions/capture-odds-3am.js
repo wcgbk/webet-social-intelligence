@@ -75,10 +75,15 @@ async function runCapture(event, deps) {
     pullError = err;
   }
   if (!pullError && pullResult && pullResult.skipped) {
+    // 503 asks the scheduler to retry a pull that already fetched and can be finished.
+    // Closes stay unfired until the board doc exists.
+    const resumable = !!pullResult.resumable;
     return {
-      statusCode: 200,
+      statusCode: resumable ? 503 : 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, skipped: pullResult.skipped, slot: '0300', date: pullResult.date || null }),
+      body: JSON.stringify({
+        ok: !resumable, skipped: pullResult.skipped, resumable, slot: '0300', date: pullResult.date || null,
+      }),
     };
   }
   let closes = null;

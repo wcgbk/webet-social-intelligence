@@ -23,6 +23,7 @@ const store = {};
 for (const w of writes) if (!w.merge) store[w.key] = w.data;
 store['by-date/2026-10-19'] = { date: '2026-10-19', events };
 store['index/NFL/ev1'] = { sport: 'NFL', eventId: 'ev1', books: ['hardrockbet', 'pinnacle', 'draftkings'], checks: { '1000': { at: '2026-10-19T14:00:00.000Z' } }, baseline0300: { at: '2026-10-19T07:00:00.000Z' } };
+store['pulls/2026-10-19/1000'] = { date: '2026-10-19', slot: '1000', at: '2026-10-19T14:00:00.000Z', phase: 'complete' };
 // baseline price blobs (0300) for line-path open
 for (const w of writes) if (!w.merge) store[w.key.replace('2026-10-19T14:00:00.000Z', '2026-10-19T07:00:00.000Z')] = w.data;
 (async () => {

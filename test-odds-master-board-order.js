@@ -46,6 +46,7 @@ function buildStore() {
     slateEvent('NFL', 'q7', 'Empty Prices', 'No Books', '2026-11-04T22:00:00Z'),
   ];
   store[`by-date/${DATE}`] = { date: DATE, events };
+  store[`pulls/${DATE}/1000`] = { date: DATE, slot: '1000', at: T.q7_10, phase: 'complete' };
   store['index/NFL/z9'] = indexDoc('NFL', 'z9', ['pinnacle', 'draftkings'], T.z9_03, T.z9_10);
   store['index/NBA/m2'] = indexDoc('NBA', 'm2', ['fanduel', 'hardrockbet'], T.m2_03, T.m2_10);
   store['index/NFL/m1'] = indexDoc('NFL', 'm1', ['draftkings', 'betmgm', 'fanatics'], T.m1_03, T.m1_10);
@@ -115,13 +116,14 @@ function assertBoard(board) {
 async function load(delayMax) {
   const store = buildStore();
   const reader = makeRead(store, delayMax);
-  const board = await loadMasterBoard(DATE, reader.read);
+  const board = await loadMasterBoard(DATE, reader.read, { OMEGA_PULL_RESUME: 'on' });
   return { board, reads: reader.reads };
 }
 
 async function main() {
   const quiet = await load(0);
-  assert.strictEqual(quiet.reads, 65);
+  // One extra read: pulls/{date}/1000 must be complete before the 1000 stamp counts.
+  assert.strictEqual(quiet.reads, 66);
   assertBoard(quiet.board);
   const quietJson = JSON.stringify(quiet.board);
 

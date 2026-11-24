@@ -1,9 +1,16 @@
 # WeBet Edge: Standing Orders (single source of truth)
-Last updated: 2026-11-17 5:43 PM ET. Newest order wins. If an order below conflicts with older memory, THIS FILE wins.
+Last updated: 2026-11-24 3:40 PM ET. Newest order wins. If an order below conflicts with older memory, THIS FILE wins.
 Every change, brief, routine, or build must be checked against this list BEFORE work starts. Every Grok Build brief must include this file.
 
+## 00. Newest orders (newest wins)
+- 11/24 3:16 PM (WeBet, verbatim): "Edge KPIs not loading and still NCAAM focused with no NBA or NHL. Anything to be optimized needs to be deployed and fixed now. This is just ridiculous. Stop back testing and deploy and working best practice formula to make picks."
+  -> Stop gating on long backtests. Ship best-practice fixes now. Before a deploy, run only a quick sanity check: the card builds, grading is unchanged, nothing crashes. This replaces the 11/16 and 11/19 replay-profit ship gates. Freeze windows and flags with rollback still apply.
+- 11/24 3:17 PM (WeBet, verbatim): "You have to be calculating edge wrong and the math behind candidates top 3 are being chosen from has to be wrong. Fix it now."
+  -> Pick formula: WeBetAI projection -> model win probability -> blended with Pinnacle no-vig (log-odds) -> compared with the DK/HR price (implied = 1/decimal) -> edge = p - 1/decimal, EV = p x decimal - 1 -> one ranking across all sports on equal terms. Use one p for the printed win %, edge, EV, grade, rank and stake.
+- 11/19 (WeBet): "Winners need to show winners and profit first." Profit and win record decide; CLV is report-only. Keep pick selection (projection vs market: edge, EV, win chance) separate from CLV measurement. Focus on the predictive formula and math, not news. Study implied vs true vs model probability. Going live needs WeBet's approval (11/24 order = approval for the listed fixes).
+
 ## 0. North star
-- PROFITABILITY ABOVE ALL ELSE. Every model/pick/ranking change is judged first by profit: it ships only if replay profit beats live on both the 61-day and held-out windows without hurting CLV; otherwise hold. (11/16 6:40 PM)
+- PROFITABILITY ABOVE ALL ELSE. (11/16) Ship gate superseded 11/24: quick sanity check (card builds, grading unchanged, no crash), then deploy. No long replay gate.
 
 ## 1. Data and Odds API
 - Odds API pulls happen ONLY twice a day: 3 AM ET and 10 AM ET. Nothing else pulls odds. (11/16)
@@ -23,7 +30,7 @@ Every change, brief, routine, or build must be checked against this list BEFORE 
 
 ## 3. Shipping
 - Picks / model / grading / KPI code goes through Grok Build CLI, grok-4.7 at xhigh. (10/06)
-- Every change is flag-gated with a rollback, tested, and replay-checked vs live before shipping.
+- Every change is flag-gated with a rollback and quick-sanity-tested before shipping (11/24: no long replay gate).
 - No deploys or pushes to main during 2:45–3:30 AM or 9:45–10:30 AM ET (a push to main auto-deploys).
 - No netlify.toml schedule edits without WeBet's approval.
 - No display or copy changes without WeBet's approval. Never write "Alpha" or "Omega" in user-facing copy.

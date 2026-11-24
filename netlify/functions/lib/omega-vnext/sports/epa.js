@@ -12,6 +12,7 @@
 const { HFA, ENGINE_SOFT } = require('../config');
 const { clamp } = require('../odds_math');
 const { fuzzyTeam, powerFromStandings, gamesPlayed } = require('./_common');
+const { cfbStandingsFixEnabled } = require('../gaps_flags');
 
 const SIERRA_W = 0.2;
 const LEAGUE_SUCCESS = 0.43;
@@ -328,6 +329,8 @@ function tagEngines(methods, enginesOn) {
 
 /**
  * Home margin and total. engine family is null on the standings path.
+ * The standings path uses the same ±marginCap as the EPA path.
+ * OMEGA_CFB_STANDINGS_FIX=off leaves that fallback uncapped.
  */
 function footballProjection({ sport, home, away, standings, efficiency }) {
   const cfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
@@ -338,7 +341,10 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   const hPow = powerFromStandings(homeSt, sport);
   const aPow = powerFromStandings(awaySt, sport);
   const hfa = HFA[sport] != null ? HFA[sport] : 0;
-  const fallbackMargin = (hPow - aPow) + hfa;
+  const fallbackMarginRaw = (hPow - aPow) + hfa;
+  const fallbackMargin = cfbStandingsFixEnabled()
+    ? clamp(fallbackMarginRaw, -cfg.marginCap, cfg.marginCap)
+    : fallbackMarginRaw;
   const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
   const homeEpa = lookupEpa(home, table);
   const awayEpa = lookupEpa(away, table);

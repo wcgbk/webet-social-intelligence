@@ -59,6 +59,17 @@ function auditCardEnabled() {
 }
 
 /**
+ * NCAAF standings fallback. Default on.
+ * Unset, blank, or any value other than 0/off/false/no parses ESPN's
+ * overall W-L(-T) record when the losses stat is missing, and clamps the
+ * football standings-fallback margin to the sport cap.
+ * OMEGA_CFB_STANDINGS_FIX=off leaves losses null and the fallback uncapped.
+ */
+function cfbStandingsFixEnabled() {
+  return flagEnabled('OMEGA_CFB_STANDINGS_FIX');
+}
+
+/**
  * Straight units plus the full parlay stake on that game.
  * The parlay dies if the leg dies, so the 0.5u ticket is exposed on every leg.
  * 2.0u is an A+ 1.5u straight plus the 0.5u parlay. A larger straight is trimmed.
@@ -85,6 +96,7 @@ module.exports = {
   gameExposureEnabled,
   parlayCorrEnabled,
   auditCardEnabled,
+  cfbStandingsFixEnabled,
   GAME_EXPOSURE_CAP,
   PARLAY_TOTAL_RHO,
   GAPS_BUILD,

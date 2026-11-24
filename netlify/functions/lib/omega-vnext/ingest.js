@@ -6,6 +6,7 @@ const {
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 const nhl = require('./sports/nhl');
+const { cfbStandingsFixEnabled } = require('./gaps_flags');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -262,6 +263,79 @@ function applyNhlStandingStats(row, stats) {
   return team;
 }
 
+/**
+ * ESPN college football publishes wins, season points, and an overall
+ * record (name "overall", type "total", displayValue "W-L" or "W-L-T").
+ * It does not publish a losses stat. null losses becomes 0 inside
+ * gamesPlayed, so point differential was divided by wins only.
+ * Fill losses, ties, and games = wins + losses + ties from that overall
+ * record. A type prefix such as "homerecord_" is a split — ignore it.
+ * Wins and points stay on the first matching stat, which is the overall
+ * split. Entries that already have losses are left alone.
+ * OMEGA_CFB_STANDINGS_FIX=off skips this and keeps losses null.
+ */
+function overallRecordStat(stats) {
+  for (const s of stats || []) {
+    if (!s || String(s.name || '').toLowerCase() !== 'overall') continue;
+    const type = String(s.type || '').toLowerCase();
+    if (type.includes('_')) continue;
+    if (type && type !== 'total') continue;
+    return s;
+  }
+  return null;
+}
+
+function parseWinLossRecord(stat) {
+  if (!stat) return null;
+  const text = String(stat.displayValue || stat.summary || '').trim();
+  const m = text.match(/^(\d+)-(\d+)(?:-(\d+))?$/);
+  if (!m) return null;
+  return {
+    wins: Number(m[1]),
+    losses: Number(m[2]),
+    ties: m[3] != null ? Number(m[3]) : 0,
+  };
+}
+
+function fillLossesFromOverallRecord(row, stats) {
+  if (!row || row.losses != null) return row;
+  const parsed = parseWinLossRecord(overallRecordStat(stats));
+  if (!parsed) return row;
+  row.losses = parsed.losses;
+  row.ties = parsed.ties;
+  const wins = Number.isFinite(Number(row.wins)) ? Number(row.wins) : parsed.wins;
+  row.games = wins + parsed.losses + parsed.ties;
+  return row;
+}
+
+/**
+ * One standings entry → { team, rating }. No network.
+ * label 'NHL' still runs the goals/games overlay.
+ */
+function ratingFromEspnEntry(entry, label) {
+  const team = (entry && entry.team && (entry.team.displayName || entry.team.name)) || '';
+  if (!team) return null;
+  const stats = (entry && entry.stats) || [];
+  // First match is the overall split. Later rows repeat these names with
+  // a type prefix (homerecord_, vsconf_, ...). Do not scan those.
+  const winPct = stats.find(s => s.name === 'winPercent' || s.name === 'avgPointsFor');
+  const pf = stats.find(s => /pointsFor|avgPointsFor|runsFor/i.test(s.name || ''));
+  const pa = stats.find(s => /pointsAgainst|avgPointsAgainst|runsAgainst/i.test(s.name || ''));
+  const wins = stats.find(s => s.name === 'wins');
+  const losses = stats.find(s => s.name === 'losses');
+  const row = {
+    winPct: winPct ? Number(winPct.value) : null,
+    pf: pf ? Number(pf.value) : null,
+    pa: pa ? Number(pa.value) : null,
+    wins: wins ? Number(wins.value) : null,
+    losses: losses ? Number(losses.value) : null,
+  };
+  if (label === 'NHL') applyNhlStandingStats(row, stats);
+  if (label === 'NHL' && entry.team && entry.team.id != null) row.espnId = String(entry.team.id);
+  if (cfbStandingsFixEnabled() && row.losses == null) fillLossesFromOverallRecord(row, stats);
+  return { team, rating: row };
+}
+
 async function fetchEspnStandings(label) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return {};
@@ -287,23 +361,9 @@ async function fetchEspnStandings(label) {
       if (data.standings && data.standings.entries) entries.push(...data.standings.entries);
       walk(data);
       for (const e of entries) {
-        const team = (e.team && (e.team.displayName || e.team.name)) || '';
-        if (!team) continue;
-        const stats = e.stats || [];
-        const winPct = stats.find(s => s.name === 'winPercent' || s.name === 'avgPointsFor');
-        const pf = stats.find(s => /pointsFor|avgPointsFor|runsFor/i.test(s.name || ''));
-        const pa = stats.find(s => /pointsAgainst|avgPointsAgainst|runsAgainst/i.test(s.name || ''));
-        const wins = stats.find(s => s.name === 'wins');
-        const losses = stats.find(s => s.name === 'losses');
-        ratings[team] = {
-          winPct: winPct ? Number(winPct.value) : null,
-          pf: pf ? Number(pf.value) : null,
-          pa: pa ? Number(pa.value) : null,
-          wins: wins ? Number(wins.value) : null,
-          losses: losses ? Number(losses.value) : null,
-        };
-        if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
-        if (label === 'NHL' && e.team && e.team.id != null) ratings[team].espnId = String(e.team.id);
+        const built = ratingFromEspnEntry(e, label);
+        if (!built) continue;
+        ratings[built.team] = built.rating;
       }
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
@@ -770,6 +830,7 @@ module.exports = {
   loadSportEngines,
   loadGameDayContext,
   applyNhlStandingStats,
+  ratingFromEspnEntry,
   enrichNhlPublicInputs,
   fetchFootballQbStatusMap,
   enabledSportLabels,

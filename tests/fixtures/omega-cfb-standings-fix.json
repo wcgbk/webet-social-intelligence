@@ -1,0 +1,53 @@
+{
+  "kentState": {
+    "team": { "displayName": "Kent State Golden Flashes" },
+    "stats": [
+      { "name": "wins", "type": "wins", "value": 3, "displayValue": "3" },
+      { "name": "pointsFor", "type": "pointsfor", "value": 160, "displayValue": "160" },
+      { "name": "pointsAgainst", "type": "pointsagainst", "value": 328, "displayValue": "328" },
+      { "name": "overall", "type": "homerecord_total", "displayValue": "0-9" },
+      { "name": "overall", "type": "total", "displayValue": "3-8" },
+      { "name": "wins", "type": "homerecord_wins", "value": 2, "displayValue": "2" },
+      { "name": "pointsFor", "type": "homerecord_pointsfor", "value": 80, "displayValue": "80" },
+      { "name": "pointsAgainst", "type": "homerecord_pointsagainst", "value": 40, "displayValue": "40" },
+      { "name": "Home", "type": "homerecord", "displayValue": "2-3" }
+    ]
+  },
+  "easternMichigan": {
+    "team": { "displayName": "Eastern Michigan Eagles" },
+    "stats": [
+      { "name": "wins", "type": "wins", "value": 4, "displayValue": "4" },
+      { "name": "pointsFor", "type": "pointsfor", "value": 226, "displayValue": "226" },
+      { "name": "pointsAgainst", "type": "pointsagainst", "value": 300, "displayValue": "300" },
+      { "name": "overall", "type": "vsconf_total", "displayValue": "1-6" },
+      { "name": "overall", "type": "total", "displayValue": "4-7" },
+      { "name": "wins", "type": "homerecord_wins", "value": 3, "displayValue": "3" },
+      { "name": "pointsFor", "type": "homerecord_pointsfor", "value": 140, "displayValue": "140" },
+      { "name": "pointsAgainst", "type": "homerecord_pointsagainst", "value": 90, "displayValue": "90" }
+    ]
+  },
+  "tied": {
+    "team": { "displayName": "Tie Example Tigers" },
+    "stats": [
+      { "name": "wins", "type": "wins", "value": 6, "displayValue": "6" },
+      { "name": "pointsFor", "type": "pointsfor", "value": 210, "displayValue": "210" },
+      { "name": "pointsAgainst", "type": "pointsagainst", "value": 180, "displayValue": "180" },
+      { "name": "overall", "type": "homerecord_total", "displayValue": "4-0" },
+      { "name": "overall", "type": "total", "displayValue": "6-4-1" }
+    ]
+  },
+  "nflWithLosses": {
+    "team": { "displayName": "Kansas City Chiefs", "id": "12" },
+    "stats": [
+      { "name": "wins", "type": "wins", "value": 10, "displayValue": "10" },
+      { "name": "losses", "type": "losses", "value": 4, "displayValue": "4" },
+      { "name": "ties", "type": "ties", "value": 0, "displayValue": "0" },
+      { "name": "pointsFor", "type": "pointsfor", "value": 360, "displayValue": "360" },
+      { "name": "pointsAgainst", "type": "pointsagainst", "value": 240, "displayValue": "240" },
+      { "name": "overall", "type": "total", "displayValue": "0-16" },
+      { "name": "losses", "type": "homerecord_losses", "value": 1, "displayValue": "1" },
+      { "name": "wins", "type": "homerecord_wins", "value": 6, "displayValue": "6" },
+      { "name": "pointsFor", "type": "homerecord_pointsfor", "value": 200, "displayValue": "200" }
+    ]
+  }
+}

@@ -323,7 +323,8 @@ function nearestPair(game, bookName, spec, maxDist) {
 /**
  * Pinnacle (then Circa) power no-vig at the bet number, converting at most 1.5.
  * opts.formula skips Circa and any soft book. A different Pinnacle number
- * converts only with the sport sigma, and only when |diff| <= 1.
+ * converts with the margin sigma on a spread and the total sigma on a
+ * total, and only when |diff| <= 1.
  */
 function fairAt(game, spec, opts) {
   if (!game || !spec) return null;
@@ -337,7 +338,7 @@ function fairAt(game, spec, opts) {
     };
     if (formula) {
       row.method = 'pinnacle-power';
-      row.sigma = formulaSigma(spec.sport);
+      row.sigma = formulaSigma(spec.sport, spec.market);
       row.distance = 0;
     }
     return row;
@@ -472,8 +473,9 @@ function tagStoredFallback(candidate, moveOn, shrinkOn, record, stale, move) {
 
 /**
  * Formula fair: Pinnacle power only. Circa and a soft consensus are not
- * a placeable p_pin. A different number converts with the sport sigma
- * inside 1 point, or the side is dropped.
+ * a placeable p_pin. A different number converts with the margin sigma
+ * on a spread and the total sigma on a total, inside 1 point, or the
+ * side is dropped.
  * The moved-against veto still uses the line-move flag.
  */
 function applyFormulaSharp(candidate, opts, index, spec) {

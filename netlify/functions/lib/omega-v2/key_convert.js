@@ -12,7 +12,7 @@
  * NHL and MLB are not converted. Distance above 1.5 points is not converted.
  */
 
-const { FORMULA_SIGMA, FORMULA_MAX_LINE_DIFF } = require('./constants');
+const { FORMULA_SIGMA, FORMULA_TOTAL_SIGMA, FORMULA_MAX_LINE_DIFF } = require('./constants');
 
 const MAX_DIST = 1.5;
 
@@ -111,10 +111,11 @@ function roundHalf(n) {
   return Math.round(n * 2) / 2;
 }
 
-function formulaSigma(sport) {
+function formulaSigma(sport, market) {
   const s = sportOf(sport);
-  if (!Object.prototype.hasOwnProperty.call(FORMULA_SIGMA, s)) return null;
-  const n = Number(FORMULA_SIGMA[s]);
+  const table = marketOf(market) === 'Total' ? FORMULA_TOTAL_SIGMA : FORMULA_SIGMA;
+  if (!Object.prototype.hasOwnProperty.call(table, s)) return null;
+  const n = Number(table[s]);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
@@ -161,9 +162,12 @@ function normsinv(p) {
 
 /**
  * Move a cover probability from one number to another with the sport sigma.
- * NBA 12, NCAAM 11, NFL 13.5, NCAAF 16. NHL and MLB are not converted.
- * NFL and NCAAF add the key-number push mass already in pushProb for each
- * integer the half-point walk crosses. Other sports use the normal only.
+ * Spreads: NBA 12, NCAAM 11, NFL 13.5, NCAAF 16.
+ * Totals: NBA 18, NCAAM 15, NFL 10, NCAAF 14.
+ * NHL and MLB are not converted.
+ * NFL and NCAAF spreads add the key-number push mass already in pushProb
+ * for each integer the half-point walk crosses. Totals and the other
+ * sports use the normal only.
  * |diff| above maxDist (default 1 point) returns null.
  */
 function convertSigmaProb(input) {
@@ -175,7 +179,7 @@ function convertSigmaProb(input) {
   const p0 = num(q.p);
   if (from == null || to == null || p0 == null) return null;
   if (!(p0 > 0 && p0 < 1)) return null;
-  const sigma = formulaSigma(sport);
+  const sigma = formulaSigma(sport, market);
   const dist = Math.abs(to - from);
   const requested = num(q.maxDist);
   const limit = requested == null ? FORMULA_MAX_LINE_DIFF : requested;
@@ -190,7 +194,7 @@ function convertSigmaProb(input) {
   }
   const side = String(q.side || '').toLowerCase();
   const easier = market === 'Total' && side === 'over' ? -1 : 1;
-  const keyChart = sport === 'NFL' || sport === 'NCAAF';
+  const keyChart = market === 'Spread' && (sport === 'NFL' || sport === 'NCAAF');
   const steps = Math.round(dist * 2);
   const dir = to > from ? 1 : -1;
   let p = p0;

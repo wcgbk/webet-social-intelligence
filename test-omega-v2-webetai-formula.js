@@ -361,17 +361,75 @@ async function main() {
     sport: 'NFL', market: 'Spread', p: 0.5, fromPoint: 3, toPoint: 3.5, side: 'spread',
   });
   close(nflKey.p, 0.545, 'NFL key mass');
+  assert.strictEqual(nflKey.sigma, 13.5);
   assert.strictEqual(formulaSigma('NBA'), 12);
   assert.strictEqual(formulaSigma('NCAAM'), 11);
   assert.strictEqual(formulaSigma('NFL'), 13.5);
   assert.strictEqual(formulaSigma('NCAAF'), 16);
   assert.strictEqual(formulaSigma('NHL'), null);
+  assert.strictEqual(formulaSigma('NBA', 'Spread'), 12);
+  assert.strictEqual(formulaSigma('NCAAM', 'Spread'), 11);
+  assert.strictEqual(formulaSigma('NFL', 'Spread'), 13.5);
+  assert.strictEqual(formulaSigma('NCAAF', 'Spread'), 16);
+  assert.strictEqual(formulaSigma('NBA', 'Total'), 18);
+  assert.strictEqual(formulaSigma('NCAAM', 'Total'), 15);
+  assert.strictEqual(formulaSigma('NFL', 'Total'), 10);
+  assert.strictEqual(formulaSigma('NCAAF', 'Total'), 14);
+  assert.strictEqual(formulaSigma('NHL', 'Total'), null);
+  assert.strictEqual(formulaSigma('NHL', 'Spread'), null);
   const nbaStep = convertSigmaProb({
     sport: 'NBA', market: 'Spread', p: 0.5, fromPoint: -3.5, toPoint: -3, side: 'spread',
   });
   close(nbaStep.p, normCdfOpen(0.5 / 12), 'NBA sigma step');
+  assert.strictEqual(nbaStep.sigma, 12);
+  const nbaTotal = convertSigmaProb({
+    sport: 'NBA', market: 'Total', p: 0.5, fromPoint: 220.5, toPoint: 221, side: 'over',
+  });
+  assert.strictEqual(nbaTotal.sigma, 18);
+  close(nbaTotal.p, normCdfOpen(-0.5 / 18), 'NBA total sigma');
+  const ncaamSpread = convertSigmaProb({
+    sport: 'NCAAM', market: 'Spread', p: 0.5, fromPoint: -3.5, toPoint: -3, side: 'spread',
+  });
+  assert.strictEqual(ncaamSpread.sigma, 11);
+  close(ncaamSpread.p, normCdfOpen(0.5 / 11), 'NCAAM spread sigma');
+  const ncaamUnder = convertSigmaProb({
+    sport: 'NCAAM', market: 'Total', p: 0.5, fromPoint: 149.5, toPoint: 150, side: 'under',
+  });
+  assert.strictEqual(ncaamUnder.sigma, 15);
+  close(ncaamUnder.p, normCdfOpen(0.5 / 15), 'NCAAM total sigma');
+  assert.ok(Math.abs(ncaamUnder.p - normCdfOpen(0.5 / 11)) > 1e-4, 'total is not the margin sigma');
+  const ncaamFull = convertSigmaProb({
+    sport: 'NCAAM', market: 'Total', p: 0.5, fromPoint: 149.5, toPoint: 150.5, side: 'under',
+  });
+  assert.strictEqual(ncaamFull.sigma, 15);
+  const ncaamMarginWalk = convertSigmaProb({
+    sport: 'NCAAM', market: 'Spread', p: 0.5, fromPoint: 149.5, toPoint: 150.5, side: 'spread',
+  });
+  assert.strictEqual(ncaamMarginWalk.sigma, 11);
+  assert.ok(Math.abs(ncaamFull.p - ncaamMarginWalk.p) > 1e-4, 'one-point total walk');
+  const nflTotal = convertSigmaProb({
+    sport: 'NFL', market: 'Total', p: 0.5, fromPoint: 44.5, toPoint: 45, side: 'under',
+  });
+  assert.strictEqual(nflTotal.sigma, 10);
+  close(nflTotal.p, normCdfOpen(0.5 / 10), 'NFL total sigma, not key mass');
+  const ncaafSpread = convertSigmaProb({
+    sport: 'NCAAF', market: 'Spread', p: 0.5, fromPoint: 7, toPoint: 7.5, side: 'spread',
+  });
+  assert.strictEqual(ncaafSpread.sigma, 16);
+  close(ncaafSpread.p, 0.5225, 'NCAAF spread key mass');
+  const ncaafTotal = convertSigmaProb({
+    sport: 'NCAAF', market: 'Total', p: 0.5, fromPoint: 51.5, toPoint: 52, side: 'under',
+  });
+  assert.strictEqual(ncaafTotal.sigma, 14);
+  close(ncaafTotal.p, normCdfOpen(0.5 / 14), 'NCAAF total sigma');
   assert.strictEqual(convertSigmaProb({
     sport: 'NBA', market: 'Spread', p: 0.5, fromPoint: -4, toPoint: -2.5, side: 'spread',
+  }), null);
+  assert.strictEqual(convertSigmaProb({
+    sport: 'NBA', market: 'Total', p: 0.5, fromPoint: 220.5, toPoint: 222, side: 'over',
+  }), null);
+  assert.strictEqual(convertSigmaProb({
+    sport: 'NHL', market: 'Total', p: 0.5, fromPoint: 5.5, toPoint: 6.5, side: 'under',
   }), null);
   const nhlSame = convertSigmaProb({
     sport: 'NHL', market: 'Spread', p: 0.42, fromPoint: -1.5, toPoint: -1.5, side: 'spread',
@@ -409,6 +467,74 @@ async function main() {
   assert.ok(converted._formulaTrace.discounts.lineConversion, 'conversion recorded');
   close(converted._formulaTrace.discounts.lineConversion.distance, 1, 'one point');
   assert.strictEqual(converted._formulaTrace.discounts.lineConversion.sigma, 12);
+
+  const duke = 'Duke';
+  const unc = 'North Carolina';
+  const totalBooks = [
+    book('pinnacle', [
+      { name: 'Over', price: -110, point: 149.5 },
+      { name: 'Under', price: -110, point: 149.5 },
+    ], 'totals'),
+    book('draftkings', [
+      { name: 'Over', price: -110, point: 150.5 },
+      { name: 'Under', price: -110, point: 150.5 },
+    ], 'totals'),
+  ];
+  const totalConv = annotateCandidate(row({
+    sport: 'NCAAM',
+    matchup: `${duke} @ ${unc}`,
+    pick: 'Under 150.5',
+    market: 'Total',
+    odds: -110,
+    line: 150.5,
+    homeTeam: unc,
+    awayTeam: duke,
+    calibration: { pCal: 0.55, pMkt: 0.5, pModel: 0.55 },
+  }), { ...opts(baseEnv()), linePolls: spreadPoll('NCAAM', duke, unc, totalBooks) });
+  assert.strictEqual(totalConv.rejectReason, null, totalConv.rejectReason);
+  assert.strictEqual(totalConv._formulaTrace.p_pin_method, 'pinnacle-sigma');
+  assert.strictEqual(totalConv._formulaTrace.discounts.lineConversion.sigma, 15);
+  close(totalConv._formulaTrace.discounts.lineConversion.distance, 1, 'total one point');
+  const sameTotalBooks = [
+    book('pinnacle', [
+      { name: 'Over', price: -110, point: 150.5 },
+      { name: 'Under', price: -110, point: 150.5 },
+    ], 'totals'),
+    book('draftkings', [
+      { name: 'Over', price: -110, point: 150.5 },
+      { name: 'Under', price: -110, point: 150.5 },
+    ], 'totals'),
+  ];
+  const sameTotal = annotateCandidate(row({
+    sport: 'NCAAM',
+    matchup: `${duke} @ ${unc}`,
+    pick: 'Under 150.5',
+    market: 'Total',
+    odds: -110,
+    line: 150.5,
+    homeTeam: unc,
+    awayTeam: duke,
+    calibration: { pCal: 0.55, pMkt: 0.5, pModel: 0.55 },
+  }), { ...opts(baseEnv()), linePolls: spreadPoll('NCAAM', duke, unc, sameTotalBooks) });
+  assert.strictEqual(sameTotal._formulaTrace.p_pin_method, 'pinnacle-power');
+  assert.strictEqual(sameTotal._formulaTrace.discounts.lineConversion, null);
+  assert.strictEqual(sameTotal._sharp.formula.sigma, 15);
+  const totalOff = annotateCandidate(row({
+    sport: 'NCAAM',
+    matchup: `${duke} @ ${unc}`,
+    pick: 'Under 150.5',
+    market: 'Total',
+    odds: -110,
+    line: 150.5,
+    homeTeam: unc,
+    awayTeam: duke,
+    calibration: { pCal: 0.55, pMkt: 0.5, pModel: 0.55 },
+  }), {
+    ...opts(baseEnv({ OMEGA_WEBETAI_FORMULA: 'off' })),
+    linePolls: spreadPoll('NCAAM', duke, unc, totalBooks),
+  });
+  assert.strictEqual(totalOff._formulaTrace, undefined);
+  assert.ok(!totalOff._sharp || !totalOff._sharp.formula, 'flag-off skips formula sigma');
 
   const farBooks = [
     book('pinnacle', [

@@ -770,8 +770,10 @@ const FORMULA_BLEND_W = 0.35;
 const FORMULA_MODELLESS_HAIRCUT = 0.01;
 /** Longer than +400 is out. +400 itself stays. */
 const FORMULA_DOG_CAP_AMERICAN = 400;
-/** Sigma (points) for a Pinnacle line that is not the DK/HR number. */
+/** Margin sigma (points) for a Pinnacle spread that is not the DK/HR number. */
 const FORMULA_SIGMA = { NBA: 12, NCAAM: 11, NFL: 13.5, NCAAF: 16 };
+/** Total sigma (points) for a Pinnacle total that is not the DK/HR number. */
+const FORMULA_TOTAL_SIGMA = { NBA: 18, NCAAM: 15, NFL: 10, NCAAF: 14 };
 /** Convert only when the numbers differ by at most one point. */
 const FORMULA_MAX_LINE_DIFF = 1;
 
@@ -933,6 +935,7 @@ module.exports = {
   FORMULA_MODELLESS_HAIRCUT,
   FORMULA_DOG_CAP_AMERICAN,
   FORMULA_SIGMA,
+  FORMULA_TOTAL_SIGMA,
   FORMULA_MAX_LINE_DIFF,
   webetaiFormulaEnabled,
   SPORT_CAP_ENV,

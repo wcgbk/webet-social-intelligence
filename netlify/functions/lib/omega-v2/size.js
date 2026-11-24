@@ -3,6 +3,7 @@
 const {
   KELLY_FRACTION, PER_BET_CAP, STRAIGHT_BUDGET, UNIT_DOLLARS, BANKROLL_UNITS,
   forceTop3From, fillerEnabled,
+  webetaiFormulaEnabled, straightCap05uEnabled, STRAIGHT_CAP_05U,
 } = require('./constants');
 const { americanToDecimal, EDGE_B_UNIT_CAP } = require('../omega-vnext/odds_math');
 const { letterFromPrintedEdge, letterFromEv } = require('./letter');
@@ -14,6 +15,14 @@ function roundQuarter(n) {
 function stakeUsd(units) {
   if (!(units > 0)) return 0;
   return Math.ceil(units * UNIT_DOLLARS - 1e-9);
+}
+
+/** 0.5u ceiling on every straight when the formula and the cap flag are on. */
+function capStraightUnits(units) {
+  if (webetaiFormulaEnabled() && straightCap05uEnabled() && units > STRAIGHT_CAP_05U) {
+    return STRAIGHT_CAP_05U;
+  }
+  return units;
 }
 
 /**
@@ -90,6 +99,7 @@ function sizeStraight(candidate, opts) {
   } else if (force && letterFromPrintedEdge(candidate.edge) === 'b' && units > EDGE_B_UNIT_CAP) {
     units = EDGE_B_UNIT_CAP;
   }
+  units = capStraightUnits(units);
   return {
     ...candidate,
     units,
@@ -158,6 +168,7 @@ function sizeForcedStraights(selected) {
     const priceEv = priceEvAtBet(row);
     const filler = markFiller && priceEv != null && priceEv < 0;
     if (filler) units = 0.25;
+    units = capStraightUnits(units);
     const next = {
       ...row,
       forced: true,

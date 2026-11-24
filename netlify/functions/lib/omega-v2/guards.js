@@ -2,7 +2,7 @@
 
 const {
   MODEL_VERSION, MAX_STRAIGHTS, PER_BET_CAP, STRAIGHT_BUDGET, CARD_BUDGET, PARLAY_STAKE_CAP, UNIT_DOLLARS,
-  fillerEnabled,
+  fillerEnabled, webetaiFormulaEnabled, straightCap05uEnabled, STRAIGHT_CAP_05U,
 } = require('./constants');
 const { assertNoLeakage } = require('./calibrate');
 const { marketFamily, pastPregameCutoff, pregameClockMs, annotateCandidate } = require('./select');
@@ -582,6 +582,19 @@ function autoCorrectCard(card, opts) {
       if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = stake;
       notes.push(`b-grade cap ${p.pick || p.side}`);
       gradeMoved = true;
+    }
+  }
+  // 0.5u straight ceiling. Letter C at 0.25u and letter B at 0.5u stay
+  // under it. The parlay stake is not this cap.
+  if (webetaiFormulaEnabled() && straightCap05uEnabled()) {
+    for (const p of picks) {
+      if (!(unitsOf(p) > STRAIGHT_CAP_05U + 1e-9)) continue;
+      notes.push(`straight cap ${p.pick || p.side}`);
+      p.unitsNum = STRAIGHT_CAP_05U;
+      p.units = `${STRAIGHT_CAP_05U}u`;
+      const stake = Math.ceil(STRAIGHT_CAP_05U * UNIT_DOLLARS - 1e-9);
+      if (Object.prototype.hasOwnProperty.call(p, 'stakeUsd')) p.stakeUsd = stake;
+      if (Object.prototype.hasOwnProperty.call(p, 'stakeDollars')) p.stakeDollars = stake;
     }
   }
   // After the letter and the B cap. A negative price EV (pBet × DK/HR

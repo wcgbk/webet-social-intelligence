@@ -695,6 +695,7 @@ async function generateOmegaVnext(opts = {}) {
         ? { polls: linePathMeta.path.polls }
         : null),
     };
+    publishInput.debugTrace = !!dryRun;
     if (Object.prototype.hasOwnProperty.call(opts, 'logInputs')) publishInput.logInputs = opts.logInputs;
     if (typeof opts.inputsFetch === 'function') publishInput.inputsFetch = opts.inputsFetch;
     built = await publishFromOmegaCandidates(publishInput);
@@ -931,6 +932,7 @@ async function generateOmegaVnext(opts = {}) {
     picksData.meta.pipelineV2 = true;
     if (built.priceCheck) picksData.meta.priceCheck = built.priceCheck;
     picksData.narration = narr.narration || { status: skipNarrate ? 'skipped' : 'none', vetoesIgnored: 0 };
+    if (dryRun && built && built.debugTrace) picksData.debugTrace = built.debugTrace;
   }
   if (shadow) {
     picksData.shadow = true;

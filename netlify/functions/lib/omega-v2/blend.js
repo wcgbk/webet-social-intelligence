@@ -7,7 +7,7 @@
  * The output clamp is the same post-trim bet-probability floor as select.js.
  */
 
-const { clampWinProb } = require('./constants');
+const { clampWinProb, BLEND_W_CAP, FORMULA_BLEND_W } = require('./constants');
 
 function clampProb(p, env) {
   return clampWinProb(p, env);
@@ -77,6 +77,57 @@ function modelProbForBlend(row, origPMkt) {
   return pCal;
 }
 
+/**
+ * NCAAM has a projection only when the sport engine built a standings
+ * margin. The sharp-anchor path copies the market and is not a model.
+ */
+function ncaamHasProjection(row) {
+  if (!row || row.sharpAnchor === true) return false;
+  const method = String(row.projMethod || '');
+  if (!method || method === 'ncaam-sharp-anchor') return false;
+  return method === 'ncaam-standings' || /ncaam/i.test(method);
+}
+
+/**
+ * Projection probability for the formula.
+ * p_model is calibration.pCal from the sport model (spread and total
+ * already went through that sport's margin or total distribution).
+ * NCAAM is null unless a projection is on the row. A probability that
+ * never left the market is not a model.
+ */
+function formulaModelProb(row, origPMkt) {
+  const cal = (row && row.calibration) || {};
+  const pCal = unitProb(cal.pCal);
+  if (canonSport(row && row.sport) === 'NCAAM') {
+    if (!ncaamHasProjection(row)) return null;
+    return pCal;
+  }
+  if (pCal == null) return null;
+  const raw = unitProb(cal.pModel != null ? cal.pModel : (row && row.pModel));
+  const mkt = unitProb(origPMkt != null ? origPMkt : cal.pMkt);
+  if (raw != null && mkt != null && Math.abs(raw - mkt) <= 1e-6) return null;
+  if (mkt != null && Math.abs(pCal - mkt) <= 1e-6) return null;
+  return pCal;
+}
+
+/**
+ * Formula weight. 0.35 for every sport that has a p_model, including
+ * NCAAM. OMEGA_V2_BLEND_W_<SPORT> still overrides. Cap stays 0.35.
+ * Callers pass w = 0 when p_model is null.
+ */
+function formulaBlendWeight(sport, env) {
+  const name = canonSport(sport);
+  const source = env == null ? process.env : env;
+  const raw = source[`OMEGA_V2_BLEND_W_${name}`];
+  if (raw != null && String(raw).trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return Math.min(BLEND_W_CAP, Math.max(0, n));
+  }
+  const fitted = Number(FORMULA_BLEND_W);
+  if (!Number.isFinite(fitted)) return 0;
+  return Math.min(BLEND_W_CAP, Math.max(0, fitted));
+}
+
 module.exports = {
   clampProb,
   unitProb,
@@ -85,4 +136,7 @@ module.exports = {
   blendProb,
   canonSport,
   modelProbForBlend,
+  ncaamHasProjection,
+  formulaModelProb,
+  formulaBlendWeight,
 };

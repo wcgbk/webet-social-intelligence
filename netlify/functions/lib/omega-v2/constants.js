@@ -1,5 +1,7 @@
 'use strict';
 
+const { defaultOnFlag } = require('../default_on_flag');
+
 /** Live Omega card. OMEGA_PIPELINE_V2=0 (or opts.pipelineV2 false) falls back to v1. */
 const MODEL_VERSION = 'omega-v2-sharp-2026-11-01-dkhr';
 const UNIT_DOLLARS = 150;
@@ -742,6 +744,76 @@ function clampWinProb(p, env) {
   return p;
 }
 
+/**
+ * Best-practice card formula. Default on.
+ * OMEGA_WEBETAI_FORMULA=off / 0 / false / no restores today's card:
+ * trimmed Pinnacle probability, the current rank packs, and the current
+ * stake caps.
+ * A partial env object that omits this key follows process.env when the
+ * process set it, so a rollback in the environment is not dropped by a
+ * caller that only passed other flags. Unset in both places stays on.
+ *
+ * On:
+ *   p_final = logistic(w * logit(p_model) + (1 - w) * logit(p_pin_power))
+ *   w = 0.35 when that side has a projection, else 0.
+ *   OMEGA_V2_BLEND_W_<SPORT> still overrides, capped at 0.35.
+ *   No longshot trim on top of the power de-vig.
+ *   The same p_final is the printed win probability, the edge, the EV,
+ *   the EV letter, the rank, and the Kelly stake.
+ *   implied = 1/decimal of the DK/HR price (vig stays in the price).
+ *   A side with no p_model uses p_pin and ranks on EV_rank = EV - 0.01
+ *   so a model-less sport is not favoured on a noisy price gap.
+ */
+const WEBETAI_FORMULA_ENV = 'OMEGA_WEBETAI_FORMULA';
+const FORMULA_BLEND_W = 0.35;
+/** One point of EV, subtracted only from the rank of a model-less side. */
+const FORMULA_MODELLESS_HAIRCUT = 0.01;
+/** Longer than +400 is out. +400 itself stays. */
+const FORMULA_DOG_CAP_AMERICAN = 400;
+/** Sigma (points) for a Pinnacle line that is not the DK/HR number. */
+const FORMULA_SIGMA = { NBA: 12, NCAAM: 11, NFL: 13.5, NCAAF: 16 };
+/** Convert only when the numbers differ by at most one point. */
+const FORMULA_MAX_LINE_DIFF = 1;
+
+function namedDefaultOn(name, env) {
+  const source = env == null ? process.env : env;
+  const raw = source[name];
+  if ((raw == null || String(raw).trim() === '') && source !== process.env) {
+    const inherited = process.env[name];
+    if (inherited != null && String(inherited).trim() !== '') {
+      return defaultOnFlag(name, process.env);
+    }
+  }
+  return defaultOnFlag(name, source);
+}
+
+function webetaiFormulaEnabled(env) {
+  return namedDefaultOn(WEBETAI_FORMULA_ENV, env);
+}
+
+/**
+ * At most 2 straights from one sport when another sport still has a side
+ * with EV_rank >= 0. Default on. OMEGA_V2_SPORT_CAP=off fills by EV_rank
+ * with no sport limit. Ignored when OMEGA_WEBETAI_FORMULA is off.
+ */
+const SPORT_CAP_ENV = 'OMEGA_V2_SPORT_CAP';
+
+function sportCapEnabled(env) {
+  return namedDefaultOn(SPORT_CAP_ENV, env);
+}
+
+/**
+ * Cap every straight at 0.5u ($75). Default on.
+ * OMEGA_V2_STRAIGHT_CAP_05U=off restores the 2u / letter caps.
+ * Ignored when OMEGA_WEBETAI_FORMULA is off.
+ */
+const STRAIGHT_CAP_05U_ENV = 'OMEGA_V2_STRAIGHT_CAP_05U';
+const STRAIGHT_CAP_05U = 0.5;
+
+function straightCap05uEnabled(env) {
+  return namedDefaultOn(STRAIGHT_CAP_05U_ENV, env);
+}
+
 module.exports = {
   MODEL_VERSION,
   UNIT_DOLLARS,
@@ -856,4 +928,16 @@ module.exports = {
   clampWinProb,
   SAME_DAY_ENV,
   sameDayOnlyEnabled,
+  WEBETAI_FORMULA_ENV,
+  FORMULA_BLEND_W,
+  FORMULA_MODELLESS_HAIRCUT,
+  FORMULA_DOG_CAP_AMERICAN,
+  FORMULA_SIGMA,
+  FORMULA_MAX_LINE_DIFF,
+  webetaiFormulaEnabled,
+  SPORT_CAP_ENV,
+  sportCapEnabled,
+  STRAIGHT_CAP_05U_ENV,
+  STRAIGHT_CAP_05U,
+  straightCap05uEnabled,
 };

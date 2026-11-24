@@ -1,5 +1,9 @@
 'use strict';
 
+// Legacy card fixtures stay on today's rollback path. The formula test
+// deletes this itself so the default-on behaviour is what it checks.
+process.env.OMEGA_WEBETAI_FORMULA = 'off';
+
 /**
  * Omega pipeline v2 test gate.
  * Checks card validity, leakage, the price-recheck hook, and that the
@@ -545,6 +549,13 @@ async function main() {
     { stdio: 'inherit' }
   );
   if (blendP.status !== 0) throw new Error('blend probability gate failed');
+
+  const webetaiFormula = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-v2-webetai-formula.js')],
+    { stdio: 'inherit' }
+  );
+  if (webetaiFormula.status !== 0) throw new Error('webetai formula gate failed');
 
   const pFloor = require('child_process').spawnSync(
     process.execPath,

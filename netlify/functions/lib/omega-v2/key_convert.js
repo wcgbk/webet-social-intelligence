@@ -12,6 +12,8 @@
  * NHL and MLB are not converted. Distance above 1.5 points is not converted.
  */
 
+const { FORMULA_SIGMA, FORMULA_MAX_LINE_DIFF } = require('./constants');
+
 const MAX_DIST = 1.5;
 
 const NFL_SPREAD = {
@@ -109,6 +111,115 @@ function roundHalf(n) {
   return Math.round(n * 2) / 2;
 }
 
+function formulaSigma(sport) {
+  const s = sportOf(sport);
+  if (!Object.prototype.hasOwnProperty.call(FORMULA_SIGMA, s)) return null;
+  const n = Number(FORMULA_SIGMA[s]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Standard normal CDF. Not clamped, so a line shift keeps its tail. */
+function normCdfOpen(z) {
+  const x = Number(z);
+  if (!Number.isFinite(x)) return null;
+  const az = Math.abs(x);
+  const t = 1 / (1 + 0.2316419 * az);
+  const d = 0.3989423 * Math.exp(-x * x / 2);
+  let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  if (x > 0) p = 1 - p;
+  if (p < 0) return 0;
+  if (p > 1) return 1;
+  return p;
+}
+
+/** Acklam inverse normal. p outside (0, 1) returns null. */
+function normsinv(p) {
+  const x = Number(p);
+  if (!Number.isFinite(x) || !(x > 0 && x < 1)) return null;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const plow = 0.02425;
+  const phigh = 1 - plow;
+  let q;
+  if (x < plow) {
+    q = Math.sqrt(-2 * Math.log(x));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (x > phigh) {
+    q = Math.sqrt(-2 * Math.log(1 - x));
+    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  q = x - 0.5;
+  const r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
+    / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
+/**
+ * Move a cover probability from one number to another with the sport sigma.
+ * NBA 12, NCAAM 11, NFL 13.5, NCAAF 16. NHL and MLB are not converted.
+ * NFL and NCAAF add the key-number push mass already in pushProb for each
+ * integer the half-point walk crosses. Other sports use the normal only.
+ * |diff| above maxDist (default 1 point) returns null.
+ */
+function convertSigmaProb(input) {
+  const q = input || {};
+  const sport = sportOf(q.sport);
+  const market = marketOf(q.market);
+  const from = num(q.fromPoint);
+  const to = num(q.toPoint);
+  const p0 = num(q.p);
+  if (from == null || to == null || p0 == null) return null;
+  if (!(p0 > 0 && p0 < 1)) return null;
+  const sigma = formulaSigma(sport);
+  const dist = Math.abs(to - from);
+  const requested = num(q.maxDist);
+  const limit = requested == null ? FORMULA_MAX_LINE_DIFF : requested;
+  if (dist > limit + 1e-9) return null;
+  if (sigma == null || !conversionAllowed(sport, market)) {
+    if (dist < 1e-9) return { p: p0, q: 0, distance: 0, sigma: null, method: 'same-line' };
+    return null;
+  }
+  if (dist < 1e-9) {
+    const destQ = isIntegerPoint(to) ? pushProb(sport, market, to) : 0;
+    return { p: p0, q: destQ, distance: 0, sigma, method: 'same-line' };
+  }
+  const side = String(q.side || '').toLowerCase();
+  const easier = market === 'Total' && side === 'over' ? -1 : 1;
+  const keyChart = sport === 'NFL' || sport === 'NCAAF';
+  const steps = Math.round(dist * 2);
+  const dir = to > from ? 1 : -1;
+  let p = p0;
+  let cur = roundHalf(from);
+  for (let i = 0; i < steps; i += 1) {
+    const next = roundHalf(cur + dir * 0.5);
+    const key = isIntegerPoint(cur) ? cur : (isIntegerPoint(next) ? next : null);
+    if (keyChart && key != null) {
+      p += dir * easier * (pushProb(sport, market, key) / 2);
+    } else {
+      const z = normsinv(Math.min(1 - 1e-12, Math.max(1e-12, p)));
+      if (z == null) return null;
+      const shifted = normCdfOpen(z + dir * easier * (0.5 / sigma));
+      if (shifted == null) return null;
+      p = shifted;
+    }
+    cur = next;
+    if (!(p > 0.001 && p < 0.999)) return null;
+  }
+  const destQ = isIntegerPoint(to) ? pushProb(sport, market, to) : 0;
+  return {
+    p,
+    q: destQ,
+    distance: dist,
+    sigma,
+    method: keyChart ? 'sigma+key' : 'sigma',
+  };
+}
+
 /**
  * Shift a cover probability from one number to another.
  * `side` is 'over' or 'under' for totals. Spreads treat a higher number
@@ -181,4 +292,8 @@ module.exports = {
   convertCoverProb,
   pushAwareEv,
   isIntegerPoint,
+  formulaSigma,
+  normCdfOpen,
+  normsinv,
+  convertSigmaProb,
 };

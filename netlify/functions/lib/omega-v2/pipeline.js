@@ -11,6 +11,7 @@ const {
 } = require('./market_skill');
 const {
   gameKey, marketFamily, annotateCandidate, selectStraights, selectForcedTop3, pastPregameCutoff, pregameClockMs,
+  buildDebugTrace,
 } = require('./select');
 const { sizeStraights, sizeForcedStraights, sumUnits } = require('./size');
 const { recheckPrices, validateCard, autoCorrectCard, parseAmerican, toParlay, toPick } = require('./guards');
@@ -155,6 +156,9 @@ function normalizeCandidate(raw) {
     noDkHr: !priced,
     openPrint: raw.openPrint != null ? raw.openPrint : null,
     lineMove: raw.lineMove != null ? raw.lineMove : null,
+    modelProjection: raw.modelProjection != null && raw.modelProjection !== '' ? raw.modelProjection : null,
+    projMethod: raw.projMethod != null && raw.projMethod !== '' ? String(raw.projMethod) : null,
+    sharpAnchor: raw.sharpAnchor === true,
   };
 }
 
@@ -533,6 +537,9 @@ async function buildCard(input) {
     });
   }
   boardStampState.set(published, { fit, skill: marketSkill, overlay });
+  if (input && input.debugTrace) {
+    published.debugTrace = buildDebugTrace(annotated, straights, pregameOpts);
+  }
   return published;
 }
 
@@ -620,6 +627,9 @@ function fromOmegaCandidate(c) {
     coreReasoning: c.coreReasoning,
     openPrint: c.openPrint != null ? c.openPrint : null,
     lineMove: c.lineMove != null ? c.lineMove : null,
+    modelProjection: c.modelProjection != null && c.modelProjection !== '' ? c.modelProjection : null,
+    projMethod: c.projMethod != null && c.projMethod !== '' ? String(c.projMethod) : null,
+    sharpAnchor: c.sharpAnchor === true,
   };
 }
 
@@ -644,6 +654,7 @@ async function publishFromOmegaCandidates(input) {
     linePolls: input.linePolls || null,
     nbaInjury: input.nbaInjury || null,
     nhlGoalies: input.nhlGoalies || null,
+    debugTrace: !!(input && input.debugTrace),
   });
   // Context log only. The card object above is already final.
   try {

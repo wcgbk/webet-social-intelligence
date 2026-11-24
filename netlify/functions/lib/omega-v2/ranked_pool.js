@@ -75,6 +75,7 @@ function compactPoolRow(row, capOn) {
     pMkt,
     ev: num(row.ev),
     edge: num(row.edge),
+    ...(num(row.evRank) != null ? { evRank: num(row.evRank) } : {}),
     sharpBook: row.sharpBook || null,
     inBand: !(capOn && favoriteOutOfBand({ odds })),
   };

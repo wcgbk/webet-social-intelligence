@@ -12,10 +12,11 @@ const { noVigTwoWay, americanToImplied } = require('../omega-vnext/odds_math');
 const { MAX_EDGE, clampWinProb } = require('./constants');
 const {
   lineMoveEnabled, moveShrinkEnabled, pinnacleFairEnabled, keyConvertEnabled,
-  lineMoveVetoPp, lineMoveStalePp,
+  lineMoveVetoPp, lineMoveStalePp, webetaiFormulaEnabled,
 } = require('./constants');
 const {
   sportOf, marketOf, conversionAllowed, convertCoverProb, pushProb, pushAwareEv, isIntegerPoint,
+  convertSigmaProb, formulaSigma,
 } = require('./key_convert');
 
 const FOLLOW = 0.40;
@@ -304,57 +305,87 @@ function pairAt(game, bookName, spec, point) {
   return { p: nv.p1, point: mine.point, price: mine.price, lastUpdate: book.lastUpdate };
 }
 
-function nearestPair(game, bookName, spec) {
+function nearestPair(game, bookName, spec, maxDist) {
   const book = bookOf(game, bookName);
   if (!book || spec.market === 'Moneyline' || spec.point == null) return null;
+  const limit = maxDist == null ? 1.5 : Number(maxDist);
   const rows = sideRows(book, spec).filter((row) => matchRow(row, spec));
   let best = null;
   for (const row of rows) {
     const dist = Math.abs(row.point - spec.point);
-    if (dist < 1e-9 || dist > 1.5 + 1e-9) continue;
+    if (dist < 1e-9 || dist > limit + 1e-9) continue;
     if (!best || dist < best.dist) best = { row, dist };
   }
   if (!best) return null;
   return pairAt(game, bookName, spec, best.row.point);
 }
 
-/** Pinnacle (then Circa) power no-vig at the bet number, converting at most 1.5. */
-function fairAt(game, spec) {
+/**
+ * Pinnacle (then Circa) power no-vig at the bet number, converting at most 1.5.
+ * opts.formula skips Circa and any soft book. A different Pinnacle number
+ * converts only with the sport sigma, and only when |diff| <= 1.
+ */
+function fairAt(game, spec, opts) {
   if (!game || !spec) return null;
+  const formula = !!(opts && opts.formula);
   const pin = pairAt(game, 'pinnacle', spec, spec.point);
   if (pin) {
-    return {
+    const row = {
       p: pin.p, book: 'pinnacle', point: pin.point, converted: false,
       q: isIntegerPoint(spec.point) ? pushProb(spec.sport, spec.market, spec.point) : 0,
       lastUpdate: pin.lastUpdate,
     };
+    if (formula) {
+      row.method = 'pinnacle-power';
+      row.sigma = formulaSigma(spec.sport);
+      row.distance = 0;
+    }
+    return row;
   }
-  for (const book of ['circa']) {
-    const exact = pairAt(game, book, spec, spec.point);
-    if (exact) {
-      return {
-        p: exact.p, book, point: exact.point, converted: false,
-        q: isIntegerPoint(spec.point) ? pushProb(spec.sport, spec.market, spec.point) : 0,
-        lastUpdate: exact.lastUpdate,
-      };
+  if (!formula) {
+    for (const book of ['circa']) {
+      const exact = pairAt(game, book, spec, spec.point);
+      if (exact) {
+        return {
+          p: exact.p, book, point: exact.point, converted: false,
+          q: isIntegerPoint(spec.point) ? pushProb(spec.sport, spec.market, spec.point) : 0,
+          lastUpdate: exact.lastUpdate,
+        };
+      }
     }
   }
   if (!conversionAllowed(spec.sport, spec.market)) return null;
-  const near = nearestPair(game, 'pinnacle', spec);
+  const near = nearestPair(game, 'pinnacle', spec, formula ? 1 : 1.5);
   if (!near) return null;
   const side = spec.market === 'Total' ? spec.side : 'spread';
-  const conv = convertCoverProb({
-    sport: spec.sport,
-    market: spec.market,
-    p: near.p,
-    fromPoint: near.point,
-    toPoint: spec.point,
-    side,
-  });
+  const conv = formula
+    ? convertSigmaProb({
+      sport: spec.sport,
+      market: spec.market,
+      p: near.p,
+      fromPoint: near.point,
+      toPoint: spec.point,
+      side,
+      maxDist: 1,
+    })
+    : convertCoverProb({
+      sport: spec.sport,
+      market: spec.market,
+      p: near.p,
+      fromPoint: near.point,
+      toPoint: spec.point,
+      side,
+    });
   if (!conv) return null;
-  return {
+  const row = {
     p: conv.p, book: 'pinnacle', point: near.point, converted: true, q: conv.q, lastUpdate: near.lastUpdate,
   };
+  if (formula) {
+    row.method = 'pinnacle-sigma';
+    row.sigma = conv.sigma != null ? conv.sigma : null;
+    row.distance = conv.distance;
+  }
+  return row;
 }
 
 function impliedAt(game, bookName, spec) {
@@ -440,6 +471,53 @@ function tagStoredFallback(candidate, moveOn, shrinkOn, record, stale, move) {
 }
 
 /**
+ * Formula fair: Pinnacle power only. Circa and a soft consensus are not
+ * a placeable p_pin. A different number converts with the sport sigma
+ * inside 1 point, or the side is dropped.
+ * The moved-against veto still uses the line-move flag.
+ */
+function applyFormulaSharp(candidate, opts, index, spec) {
+  const env = opts && opts.env;
+  const moveOn = lineMoveEnabled(env);
+  if (!spec) return { rejectReason: 'no-pinnacle-fair' };
+  const g10 = gameAt(index, '1000', candidate);
+  const fair = g10 ? fairAt(g10, spec, { formula: true }) : null;
+  const move = moveOn ? computeMove(index, candidate, spec) : null;
+  const record = move ? lineMoveRecord(move, false) : null;
+  if (moveOn && move && move.m <= -lineMoveVetoPp(env)) {
+    return { rejectReason: 'pinnacle-moved-against', lineMovePinn: record };
+  }
+  if (!fair || fair.book !== 'pinnacle') {
+    return { rejectReason: 'no-pinnacle-fair', ...(record ? { lineMovePinn: record } : {}) };
+  }
+  const next = {
+    ...candidate,
+    calibration: candidate.calibration ? { ...candidate.calibration } : candidate.calibration,
+  };
+  if (next.calibration) next.calibration.pMkt = fair.p;
+  else next.pMkt = fair.p;
+  next._sharp = {
+    lineMovePinn: record,
+    stale: false,
+    softLagPp: null,
+    shrink: null,
+    pushQ: 0,
+    pushAware: false,
+    formula: {
+      method: fair.method || (fair.converted ? 'pinnacle-sigma' : 'pinnacle-power'),
+      book: 'pinnacle',
+      converted: !!fair.converted,
+      fromPoint: fair.point,
+      toPoint: spec.point,
+      sigma: fair.sigma != null ? fair.sigma : null,
+      distance: fair.distance != null ? fair.distance : 0,
+      pushQ: fair.q > 0 ? fair.q : 0,
+    },
+  };
+  return { candidate: next };
+}
+
+/**
  * Adjust the candidate before the existing annotate math.
  * Null means the row is unchanged. A rejectReason drops it before the cut.
  * noSharpFair keeps the stored fair and stays placeable.
@@ -450,9 +528,14 @@ function applySharpPrep(candidate, opts) {
   const shrinkOn = moveShrinkEnabled(env);
   const fairOn = pinnacleFairEnabled(env);
   const keyOn = keyConvertEnabled(env);
-  if (!moveOn && !shrinkOn && !fairOn && !keyOn) return null;
+  const formula = webetaiFormulaEnabled(env);
+  if (!formula && !moveOn && !shrinkOn && !fairOn && !keyOn) return null;
   const index = pollsOf(opts && opts.linePolls);
   if (!index) return null;
+  if (formula) {
+    const spec = specOf(candidate);
+    return applyFormulaSharp(candidate, opts, index, spec);
+  }
   const spec = specOf(candidate);
   if (!spec) {
     if (keyOn && candidate && candidate.needsKeyConvert) return { rejectReason: 'dk-hr-line-mismatch' };

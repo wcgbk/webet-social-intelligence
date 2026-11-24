@@ -6,8 +6,11 @@ const {
   marketPEnabled, favCapEnabled, FAV_CAP_AMERICAN, powerDevigEnabled,
   evFirstEnabled, evFirstCappedEnabled, rawEvRankEnabled, KELLY_FRACTION,
   blendPEnabled, blendWeightFor, blendTrimEnabled, clampWinProb,
+  webetaiFormulaEnabled, sportCapEnabled, FORMULA_MODELLESS_HAIRCUT, FORMULA_DOG_CAP_AMERICAN,
 } = require('./constants');
-const { blendProb, modelProbForBlend } = require('./blend');
+const {
+  blendProb, modelProbForBlend, formulaModelProb, formulaBlendWeight, canonSport, logit, logistic,
+} = require('./blend');
 const { dkHrLineAgrees, quotePoint } = require('./board');
 const { applySharpPrep, applySharpFinish } = require('./sharp_gaps');
 const { applyStatusVeto } = require('./status_veto');
@@ -216,6 +219,194 @@ function favoriteOutOfBand(row) {
 }
 
 /**
+ * Formula price band. Longer than +400 or shorter than -300 is out.
+ * +400 and -300 stay. This is a hard drop, not a favorite-cap fill.
+ */
+function priceOutOfBand(row) {
+  const odds = Number(row && row.odds);
+  if (!Number.isFinite(odds) || odds === 0) return false;
+  if (odds > FORMULA_DOG_CAP_AMERICAN) return true;
+  return odds < FAV_CAP_AMERICAN;
+}
+
+function projectionOf(row) {
+  if (!row || row.modelProjection == null || row.modelProjection === '') return null;
+  const value = Number(row.modelProjection);
+  if (!Number.isFinite(value)) return null;
+  const market = String(row.market || row.marketFamily || '');
+  const kind = /total/i.test(market) ? 'total' : 'margin';
+  return { kind, value, method: row.projMethod || null };
+}
+
+function formulaEvRankOf(row) {
+  const ranked = Number(row && row.evRank);
+  if (Number.isFinite(ranked)) return ranked;
+  const ev = Number(row && row.ev);
+  return Number.isFinite(ev) ? ev : -Infinity;
+}
+
+function compareFormulaRank(a, b) {
+  const ev = formulaEvRankOf(b) - formulaEvRankOf(a);
+  if (ev) return ev;
+  const edge = finiteRank(b && b.edge) - finiteRank(a && a.edge);
+  if (edge) return edge;
+  return String(a && a.pick).localeCompare(String(b && b.pick));
+}
+
+function rowGameKey(row) {
+  if (row && row.gameKey != null && row.gameKey !== '') return String(row.gameKey);
+  return gameKey(row && row.matchup);
+}
+
+/**
+ * One side per game, best EV_rank first.
+ * Qualified rows only. The sport cap is applied later, and only to the
+ * published three. A missing qualified flag stays out of this pool.
+ */
+function formulaPool(annotated, opts) {
+  const asOfMs = pregameClockMs(opts);
+  const rows = rankPool(annotated, opts)
+    .filter((c) => c && c.qualified !== false && !pastPregameCutoff(c.commenceTime, asOfMs));
+  const best = new Map();
+  for (const c of rows) {
+    const key = rowGameKey(c);
+    const prev = best.get(key);
+    if (!prev || compareFormulaRank(c, prev) < 0) best.set(key, c);
+  }
+  return [...best.values()].sort(compareFormulaRank);
+}
+
+/**
+ * At most 2 straights from one sport when any other sport still has a
+ * side with EV_rank >= 0. Otherwise fill the card in EV_rank order.
+ */
+function applySportCap(list, limit) {
+  const out = [];
+  const counts = {};
+  const used = new Set();
+  for (const c of list || []) {
+    if (out.length >= limit) break;
+    const key = rowGameKey(c);
+    if (used.has(key)) continue;
+    const sport = canonSport(c.sport);
+    if ((counts[sport] || 0) >= 2) {
+      const other = (list || []).some((r) => {
+        const rk = rowGameKey(r);
+        if (used.has(rk)) return false;
+        if (canonSport(r.sport) === sport) return false;
+        return formulaEvRankOf(r) >= 0;
+      });
+      if (other) continue;
+    }
+    used.add(key);
+    counts[sport] = (counts[sport] || 0) + 1;
+    out.push({ ...c, forced: true });
+  }
+  return out;
+}
+
+function selectFormulaTop3(annotated, opts) {
+  const pool = formulaPool(annotated, opts);
+  const env = opts && opts.env;
+  if (sportCapEnabled(env)) return applySportCap(pool, MAX_STRAIGHTS);
+  return pool.slice(0, MAX_STRAIGHTS).map((c) => ({ ...c, forced: true }));
+}
+
+function unclampedFormulaP(pPin, pModel, w) {
+  if (!(w > 0) || pModel == null) return pPin;
+  const a = logit(pPin);
+  const b = logit(pModel);
+  if (a == null || b == null) return null;
+  return logistic(((1 - w) * a) + (w * b));
+}
+
+/**
+ * One probability for the printed win rate, the edge, the EV, the letter,
+ * the rank, and the stake. No longshot trim on top of the power de-vig.
+ * A side with no projection keeps p_pin and ranks on EV_rank = EV - 0.01.
+ */
+function applyFormulaBet(row, candidate, opts, ctx) {
+  const env = opts && opts.env;
+  let reason = ctx.straightReject;
+  if (reason === 'edge-over-10pp') {
+    reason = priceFairMismatch(ctx.implied, ctx.pMkt, { fullRange: true }) ? 'price-fair-mismatch' : null;
+  }
+  const band = priceOutOfBand(row);
+  if (band && (reason == null || reason === 'price-fair-mismatch' || reason === 'edge-over-10pp')) {
+    reason = 'price-band';
+  }
+  const pPin = Number.isFinite(Number(ctx.pMkt)) ? Number(ctx.pMkt) : null;
+  const pModel = formulaModelProb(candidate, ctx.origPMkt);
+  const w = pModel == null ? 0 : formulaBlendWeight(candidate.sport, env);
+  const pFinal = pPin == null ? null : blendProb(pPin, pModel, w, env);
+  if (reason == null && pFinal == null) reason = 'no-calibration';
+  const dec = ctx.dec;
+  const priceImplied = dec > 1 ? (1 / dec) : ctx.implied;
+  const priceEdge = pFinal == null ? null : (pFinal - priceImplied);
+  if (reason == null && priceEdge != null && priceEdge > MAX_EDGE) reason = 'price-edge-over-10pp';
+  const priceEv = pFinal == null || !(dec > 1) ? null : (pFinal * dec - 1);
+  const modelless = pModel == null;
+  const evRank = priceEv == null ? null : (priceEv - (modelless ? FORMULA_MODELLESS_HAIRCUT : 0));
+  const sharp = candidate && candidate._sharp && candidate._sharp.formula;
+  const rawP = unclampedFormulaP(pPin, pModel, w);
+  const pFloor = rawP != null && pFinal != null && Math.abs(rawP - pFinal) > 1e-9;
+  const trace = {
+    projection: projectionOf(candidate),
+    p_model: pModel,
+    p_pin: pPin,
+    p_pin_method: sharp ? (sharp.method || 'pinnacle-power') : 'stored',
+    w,
+    p_final: pFinal,
+    implied: priceImplied,
+    decimal: dec,
+    edge: priceEdge,
+    ev: priceEv,
+    evRank,
+    discounts: {
+      longshotTrim: false,
+      pFloor,
+      lineConversion: sharp && sharp.converted ? {
+        fromPoint: sharp.fromPoint,
+        toPoint: sharp.toPoint,
+        sigma: sharp.sigma,
+        distance: sharp.distance,
+        method: sharp.method || null,
+      } : null,
+      priceBand: band ? 'price-band' : null,
+      favCap: false,
+      movedAgainst: false,
+      modellessHaircut: modelless ? FORMULA_MODELLESS_HAIRCUT : 0,
+      pushQ: sharp && sharp.pushQ ? sharp.pushQ : 0,
+    },
+    qualified: reason == null,
+    rejectReason: reason,
+  };
+  return {
+    ...row,
+    implied: priceImplied,
+    decimal: dec,
+    pBet: pFinal,
+    pPinnacle: pPin,
+    pModelBlend: pModel,
+    pBlend: pFinal,
+    blendW: w,
+    blendApplied: true,
+    formulaApplied: true,
+    breakeven: priceImplied,
+    edge: priceEdge,
+    ev: priceEv,
+    evRank,
+    longshotPenalty: 0,
+    forced: true,
+    forcePlaceable: reason == null,
+    qualified: reason == null,
+    parlayQualified: reason == null,
+    rejectReason: reason,
+    _formulaTrace: trace,
+  };
+}
+
+/**
  * Straight gates.
  * Flag off: positive no-vig edge, positive EV at the DK/HR price, under the
  * miscalibration cap, and clear of k*SE in its no-vig bucket. Parlay
@@ -238,7 +429,7 @@ function annotateCandidate(candidate, opts) {
   const origPMkt = candidate && candidate.calibration ? candidate.calibration.pMkt : null;
   const prep = applySharpPrep(candidate, opts);
   if (prep && prep.rejectReason) {
-    return {
+    const dropped = {
       ...candidate,
       qualified: false,
       parlayQualified: false,
@@ -246,6 +437,36 @@ function annotateCandidate(candidate, opts) {
       ...(prep.lineMovePinn ? { lineMovePinn: prep.lineMovePinn } : {}),
       ...(force ? { forced: true, forcePlaceable: false } : {}),
     };
+    if (force && webetaiFormulaEnabled(opts && opts.env)) {
+      const moved = prep.rejectReason === 'pinnacle-moved-against';
+      dropped.formulaApplied = true;
+      dropped._formulaTrace = {
+        projection: projectionOf(candidate),
+        p_model: formulaModelProb(candidate, origPMkt),
+        p_pin: null,
+        p_pin_method: null,
+        w: null,
+        p_final: null,
+        implied: null,
+        edge: null,
+        ev: null,
+        evRank: null,
+        discounts: {
+          longshotTrim: false,
+          pFloor: false,
+          lineConversion: null,
+          priceBand: null,
+          favCap: false,
+          movedAgainst: moved,
+          noPinnacleFair: prep.rejectReason === 'no-pinnacle-fair',
+          modellessHaircut: 0,
+          pushQ: 0,
+        },
+        qualified: false,
+        rejectReason: prep.rejectReason,
+      };
+    }
+    return dropped;
   }
   if (prep && prep.candidate) candidate = prep.candidate;
   const finish = (row) => applySharpFinish(row, candidate, opts);
@@ -312,6 +533,15 @@ function annotateCandidate(candidate, opts) {
   };
   if (!force) return finish(row);
   const env = opts && opts.env;
+  if (webetaiFormulaEnabled(env)) {
+    return finish(applyFormulaBet(row, candidate, opts, {
+      origPMkt,
+      implied,
+      dec,
+      pMkt,
+      straightReject,
+    }));
+  }
   const probOpts = {
     ...(opts || {}),
     pMktPower: candidate.pMktPower != null ? candidate.pMktPower : (opts && opts.pMktPower),
@@ -629,6 +859,7 @@ function growthForRank(row, pBet, decimal) {
 }
 
 function selectForcedTop3(annotated, opts) {
+  if (webetaiFormulaEnabled(opts && opts.env)) return selectFormulaTop3(annotated, opts);
   const asOfMs = pregameClockMs(opts);
   const env = opts && opts.env;
   const cap = favCapEnabled(env);
@@ -662,6 +893,7 @@ function selectForcedTop3(annotated, opts) {
  * `qualified: false` stays out. The -300 cap is favCapEnabled.
  */
 function orderForcedPool(annotated, opts) {
+  if (webetaiFormulaEnabled(opts && opts.env)) return formulaPool(annotated, opts);
   const asOfMs = pregameClockMs(opts);
   const env = opts && opts.env;
   const cap = favCapEnabled(env);
@@ -687,6 +919,85 @@ function orderForcedPool(annotated, opts) {
   const evFirst = evFirstEnabled(env);
   const evFirstCapped = evFirstCappedEnabled(env);
   return concatPacks(forcedPacks(inFair, outFair, cap, evFirst, evFirstCapped, env));
+}
+
+/**
+ * Debug trace for a dry run. Not copied onto a published pick.
+ * Best 3 qualified sides per sport, plus the global EV_rank.
+ * A side with no p_model is ranked on EV_rank = EV - 0.01.
+ */
+function buildDebugTrace(annotated, selected, opts) {
+  const formula = webetaiFormulaEnabled(opts && opts.env);
+  const pool = formula
+    ? formulaPool(annotated, opts)
+    : orderForcedPool(annotated, opts);
+  const rankOf = new Map();
+  pool.forEach((row, i) => { rankOf.set(row, i + 1); });
+  const selectedIds = new Set((selected || []).map((row) => {
+    const pick = String(row && (row.pick || row.side) || '').toLowerCase();
+    return `${rowGameKey(row)}|${pick}`;
+  }));
+  const drops = {};
+  for (const row of annotated || []) {
+    if (!row || row.qualified) continue;
+    const reason = row.rejectReason || 'not-qualified';
+    drops[reason] = (drops[reason] || 0) + 1;
+  }
+  const traced = pool.map((row) => {
+    const base = row && row._formulaTrace ? { ...row._formulaTrace } : {
+      projection: projectionOf(row),
+      p_model: row && row.pModelBlend != null ? row.pModelBlend : null,
+      p_pin: row && row.calibration ? row.calibration.pMkt : null,
+      p_pin_method: row && row.pPinnacle != null ? 'stored' : null,
+      w: row && row.blendW != null ? row.blendW : null,
+      p_final: row && row.pBet != null ? row.pBet : null,
+      implied: row && row.implied != null ? row.implied : null,
+      edge: row && row.edge != null ? row.edge : null,
+      ev: row && row.ev != null ? row.ev : null,
+      evRank: formulaEvRankOf(row),
+      discounts: {
+        longshotTrim: !(row && row.formulaApplied),
+        pFloor: false,
+        lineConversion: null,
+        priceBand: null,
+        favCap: !!(row && row.favCapFill),
+        movedAgainst: row && row.rejectReason === 'pinnacle-moved-against',
+        modellessHaircut: row && row.formulaApplied ? 0 : 0,
+        pushQ: row && row.pushQ ? row.pushQ : 0,
+      },
+      qualified: !!(row && row.qualified),
+      rejectReason: row && row.rejectReason || null,
+    };
+    if (base.discounts && row && row.formulaApplied && row.pModelBlend == null) {
+      base.discounts = { ...base.discounts, modellessHaircut: FORMULA_MODELLESS_HAIRCUT };
+    }
+    const id = `${rowGameKey(row)}|${String(row.pick || '').toLowerCase()}`;
+    return {
+      sport: canonSport(row.sport),
+      matchup: row.matchup || null,
+      pick: row.pick || null,
+      market: row.market || null,
+      odds: row.odds != null ? row.odds : null,
+      book: row.book || null,
+      ...base,
+      finalRank: rankOf.get(row) || null,
+      selected: selectedIds.has(id),
+    };
+  });
+  const bestBySport = {};
+  for (const row of traced) {
+    const sport = row.sport || 'OTHER';
+    if (!bestBySport[sport]) bestBySport[sport] = [];
+    if (bestBySport[sport].length < 3) bestBySport[sport].push(row);
+  }
+  return {
+    formula,
+    modellessHaircut: FORMULA_MODELLESS_HAIRCUT,
+    note: 'A side with no p_model uses p_pin. Its rank value is EV_rank = EV - 0.01 so a model-less sport is not favoured on a price gap.',
+    bestBySport,
+    pool: traced,
+    drops,
+  };
 }
 
 function selectStraights(annotated, opts) {
@@ -719,6 +1030,9 @@ module.exports = {
   kellyGrowth,
   forcedBetProb,
   favoriteOutOfBand,
+  priceOutOfBand,
+  formulaEvRankOf,
+  buildDebugTrace,
   annotateCandidate: (candidate, opts) => applyStatusVeto(annotateCandidate(candidate, opts), opts),
   selectStraights,
   selectForcedTop3,

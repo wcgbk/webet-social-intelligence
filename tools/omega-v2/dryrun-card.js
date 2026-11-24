@@ -184,6 +184,7 @@ function cardSlim(card) {
         marketSkill: row.marketSkill || null,
       }))
       : null,
+    debugTrace: card.debugTrace || null,
     captureHealth: card.captureHealth ? {
       ok: card.captureHealth.ok,
       hardFail: card.captureHealth.hardFail,

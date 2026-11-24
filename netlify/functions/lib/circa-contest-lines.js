@@ -31,7 +31,7 @@ const WEEK10_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-10.pdf";
 
 const WEEK11_SOURCE_URL =
-  "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-11.pdf";
+  "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Week-11-Selections.pdf";
 
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
@@ -472,11 +472,14 @@ const WEEK10_GAMES = [
 ];
 
 
-// Verified against the official Week 11 Contest Point Spreads PDF
-// (https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-11.pdf,
-// 504,659 bytes, sha256 1b3340100af389487edc06ba023e071e28ce5c66a2e541ba7b7105ea0d75b832).
-// Image render; spreads are ½ → .5. Top team on the sheet is visitor; bottom is home.
-// Every pair is an exact mirror. Mexico City: 49ers are the designated home team.
+// Verified against the official Week 11 Selections PDF
+// (https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Week-11-Selections.pdf,
+// 3,405,536 bytes, sha256 a2a780b70ffc6255625b555a76332acc4c13fabb40526bab4372805d5cc15d86).
+// Spreads are ½ → .5. Every pair is an exact mirror (26 contest IDs, no disagreements).
+// Mexico City: 49ers are the designated home team.
+// Correction vs the earlier Contest Point Spreads pin: 21 Steelers / 22 Eagles
+// are Steelers -4.5 / Eagles +4.5 (the Selections sheet is unanimous: 1186×
+// STEELERS -4½, 1014× EAGLES +4½, zero opposite sides). All other sides unchanged.
 const WEEK11_GAMES = [
   gameRow({
     away: "Indianapolis Colts", home: "Houston Texans",
@@ -531,7 +534,7 @@ const WEEK11_GAMES = [
   gameRow({
     away: "Pittsburgh Steelers", home: "Philadelphia Eagles",
     commenceHint: "Sun Nov 22, 10:00 AM PT", commenceTime: "2026-11-22T18:00:00.000Z",
-    awaySpread: 4.5, homeSpread: -4.5, contestIds: { away: 21, home: 22 },
+    awaySpread: -4.5, homeSpread: 4.5, contestIds: { away: 21, home: 22 },
   }),
   gameRow({
     away: "Minnesota Vikings", home: "San Francisco 49ers",

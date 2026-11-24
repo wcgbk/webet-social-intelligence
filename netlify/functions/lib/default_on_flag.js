@@ -120,6 +120,14 @@ function kpiSwrShortEnabled(env) {
 }
 
 /**
+ * Serve the KPI blob immediately and refresh it in the background once cacheTtlMs
+ * has passed. off / 0 / false / no grades inside the request again after the TTL.
+ */
+function kpiServeStaleEnabled(env) {
+  return defaultOnFlag('OMEGA_KPI_SERVE_STALE', env);
+}
+
+/**
  * 3 AM saved-board close copies the last Pinnacle price onto each card pick.
  * off / 0 / false / no keeps the old name match and archive-only stored closes.
  */
@@ -164,6 +172,7 @@ module.exports = {
   deployActorPrefixEnabled,
   clvLatestSavedEnabled,
   kpiSwrShortEnabled,
+  kpiServeStaleEnabled,
   savedPickCloseEnabled,
   pullBookPricesEnabled,
   pullCreditsPersistEnabled,

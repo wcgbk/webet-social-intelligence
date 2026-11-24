@@ -5,11 +5,11 @@
 //   - 0-0 placeholder rows for dates with no picks in either pipeline
 
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
-const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
+const { cacheIsFresh, cacheControlFor, cacheTtlMs, wantFresh } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 const { canonicalSchool, schoolsEqual } = require('./lib/ncaaf-names');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
-const { kpiTodayPendingEnabled } = require('./lib/default_on_flag');
+const { kpiTodayPendingEnabled, kpiServeStaleEnabled } = require('./lib/default_on_flag');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +18,9 @@ const CORS = {
 };
 
 const RESULTS_CACHE_KEY = 'results-omega-cache-v9-kpi1030';
+const REFRESH_LOCK_KEY = 'results-omega-refresh-lock';
+const REFRESH_LOCK_MS = 60000;
+const REFRESH_KICK_TIMEOUT_MS = 1500;
 const DOLLAR_PER_UNIT = 150;
 
 function getEasternDateToday() {
@@ -847,6 +850,88 @@ function respond(full, event) {
   return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(full) }, body: JSON.stringify(body) };
 }
 
+function refreshResultsUrl(env) {
+  const base = env && (env.URL || env.DEPLOY_PRIME_URL);
+  if (!base) return '';
+  return String(base).replace(/\/$/, '') + '/.netlify/functions/refresh-results-omega-background';
+}
+
+// Await the kick, capped, so the POST leaves before this lambda returns.
+async function kickOmegaResultsRefresh(opts) {
+  const env = (opts && opts.env) || process.env;
+  const fetchFn = (opts && opts.fetchImpl) || fetch;
+  const storeUrl = opts && opts.storeUrl;
+  const authHeaders = (opts && opts.authHeaders) || {};
+  const now = (opts && opts.now) || Date.now();
+  const timeoutMs = (opts && opts.timeoutMs) || REFRESH_KICK_TIMEOUT_MS;
+  if (!storeUrl) return { kicked: false, reason: 'no-store' };
+
+  const ac = new AbortController();
+  let timer;
+  const capped = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      ac.abort();
+      resolve({ kicked: false, reason: 'timeout' });
+    }, timeoutMs);
+  });
+
+  const work = (async () => {
+    const lockUrl = `${storeUrl}/${REFRESH_LOCK_KEY}`;
+    try {
+      const lockResp = await fetchFn(lockUrl, { headers: authHeaders, signal: ac.signal });
+      if (lockResp && lockResp.ok && typeof lockResp.json === 'function') {
+        const lock = await lockResp.json();
+        const kickedAt = lock && Number(lock.kickedAt);
+        if (Number.isFinite(kickedAt) && (now - kickedAt) < REFRESH_LOCK_MS) {
+          return { kicked: false, reason: 'throttled' };
+        }
+      }
+    } catch (e) {}
+
+    const url = refreshResultsUrl(env);
+    if (!url) return { kicked: false, reason: 'no-base' };
+
+    try {
+      await fetchFn(lockUrl, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kickedAt: now }),
+        signal: ac.signal,
+      });
+    } catch (e) {}
+
+    try {
+      await fetchFn(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        signal: ac.signal,
+      });
+    } catch (e) {}
+    return { kicked: true };
+  })();
+
+  try {
+    return await Promise.race([work, capped]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function respondFromCache(previousResultsCache, event) {
+  const todayET = getEasternDateToday();
+  const days = omitUnpublishedToday(previousResultsCache.days, todayET, process.env);
+  if (days.length !== (previousResultsCache.days || []).length) {
+    try {
+      const mirror = require('./lib/supa-mirror');
+      await mirror.deleteUnpublishedNoPlays(todayET, { env: process.env });
+    } catch (err) {
+      console.error(`[get-results-omega] daily_results today: ${err && err.message ? err.message : err}`);
+    }
+  }
+  return respond(Object.assign({}, previousResultsCache, { days }), event);
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -864,26 +949,31 @@ exports.handler = async (event) => {
 
     // Adaptive cache: 30s while any pick is pending (settle promptly after final),
     // 5 min once the ET day is fully decided. v3 busts the pre-NFL/NCAAF endpoint cache.
+    // OMEGA_KPI_SERVE_STALE (default on) returns any cached blob immediately.
+    // Past cacheTtlMs it kicks refresh-results-omega-background instead of grading here.
     let previousResultsCache = null;
     try {
       const cacheResp = await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, { headers: authHeaders });
-      if (cacheResp.ok) {
-        previousResultsCache = await cacheResp.json();
-        if (cacheIsFresh(previousResultsCache, event)) {
-          const todayET = getEasternDateToday();
-          const days = omitUnpublishedToday(previousResultsCache.days, todayET, process.env);
-          if (days.length !== (previousResultsCache.days || []).length) {
-            try {
-              const mirror = require('./lib/supa-mirror');
-              await mirror.deleteUnpublishedNoPlays(todayET, { env: process.env });
-            } catch (err) {
-              console.error(`[get-results-omega] daily_results today: ${err && err.message ? err.message : err}`);
-            }
-          }
-          return respond(Object.assign({}, previousResultsCache, { days }), event);
-        }
-      }
+      if (cacheResp.ok) previousResultsCache = await cacheResp.json();
     } catch (e) {}
+
+    if (previousResultsCache && kpiServeStaleEnabled(process.env) && !wantFresh(event)) {
+      const ageMs = previousResultsCache.cachedAt ? (Date.now() - previousResultsCache.cachedAt) : Infinity;
+      if (ageMs >= cacheTtlMs(previousResultsCache)) {
+        try {
+          await kickOmegaResultsRefresh({
+            env: process.env,
+            storeUrl: alphaStoreUrl,
+            authHeaders,
+          });
+        } catch (e) {}
+      }
+      return respondFromCache(previousResultsCache, event);
+    }
+
+    if (previousResultsCache && cacheIsFresh(previousResultsCache, event)) {
+      return respondFromCache(previousResultsCache, event);
+    }
 
     // OMEGA: KPIs reset to start 2026-09-22 for v12.0.0-omega-vnext-clv cutover.
     // Omega store ONLY — no alpha/beta back-merge. Daily + cumulative ignore any pre-floor blob dates.

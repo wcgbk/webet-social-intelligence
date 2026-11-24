@@ -797,6 +797,13 @@ async function main() {
   );
   if (kpiSwr.status !== 0) throw new Error('kpi swr gate failed');
 
+  const kpiServeStale = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'tests/omega-kpi-serve-stale.test.js')],
+    { stdio: 'inherit' }
+  );
+  if (kpiServeStale.status !== 0) throw new Error('kpi serve stale gate failed');
+
   const savedPickClose = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-saved-pick-close.js')],

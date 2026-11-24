@@ -2045,7 +2045,12 @@
       renderResults(data);
       if (!kpiExpanded) { try { localStorage.setItem('edgeKpi7', JSON.stringify(data)); } catch (e) {} }
     } catch (err) {
+      if (!(opts && opts.kpiRetried)) {
+        setTimeout(function () { loadResults(Object.assign({}, opts, { kpiRetried: true })); }, 4000);
+        return;
+      }
       console.error('Results load failed:', err);
+      if (resultsSnapshot) return;
       document.getElementById('results-body').innerHTML =
         '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:#c0392b;">Failed to load results. Try again later.</td></tr>';
     }

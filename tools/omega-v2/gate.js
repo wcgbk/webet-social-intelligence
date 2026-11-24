@@ -811,6 +811,13 @@ async function main() {
   );
   if (savedPickClose.status !== 0) throw new Error('saved pick close gate failed');
 
+  const savedClvAttach = require('child_process').spawnSync(
+    process.execPath,
+    [path.join(root, 'test-omega-clv-saved-attach.js')],
+    { stdio: 'inherit' }
+  );
+  if (savedClvAttach.status !== 0) throw new Error('saved clv attach gate failed');
+
   const pullBookPrices = require('child_process').spawnSync(
     process.execPath,
     [path.join(root, 'test-omega-pull-book-prices.js')],

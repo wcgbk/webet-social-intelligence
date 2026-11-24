@@ -8,9 +8,15 @@ const {
   gradePowerClv,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
-const { defaultOnFlag, closesAt3amEnabled, pullSlotLockEnabled, dailyResultsResyncEnabled } = require('./lib/default_on_flag');
+const { defaultOnFlag, closesAt3amEnabled, pullSlotLockEnabled, dailyResultsResyncEnabled, savedClvAttachEnabled } = require('./lib/default_on_flag');
 const { forceOverride, trackLockKey, guardDateLock, releaseHeldLock } = require('./lib/slot-lock');
 const { loadStoredEventsForSport } = require('./lib/closes-3am');
+const {
+  resolveSavedClose,
+  loadSavedBundle,
+  parseBackfillRequest,
+  rowHasClose,
+} = require('./lib/clv-saved-attach');
 const { ncaamTeamsMatch, collegeHoopsMatchEnabled, ncaamMatchingGames, ncaamPickedSide } = require('./lib/ncaam-names');
 const { pickClvFillEnabled } = require('./lib/omega-v2/constants');
 const { applyToRecord, enforceLineMatch } = require('./lib/clv-line-adj');
@@ -134,6 +140,16 @@ async function writeWeeklyObserver(store, dateISO, forceWeekly) {
 //     blob. We keep clv numeric and the picks array in picks-blob order, 1:1.
 //   • Results grading (win/loss/push + profit, written back to the picks blob) is
 //     preserved unchanged.
+//
+// Saved Pinnacle attach (OMEGA_CLV_SAVED_ATTACH, default on). When the odds
+// feed no longer has the game, closing odds, closing line, and CLV are filled
+// from clv.odds_snapshots (source odds-master-board:capture-closes-3am) or the
+// card pick's saved quote. The line must match exactly while
+// OMEGA_CLV_LINE_MATCH is on. =off keeps the feed-miss nulls.
+// Backfill rewrites only null closes. It does not call the Odds API.
+//   POST /.netlify/functions/track-clv-omega?backfill=2026-11-18..2026-11-24
+//   POST /.netlify/functions/track-clv-omega?days=7
+//   POST body {"backfill":"2026-11-18..2026-11-24"} or {"days":7}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -1059,6 +1075,215 @@ async function resyncSettledDay(dateISO, settledCount, env, deps, picks) {
   }
 }
 
+// Same no-vig CLV record the per-pick loop writes. A saved attach passes
+// snapAt null so an existing non-null close (lower captureScore) still wins.
+function recordWithClose(baseRecord, close, pick, sideInfo, env, timing) {
+  const snapAt = timing && timing.snapAt;
+  const commenceMs = timing && timing.commenceMs;
+  const nowMs = timing && timing.nowMs != null ? timing.nowMs : Date.now();
+  const gameObj = timing && timing.gameObj;
+  let captureMinsToCommence = null;
+  if (snapAt) captureMinsToCommence = 0; // historical snapshot is taken AT commence
+  else if (Number.isFinite(commenceMs)) captureMinsToCommence = Math.round((commenceMs - nowMs) / 60000);
+  // Lower captureScore = closer to (and ideally just before) first pitch.
+  const captureScore = captureMinsToCommence == null ? 5e5
+    : (captureMinsToCommence >= -PRE_PITCH_BUFFER_MIN ? Math.max(0, captureMinsToCommence) : 1e6 + Math.abs(captureMinsToCommence));
+
+  let rec;
+  if (!close || !close.overround) {
+    rec = {
+      ...baseRecord,
+      closingOdds: close ? String(close.sideOdds) : null,
+      closingLine: close ? (close.closingLine ?? null) : null,
+      anchor: close ? close.anchor : null,
+      anchorBook: close ? close.anchorBook : null,
+      pickTimeImplied: impliedProbability(pick.odds),
+      closingImplied: close && close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
+      pickTimeNoVig: null, closingNoVig: null, closingOverround: null, betDevigMethod: null,
+      clv: null, clvCents: null, clvRaw: null, beatClosing: null,
+      closeSnapshotAt: null, captureMinsToCommence, captureScore: 5e5,
+      error: gameObj ? 'Could not extract sharp closing price for this market' : 'No matching game found in odds feed',
+    };
+    if (close && close.closeFallback) rec.closeFallback = close.closeFallback;
+    return rec;
+  }
+
+  const betRaw = impliedProbability(pick.odds);
+  const powered = close.oppOdds != null ? gradePowerClv(pick.odds, close.sideOdds, close.oppOdds) : null;
+  const closingNoVig = powered ? powered.closingNoVig : +(close.sideRaw / close.overround).toFixed(4);
+  // No second close price: proportional split. A two-sided close uses power.
+  // The bet's other side is not on the ticket, so the power path rebuilds it
+  // from this close overround. It does not copy the bet price into the fair.
+  const pickTimeNoVig = powered ? powered.pickTimeNoVig : (betRaw != null ? +(betRaw / close.overround).toFixed(4) : null);
+  const clv = powered ? powered.clv : ((pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null);
+  const clvRaw = (betRaw != null && close.sideRaw != null) ? +(close.sideRaw - betRaw).toFixed(4) : null;
+
+  rec = {
+    ...baseRecord,
+    closingOdds: String(close.sideOdds),
+    closingLine: close.closingLine ?? null,
+    anchor: close.anchor,
+    anchorBook: close.anchorBook,
+    pickTimeImplied: betRaw != null ? +betRaw.toFixed(4) : null,
+    closingImplied: close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
+    pickTimeNoVig,
+    closingNoVig,
+    closingOverround: +close.overround.toFixed(4),
+    betDevigMethod: powered ? 'power' : 'closing-overround',
+    // 'clv' is the TRUE two-sided no-vig CLV. Field name preserved for the generator's
+    // CLV-feedback loop and get-analytics, which both read pick.clv numerically.
+    clv,
+    clvCents: clv != null ? +(clv * 100).toFixed(2) : null,
+    clvRaw, // legacy raw-implied (closing − bet) difference, for transparency
+    beatClosing: clv != null ? clv > 0 : null,
+    closeSnapshotAt: snapAt || new Date().toISOString(),
+    captureMinsToCommence,
+    captureScore,
+  };
+  // Moved spread/total: score the bet's own number. Flag off keeps rec.
+  const lineExtra = {
+    sport: pick.sport,
+    market: pick.betType || pick.market,
+    side: sideInfo,
+    betLine: baseRecord.betLine,
+    closeLine: close.closingLine,
+    altQuote: close.altQuote || null,
+    betOdds: pick.odds,
+  };
+  rec = applyToRecord(rec, lineExtra, env);
+  rec = enforceLineMatch(rec, lineExtra, env);
+  if (close.closeFallback) rec.closeFallback = close.closeFallback;
+  if (close.savedAttach) {
+    rec.closeSource = 'saved-pinnacle';
+    if (close.closeSnapshotAt) rec.closeSnapshotAt = close.closeSnapshotAt;
+  }
+  console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
+  return rec;
+}
+
+function pickForSavedAttach(rec, cardPick) {
+  const card = cardPick || {};
+  return {
+    sport: card.sport || rec.sport,
+    matchup: card.matchup || rec.matchup,
+    pick: card.pick || rec.pick,
+    betType: card.betType || card.market || rec.betType || rec.market,
+    market: card.market || card.betType || rec.market || rec.betType,
+    odds: card.odds != null && card.odds !== '' ? card.odds : rec.pickTimeOdds,
+    commenceTime: card.commenceTime || rec.commenceTime,
+    betLine: rec.betLine != null ? rec.betLine : (card.betLine != null ? card.betLine : card.line),
+    closingOdds: card.closingOdds != null ? card.closingOdds : null,
+    closingLine: card.closingLine != null ? card.closingLine : null,
+    oppOdds: card.oppOdds != null ? card.oppOdds : null,
+    closeSnapshotAt: card.closeSnapshotAt || null,
+    closeFallback: card.closeFallback || null,
+  };
+}
+
+async function runSavedAttachBackfill(dates, ctx) {
+  const env = ctx.env || {};
+  const storeImpl = ctx.storeImpl;
+  const fetchImpl = ctx.fetchImpl;
+  const deps = ctx.deps || {};
+  const nowMs = ctx.nowMs;
+  const report = {
+    ok: true,
+    mode: 'saved-attach-backfill',
+    dates,
+    attached: 0,
+    skipped: 0,
+    missed: 0,
+    absent: 0,
+    wrote: [],
+    oddsApi: false,
+  };
+  for (const dateISO of dates) {
+    const picksData = await loadPicksData(dateISO, storeImpl);
+    const clv = await loadClvData(dateISO, storeImpl);
+    if (!clv || !Array.isArray(clv.picks) || !clv.picks.length) {
+      report.absent += 1;
+      continue;
+    }
+    const cardPicks = (picksData && picksData.picks) || [];
+    const injected = deps.savedByDate && deps.savedByDate[dateISO];
+    const bundle = injected
+      ? {
+        games: injected.games || [],
+        snapshots: injected.snapshots || [],
+        events: injected.events || [],
+        summaryPicks: injected.summaryPicks || injected.picks || [],
+      }
+      : await loadSavedBundle(dateISO, cardPicks.length ? cardPicks : clv.picks, {
+        env,
+        fetchImpl,
+        allowBoard: true,
+        allowRemote: true,
+      });
+    let changed = false;
+    for (let i = 0; i < clv.picks.length; i += 1) {
+      const rec = clv.picks[i];
+      if (!rec) continue;
+      if (rowHasClose(rec)) {
+        report.skipped += 1;
+        continue;
+      }
+      const card = cardPicks.find((row) => row && row.pick === rec.pick && (!rec.matchup || row.matchup === rec.matchup));
+      const pick = pickForSavedAttach(rec, card);
+      const close = resolveSavedClose(pick, bundle, env);
+      if (!close || !close.overround) {
+        report.missed += 1;
+        continue;
+      }
+      const sideInfo = pickSideInfo(pick);
+      const commenceMs = Date.parse(pick.commenceTime);
+      const base = {
+        pick: rec.pick,
+        matchup: rec.matchup,
+        sport: rec.sport || pick.sport || null,
+        betType: rec.betType || pick.betType || null,
+        market: rec.market || rec.betType || pick.betType || null,
+        segment: rec.segment || segmentOf(pick),
+        source: rec.source || sourceKey(pick),
+        units: rec.units || null,
+        pickTimeOdds: rec.pickTimeOdds || pick.odds || 'N/A',
+        betLine: rec.betLine != null ? rec.betLine : parseBetLine(pick, sideInfo),
+        commenceTime: rec.commenceTime || pick.commenceTime || null,
+      };
+      const filled = recordWithClose(base, close, pick, sideInfo, env, {
+        gameObj: null,
+        snapAt: null,
+        commenceMs,
+        nowMs,
+      });
+      if (!filled || filled.clv == null && (filled.closingOdds == null || filled.closingOdds === '')) {
+        report.missed += 1;
+        continue;
+      }
+      const next = Object.assign({}, rec);
+      const keys = [
+        'closingOdds', 'closingLine', 'anchor', 'anchorBook',
+        'pickTimeImplied', 'closingImplied', 'pickTimeNoVig', 'closingNoVig', 'closingOverround',
+        'betDevigMethod', 'clv', 'clvCents', 'clvRaw', 'beatClosing',
+        'closeSnapshotAt', 'captureMinsToCommence', 'captureScore',
+        'clvMethod', 'lineDiff', 'clvRawLine', 'closeSource',
+      ];
+      for (const key of keys) {
+        if (next[key] == null || next[key] === '') next[key] = filled[key];
+      }
+      if (next.error && /No matching game|Could not extract sharp/.test(String(next.error))) next.error = null;
+      clv.picks[i] = attachRealizedAliases(next);
+      report.attached += 1;
+      changed = true;
+    }
+    if (changed) {
+      Object.assign(clv, summarizeTrackedPicks(clv.picks));
+      await writeClvData(dateISO, clv, storeImpl);
+      report.wrote.push(dateISO);
+    }
+  }
+  return report;
+}
+
 async function handle(event, deps) {
   if (event && event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -1083,6 +1308,25 @@ async function handle(event, deps) {
     const explicitDate = body.date || params.date || null;
     const dateISO = explicitDate || estOffset.toISOString().split('T')[0];
     const nowMs = Date.now();
+
+    // Saved-close backfill. Null CLV fields only. No Odds API. =off writes nothing.
+    const backfillReq = parseBackfillRequest(params, body, now);
+    if (backfillReq) {
+      if (backfillReq.error) {
+        return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: backfillReq.error }) };
+      }
+      if (!savedClvAttachEnabled(env)) {
+        return {
+          statusCode: 200,
+          headers: CORS,
+          body: JSON.stringify({ ok: true, skipped: 'flag-off', attached: 0, mode: 'saved-attach-backfill', oddsApi: false }),
+        };
+      }
+      const report = await runSavedAttachBackfill(backfillReq.dates, {
+        env, fetchImpl, storeImpl, deps, nowMs: now.getTime(),
+      });
+      return { statusCode: 200, headers: CORS, body: JSON.stringify(report) };
+    }
     const storedRequested = body.storedCloses === true || params.storedCloses === '1' || params.storedCloses === 'true';
     const storedMode = storedRequested || closesAt3amEnabled(env);
     const wantSweep = body.sweep === true || params.sweep === '1' || params.sweep === 'true';
@@ -1264,6 +1508,31 @@ async function handle(event, deps) {
       return eventCache.get(k);
     };
 
+    const savedAttachOn = savedClvAttachEnabled(env);
+    let savedBundlePromise = null;
+    function getSavedBundle() {
+      if (!savedAttachOn) return Promise.resolve({ games: [], snapshots: [], events: [], summaryPicks: [] });
+      if (!savedBundlePromise) {
+        const injected = deps && (deps.savedProvided || deps.savedGames || deps.savedSnapshots || deps.savedEvents || deps.savedSummary);
+        savedBundlePromise = loadSavedBundle(dateISO, picksData.picks, {
+          env,
+          fetchImpl,
+          provided: !!injected,
+          games: deps && deps.savedGames,
+          snapshots: deps && deps.savedSnapshots,
+          events: deps && deps.savedEvents,
+          summaryPicks: deps && deps.savedSummary,
+          allowRemote: !injected,
+          allowBoard: false,
+        }).catch((err) => {
+          const msg = String(err && err.message || 'error');
+          console.log(`[track-clv] saved attach load failed: ${/bearer|token|authorization|api[_-]?key/i.test(msg) ? 'unavailable' : msg.slice(0, 180)}`);
+          return { games: [], snapshots: [], events: [], summaryPicks: [] };
+        });
+      }
+      return savedBundlePromise;
+    }
+
     const clvPicks = [];
 
     for (const pick of picksData.picks) {
@@ -1298,18 +1567,28 @@ async function handle(event, deps) {
       let commenceMs = commenceISO ? Date.parse(commenceISO) : NaN;
       let gameObj = null;
       let snapAt = null; // null → live current; ISO → historical snapshot
+      const started = Number.isFinite(commenceMs) && commenceMs < nowMs - PRE_PITCH_BUFFER_MIN * 60000;
 
-      // Upcoming (or commence unknown) → current line.
-      if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
-        const games = await getBulk(sportKey, null);
-        gameObj = findMatchingGame(pick, games, env);
-        if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
+      // A started game with the flag on and stored mode off must not buy a
+      // historical Odds API snapshot when the saved Pinnacle close is already here.
+      let savedClose = null;
+      if (savedAttachOn && started && !storedMode) {
+        savedClose = resolveSavedClose(pick, await getSavedBundle(), env);
       }
-      // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
-      if (!gameObj && Number.isFinite(commenceMs)) {
-        const games = await getBulk(sportKey, commenceISO);
-        gameObj = findMatchingGame(pick, games, env);
-        if (gameObj) snapAt = commenceISO;
+
+      if (!savedClose) {
+        // Upcoming (or commence unknown) → current line.
+        if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
+          const games = await getBulk(sportKey, null);
+          gameObj = findMatchingGame(pick, games, env);
+          if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
+        }
+        // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
+        if (!gameObj && Number.isFinite(commenceMs)) {
+          const games = await getBulk(sportKey, commenceISO);
+          gameObj = findMatchingGame(pick, games, env);
+          if (gameObj) snapAt = commenceISO;
+        }
       }
 
       // F5 markets live only on the per-event endpoint.
@@ -1319,80 +1598,36 @@ async function handle(event, deps) {
         if (ev) extractObj = ev;
       }
 
-      const close = gameObj ? extractClose(extractObj, sideInfo, pick, env) : null;
-
-      // Capture provenance: how close to first pitch this snapshot was.
-      let captureMinsToCommence = null;
-      if (snapAt) captureMinsToCommence = 0; // historical snapshot is taken AT commence
-      else if (Number.isFinite(commenceMs)) captureMinsToCommence = Math.round((commenceMs - nowMs) / 60000);
-      // Lower captureScore = closer to (and ideally just before) first pitch.
-      const captureScore = captureMinsToCommence == null ? 5e5
-        : (captureMinsToCommence >= -PRE_PITCH_BUFFER_MIN ? Math.max(0, captureMinsToCommence) : 1e6 + Math.abs(captureMinsToCommence));
-
-      let rec;
-      if (!close || !close.overround) {
-        rec = {
-          ...baseRecord,
-          closingOdds: close ? String(close.sideOdds) : null,
-          closingLine: close ? (close.closingLine ?? null) : null,
-          anchor: close ? close.anchor : null,
-          anchorBook: close ? close.anchorBook : null,
-          pickTimeImplied: impliedProbability(pick.odds),
-          closingImplied: close && close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
-          pickTimeNoVig: null, closingNoVig: null, closingOverround: null, betDevigMethod: null,
-          clv: null, clvCents: null, clvRaw: null, beatClosing: null,
-          closeSnapshotAt: null, captureMinsToCommence, captureScore: 5e5,
-          error: gameObj ? 'Could not extract sharp closing price for this market' : 'No matching game found in odds feed',
-        };
-        if (close && close.closeFallback) rec.closeFallback = close.closeFallback;
-      } else {
-        const betRaw = impliedProbability(pick.odds);
-        const powered = close.oppOdds != null ? gradePowerClv(pick.odds, close.sideOdds, close.oppOdds) : null;
-        const closingNoVig = powered ? powered.closingNoVig : +(close.sideRaw / close.overround).toFixed(4);
-        // No second close price: proportional split. A two-sided close uses power.
-        // The bet's other side is not on the ticket, so the power path rebuilds it
-        // from this close overround. It does not copy the bet price into the fair.
-        const pickTimeNoVig = powered ? powered.pickTimeNoVig : (betRaw != null ? +(betRaw / close.overround).toFixed(4) : null);
-        const clv = powered ? powered.clv : ((pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null);
-        const clvRaw = (betRaw != null && close.sideRaw != null) ? +(close.sideRaw - betRaw).toFixed(4) : null;
-
-        rec = {
-          ...baseRecord,
-          closingOdds: String(close.sideOdds),
-          closingLine: close.closingLine ?? null,
-          anchor: close.anchor,
-          anchorBook: close.anchorBook,
-          pickTimeImplied: betRaw != null ? +betRaw.toFixed(4) : null,
-          closingImplied: close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
-          pickTimeNoVig,
-          closingNoVig,
-          closingOverround: +close.overround.toFixed(4),
-          betDevigMethod: powered ? 'power' : 'closing-overround',
-          // 'clv' is the TRUE two-sided no-vig CLV. Field name preserved for the generator's
-          // CLV-feedback loop and get-analytics, which both read pick.clv numerically.
-          clv,
-          clvCents: clv != null ? +(clv * 100).toFixed(2) : null,
-          clvRaw, // legacy raw-implied (closing − bet) difference, for transparency
-          beatClosing: clv != null ? clv > 0 : null,
-          closeSnapshotAt: snapAt || new Date().toISOString(),
-          captureMinsToCommence,
-          captureScore,
-        };
-        // Moved spread/total: score the bet's own number. Flag off keeps rec.
-        const lineExtra = {
-          sport: pick.sport,
-          market: pick.betType || pick.market,
-          side: sideInfo,
-          betLine: baseRecord.betLine,
-          closeLine: close.closingLine,
-          altQuote: close.altQuote || null,
-          betOdds: pick.odds,
-        };
-        rec = applyToRecord(rec, lineExtra, env);
-        rec = enforceLineMatch(rec, lineExtra, env);
-        if (close.closeFallback) rec.closeFallback = close.closeFallback;
-        console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
+      let close = savedClose && savedClose.overround
+        ? savedClose
+        : (gameObj ? extractClose(extractObj, sideInfo, pick, env) : null);
+      // Feed miss (game already dropped): saved snapshots or the card pick's quote.
+      if ((!close || !close.overround) && savedAttachOn) {
+        const bundle = await getSavedBundle();
+        const cached = [];
+        for (const key of [`${sportKey}|stored`, `${sportKey}|live`, `${sportKey}|${commenceISO}`]) {
+          const rows = bulkCache.get(key);
+          if (Array.isArray(rows)) cached.push(...rows);
+        }
+        const retry = resolveSavedClose(pick, {
+          games: bundle.games,
+          snapshots: bundle.snapshots,
+          events: (bundle.events || []).concat(cached),
+          summaryPicks: bundle.summaryPicks,
+        }, env);
+        if (retry && retry.overround) {
+          close = retry;
+          savedClose = retry;
+          snapAt = null;
+        }
       }
+
+      const rec = recordWithClose(baseRecord, close, pick, sideInfo, env, {
+        gameObj: savedClose ? { id: 'saved' } : gameObj,
+        snapAt: savedClose ? null : snapAt,
+        commenceMs,
+        nowMs,
+      });
 
       // Merge: keep whichever capture is closer to first pitch (and ideally pre-pitch).
       clvPicks.push(chooseCapture(prev, rec));

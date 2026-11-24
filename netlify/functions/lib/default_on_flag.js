@@ -155,6 +155,16 @@ function pullResumeEnabled(env) {
   return defaultOnFlag('OMEGA_PULL_RESUME', env);
 }
 
+/**
+ * When the odds feed no longer has the game, fill CLV from the saved
+ * Pinnacle close (odds_snapshots and the card pick's saved quote).
+ * The line must match exactly while OMEGA_CLV_LINE_MATCH is on.
+ * off / 0 / false / no leaves the feed miss and those fields null.
+ */
+function savedClvAttachEnabled(env) {
+  return defaultOnFlag('OMEGA_CLV_SAVED_ATTACH', env);
+}
+
 module.exports = {
   defaultOnFlag,
   verifyCleanStampEnabled,
@@ -177,4 +187,5 @@ module.exports = {
   pullBookPricesEnabled,
   pullCreditsPersistEnabled,
   pullResumeEnabled,
+  savedClvAttachEnabled,
 };

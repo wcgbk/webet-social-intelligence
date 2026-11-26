@@ -33,6 +33,9 @@ const WEEK10_SOURCE_URL =
 const WEEK11_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Week-11-Selections.pdf";
 
+const WEEK12_SOURCE_URL =
+  "https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-12.pdf";
+
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
 class ContestLinesError extends Error {
@@ -549,6 +552,100 @@ const WEEK11_GAMES = [
   }),
 ];
 
+
+// Verified against the official Week 12 Contest Point Spreads PDF
+// (https://www.circasports.com/wp-content/uploads/2026/11/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-12.pdf,
+// 719,766 bytes, sha256 a285ad773fb87e15acdcf098474e1eab84d0a7bc4b5601ffb285cf5590e5701f,
+// updated 11/25/26 9:45 AM). Image-only Microsoft Print-to-PDF; spreads are ½ → .5;
+// PK → 0. Top team on the sheet is visitor; bottom is home. Every pair is an exact
+// mirror. Home/away confirmed against the 2026 NFL Week 12 schedule.
+// Date typo on the Circa sheet: Sunday games are printed "Nov 30" and MNF "Dec 1",
+// but the official slate is Sunday Nov 29 and Monday Nov 30. commenceTime uses the
+// official kickoffs so already-started / early-window logic stays correct.
+// Patriots @ Chargers is printed 1:25 PM PT; official kickoff is 1:05 PM PT (4:05 ET).
+const WEEK12_GAMES = [
+  gameRow({
+    away: "Green Bay Packers", home: "Los Angeles Rams",
+    commenceHint: "Wed Nov 25, 5:00 PM PT", commenceTime: "2026-11-26T01:00:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 2, home: 1 },
+  }),
+  gameRow({
+    away: "Chicago Bears", home: "Detroit Lions",
+    commenceHint: "Thu Nov 26, 10:00 AM PT", commenceTime: "2026-11-26T18:00:00.000Z",
+    awaySpread: 0, homeSpread: 0, contestIds: { away: 3, home: 4 },
+  }),
+  gameRow({
+    away: "Philadelphia Eagles", home: "Dallas Cowboys",
+    commenceHint: "Thu Nov 26, 1:30 PM PT", commenceTime: "2026-11-26T21:30:00.000Z",
+    awaySpread: 8.5, homeSpread: -8.5, contestIds: { away: 6, home: 5 },
+  }),
+  gameRow({
+    away: "Kansas City Chiefs", home: "Buffalo Bills",
+    commenceHint: "Thu Nov 26, 5:20 PM PT", commenceTime: "2026-11-27T01:20:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 8, home: 7 },
+  }),
+  gameRow({
+    away: "Denver Broncos", home: "Pittsburgh Steelers",
+    commenceHint: "Fri Nov 27, 12:00 PM PT", commenceTime: "2026-11-27T20:00:00.000Z",
+    awaySpread: -3.5, homeSpread: 3.5, contestIds: { away: 9, home: 10 },
+  }),
+  gameRow({
+    away: "New York Giants", home: "Indianapolis Colts",
+    commenceHint: "Sun Nov 29, 10:00 AM PT", commenceTime: "2026-11-29T18:00:00.000Z",
+    awaySpread: -6.5, homeSpread: 6.5, contestIds: { away: 11, home: 12 },
+  }),
+  gameRow({
+    away: "Baltimore Ravens", home: "Houston Texans",
+    commenceHint: "Sun Nov 29, 10:00 AM PT", commenceTime: "2026-11-29T18:00:00.000Z",
+    awaySpread: 6.5, homeSpread: -6.5, contestIds: { away: 14, home: 13 },
+  }),
+  gameRow({
+    away: "Atlanta Falcons", home: "Minnesota Vikings",
+    commenceHint: "Sun Nov 29, 10:00 AM PT", commenceTime: "2026-11-29T18:00:00.000Z",
+    awaySpread: 7, homeSpread: -7, contestIds: { away: 16, home: 15 },
+  }),
+  gameRow({
+    away: "New Orleans Saints", home: "Cincinnati Bengals",
+    commenceHint: "Sun Nov 29, 10:00 AM PT", commenceTime: "2026-11-29T18:00:00.000Z",
+    awaySpread: 10, homeSpread: -10, contestIds: { away: 18, home: 17 },
+  }),
+  gameRow({
+    away: "Las Vegas Raiders", home: "Cleveland Browns",
+    commenceHint: "Sun Nov 29, 5:20 PM PT", commenceTime: "2026-11-30T01:20:00.000Z",
+    awaySpread: 4.5, homeSpread: -4.5, contestIds: { away: 20, home: 19 },
+  }),
+  gameRow({
+    away: "New York Jets", home: "Miami Dolphins",
+    commenceHint: "Sun Nov 29, 10:00 AM PT", commenceTime: "2026-11-29T18:00:00.000Z",
+    awaySpread: -3.5, homeSpread: 3.5, contestIds: { away: 21, home: 22 },
+  }),
+  gameRow({
+    away: "Tennessee Titans", home: "Jacksonville Jaguars",
+    commenceHint: "Sun Nov 29, 10:00 AM PT", commenceTime: "2026-11-29T18:00:00.000Z",
+    awaySpread: 14.5, homeSpread: -14.5, contestIds: { away: 24, home: 23 },
+  }),
+  gameRow({
+    away: "Washington Commanders", home: "Arizona Cardinals",
+    commenceHint: "Sun Nov 29, 1:25 PM PT", commenceTime: "2026-11-29T21:25:00.000Z",
+    awaySpread: -7, homeSpread: 7, contestIds: { away: 25, home: 26 },
+  }),
+  gameRow({
+    away: "Seattle Seahawks", home: "San Francisco 49ers",
+    commenceHint: "Sun Nov 29, 1:25 PM PT", commenceTime: "2026-11-29T21:25:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 28, home: 27 },
+  }),
+  gameRow({
+    away: "New England Patriots", home: "Los Angeles Chargers",
+    commenceHint: "Sun Nov 29, 1:05 PM PT", commenceTime: "2026-11-29T21:05:00.000Z",
+    awaySpread: 0, homeSpread: 0, contestIds: { away: 29, home: 30 },
+  }),
+  gameRow({
+    away: "Carolina Panthers", home: "Tampa Bay Buccaneers",
+    commenceHint: "Mon Nov 30, 5:15 PM PT", commenceTime: "2026-12-01T01:15:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 32, home: 31 },
+  }),
+];
+
 const WEEK_FIXTURES = {
   1: {
     weekNum: 1,
@@ -585,6 +682,13 @@ const WEEK_FIXTURES = {
     lineSource: LINE_SOURCE,
     games: WEEK11_GAMES,
   },
+  12: {
+    weekNum: 12,
+    sourceUrl: WEEK12_SOURCE_URL,
+    fromFixture: true,
+    lineSource: LINE_SOURCE,
+    games: WEEK12_GAMES,
+  },
 };
 
 function getWeekFixture(weekNum) {
@@ -619,7 +723,7 @@ function candidateSpreadUrls(weekNum, now = new Date()) {
     13: [2026, 12], 14: [2026, 12], 15: [2026, 12], 16: [2026, 12],
     17: [2026, 12], 18: [2027, 1],
   };
-  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL, 10: WEEK10_SOURCE_URL, 11: WEEK11_SOURCE_URL };
+  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL, 10: WEEK10_SOURCE_URL, 11: WEEK11_SOURCE_URL, 12: WEEK12_SOURCE_URL };
   if (known[n]) urls.push(known[n]);
   const ym = weekMonth[n];
   if (ym) {
@@ -1007,6 +1111,7 @@ module.exports = {
   WEEK3_SOURCE_URL,
   WEEK10_SOURCE_URL,
   WEEK11_SOURCE_URL,
+  WEEK12_SOURCE_URL,
   NICK_TO_FULL,
   ContestLinesError,
   fullTeam,
@@ -1024,5 +1129,6 @@ module.exports = {
   WEEK3_GAMES,
   WEEK10_GAMES,
   WEEK11_GAMES,
+  WEEK12_GAMES,
   mirroredSpreads,
 };
